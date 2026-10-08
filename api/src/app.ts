@@ -21,8 +21,16 @@ async function readJson(req: IncomingMessage): Promise<any> {
   }
 }
 
+// Auth is a bearer token in a header (never cookies), so any origin may call the API. The desktop app runs from a local page.
+const CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "authorization, content-type",
+  "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "access-control-max-age": "86400",
+};
+
 function send(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, { "content-type": "application/json" });
+  res.writeHead(status, { "content-type": "application/json", ...CORS });
   res.end(JSON.stringify(body));
 }
 
@@ -107,6 +115,7 @@ export function createApp(cfg: Config) {
   }
 
   return createServer((req, res) => {
+    if (req.method === "OPTIONS") { res.writeHead(204, CORS); res.end(); return; }
     handle(req, res).catch((e) => {
       if (e instanceof HttpError) return send(res, e.status, { error: e.message });
       console.error(e);

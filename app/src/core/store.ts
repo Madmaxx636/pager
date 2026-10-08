@@ -433,7 +433,7 @@ declare global {
     pagerDesktop?: {
       notify(o: { title: string; body: string; roomId?: string; silent?: boolean }): void;
       setBadge(n: number): void;
-      getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setCloseToTray(on: boolean): void;
+      getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean }): void;
       onOpenRoom(cb: (roomId: string) => void): void;
       platform: string;
     };

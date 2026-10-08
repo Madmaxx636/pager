@@ -7,3 +7,7 @@ android/.gradle/
 android/build/
 android/app/build/
 *.keystore
+desktop/node_modules
+desktop/app-dist
+desktop/release
+desktop/build

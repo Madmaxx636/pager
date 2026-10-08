@@ -98,6 +98,9 @@ const json = (res, status, body) => { res.writeHead(status, { "content-type": "a
 createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   const p = decodeURIComponent(url.pathname);
+  // Permissive CORS, like a real Synapse, so the desktop app (a local page) can call it.
+  res.setHeader("access-control-allow-origin", "*"); res.setHeader("access-control-allow-headers", "authorization, content-type"); res.setHeader("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS");
+  if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
   let body = "";
   for await (const c of req) body += c;
   if (!p.startsWith("/_matrix/client/v1/media")) console.log(req.method, p, body.slice(0, 120));
