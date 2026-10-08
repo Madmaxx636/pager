@@ -359,6 +359,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                 }
             }
         }
+        ScreenEffects(messages, roomId)
     }
 
     // ---- Sheets & dialogs

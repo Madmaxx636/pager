@@ -2,6 +2,16 @@
 
 package app.pager.android
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.runtime.LaunchedEffect
 import android.graphics.ImageDecoder
 import android.graphics.drawable.AnimatedImageDrawable
 import android.os.Build
@@ -187,10 +197,38 @@ fun MessageRow(
     val scheme = MaterialTheme.colorScheme
     val bigEmoji = s.largeEmoji && msg.type == "m.text" && msg.html == null && Format.isEmojiOnly(msg.body)
     val bare = msg.sticker || bigEmoji
-    val fg = if (mine) scheme.onPrimaryContainer else scheme.onSurface
-    val r = when (s.bubbleStyle) { "square" -> 6.dp; "soft" -> 26.dp; else -> 18.dp }
-    val tight = if (s.bubbleStyle == "square") 3.dp else 5.dp
-    val shape = if (mine) RoundedCornerShape(r, if (first) r else tight, if (last) r else tight, r) else RoundedCornerShape(if (first) r else tight, r, r, if (last) r else tight)
+    val style = s.bubbleStyle
+    val outlined = style == "outline"
+    val plain = style == "plain"
+    val gradient = mine && s.bubbleFill == "gradient" && !outlined && !plain
+    val tinted = mine && s.bubbleFill == "tinted" && !outlined && !plain
+    val fg = when {
+        outlined || plain || tinted -> scheme.onSurface
+        gradient -> scheme.onPrimary
+        mine -> scheme.onPrimaryContainer
+        else -> scheme.onSurface
+    }
+    val fill: Color = when {
+        bare || outlined || plain -> Color.Transparent
+        tinted -> scheme.primary.copy(alpha = 0.24f).compositeOver(scheme.surface)
+        gradient -> scheme.primary
+        mine -> scheme.primaryContainer
+        else -> scheme.surface
+    }
+    val fillBrush = if (gradient && !bare) Brush.linearGradient(listOf(scheme.primary, lerp(scheme.primary, Color(0xFF7C3AED), 0.45f))) else null
+    val r = when (style) { "square" -> 6.dp; "soft" -> 26.dp; else -> 18.dp }
+    val tight = when (style) { "square" -> 3.dp; "tail" -> 18.dp; else -> 5.dp }
+    val tailed = style == "tail" && last && !bare && msg.type != "m.image"
+    val tailR = 4.dp
+    val shape = if (mine) RoundedCornerShape(r, if (first) r else tight, if (last) (if (tailed) tailR else r) else tight, r)
+        else RoundedCornerShape(if (first) r else tight, r, r, if (last) (if (tailed) tailR else r) else tight)
+    val elevation = if (bare || outlined || plain || msg.type == "m.image") 0.dp else when (s.bubbleDepth) { "raised" -> 4.dp; "soft" -> 1.dp; else -> 0.dp }
+    val tailColor = if (gradient) lerp(scheme.primary, Color(0xFF7C3AED), 0.45f) else fill
+
+    // Entrance animation, only for messages that just arrived.
+    val fresh = remember(msg.id) { System.currentTimeMillis() - msg.ts < 4000 && s.messageAnimation != "none" && !s.reduceMotion }
+    val enter = remember(msg.id) { androidx.compose.animation.core.Animatable(if (fresh) 0f else 1f) }
+    LaunchedEffect(msg.id) { if (fresh) enter.animateTo(1f, androidx.compose.animation.core.tween(if (s.messageAnimation == "pop") 280 else 260, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
     val vGap = if (first) 8.dp else if (s.density == "compact") 1.dp else 2.dp
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
@@ -201,8 +239,35 @@ fun MessageRow(
         }
         Box(Modifier.swipeToReply(s.swipeToReply && msg.status == STATUS_SENT, onReply) { if (s.haptics) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }) {
             Box(
-                Modifier.widthIn(max = 300.dp).clip(shape)
-                    .background(if (bare) Color.Transparent else if (mine) scheme.primaryContainer else scheme.surface)
+                Modifier.widthIn(max = 300.dp)
+                    .graphicsLayer {
+                        val t = enter.value
+                        alpha = if (s.messageAnimation == "slide" || s.messageAnimation == "fade" || s.messageAnimation == "pop") t.coerceIn(0f, 1f) else 1f
+                        when (s.messageAnimation) {
+                            "pop" -> { val sc = 0.82f + 0.18f * t; scaleX = sc; scaleY = sc; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (mine) 1f else 0f, 1f) }
+                            "slide" -> translationY = (1f - t) * 14.dp.toPx()
+                        }
+                    }
+                    .drawBehind {
+                        if (tailed) {
+                            val d = density; val w = size.width; val h = size.height
+                            val path = androidx.compose.ui.graphics.Path().apply {
+                                if (mine) { moveTo(w - 6 * d, h - 16 * d); lineTo(w + 7 * d, h); lineTo(w - 10 * d, h); close() }
+                                else { moveTo(6 * d, h - 16 * d); lineTo(-7 * d, h); lineTo(10 * d, h); close() }
+                            }
+                            drawPath(path, tailColor)
+                        }
+                    }
+                    .let { if (elevation > 0.dp) it.shadow(elevation, shape, clip = false) else it }
+                    .clip(shape)
+                    .let { if (fillBrush != null) it.background(fillBrush) else it.background(fill) }
+                    .let {
+                        when {
+                            outlined -> it.border(1.5.dp, if (mine) scheme.primary else scheme.outlineVariant, shape)
+                            plain -> it.drawBehind { drawRect(if (mine) scheme.primary else scheme.outlineVariant, Offset.Zero, Size(3.dp.toPx(), size.height)) }
+                            else -> it
+                        }
+                    }
                     .combinedClickable(
                         onClick = { if (msg.status == STATUS_FAILED) chat?.id?.let { store.retry(it, msg) } else onOpen(msg) },
                         onLongClick = onLong, onDoubleClick = onDouble,

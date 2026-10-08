@@ -10,11 +10,14 @@ USERNS=""; case "$(readlink -f "$(command -v docker)")" in *podman*) USERNS="--u
 yq() { docker run --rm -i $USERNS -u "$DOCKER_UID" -v "$PWD/data:/work" -w /work docker.io/mikefarah/yq "$@"; }
 rand() { head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40; }
 
-if [ ! -f .env ]; then
-  read -rp "Public domain for your server (e.g. matrix.example.com): " domain
-  printf 'PAGER_DOMAIN=%s\nPOSTGRES_PASSWORD=%s\nPROVISIONING_SECRET=%s\nINVITE_CODE=%s\nSIGNUP_MODE=invite\n' \
-    "$domain" "$(rand)" "$(rand)" "$(rand | head -c 12)" > .env
-fi
+touch .env
+# Fill in whatever .env doesn't have yet (so you can pre-seed PAGER_DOMAIN, DUCKDNS_*, etc. and let setup add the secrets).
+need() { grep -q "^$1=." .env; }
+if ! need PAGER_DOMAIN; then read -rp "Public domain for your server (e.g. matrix.example.com): " domain; echo "PAGER_DOMAIN=$domain" >> .env; fi
+need POSTGRES_PASSWORD || echo "POSTGRES_PASSWORD=$(rand)" >> .env
+need PROVISIONING_SECRET || echo "PROVISIONING_SECRET=$(rand)" >> .env
+need INVITE_CODE || echo "INVITE_CODE=$(rand | head -c 12)" >> .env
+need SIGNUP_MODE || echo "SIGNUP_MODE=invite" >> .env
 # Local or rootless installs: plain HTTP (no certificate possible for localhost/IPs) and unprivileged ports.
 domain_now="$(grep '^PAGER_DOMAIN=' .env | cut -d= -f2)"
 if ! grep -q '^PAGER_ADDRESS=' .env && [[ "$domain_now" =~ ^(localhost|[0-9.]+|.*\.local)$ ]]; then
@@ -23,6 +26,8 @@ fi
 if [ -n "$USERNS" ] && ! grep -q '^SYNAPSE_UID=' .env; then
   printf 'SYNAPSE_UID=0\nSYNAPSE_GID=0\nBRIDGE_UID=0\nBRIDGE_GID=0\n' >> .env
 fi
+# DuckDNS: set DUCKDNS_TOKEN and DUCKDNS_SUBDOMAIN (the part before .duckdns.org) in .env to keep the name pointed at this IP.
+if grep -q '^DUCKDNS_TOKEN=.' .env && ! grep -q '^COMPOSE_PROFILES=' .env; then echo 'COMPOSE_PROFILES=duckdns' >> .env; fi
 grep -q '^COMPOSE_FILE=' .env || echo 'COMPOSE_FILE=docker-compose.yml:data/bridges.compose.yml' >> .env
 set -a; . ./.env; set +a
 

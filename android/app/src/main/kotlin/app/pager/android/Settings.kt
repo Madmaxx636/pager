@@ -15,7 +15,11 @@ data class AppSettings(
     val themeMode: String = "system",          // system | light | dark | black
     val accent: String = "teal",               // teal | blue | purple | pink | orange | green | red | dynamic
     val fontScale: Float = 1f,
-    val bubbleStyle: String = "round",         // round | soft | square
+    val bubbleStyle: String = "round",         // round | soft | square | tail | outline | plain
+    val bubbleFill: String = "solid",          // solid | gradient | tinted
+    val bubbleDepth: String = "soft",          // flat | soft | raised
+    val messageAnimation: String = "pop",      // none | pop | slide | fade
+    val screenEffects: Boolean = true,
     val wallpaper: String = "none",            // none | dusk | forest | ocean | sand | graphite
     val timeFormat: String = "system",         // system | 12 | 24
     val colorSenderNames: Boolean = true,

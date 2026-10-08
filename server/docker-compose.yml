@@ -60,5 +60,15 @@ services:
     depends_on: [synapse]
     networks: [pager]
 
+  # Keeps a DuckDNS name pointed at your home IP. Enabled by setup.sh when DUCKDNS_TOKEN is in .env.
+  duckdns:
+    image: lscr.io/linuxserver/duckdns:latest
+    profiles: ["duckdns"]
+    restart: unless-stopped
+    environment:
+      SUBDOMAINS: ${DUCKDNS_SUBDOMAIN:-}
+      TOKEN: ${DUCKDNS_TOKEN:-}
+    networks: [pager]
+
 networks:
   pager:
