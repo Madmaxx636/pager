@@ -35,6 +35,18 @@ export interface LoginStep {
   instructions?: string;
   display_and_wait?: { type: "qr" | "emoji" | "code" | "nothing"; data?: string };
   user_input?: { fields: LoginField[] };
+  cookies?: { url: string; user_agent?: string; fields: { id: string; required?: boolean; sources?: { type: string; name?: string; cookie_domain?: string }[] }[] };
+}
+
+/** Turns pasted text into cookie values: a JSON object, a "Cookie: a=1; b=2" header, or a copied cURL command. */
+export function parseCookies(text: string): Record<string, string> {
+  const t = text.trim();
+  if (t.startsWith("{")) { try { const o = JSON.parse(t); return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, String(v)])); } catch { /* fall through */ } }
+  const m = /(?:-b|--cookie)\s+(['"])([\s\S]*?)\1/.exec(t) ?? /cookie:\s*([^\n'"]+)/i.exec(t);
+  const raw = m ? (m[2] ?? m[1]) : t;
+  const out: Record<string, string> = {};
+  for (const part of raw.split(/;\s*/)) { const i = part.indexOf("="); if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim(); }
+  return out;
 }
 
 export const pager = {
