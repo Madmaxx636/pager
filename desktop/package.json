@@ -57,5 +57,6 @@
     "electron-builder": "^26.15.3"
   },
   "homepage": "https://pager.invalid/",
-  "desktopName": "pager.desktop"
+  "desktopName": "pager.desktop",
+  "license": "AGPL-3.0-only"
 }
