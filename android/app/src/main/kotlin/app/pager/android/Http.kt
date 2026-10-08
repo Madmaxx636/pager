@@ -16,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.source
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
@@ -38,6 +39,32 @@ class Http(var baseUrl: String, var token: String? = null) {
             override fun onFailure(call: Call, e: IOException) = cont.resumeWithException(e)
             override fun onResponse(call: Call, response: Response) = cont.resume(response)
         })
+    }
+
+    /** Streams a local file/URI to the media repo. Returns the mxc:// URI. */
+    suspend fun upload(filename: String, contentType: String, length: Long, open: () -> java.io.InputStream): String = withContext(Dispatchers.IO) {
+        val body = object : okhttp3.RequestBody() {
+            override fun contentType() = contentType.toMediaType()
+            override fun contentLength() = length
+            override fun writeTo(sink: okio.BufferedSink) { open().use { sink.writeAll(it.source()) } }
+        }
+        val req = Request.Builder()
+            .url(baseUrl.trimEnd('/') + "/_matrix/media/v3/upload?filename=" + java.net.URLEncoder.encode(filename, "UTF-8"))
+            .post(body)
+            .apply { token?.let { header("Authorization", "Bearer $it") } }
+            .build()
+        client.newCall(req).await().use { res ->
+            val text = res.body?.string().orEmpty()
+            val parsed = runCatching { json.parseToJsonElement(text).jsonObject }.getOrDefault(JsonObject(emptyMap()))
+            if (!res.isSuccessful) throw ApiException(res.code, (parsed["error"] as? JsonPrimitive)?.contentOrNull ?: "Upload failed (${res.code})")
+            (parsed["content_uri"] as? JsonPrimitive)?.contentOrNull ?: throw ApiException(500, "Upload failed")
+        }
+    }
+
+    /** Authenticated media GET; caller owns the response. */
+    suspend fun getRaw(path: String): Response = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url(baseUrl.trimEnd('/') + path).apply { token?.let { header("Authorization", "Bearer $it") } }.build()
+        client.newCall(req).await()
     }
 
     suspend fun request(method: String, path: String, body: JsonElement? = null): JsonObject = withContext(Dispatchers.IO) {

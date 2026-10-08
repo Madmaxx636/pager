@@ -93,10 +93,14 @@ export function createApp(cfg: Config) {
         (method === "GET" && rest === "/login/flows") ||
         (method === "POST" && /^\/login\/start\/[\w.-]+$/.test(rest)) ||
         (method === "POST" && /^\/login\/step\/[\w.-]+\/[\w.-]+\/[\w.-]+$/.test(rest)) ||
-        (method === "POST" && /^\/logout\/[\w.:@!-]+$/.test(rest));
+        (method === "POST" && /^\/logout\/[\w.:@!-]+$/.test(rest)) ||
+        (method === "GET" && rest === "/contacts") ||
+        (method === "POST" && rest === "/search_users") ||
+        (method === "GET" && /^\/resolve_identifier\/[^/]+$/.test(rest)) ||
+        (method === "POST" && /^\/create_dm\/[^/]+$/.test(rest));
       if (!allowed) throw new HttpError(404, "Not found");
       const body = method === "POST" ? await readJson(req) : undefined;
-      return send(res, 200, await bridgeRequest(cfg, bridge, userId, method, rest, body));
+      return send(res, 200, await bridgeRequest(cfg, bridge, userId, method, rest, body, url.searchParams));
     }
 
     throw new HttpError(404, "Not found");

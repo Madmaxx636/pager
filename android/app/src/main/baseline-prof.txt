@@ -1,0 +1,3 @@
+# Baseline profile: tells Android to precompile all of Pager's own code on install (library profiles ship with Compose).
+HSPLapp/pager/android/**->**(**)**
+Lapp/pager/android/**;

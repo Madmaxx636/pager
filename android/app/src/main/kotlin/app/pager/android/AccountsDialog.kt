@@ -58,9 +58,9 @@ private fun qrBitmap(data: String, px: Int = 480): Bitmap {
 }
 
 @Composable
-fun AccountsDialog(store: Store, onClose: () -> Unit) {
+fun AccountsDialog(store: Store, initial: Network? = null, onClose: () -> Unit) {
     var networks by remember { mutableStateOf<List<Network>?>(null) }
-    var active by remember { mutableStateOf<Network?>(null) }
+    var active by remember { mutableStateOf(initial) }
     var error by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -74,7 +74,7 @@ fun AccountsDialog(store: Store, onClose: () -> Unit) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
                 val net = active
                 if (net != null) {
-                    LoginFlowView(store, net, onCancel = { active = null }, onDone = { active = null; refresh() })
+                    LoginFlowView(store, net, onCancel = { if (initial != null) onClose() else active = null }, onDone = { active = null; refresh(); scope.launch { store.refreshBridges() }; if (initial != null) onClose() })
                 } else {
                     Text("Accounts", fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Text("Connect the apps you use. You can add more than one account per app.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
