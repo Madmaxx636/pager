@@ -90,7 +90,7 @@ export const matrix = {
     const filter = enc(JSON.stringify({ presence: { types: [] }, room: { timeline: { limit: 20 }, state: { lazy_load_members: true }, ephemeral: { types: ["m.receipt", "m.typing"] } } }));
     return call("GET", `/_matrix/client/v3/sync?set_presence=offline&filter=${filter}${since ? `&since=${enc(since)}&timeout=30000` : "&timeout=0"}`, undefined, signal);
   },
-  messages: async (roomId: string, from: string): Promise<{ chunk: any[]; end?: string }> =>
+  messages: async (roomId: string, from: string): Promise<{ chunk: any[]; end?: string; state?: any[] }> =>
     call("GET", `/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=40&from=${enc(from)}&filter=${enc('{"lazy_load_members":true}')}`),
   join: (roomId: string) => call("POST", `/_matrix/client/v3/join/${enc(roomId)}`, {}),
   leave: (roomId: string) => call("POST", `/_matrix/client/v3/rooms/${enc(roomId)}/leave`, {}),

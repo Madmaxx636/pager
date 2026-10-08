@@ -17,6 +17,28 @@ export interface SyncResult {
   userStickers?: StickerPack;
 }
 
+// ---- Your own accounts on other networks ------------------------------------------------------
+// A bridge without double puppeting sends the messages you wrote on your phone (and your history) as your own "ghost"
+// user on that network, not as you. Treat those ghosts as you, so they show as sent instead of received.
+let ownNames = new Set<string>();
+let ownIds = new Set<string>();
+export function setOwnIdentity(names: string[], ids: string[]) {
+  ownNames = new Set(names.map((n) => n.trim().toLowerCase()).filter((n) => n.length >= 2));
+  ownIds = new Set(ids);
+}
+/** Bridges decorate ghost names, e.g. "Lane McDonald (WA)": compare without that suffix. */
+const baseName = (n: string) => n.trim().toLowerCase().replace(/\s*\([^)]{1,12}\)$/, "");
+function ownGhosts(chat: ChatState, me: string): Set<string> {
+  const out = new Set<string>();
+  for (const [id, name] of Object.entries(chat.members)) if (id !== me && (ownIds.has(id) || ownNames.has(baseName(name)))) out.add(id);
+  for (const id of ownIds) if (id !== me) out.add(id);
+  return out;
+}
+function claimOwn(events: J[], ghosts: Set<string>, me: string): J[] {
+  if (!ghosts.size) return events;
+  return events.map((e) => (e.state_key == null && typeof e.sender === "string" && ghosts.has(e.sender) ? { ...e, sender: me } : e));
+}
+
 export function applySync(old: Record<string, ChatState>, sync: J, me: string, initial: boolean): SyncResult {
   const chats = { ...old };
   const incoming: Incoming[] = [];
@@ -35,7 +57,7 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
     else if (chat.prevBatch == null && chat.messages.length === 0 && prev != null) chat = { ...chat, prevBatch: prev };
 
     const pre = chat;
-    chat = process(chat, arr(tl.events).map(obj), true, (m, parentSender) => {
+    chat = process(chat, claimOwn(arr(tl.events).map(obj), ownGhosts(chat, me), me), true, (m, parentSender) => {
       if (!initial && m.sender !== me) {
         const mine = pre.members[me] ?? me.replace(/^@/, "").split(":")[0];
         const mentioned = m.mentions.includes(me) || m.body.toLowerCase().includes(`@${mine}`.toLowerCase());
@@ -67,8 +89,9 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
 }
 
 /** Merges a page of older events (as returned by /messages, newest first). */
-export function applyHistory(chat: ChatState, chunk: J[], end: string | undefined): ChatState {
-  const next = process(chat, [...chunk].reverse(), false, undefined);
+export function applyHistory(chat: ChatState, chunk: J[], end: string | undefined, state: J[] = [], me = ""): ChatState {
+  for (const s of state) if (obj(s).type === "m.room.member") chat = applyState(chat, obj(s));
+  const next = process(chat, claimOwn([...chunk].reverse(), me ? ownGhosts(chat, me) : new Set(), me), false, undefined);
   return { ...next, prevBatch: end ?? null, reachedStart: end == null };
 }
 
