@@ -3,12 +3,12 @@
 ## You need
 - A Linux machine with Docker (compose plugin) or rootless Podman + `docker-compose` (see README).
 - A domain name pointing at it, with ports 80 and 443 open. Caddy gets the HTTPS certificate automatically.
-- Node.js 20+ to build the web app (once).
+- Node.js 20+ to build the web app, or just Docker: `server/scripts/build-web.sh` builds it in a container.
 
 ## Install
 ```bash
 git clone <your-pager-repo> pager && cd pager
-(cd app && npm ci && npm run build)
+server/scripts/build-web.sh
 cd server
 ./scripts/setup.sh              # asks for your domain, prints an invite code
 docker compose up -d --build
