@@ -11,3 +11,4 @@ desktop/node_modules
 desktop/app-dist
 desktop/release
 desktop/build
+.kotlin/
