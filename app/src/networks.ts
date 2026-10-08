@@ -8,6 +8,7 @@ export const NETWORKS: Record<string, NetworkMeta> = {
   instagram: { label: "Instagram", color: "#e1306c", glyph: "I" },
   messenger: { label: "Messenger", color: "#0a7cff", glyph: "M" },
   gmessages: { label: "Messages", color: "#1a73e8", glyph: "G" },
+  facebook: { label: "Messenger", color: "#0a7cff", glyph: "M" },
   matrix: { label: "Matrix", color: "#8a94a6", glyph: "#" },
 };
 

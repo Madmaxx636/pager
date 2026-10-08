@@ -65,7 +65,9 @@ createServer(async (req, res) => {
     if (!first) await new Promise((r) => setTimeout(r, 8000));
     return send(res, 200, { next_batch: first ? "s1" : "s1", rooms: first ? { join: rooms } : {}, account_data: { events: [] }, presence: { events: [] } });
   }
-  if (p.includes("/send/")) return send(res, 200, { event_id: "$sent" + Date.now() });
+  if (p.includes("/media/v3/upload")) return send(res, 200, { content_uri: "mxc://pager.test/uploaded" });
+  if (p.includes("/send/")) { console.log("SEND", body.slice(0, 200)); return send(res, 200, { event_id: "$sent" + Date.now() }); }
+  if (false) return send(res, 200, { event_id: "$sent" + Date.now() });
   if (p.includes("/capabilities")) return send(res, 200, { capabilities: {} });
   if (p.includes("/filter")) return send(res, 200, { filter_id: "1" });
   send(res, 200, {});

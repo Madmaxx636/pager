@@ -1,12 +1,5 @@
-# Pager server stack. Run ./scripts/setup.sh first (generates configs), then `docker compose up -d`.
+# Pager server stack. Run ./scripts/setup.sh first. It generates data/bridges.compose.yml, which .env pulls in via COMPOSE_FILE.
 name: pager
-
-x-bridge: &bridge
-  restart: unless-stopped
-  depends_on:
-    postgres:
-      condition: service_healthy
-  networks: [pager]
 
 services:
   postgres:
@@ -57,23 +50,11 @@ services:
       PROVISIONING_SECRET: ${PROVISIONING_SECRET}
       INVITE_CODE: ${INVITE_CODE}
       SIGNUP_MODE: ${SIGNUP_MODE:-invite}
+      BRIDGES_FILE: /config/bridges.json
+    volumes:
+      - ./data/bridges.json:/config/bridges.json:ro
     depends_on: [synapse]
     networks: [pager]
-
-  whatsapp:
-    <<: *bridge
-    image: dock.mau.dev/mautrix/whatsapp:latest
-    volumes: ["./data/bridges/whatsapp:/data"]
-
-  signal:
-    <<: *bridge
-    image: dock.mau.dev/mautrix/signal:latest
-    volumes: ["./data/bridges/signal:/data"]
-
-  discord:
-    <<: *bridge
-    image: dock.mau.dev/mautrix/discord:latest
-    volumes: ["./data/bridges/discord:/data"]
 
 networks:
   pager:

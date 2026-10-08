@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { restoreSession, useSignedIn, useSynced } from "./matrix";
+import { requestNotifications, restoreSession, useSignedIn, useSynced } from "./matrix";
 import { Auth } from "./components/Auth";
 import { Sidebar } from "./components/Sidebar";
 import { Chat } from "./components/Chat";
@@ -15,6 +15,15 @@ export function App() {
   useEffect(() => {
     restoreSession().catch(() => {}).finally(() => setBooting(false));
   }, []);
+
+  useEffect(() => {
+    const open = (e: Event) => setSelected((e as CustomEvent<string>).detail);
+    window.addEventListener("pager:open", open);
+    return () => window.removeEventListener("pager:open", open);
+  }, []);
+  useEffect(() => {
+    if (signedIn) requestNotifications();
+  }, [signedIn]);
 
   if (booting) return <div className="splash"><span className="logo-mark big" /></div>;
   if (!signedIn) return <Auth />;
