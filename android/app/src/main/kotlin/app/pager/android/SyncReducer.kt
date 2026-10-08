@@ -21,6 +21,8 @@ data class SyncResult(
     val invites: List<String>,
     /** Rooms with notifications switched off; null when this sync carried no push-rule change. */
     val muted: Set<String>?,
+    /** The user's own sticker pack when this sync carried it. */
+    val userStickers: StickerPack? = null,
 )
 
 object SyncReducer {
@@ -44,11 +46,11 @@ object SyncReducer {
             else if (chat.prevBatch == null && chat.messages.isEmpty() && prev != null) chat = chat.copy(prevBatch = prev)
 
             val pre = chat
-            chat = process(chat, tl["events"].arr().map { it.obj() }, applyStates = true) { m ->
+            chat = process(chat, tl["events"].arr().map { it.obj() }, applyStates = true) { m, parentSender ->
                 if (!initial && m.sender != me) {
                     val mine = pre.members[me] ?: me.removePrefix("@").substringBefore(':')
                     val mentioned = me in m.mentions || m.body.contains("@$mine", ignoreCase = true)
-                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.memberCount > 2, mentioned, m.ts))
+                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.memberCount > 2, mentioned, m.ts, replyToMe = parentSender == me))
                 }
             }
 
@@ -64,10 +66,14 @@ object SyncReducer {
         for (roomId in rooms["leave"].obj().keys) chats.remove(roomId)
 
         var muted: Set<String>? = null
+        var userStickers: StickerPack? = null
         for (e in sync["account_data"].obj()["events"].arr()) {
-            if (e.obj()["type"].str() == "m.push_rules") muted = parseMuted(e.obj())
+            when (e.obj()["type"].str()) {
+                "m.push_rules" -> muted = parseMuted(e.obj())
+                "im.ponies.user_emotes" -> userStickers = parseStickerPack("user", "My stickers", e.obj()["content"].obj())
+            }
         }
-        return SyncResult(chats, incoming, invites, muted)
+        return SyncResult(chats, incoming, invites, muted, userStickers)
     }
 
     /** Merges a page of older events (as returned by /messages, newest first) into a chat. */
@@ -77,13 +83,15 @@ object SyncReducer {
     }
 
     /** The core event loop shared by sync and history. */
-    private fun process(start: ChatState, events: List<JsonObject>, applyStates: Boolean, onNew: ((Msg) -> Unit)?): ChatState {
+    private fun process(start: ChatState, events: List<JsonObject>, applyStates: Boolean, onNew: ((Msg, String?) -> Unit)?): ChatState {
         if (events.isEmpty()) return start
         var chat = start
         val msgs = start.messages.toMutableList()
         val ids = msgs.mapTo(HashSet()) { it.id }
         val reactions = start.reactions.mapValuesTo(HashMap()) { (_, v) -> v.mapValuesTo(HashMap()) { it.value.toMutableList() } }
         val refs = start.reactionRefs.toMutableMap()
+        val votes = start.pollVotes.mapValues { (_, v) -> v.toMutableMap() }.toMutableMap()
+        val ended = start.pollEnded.toMutableSet()
 
         for (e in events) {
             if (e["state_key"] != null) {
@@ -101,11 +109,26 @@ object SyncReducer {
                     msg.txn?.let { txn -> msgs.removeAll { it.id == "local-$txn" } }
                     if (!ids.add(msg.id)) continue
                     msgs.add(msg)
-                    onNew?.invoke(msg)
+                    onNew?.invoke(msg, msg.replyTo?.let { p -> msgs.firstOrNull { it.id == p }?.sender })
                 }
                 "m.sticker" -> {
                     val sticker = toMsg(e)?.copy(type = "m.image", sticker = true) ?: stickerMsg(e) ?: continue
-                    if (ids.add(sticker.id)) { msgs.add(sticker); onNew?.invoke(sticker) }
+                    if (ids.add(sticker.id)) { msgs.add(sticker); onNew?.invoke(sticker, null) }
+                }
+                "org.matrix.msc3381.poll.start", "m.poll.start" -> {
+                    val poll = toPollMsg(e) ?: continue
+                    if (ids.add(poll.id)) { msgs.add(poll); onNew?.invoke(poll, null) }
+                }
+                "org.matrix.msc3381.poll.response", "m.poll.response" -> {
+                    val target = content["m.relates_to"].obj()["event_id"].str() ?: continue
+                    val sender = e["sender"].str() ?: continue
+                    val answers = (content["org.matrix.msc3381.poll.response"].obj()["answers"] ?: content["m.selections"]).arr().mapNotNull { it.str() }
+                    if (target !in ended) votes.getOrPut(target) { mutableMapOf() }[sender] = answers
+                }
+                "org.matrix.msc3381.poll.end", "m.poll.end" -> {
+                    val target = content["m.relates_to"].obj()["event_id"].str() ?: continue
+                    val owner = msgs.firstOrNull { it.id == target }?.sender
+                    if (owner == null || owner == e["sender"].str()) ended.add(target)
                 }
                 "m.reaction" -> {
                     val rel = content["m.relates_to"].obj()
@@ -134,6 +157,8 @@ object SyncReducer {
             messages = msgs,
             reactions = reactions.mapValues { (_, v) -> v.mapValues { it.value.toList() } }.filterValues { it.isNotEmpty() },
             reactionRefs = refs,
+            pollVotes = votes.mapValues { (_, v) -> v.toMap() },
+            pollEnded = ended,
         )
     }
 
@@ -152,6 +177,10 @@ object SyncReducer {
         return when (e["type"].str()) {
             "m.room.name" -> chat.copy(name = content["name"].str() ?: "")
             "m.room.avatar" -> chat.copy(avatarMxc = content["url"].str())
+            "im.ponies.room_emotes" -> {
+                val pack = parseStickerPack(key.ifEmpty { "room" }, content["pack"].obj()["display_name"].str() ?: "Room stickers", content)
+                chat.copy(stickerPacks = chat.stickerPacks.filter { it.key != pack.key } + pack)
+            }
             "m.bridge", "uk.half-shot.bridge" -> {
                 val id = content["protocol"].obj()["id"].str()
                 if (id != null) chat.copy(network = if (id == "facebook") "messenger" else id) else chat
@@ -185,11 +214,27 @@ object SyncReducer {
     private fun applyRoomAccountData(chat: ChatState, e: JsonObject): ChatState {
         val content = e["content"].obj()
         return when (e["type"].str()) {
-            "m.tag" -> chat.copy(tags = content["tags"].obj().keys)
+            "m.tag" -> {
+                val tags = content["tags"].obj()
+                chat.copy(tags = tags.keys, pinOrder = (tags["m.favourite"].obj()["order"] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull())
+            }
             "m.marked_unread", "com.famedly.marked_unread" ->
                 chat.copy(markedUnread = (content["unread"] as? JsonPrimitive)?.booleanOrNull == true)
             else -> chat
         }
+    }
+
+    /** Sticker packs (MSC2545): images keyed by shortcode, usable as stickers unless marked emoji-only. */
+    fun parseStickerPack(key: String, fallbackName: String, content: JsonObject): StickerPack {
+        val name = content["pack"].obj()["display_name"].str() ?: fallbackName
+        val stickers = content["images"].obj().mapNotNull { (short, el) ->
+            val o = el.obj()
+            val usage = o["usage"].arr().mapNotNull { it.str() }
+            if (usage.isNotEmpty() && "sticker" !in usage) return@mapNotNull null
+            val info = o["info"].obj()
+            Sticker(short, o["url"].str() ?: return@mapNotNull null, o["body"].str() ?: short, info["w"].int(), info["h"].int(), info["mimetype"].str())
+        }
+        return StickerPack(key, name, stickers)
     }
 
     /** Rooms that have a "don't notify" push rule. */
@@ -222,6 +267,26 @@ object SyncReducer {
         )
     }
 
+    private fun pollText(el: JsonElement?): String? {
+        val o = el.obj()
+        return o["org.matrix.msc1767.text"].str() ?: o["body"].str()
+            ?: o["m.text"].arr().firstNotNullOfOrNull { it.obj()["body"].str() } ?: (el as? JsonPrimitive)?.contentOrNull
+    }
+
+    fun toPollMsg(e: JsonObject): Msg? {
+        val content = e["content"].obj()
+        val p = (content["org.matrix.msc3381.poll.start"] ?: content["m.poll"]).obj()
+        val question = pollText(p["question"]) ?: return null
+        val answers = p["answers"].arr().mapNotNull { a -> a.obj().let { o -> o["id"].str()?.let { id -> pollText(o)?.let { PollAnswer(id, it) } } } }
+        if (answers.size < 2) return null
+        val kind = p["kind"].str().orEmpty()
+        return Msg(
+            id = e["event_id"].str() ?: return null, sender = e["sender"].str() ?: return null, ts = e["origin_server_ts"].long() ?: 0L,
+            type = "m.poll", body = question,
+            poll = PollInfo(question, answers, p["max_selections"].int() ?: 1, disclosed = !kind.endsWith("undisclosed")),
+        )
+    }
+
     fun toMsg(e: JsonObject): Msg? {
         if (e["type"].str() != "m.room.message") return null
         val content = e["content"].obj()
@@ -247,6 +312,7 @@ object SyncReducer {
             geo = content["geo_uri"].str(),
             voice = content["org.matrix.msc3245.voice"] != null || content["org.matrix.msc1767.audio"].obj()["waveform"] != null,
             mentions = content["m.mentions"].obj()["user_ids"].arr().mapNotNull { it.str() },
+            html = if (content["format"].str() == "org.matrix.html") content["formatted_body"].str() else null,
         )
     }
 

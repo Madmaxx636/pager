@@ -74,6 +74,33 @@ class MediaLoader(private val context: Context, private val http: Http) {
         return runCatching { context.startActivity(intent) }.isSuccess
     }
 
+    /** Hands the file to the system share sheet. */
+    suspend fun share(mxc: String, name: String, mime: String?): Boolean {
+        val src = fetch(mxc) ?: return false
+        val shared = File(dir, "open").apply { mkdirs() }.let { File(it, name.replace(Regex("[^A-Za-z0-9._ -]"), "_").ifEmpty { "file" }) }
+        withContext(Dispatchers.IO) { src.copyTo(shared, overwrite = true) }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", shared)
+        val send = Intent(Intent.ACTION_SEND).setType(mime ?: "*/*").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        return runCatching { context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+    }
+
+    /** Saves a photo into the gallery (Pictures/Pager). Works without extra permission on Android 10+. */
+    suspend fun saveToGallery(mxc: String, name: String, mime: String?): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 29) return false
+        val src = fetch(mxc) ?: return false
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name.ifEmpty { "pager-${System.currentTimeMillis()}.jpg" })
+                    put(android.provider.MediaStore.Images.Media.MIME_TYPE, mime ?: "image/jpeg")
+                    put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Pager")
+                }
+                val uri = context.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
+                context.contentResolver.openOutputStream(uri)!!.use { out -> src.inputStream().use { it.copyTo(out) } }
+            }.isSuccess
+        }
+    }
+
     fun clear() { bitmaps.evictAll(); dir.deleteRecursively(); dir.mkdirs() }
 }
 

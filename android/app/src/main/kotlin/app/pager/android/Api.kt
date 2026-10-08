@@ -158,9 +158,13 @@ class MatrixApi(private val http: Http) {
         http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/redact/${enc(eventId)}/${enc(txnId)}", JsonObject(emptyMap()))
     }
 
-    suspend fun setTag(me: String, roomId: String, tag: String, on: Boolean) {
+    suspend fun setTag(me: String, roomId: String, tag: String, on: Boolean, order: Double? = null) {
         val path = "/_matrix/client/v3/user/${enc(me)}/rooms/${enc(roomId)}/tags/${enc(tag)}"
-        if (on) http.request("PUT", path, JsonObject(emptyMap())) else http.request("DELETE", path)
+        if (on) http.request("PUT", path, if (order != null) buildJsonObject { put("order", order) } else JsonObject(emptyMap())) else http.request("DELETE", path)
+    }
+
+    suspend fun putAccountData(me: String, type: String, content: JsonObject) {
+        http.request("PUT", "/_matrix/client/v3/user/${enc(me)}/account_data/${enc(type)}", content)
     }
 
     suspend fun setMarkedUnread(me: String, roomId: String, unread: Boolean) {

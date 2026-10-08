@@ -8,6 +8,18 @@ const val STATUS_SENDING = 1
 const val STATUS_FAILED = 2
 
 @Serializable
+data class Sticker(val shortcode: String, val url: String, val body: String, val w: Int? = null, val h: Int? = null, val mime: String? = null)
+
+@Serializable
+data class StickerPack(val key: String, val name: String, val stickers: List<Sticker>)
+
+@Serializable
+data class PollAnswer(val id: String, val text: String)
+
+@Serializable
+data class PollInfo(val question: String, val answers: List<PollAnswer>, val maxSelections: Int = 1, val disclosed: Boolean = true)
+
+@Serializable
 data class Msg(
     val id: String,
     val sender: String,
@@ -30,6 +42,9 @@ data class Msg(
     val voice: Boolean = false,
     /** User ids explicitly mentioned (m.mentions). */
     val mentions: List<String> = emptyList(),
+    /** Sanitized-later HTML from formatted_body (bridges send bold/italic/links this way). */
+    val html: String? = null,
+    val poll: PollInfo? = null,
 )
 
 @Serializable
@@ -58,12 +73,20 @@ data class ChatState(
     val tags: Set<String> = emptySet(),
     val markedUnread: Boolean = false,
     val memberCount: Int = 0,
+    /** Order of this chat among pinned chats (m.favourite tag order). */
+    val pinOrder: Double? = null,
+    /** poll event id -> user id -> chosen answer ids */
+    val pollVotes: Map<String, Map<String, List<String>>> = emptyMap(),
+    val pollEnded: Set<String> = emptySet(),
+    val stickerPacks: List<StickerPack> = emptyList(),
     @Transient val typing: Set<String> = emptySet(),
 ) {
     val lastTs get() = messages.lastOrNull()?.ts ?: 0L
     val isGroup get() = memberCount > 2
     val pinned get() = "m.favourite" in tags
     val archived get() = "u.archived" in tags
+    val lowPriority get() = "m.lowpriority" in tags
+    val labels get() = tags.filter { it.startsWith(LABEL_PREFIX) }.map { it.removePrefix(LABEL_PREFIX) }.sorted()
 
     val preview: String
         get() = messages.lastOrNull()?.let { previewOf(it) } ?: ""
@@ -76,16 +99,17 @@ data class ChatState(
         return others.size == 1 && BOT.containsMatchIn(others[0])
     }
 
-    companion object { private val BOT = Regex("^@[a-z]*bot:") }
+    companion object { const val LABEL_PREFIX = "u.label."; private val BOT = Regex("^@[a-z]*bot:") }
 }
 
 fun previewOf(m: Msg) = when (m.type) {
-    "m.image" -> if (m.sticker) "Sticker" else "📷 Photo"
-    "m.location" -> "📍 Location"
+    "m.image" -> if (m.sticker) "Sticker" else if (m.mime == "image/gif") "GIF" else "Photo"
+    "m.location" -> "Location"
+    "m.poll" -> "Poll: ${m.poll?.question ?: m.body}"
     "m.emote" -> "* ${m.body}"
-    "m.video" -> "🎬 Video"
-    "m.audio" -> if (m.voice) "🎤 Voice message" else "🎵 ${m.body}"
-    "m.file" -> "📎 ${m.body}"
+    "m.video" -> "Video"
+    "m.audio" -> if (m.voice) "Voice message" else m.body
+    "m.file" -> if (m.mime?.contains("vcard") == true || m.body.endsWith(".vcf")) "Contact: ${m.body.removeSuffix(".vcf")}" else m.body
     else -> m.body
 }
 
@@ -104,6 +128,13 @@ data class ChatSummary(
     val muted: Boolean,
     val isGroup: Boolean,
     val draft: String?,
+    val lowPriority: Boolean = false,
+    val labels: List<String> = emptyList(),
+    val pinOrder: Double = 0.0,
+    /** The last message is from someone else and hasn't been answered. */
+    val unanswered: Boolean = false,
+    val lastFromMe: Boolean = false,
+    val typing: Boolean = false,
 )
 
 /** A message that just arrived from someone else, for notifications. */
@@ -116,4 +147,6 @@ data class Incoming(
     val isGroup: Boolean = false,
     val mentioned: Boolean = false,
     val ts: Long = 0L,
+    /** The message is a reply to something you wrote. */
+    val replyToMe: Boolean = false,
 )

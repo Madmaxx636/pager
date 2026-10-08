@@ -1,6 +1,17 @@
 package app.pager.android
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Build
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
@@ -57,9 +68,9 @@ private fun scheme(dark: Boolean, black: Boolean, accent: String): ColorScheme {
         error = Color(0xFFFF7B7B),
     ) else lightColorScheme(
         primary = primary, onPrimary = on, primaryContainer = primary, onPrimaryContainer = on,
-        background = Color(0xFFF6F7F9), onBackground = Color(0xFF14181F),
+        background = Color(0xFFF2F4F7), onBackground = Color(0xFF111418),
         surface = Color.White, onSurface = Color(0xFF14181F),
-        surfaceVariant = Color(0xFFECEFF4), onSurfaceVariant = Color(0xFF667085),
+        surfaceVariant = Color(0xFFE9ECF1), onSurfaceVariant = Color(0xFF5F6B7A),
         error = Color(0xFFC62828),
     )
 }
@@ -85,10 +96,41 @@ fun wallpaperBrush(name: String, dark: Boolean): Brush? = when (name) {
 @Composable
 fun isDarkTheme(s: AppSettings) = when (s.themeMode) { "light" -> false; "dark", "black" -> true; else -> isSystemInDarkTheme() }
 
+private fun Context.findActivity(): Activity? {
+    var c = this
+    while (c is ContextWrapper) { if (c is Activity) return c; c = c.baseContext }
+    return null
+}
+
+/** Tighter, calmer type scale than the Material default (closer to Google Messages / iOS Messages). */
+private val PagerTypography = Typography(
+    headlineMedium = TextStyle(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp),
+    titleLarge = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
+    titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold),
+    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 22.sp),
+    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium),
+)
+
+private val PagerShapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp), small = RoundedCornerShape(10.dp), medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(20.dp), extraLarge = RoundedCornerShape(28.dp),
+)
+
 @Composable
 fun PagerTheme(settings: AppSettings, content: @Composable () -> Unit) {
     val dark = isDarkTheme(settings)
     val context = LocalContext.current
+    // The app has its own light/dark setting, so the system bars must follow it, not the phone's theme
+    // (otherwise light mode draws white status-bar icons on a light background).
+    val view = LocalView.current
+    if (!view.isInEditMode) SideEffect {
+        val window = view.context.findActivity()?.window ?: return@SideEffect
+        val controller = WindowCompat.getInsetsController(window, view)
+        controller.isAppearanceLightStatusBars = !dark
+        controller.isAppearanceLightNavigationBars = !dark
+    }
     val colors = if (settings.accent == "dynamic" && Build.VERSION.SDK_INT >= 31) {
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else scheme(dark, settings.themeMode == "black", settings.accent)
@@ -96,5 +138,5 @@ fun PagerTheme(settings: AppSettings, content: @Composable () -> Unit) {
     CompositionLocalProvider(
         LocalSettings provides settings,
         LocalDensity provides Density(base.density, base.fontScale * settings.fontScale),
-    ) { MaterialTheme(colorScheme = colors, content = content) }
+    ) { MaterialTheme(colorScheme = colors, typography = PagerTypography, shapes = PagerShapes, content = content) }
 }

@@ -187,6 +187,6 @@ class SyncReducerTest {
         val r = SyncReducer.apply(base, joinWith(
             """{"type":"m.room.message","event_id":"${'$'}img","sender":"$mom","origin_server_ts":8000,"content":{"msgtype":"m.image","body":"p.jpg","url":"mxc://pager.test/abc","info":{"mimetype":"image/jpeg","size":1234,"w":800,"h":600}}}"""),
             me, false).chats.getValue("!a:x").messages.last()
-        assertEquals("mxc://pager.test/abc", r.mxc); assertEquals(800, r.w); assertEquals(600, r.h); assertEquals("📷 Photo", previewOf(r))
+        assertEquals("mxc://pager.test/abc", r.mxc); assertEquals(800, r.w); assertEquals(600, r.h); assertEquals("Photo", previewOf(r))
     }
 }

@@ -1,27 +1,43 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package app.pager.android
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Label
+import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.ExitToApp
+import androidx.compose.material.icons.rounded.InsertDriveFile
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.LowPriority
+import androidx.compose.material.icons.rounded.MarkChatUnread
+import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Snooze
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,10 +50,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
 @Composable
 fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSearch: () -> Unit) {
@@ -45,70 +65,95 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
     val chat by remember(roomId) { store.chat(roomId) }.collectAsState(null)
     val me = store.session.collectAsState().value?.userId ?: ""
     val muted by store.muted.collectAsState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var members by remember { mutableStateOf<Map<String, String>?>(null) }
     var confirmLeave by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
-    var muteDialog by remember { mutableStateOf(false) }
-    var remindDialog by remember { mutableStateOf(false) }
+    var muteSheet by remember { mutableStateOf(false) }
+    var remindSheet by remember { mutableStateOf(false) }
+    var snoozeSheet by remember { mutableStateOf(false) }
+    var labelSheet by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf("photos") }
     LaunchedEffect(roomId) { members = store.members(roomId) }
 
     val c = chat ?: run { onBack(); return }
     val name = SyncReducer.displayName(c, me)
-    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
-    val media = remember(c.messages) { c.messages.filter { it.type == "m.image" && it.mxc != null && !it.sticker }.takeLast(40).reversed() }
     val isMuted = roomId in muted
+    val photos = remember(c.messages) { c.messages.filter { it.type == "m.image" && it.mxc != null && !it.sticker }.reversed() }
+    val links = remember(c.messages) { c.messages.mapNotNull { m -> firstUrl(m.body)?.let { m to it } }.reversed() }
+    val files = remember(c.messages) { c.messages.filter { it.type == "m.file" || it.type == "m.audio" || it.type == "m.video" }.reversed() }
+    var viewer by remember { mutableStateOf<String?>(null) }
 
-    LazyColumn(Modifier.fillMaxSize()) {
-        item {
-            Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onBack) { Text("‹", fontSize = 28.sp) } }
-            Column(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        TopBar("Chat info", onBack)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 40.dp)) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Avatar(name, c.network, 96.dp, c.avatarMxc)
                 Spacer(Modifier.height(12.dp))
-                Text(name, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text("${networkMeta(c.network).label}${if (c.isGroup) " · ${c.memberCount} members" else ""}", color = onSurfaceVariant)
+                Text(name, style = MaterialTheme.typography.headlineMedium)
+                Text("${networkMeta(c.network).label}${if (c.isGroup) " · ${c.memberCount} members" else ""}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (c.isGroup) TextButton(onClick = { rename = true }) { Text("Rename group") }
             }
-        }
-        item {
-            NavRow("Search in this chat", null, "🔍", onSearch)
-            NavRow("Remind me about this chat", null, "⏰") { remindDialog = true }
-            ToggleRow("Pinned", c.pinned) { store.setTag(roomId, "m.favourite", it) }
-            ToggleRow(if (isMuted) "Muted${store.muteLeft(roomId)?.takeIf { it > 0 }?.let { " · ${it / 3_600_000 + 1}h left" } ?: ""}" else "Muted", isMuted) { on -> if (on) muteDialog = true else store.setMuted(roomId, false) }
-            ToggleRow("Archived", c.archived) { store.setTag(roomId, "u.archived", it) }
-            ToggleRow("Marked unread", c.markedUnread) { store.markUnread(roomId, it) }
-            if (media.isNotEmpty()) {
-                Text("Shared photos", fontWeight = FontWeight.SemiBold, color = onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp))
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(media, key = { it.id }) { m ->
-                        val img = rememberMxcImage(m.mxc, 256)
-                        Row(Modifier.size(92.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
-                            if (img != null) Image(img, null, Modifier.size(92.dp), contentScale = ContentScale.Crop)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                QuickAction(Icons.Rounded.Search, "Search") { onSearch() }
+                QuickAction(Icons.Rounded.PushPin, if (c.pinned) "Unpin" else "Pin", c.pinned) { store.pin(roomId, !c.pinned) }
+                QuickAction(Icons.Rounded.NotificationsOff, if (isMuted) "Unmute" else "Mute", isMuted) { if (isMuted) store.setMuted(roomId, false) else muteSheet = true }
+                QuickAction(Icons.Rounded.Alarm, "Remind") { remindSheet = true }
+            }
+            SettingsGroup {
+                SwitchRow("Low priority", "Quiet, except @mentions and replies", c.lowPriority) { store.setLowPriority(roomId, it) }; GroupDivider()
+                SwitchRow("Archived", checked = c.archived) { store.setTag(roomId, "u.archived", it) }; GroupDivider()
+                SwitchRow("Marked unread", checked = c.markedUnread) { store.markUnread(roomId, it) }; GroupDivider()
+                NavRow("Labels", if (c.labels.isEmpty()) "None" else c.labels.joinToString(), Icons.AutoMirrored.Rounded.Label, Color(0xFFF59E0B)) { labelSheet = true }; GroupDivider()
+                NavRow("Snooze…", "Hide this chat and bring it back later", Icons.Rounded.Snooze, Color(0xFF8B5CF6)) { snoozeSheet = true }
+            }
+
+            // Shared media, links and files from what's loaded on this device.
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("photos" to "Photos ${photos.size}", "links" to "Links ${links.size}", "files" to "Files ${files.size}").forEach { (id, label) ->
+                    val on = tab == id
+                    Text(label, style = MaterialTheme.typography.labelLarge, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant).clickable { tab = id }.padding(horizontal = 14.dp, vertical = 8.dp))
+                }
+            }
+            when (tab) {
+                "photos" -> if (photos.isEmpty()) Text("No photos loaded yet. Scroll up in the chat to load more.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    photos.take(60).chunked(3).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            row.forEach { m ->
+                                val img = rememberMxcImage(m.mxc, 300)
+                                Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable { viewer = m.id }) { if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+                            }
+                            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 }
+                "links" -> if (links.isEmpty()) Text("No links shared.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else SettingsGroup { links.take(40).forEachIndexed { i, (m, u) -> if (i > 0) GroupDivider(); NavRow(u, "${c.nameOf(m.sender)} · ${timeLabel(m.ts)}", Icons.Rounded.Link, Color(0xFF0EA5E9)) { runCatching { store.openUrl(android.net.Uri.parse(u)) } } } }
+                else -> if (files.isEmpty()) Text("No files shared.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else SettingsGroup { files.take(40).forEachIndexed { i, m -> if (i > 0) GroupDivider(); NavRow(m.body.ifEmpty { previewOf(m) }, "${c.nameOf(m.sender)} · ${m.size?.let { humanSize(it) } ?: ""}", Icons.Rounded.InsertDriveFile, Color(0xFF14B8A6)) { m.mxc?.let { x -> scope.launch { store.media.open(x, m.body.ifEmpty { "file" }, m.mime) } } } } }
             }
-            Text("Leave chat", color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth().clickable { confirmLeave = true }.padding(horizontal = 20.dp, vertical = 16.dp))
-            Text("Members${members?.let { " (${it.size})" } ?: ""}", fontWeight = FontWeight.SemiBold, color = onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
-        }
-        val list = (members ?: c.members).entries.sortedBy { it.value.lowercase() }
-        items(list, key = { it.key }) { (id, display) ->
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Avatar(display, null, 36.dp)
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(if (id == me) "$display (you)" else display)
-                    Text(id, fontSize = 11.sp, color = onSurfaceVariant)
+
+            SettingsGroup("Members${members?.let { " (${it.size})" } ?: ""}") {
+                val list = (members ?: c.members).entries.sortedBy { it.value.lowercase() }
+                list.forEachIndexed { i, (id, display) ->
+                    if (i > 0) GroupDivider()
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(display, null, 38.dp); Spacer(Modifier.width(14.dp))
+                        Column { Text(if (id == me) "$display (you)" else display); Text(id, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
                 }
+                if (members == null) Text("Loading members…", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            SettingsGroup { ButtonRow("Leave chat", danger = true) { confirmLeave = true } }
         }
-        if (members == null) item { Text("Loading members…", color = onSurfaceVariant, modifier = Modifier.padding(20.dp)) }
     }
 
     if (confirmLeave) AlertDialog(
-        onDismissRequest = { confirmLeave = false },
-        title = { Text("Leave this chat?") },
+        onDismissRequest = { confirmLeave = false }, title = { Text("Leave this chat?") },
         text = { Text("It will disappear from your inbox. The conversation on ${networkMeta(c.network).label} isn't deleted.") },
-        confirmButton = { TextButton(onClick = { confirmLeave = false; store.leave(roomId); onLeft() }) { Text("Leave") } },
+        confirmButton = { TextButton(onClick = { confirmLeave = false; store.leave(roomId); onLeft() }) { Text("Leave", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Cancel") } },
     )
     if (rename) {
@@ -120,24 +165,19 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
             dismissButton = { TextButton(onClick = { rename = false }) { Text("Cancel") } },
         )
     }
-    if (muteDialog) AlertDialog(
-        onDismissRequest = { muteDialog = false }, title = { Text("Mute $name") },
-        text = {
-            Column {
-                listOf("For 1 hour" to 3_600_000L, "For 8 hours" to 8 * 3_600_000L, "For 1 week" to 7 * 86_400_000L, "Until I turn it back on" to null).forEach { (label, ms) ->
-                    Text(label, Modifier.fillMaxWidth().clickable { store.setMuted(roomId, true, ms); muteDialog = false }.padding(vertical = 12.dp))
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { muteDialog = false }) { Text("Cancel") } },
-    )
-    if (remindDialog) TimePresetDialog("Remind me about $name", { store.remind(roomId, it); remindDialog = false }, { remindDialog = false })
+    if (muteSheet) MuteSheet("Mute $name", { ms -> store.setMuted(roomId, true, ms); muteSheet = false }, { muteSheet = false })
+    if (remindSheet) WhenSheet("Remind me about $name", { store.remind(roomId, it); remindSheet = false }, { remindSheet = false })
+    if (snoozeSheet) WhenSheet("Snooze until", { store.snooze(roomId, it); snoozeSheet = false; onLeft() }, { snoozeSheet = false })
+    if (labelSheet) LabelSheet(listOf(roomId)) { labelSheet = false }
+    viewer?.let { id -> ImageViewer(photos.reversed(), id, senderName = { c.nameOf(it) }) { viewer = null } }
 }
 
 @Composable
-private fun ToggleRow(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onChange(!on) }.padding(horizontal = 20.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label)
-        Switch(on, onChange)
+private fun QuickAction(icon: ImageVector, label: String, active: Boolean = false, onClick: () -> Unit) {
+    Column(Modifier.width(76.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(52.dp).clip(CircleShape).background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
+            Icon(icon, label, tint = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
+        }
+        Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp), maxLines = 1)
     }
 }
