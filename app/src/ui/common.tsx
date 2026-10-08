@@ -1,9 +1,13 @@
 import { ReactNode, useEffect, useState } from "react";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronRight, MessageCircle, MessageSquare, Phone, Send, Camera, Gamepad2, MessagesSquare, User, X } from "lucide-react";
 import { mediaUrl } from "../core/store";
 import { EMOJI_CATEGORIES, networkMeta } from "../core/emoji";
 import { useSettings } from "../core/settings";
 
+/** Simple original glyphs for each network (no brand marks). */
+const NET_ICONS: Record<string, React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>> = {
+  whatsapp: Phone, signal: MessageCircle, telegram: Send, discord: Gamepad2, instagram: Camera, messenger: MessagesSquare, gmessages: MessageSquare,
+};
 const hueOf = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
 
 /** Loads a Matrix image (thumbnail of `thumb` px; 0 = original) with auth. */
@@ -25,8 +29,8 @@ export function Avatar({ name, mxc, size = 44, network }: { name: string; mxc?: 
   const h = hueOf(name);
   return (
     <div className={"avatar" + (squircle ? " squircle" : "")} style={{ width: size, height: size, fontSize: size * 0.4 }}>
-      {src ? <img src={src} alt="" /> : <span style={{ background: `linear-gradient(135deg, hsl(${h} 55% 52%), hsl(${(h + 28) % 360} 62% 38%))` }}>{(name.replace(/^[^\p{L}\p{N}]+/u, "")[0] ?? "?").toUpperCase()}</span>}
-      {meta && <i className="badge" style={{ background: meta.color, width: size * 0.4, height: size * 0.4, fontSize: size * 0.2 }} title={meta.label}>{meta.glyph}</i>}
+      {src ? <img src={src} alt="" /> : <span style={{ background: `linear-gradient(135deg, hsl(${h} 55% 52%), hsl(${(h + 28) % 360} 62% 38%))` }}>{/^[\d\s+()-]+$/.test(name) ? <User size={size * 0.55} /> : (name.replace(/^[^\p{L}\p{N}]+/u, "")[0] ?? "?").toUpperCase()}</span>}
+      {meta && <i className="badge" style={{ background: meta.color, width: size * 0.4, height: size * 0.4, fontSize: size * 0.2 }} title={meta.label}>{NET_ICONS[network!] ? (() => { const I = NET_ICONS[network!]; return <I size={size * 0.24} strokeWidth={2.4} color="#fff" />; })() : meta.glyph}</i>}
     </div>
   );
 }

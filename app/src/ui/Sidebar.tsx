@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlarmClock, Archive, ArchiveRestore, BellOff, CheckCheck, CircleDot, Circle, CheckCircle2, Inbox, ListFilter, MailOpen, MessageSquareDot, MoreVertical, Pin,
-  PinOff, Search, Settings as SettingsIcon, Hourglass, SquarePen, Star, Tag, TriangleAlert, Users, ArrowDownToLine, ChevronLeft, ChevronRight, UserRoundCog, X,
+  PinOff, Search, Settings as SettingsIcon, Hourglass, SquarePen, Star, Tag, TriangleAlert, Users, ArrowDownToLine, ChevronLeft, ChevronRight, UserRoundCog, X, BellRing, ArrowUpToLine,
 } from "lucide-react";
 import { ChatSummary } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import {
   addLabel, markAllRead, markRead, markUnread, me, movePin, pin, remind, removeLabel, setLowPriority, setMuted, setTag, snooze, useInbox, useLabels, useStore, useChatsRaw,
 } from "../core/store";
-import { useSettings } from "../core/settings";
+import { RowAction, useSettings } from "../core/settings";
 import { Avatar, IconButton, Modal, SheetItem, WhenModal, EmptyState } from "./common";
 import { needsAttention } from "./Accounts";
 
@@ -36,6 +36,20 @@ function inTab(c: ChatSummary, tab: string) {
   return true;
 }
 
+/** What a hover quick action looks like and does for a chat (and how to undo it). */
+function rowAction(a: RowAction, c: ChatSummary, setUndo: (u?: { label: string; revert: () => void }) => void, ask: () => void) {
+  const unread = c.unread > 0 || c.markedUnread;
+  switch (a) {
+    case "archive": return { label: c.archived ? "Move to inbox" : "Archive", icon: c.archived ? ArchiveRestore : Archive, run: () => { setTag(c.id, "u.archived", !c.archived); setUndo({ label: c.archived ? "Moved to inbox" : "Archived", revert: () => setTag(c.id, "u.archived", c.archived) }); } };
+    case "read": return { label: unread ? "Mark read" : "Mark unread", icon: unread ? MailOpen : MessageSquareDot, run: () => (unread ? markRead(c.id) : markUnread(c.id, true)) };
+    case "pin": return { label: c.pinned ? "Unpin" : "Pin", icon: c.pinned ? PinOff : Pin, run: () => pin(c.id, !c.pinned) };
+    case "mute": return { label: c.muted ? "Unmute" : "Mute", icon: BellOff, run: () => (c.muted ? setMuted(c.id, false) : ask()) };
+    case "low": return { label: c.lowPriority ? "Move to inbox" : "Low priority", icon: ArrowDownToLine, run: () => { setLowPriority(c.id, !c.lowPriority); setUndo({ label: c.lowPriority ? "Moved to inbox" : "Moved to low priority", revert: () => setLowPriority(c.id, c.lowPriority) }); } };
+    case "snooze": return { label: "Snooze 3 hours", icon: Hourglass, run: () => { snooze(c.id, Date.now() + 3 * 3600_000); setUndo({ label: "Snoozed for 3 hours", revert: () => setTag(c.id, "u.archived", c.archived) }); } };
+    default: return undefined;
+  }
+}
+
 export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: string | null; onSelect: (id: string) => void; nav: Nav; onAccounts: () => void }) {
   const st = useSettings();
   const all = useInbox();
@@ -49,6 +63,8 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
   const [ctx, setCtx] = useState<{ c: ChatSummary; x: number; y: number }>();
   const [filterModal, setFilterModal] = useState(false);
   const [muteFor, setMuteFor] = useState<string[]>();
+  const [undo, setUndo] = useState<{ label: string; revert: () => void }>();
+  useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(undefined), 4500); return () => clearTimeout(t); }, [undo]);
   const [labelFor, setLabelFor] = useState<string[]>();
   const [whenFor, setWhenFor] = useState<{ ids: string[]; kind: "snooze" | "remind" }>();
   const [picked, setPicked] = useState<string[]>([]);
@@ -154,7 +170,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
           {shown.map((c) => {
             const unread = c.unread > 0 || c.markedUnread;
             return (
-              <li key={c.id}>
+              <li key={c.id} className="chat-li">
                 <button className={"chat-row" + (c.id === selected ? " sel" : "") + (picked.includes(c.id) ? " picked" : "")} onClick={() => open(c.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }}>
                   {selecting && (picked.includes(c.id) ? <CheckCircle2 className="check on" size={22} /> : <Circle className="check" size={22} />)}
                   {st.showAvatars && <Avatar name={c.name} mxc={c.avatarMxc} network={st.showNetworkBadges ? c.network : undefined} size={st.density === "compact" ? 40 : 50} />}
@@ -171,12 +187,20 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
                       <div className="chat-bottom">
                         {c.typing ? <span className="chat-preview accent">typing…</span>
                           : c.draft ? <span className="chat-preview"><b className="accent">Draft:</b> {c.draft.replace(/\n/g, " ")}</span>
-                          : st.showPreviews ? <span className="chat-preview">{c.lastFromMe ? "You: " : ""}{c.preview}</span> : <span className="chat-preview" />}
+                          : st.showPreviews ? <span className={"chat-preview" + (c.preview ? "" : " no-msgs")}>{c.preview ? (c.lastFromMe ? "You: " : "") + c.preview : "No messages yet"}</span> : <span className="chat-preview" />}
                         {unread && <span className={"unread" + (c.muted || c.lowPriority ? " muted-badge" : "")}>{c.unread > 99 ? "99+" : c.unread || ""}</span>}
                       </div>
                     )}
                   </div>
                 </button>
+                {!selecting && (
+                  <div className="row-actions">
+                    {[st.rowAction1, st.rowAction2].map((a, n) => {
+                      const r = rowAction(a, c, setUndo, () => setMuteFor([c.id]));
+                      return r ? <button key={n} className="icon sm" title={r.label} aria-label={r.label} onClick={() => r.run()}><r.icon size={17} /></button> : null;
+                    })}
+                  </div>
+                )}
               </li>
             );
           })}
@@ -217,6 +241,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
           </div>
         </Modal>
       )}
+      {undo && <div className="undo-toast"><span>{undo.label}</span><button onClick={() => { undo.revert(); setUndo(undefined); }}>Undo</button></div>}
     </aside>
   );
 }

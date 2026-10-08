@@ -259,7 +259,7 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
                 SwitchRow("Show message previews", checked = s.showPreviews) { v -> set { copy(showPreviews = v) } }
             }
             SettingsGroup("Swipe actions", footer = "Swipe a chat in the list. Long-press a chat to see every action.") {
-                val swipe = listOf("none" to "Nothing", "archive" to "Archive", "read" to "Mark read / unread", "pin" to "Pin", "mute" to "Mute")
+                val swipe = listOf("none" to "Nothing", "archive" to "Archive", "read" to "Mark read / unread", "pin" to "Pin", "mute" to "Mute", "low" to "Low priority", "snooze" to "Snooze 3 hours")
                 ChoiceRow("Swipe right", swipe, s.swipeRight) { v -> set { copy(swipeRight = v) } }; GroupDivider()
                 ChoiceRow("Swipe left", swipe, s.swipeLeft) { v -> set { copy(swipeLeft = v) } }
             }
