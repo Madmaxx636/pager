@@ -36,7 +36,7 @@
       "synopsis": "Unified messenger",
       "maintainer": "Pager contributors <pager@localhost>",
       "syncDesktopName": true,
-      "executableName": "pager"
+      "executableName": "pager-desktop"
     },
     "mac": {
       "target": [
