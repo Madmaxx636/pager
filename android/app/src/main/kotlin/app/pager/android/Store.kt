@@ -170,6 +170,8 @@ class Store(private val context: Context) {
             if (!cacheFile.exists()) return
             val c = json.decodeFromString(cacheSerializer, cacheFile.readText())
             if (c.userId != userId) return
+            // Caches from before room types were tracked can't tell DMs from groups: resync from scratch.
+            if (c.chats.values.any { it.network != "matrix" && it.roomType == null }) { cacheFile.delete(); return }
             _chats.value = c.chats
             since = c.since
             _synced.value = true

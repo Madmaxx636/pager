@@ -118,7 +118,10 @@ export async function restoreSession(): Promise<boolean> {
   const s = lsGet<Session | null>(SESSION_KEY, null);
   // Sessions saved by older versions had a different shape; make the user sign in again rather than crash.
   if (!s || typeof s.token !== "string" || typeof s.userId !== "string" || typeof s.baseUrl !== "string") { localStorage.removeItem(SESSION_KEY); return false; }
-  begin(s, await dbGet<{ userId: string; since?: string; chats: Record<string, ChatState> }>("cache"));
+  let cached = await dbGet<{ userId: string; since?: string; chats: Record<string, ChatState> }>("cache");
+  // Caches from before room types were tracked can't tell DMs from groups: resync from scratch.
+  if (cached && Object.values(cached.chats).some((c) => c.network !== "matrix" && !c.roomType)) cached = undefined;
+  begin(s, cached);
   return true;
 }
 

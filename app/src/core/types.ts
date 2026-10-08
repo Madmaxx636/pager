@@ -54,6 +54,7 @@ export interface ChatState {
   tags: string[];
   markedUnread: boolean;
   memberCount: number;
+  roomType?: string;
   typing: string[];
   /** Order among pinned chats (the m.favourite tag's order). */
   pinOrder?: number;
@@ -104,7 +105,9 @@ export const emptyChat = (id: string): ChatState => ({
   pollVotes: {}, pollEnded: [], stickerPacks: [],
 });
 
-export const isGroup = (c: ChatState) => c.memberCount > 2;
+/** Bridged rooms always hold the bridge bot and your own puppet, so raw member counts overstate. */
+export const isGroup = (c: ChatState) => (c.roomType ? c.roomType !== "dm" : c.memberCount > 2);
+export const peopleCount = (c: ChatState) => (c.roomType ? Math.max(2, c.memberCount - 2) : c.memberCount);
 export const isPinned = (c: ChatState) => c.tags.includes("m.favourite");
 export const isArchived = (c: ChatState) => c.tags.includes("u.archived");
 export const isLowPriority = (c: ChatState) => c.tags.includes("m.lowpriority");

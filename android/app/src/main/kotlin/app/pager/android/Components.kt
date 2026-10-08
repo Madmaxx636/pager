@@ -7,7 +7,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,8 +53,13 @@ fun Avatar(name: String, network: String?, size: Dp = 46.dp, mxc: String? = null
         Box(Modifier.size(size).clip(shape).background(Brush.linearGradient(listOf(Color.hsv(h, 0.55f, 0.78f), Color.hsv((h + 28f) % 360f, 0.65f, 0.58f)))), contentAlignment = Alignment.Center) {
             if (img != null) Image(img, null, Modifier.size(size), contentScale = ContentScale.Crop)
             else {
-                val initial = name.dropWhile { !it.isLetterOrDigit() }.firstOrNull()?.uppercase() ?: "?"
-                Text(initial, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
+                // Unnamed contacts show up as phone numbers: a person glyph beats a meaningless digit.
+                val unnamed = name.isNotEmpty() && name.all { it.isDigit() || it in "+ -()" }
+                if (unnamed) Icon(Icons.Rounded.Person, null, Modifier.size(size * 0.55f), tint = Color.White.copy(alpha = 0.9f))
+                else {
+                    val initial = name.dropWhile { !it.isLetterOrDigit() }.firstOrNull()?.uppercase() ?: "?"
+                    Text(initial, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
+                }
             }
         }
         if (network != null && network != "matrix") {
@@ -61,7 +69,9 @@ fun Avatar(name: String, network: String?, size: Dp = 46.dp, mxc: String? = null
                 contentAlignment = Alignment.Center,
             ) {
                 Box(Modifier.size(size * 0.33f).clip(CircleShape).background(meta.color), contentAlignment = Alignment.Center) {
-                    Text(meta.glyph, color = Color.White, fontSize = (size.value * 0.19f).sp, fontWeight = FontWeight.Bold)
+                    val icon = networkIcon(network)
+                    if (icon != null) Icon(icon, null, Modifier.size(size * 0.2f), tint = Color.White)
+                    else Text(meta.glyph, color = Color.White, fontSize = (size.value * 0.19f).sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

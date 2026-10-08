@@ -1,5 +1,13 @@
 package app.pager.android
 
+import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.ChatBubble
+import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.SportsEsports
+import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.Sms
+import androidx.compose.material.icons.Icons
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -42,6 +50,18 @@ private val networks = mapOf(
     "gmessages" to NetworkMeta("Messages", Color(0xFF1A73E8), "G"),
     "matrix" to NetworkMeta("Matrix", Color(0xFF8A94A6), "#"),
 )
+
+/** Simple original glyphs for each network (no brand marks). */
+fun networkIcon(id: String): androidx.compose.ui.graphics.vector.ImageVector? = when (id) {
+    "whatsapp" -> Icons.Rounded.Call
+    "signal" -> Icons.Rounded.ChatBubble
+    "telegram" -> Icons.Rounded.Send
+    "discord" -> Icons.Rounded.SportsEsports
+    "instagram" -> Icons.Rounded.PhotoCamera
+    "messenger" -> Icons.Rounded.Forum
+    "gmessages" -> Icons.Rounded.Sms
+    else -> null
+}
 
 fun networkMeta(id: String) = networks[id] ?: NetworkMeta(id, Color(0xFF8A94A6), id.take(1).uppercase())
 

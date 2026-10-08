@@ -62,7 +62,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSearch: () -> Unit) {
     val store = LocalStore.current
-    val chat by remember(roomId) { store.chat(roomId) }.collectAsState(null)
+    val chat by remember(roomId) { store.chat(roomId) }.collectAsState(store.chatNow(roomId))
     val me = store.session.collectAsState().value?.userId ?: ""
     val muted by store.muted.collectAsState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -91,7 +91,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 Avatar(name, c.network, 96.dp, c.avatarMxc)
                 Spacer(Modifier.height(12.dp))
                 Text(name, style = MaterialTheme.typography.headlineMedium)
-                Text("${networkMeta(c.network).label}${if (c.isGroup) " · ${c.memberCount} members" else ""}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${networkMeta(c.network).label}${if (c.isGroup) " · ${c.peopleCount} members" else ""}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (c.isGroup) TextButton(onClick = { rename = true }) { Text("Rename group") }
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {

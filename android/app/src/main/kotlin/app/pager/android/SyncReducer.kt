@@ -50,7 +50,7 @@ object SyncReducer {
                 if (!initial && m.sender != me) {
                     val mine = pre.members[me] ?: me.removePrefix("@").substringBefore(':')
                     val mentioned = me in m.mentions || m.body.contains("@$mine", ignoreCase = true)
-                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.memberCount > 2, mentioned, m.ts, replyToMe = parentSender == me))
+                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.isGroup, mentioned, m.ts, replyToMe = parentSender == me))
                 }
             }
 
@@ -183,7 +183,8 @@ object SyncReducer {
             }
             "m.bridge", "uk.half-shot.bridge" -> {
                 val id = content["protocol"].obj()["id"].str()
-                if (id != null) chat.copy(network = if (id == "facebook") "messenger" else id) else chat
+                val type = content["com.beeper.room_type"].str() ?: content["com.beeper.room_type.v2"].str()
+                if (id != null) chat.copy(network = if (id == "facebook") "messenger" else id, roomType = type ?: chat.roomType ?: "") else chat
             }
             "m.room.member" -> {
                 val joined = content["membership"].str() == "join"

@@ -73,6 +73,8 @@ data class ChatState(
     val tags: Set<String> = emptySet(),
     val markedUnread: Boolean = false,
     val memberCount: Int = 0,
+    /** Bridge-reported room type ("dm", "group"...), when the room is bridged. */
+    val roomType: String? = null,
     /** Order of this chat among pinned chats (m.favourite tag order). */
     val pinOrder: Double? = null,
     /** poll event id -> user id -> chosen answer ids */
@@ -82,7 +84,9 @@ data class ChatState(
     @Transient val typing: Set<String> = emptySet(),
 ) {
     val lastTs get() = messages.lastOrNull()?.ts ?: 0L
-    val isGroup get() = memberCount > 2
+    /** Bridged rooms always hold the bridge bot and your own puppet, so raw member counts overstate. */
+    val isGroup get() = roomType?.takeIf { it.isNotEmpty() }?.let { it != "dm" } ?: (memberCount > 2)
+    val peopleCount get() = if (!roomType.isNullOrEmpty()) (memberCount - 2).coerceAtLeast(2) else memberCount
     val pinned get() = "m.favourite" in tags
     val archived get() = "u.archived" in tags
     val lowPriority get() = "m.lowpriority" in tags

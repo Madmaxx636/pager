@@ -3,7 +3,7 @@ import {
   AlarmClock, Archive, ArrowDownToLine, ArrowLeft, BellOff, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
   Reply, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon,
 } from "lucide-react";
-import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, previewOf } from "../core/types";
+import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import { getSettings, useSettings, AppSettings } from "../core/settings";
 import {
@@ -126,7 +126,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
             <div>
               <div className="chat-title">{name}</div>
               {typingNames.length ? <div className="chat-sub typing">{typingNames.length === 1 ? `${typingNames[0]} is typing…` : "Several people are typing…"}</div>
-                : <div className="chat-sub"><i style={{ background: meta.color }} />{meta.label}{isGroup(chat) ? ` · ${chat.memberCount} members` : ""}</div>}
+                : <div className="chat-sub"><i style={{ background: meta.color }} />{meta.label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</div>}
             </div>
           </button>
           <IconButton icon={Search} label="Search in chat (Ctrl+F)" onClick={() => nav(`search:${roomId}`)} />
@@ -380,7 +380,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
     <aside className="info">
       <header><b>Chat info</b><IconButton icon={X} label="Close" onClick={onClose} /></header>
       <div className="info-body">
-        <div className="info-id"><Avatar name={name} mxc={chat.avatarMxc} size={88} network={chat.network} /><h3>{name}</h3><small>{networkMeta(chat.network).label}{isGroup(chat) ? ` · ${chat.memberCount} members` : ""}</small>
+        <div className="info-id"><Avatar name={name} mxc={chat.avatarMxc} size={88} network={chat.network} /><h3>{name}</h3><small>{networkMeta(chat.network).label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</small>
           {isGroup(chat) && <button className="link" onClick={() => { const n = prompt("Rename group", chat.name); if (n?.trim()) rename(chat.id, n.trim()); }}>Rename group</button>}</div>
         <div className="quick-actions">
           <button onClick={() => nav(`search:${chat.id}`)}><span><Search size={20} /></span>Search</button>

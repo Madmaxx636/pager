@@ -1,5 +1,5 @@
 // Folds Matrix /sync and /messages responses into chat state. A direct port of the Android SyncReducer so both clients behave alike.
-import { ChatState, Incoming, Msg, PollAnswer, STATUS_SENT, StickerPack, displayName, emptyChat, nameOf, previewOf } from "./types";
+import { ChatState, Incoming, Msg, PollAnswer, STATUS_SENT, StickerPack, displayName, emptyChat, isGroup, nameOf, previewOf } from "./types";
 
 type J = Record<string, any>;
 const obj = (v: unknown): J => (v && typeof v === "object" && !Array.isArray(v) ? (v as J) : {});
@@ -39,7 +39,7 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
       if (!initial && m.sender !== me) {
         const mine = pre.members[me] ?? me.replace(/^@/, "").split(":")[0];
         const mentioned = m.mentions.includes(me) || m.body.toLowerCase().includes(`@${mine}`.toLowerCase());
-        incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: pre.memberCount > 2, mentioned, ts: m.ts, replyToMe: parentSender === me });
+        incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: isGroup(pre), mentioned, ts: m.ts, replyToMe: parentSender === me });
       }
     });
 
@@ -184,7 +184,8 @@ function applyState(chat: ChatState, e: J): ChatState {
     case "m.bridge":
     case "uk.half-shot.bridge": {
       const id = str(obj(content.protocol).id);
-      return id ? { ...chat, network: id === "facebook" ? "messenger" : id } : chat;
+      const type = str(content["com.beeper.room_type"]) ?? str(content["com.beeper.room_type.v2"]);
+      return id ? { ...chat, network: id === "facebook" ? "messenger" : id, roomType: type ?? chat.roomType ?? "" } : chat;
     }
     case "m.room.member": {
       const joined = content.membership === "join";
