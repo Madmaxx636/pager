@@ -123,3 +123,14 @@ test("contact search and DM creation are proxied with login_id", async () => {
   assert.equal((await post("/api/bridges/whatsapp/create_dm/%2B15551234567?login_id=123", {}, "goodtoken")).status, 200);
   assert.match(bridgeCalls.at(-1)!.url, /create_dm\/%2B15551234567/);
 });
+
+test("CORS: preflight succeeds and responses allow cross-origin callers", async () => {
+  const pre = await fetch(base + "/api/bridges", { method: "OPTIONS" });
+  assert.equal(pre.status, 204);
+  assert.match(pre.headers.get("access-control-allow-headers") ?? "", /authorization/);
+  const r = await fetch(base + "/api/config");
+  assert.equal(r.headers.get("access-control-allow-origin"), "*");
+  const bad = await fetch(base + "/api/bridges");
+  assert.equal(bad.status, 401);
+  assert.equal(bad.headers.get("access-control-allow-origin"), "*");
+});

@@ -174,9 +174,9 @@ function Desktop() {
   useEffect(() => { void window.pagerDesktop?.getAutostart().then(setAuto); }, []);
   return (
     <>
-      <SwitchRow title="Keep running in the tray when closed" hint="Closing the window hides Pager so messages keep arriving" checked={s.closeToTray} onChange={(v) => { updateSettings({ closeToTray: v }); window.pagerDesktop?.setCloseToTray(v); }} />
+      <SwitchRow title="Keep running in the tray when closed" hint="Closing the window hides Pager so messages keep arriving" checked={s.closeToTray} onChange={(v) => { updateSettings({ closeToTray: v }); window.pagerDesktop?.setPrefs({ closeToTray: v }); }} />
       <SwitchRow title="Launch at login" checked={auto} onChange={(v) => { setAuto(v); window.pagerDesktop?.setAutostart(v); }} />
-      <SwitchRow title="Start minimized to tray" checked={s.startMinimized} onChange={(v) => updateSettings({ startMinimized: v })} />
+      <SwitchRow title="Start minimized to tray" checked={s.startMinimized} onChange={(v) => { updateSettings({ startMinimized: v }); window.pagerDesktop?.setPrefs({ startMinimized: v }); }} />
     </>
   );
 }

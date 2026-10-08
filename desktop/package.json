@@ -1,0 +1,61 @@
+{
+  "name": "pager-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Pager desktop app (Linux first; macOS and Windows builds are configured but untested)",
+  "author": "Pager contributors",
+  "main": "main.js",
+  "scripts": {
+    "icons": "node scripts/make-icons.mjs",
+    "web": "cd ../app && npm ci && npm run build && rm -rf ../desktop/app-dist && cp -r dist ../desktop/app-dist",
+    "start": "electron .",
+    "dist": "npm run icons && npm run web && electron-builder --linux AppImage deb",
+    "dist:mac": "npm run icons && npm run web && electron-builder --mac",
+    "dist:win": "npm run icons && npm run web && electron-builder --win"
+  },
+  "build": {
+    "appId": "app.pager.desktop",
+    "productName": "Pager",
+    "files": [
+      "main.js",
+      "preload.js",
+      "app-dist/**",
+      "build/icon.png",
+      "build/tray.png"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Network;InstantMessaging;Chat",
+      "icon": "build/icon.png",
+      "synopsis": "Unified messenger",
+      "maintainer": "Pager contributors <pager@localhost>",
+      "syncDesktopName": true,
+      "executableName": "pager"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.social-networking",
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "homepage": "https://pager.invalid/",
+  "desktopName": "pager.desktop"
+}
