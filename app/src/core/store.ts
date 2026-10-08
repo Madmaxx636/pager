@@ -3,14 +3,16 @@ import { http, matrix, pager, ApiError, LinkPreview, Network, SearchHit, url } f
 import { applyHistory, applySync } from "./reducer";
 import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings } from "./settings";
 import {
-  ChatState, ChatSummary, Incoming, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, displayName, isArchived, isBotRoom, isGroup, isPinned,
-  lastPreview, lastTs, nameOf, previewOf,
+  ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
+  labelsOf, lastPreview, lastTs, nameOf, previewOf,
 } from "./types";
+import { markdownToHtml } from "./format";
+import type { Gif } from "./gifs";
 
 export interface Session { baseUrl: string; token: string; userId: string; deviceId: string }
 export interface Star { roomId: string; eventId: string; chat: string; sender: string; text: string; ts: number }
 export interface Scheduled { delayId: string; roomId: string; chat: string; text: string; whenMs: number }
-export interface Reminder { id: string; roomId: string; chat: string; whenMs: number }
+export interface Reminder { id: string; roomId: string; chat: string; whenMs: number; snooze?: boolean }
 
 interface State {
   session?: Session;
@@ -22,6 +24,7 @@ interface State {
   scheduled: Scheduled[];
   reminders: Reminder[];
   bridges: Network[];
+  userStickers?: StickerPack;
 }
 
 const SESSION_KEY = "pager.session";
@@ -31,7 +34,7 @@ const lsSet = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.st
 let state: State = {
   chats: {}, synced: false, muted: [],
   drafts: lsGet("pager.drafts", {}), stars: lsGet("pager.stars", []), scheduled: lsGet("pager.scheduled", []),
-  reminders: lsGet("pager.reminders", []), bridges: [],
+  reminders: lsGet("pager.reminders", []), bridges: [], userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
 };
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
@@ -56,12 +59,20 @@ export function buildInbox(s: State, st: AppSettings): ChatSummary[] {
   const user = s.session?.userId ?? "";
   return Object.values(s.chats)
     .filter((c) => !isBotRoom(c, user) && !st.hiddenNetworks.includes(c.network))
-    .map((c): ChatSummary => ({
-      id: c.id, name: displayName(c, user), network: c.network, avatarMxc: c.avatarMxc, preview: lastPreview(c), ts: lastTs(c), unread: c.unread,
-      markedUnread: c.markedUnread, pinned: isPinned(c), archived: isArchived(c), muted: s.muted.includes(c.id), isGroup: isGroup(c), draft: s.drafts[c.id]?.trim() || undefined,
-    }))
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.ts - a.ts);
+    .map((c): ChatSummary => {
+      const last = c.messages[c.messages.length - 1];
+      return {
+        id: c.id, name: displayName(c, user), network: c.network, avatarMxc: c.avatarMxc, preview: lastPreview(c), ts: lastTs(c), unread: c.unread,
+        markedUnread: c.markedUnread, pinned: isPinned(c), archived: isArchived(c), muted: s.muted.includes(c.id), isGroup: isGroup(c), draft: s.drafts[c.id]?.trim() || undefined,
+        lowPriority: isLowPriority(c), labels: labelsOf(c), pinOrder: c.pinOrder ?? Number.MAX_VALUE,
+        unanswered: !!last && last.sender !== user, lastFromMe: last?.sender === user, typing: c.typing.length > 0,
+      };
+    })
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || (a.pinned ? a.pinOrder - b.pinOrder : 0)
+      || (st.sortUnreadFirst ? Number(b.unread > 0 || b.markedUnread) - Number(a.unread > 0 || a.markedUnread) : 0) || b.ts - a.ts);
 }
+
+export function useChatsRaw(): Record<string, ChatState> { return useStore((s) => s.chats); }
 
 export function useInbox(): ChatSummary[] {
   const st = useSettings();
@@ -145,10 +156,16 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       const res = await matrix.sync(since, signal);
       const initial = since === undefined;
       const r = applySync(state.chats, res, s.userId, initial);
-      set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}) });
+      set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}), ...(r.userStickers ? { userStickers: r.userStickers } : {}) });
+      if (r.userStickers) lsSet("pager.userStickers", r.userStickers);
       r.invites.forEach((id) => void matrix.join(id).catch(() => {}));
-      const muted = state.muted;
-      r.incoming.filter((m) => !muted.includes(m.roomId)).forEach(notify);
+      const muted = state.muted, scope = getSettings().notifScope;
+      // Beeper-style: muted and low-priority chats stay quiet except for @mentions and replies to you.
+      r.incoming.filter((m) => {
+        const c = r.chats[m.roomId], direct = m.mentioned || !!m.replyToMe;
+        const quiet = muted.includes(m.roomId) || (c ? isLowPriority(c) : false);
+        return (!quiet || direct) && (scope === "dm_mentions" ? !m.isGroup || direct : scope === "favorites" ? (c ? isPinned(c) : false) || direct : true);
+      }).forEach(notify);
       if (getSettings().unarchiveOnMessage) {
         for (const id of new Set(r.incoming.map((m) => m.roomId))) if (!muted.includes(id) && state.chats[id] && isArchived(state.chats[id])) setTag(id, "u.archived", false);
       }
@@ -215,13 +232,15 @@ const localMsg = (id: string, type: string, body: string, extra: Partial<Msg> = 
 
 export function send(roomId: string, text: string, replyTo?: string, mentions: string[] = []) {
   const txn = uuid(), localId = `local-${txn}`;
-  addLocal(roomId, localMsg(localId, "m.text", text, { replyTo, txn, mentions }));
+  const html = getSettings().markdown ? markdownToHtml(text) : undefined;
+  addLocal(roomId, localMsg(localId, "m.text", text, { replyTo, txn, mentions, html }));
   setDraft(roomId, "");
-  matrix.send(roomId, "m.room.message", txn, textContent(text, replyTo, mentions))
+  matrix.send(roomId, "m.room.message", txn, textContent(text, replyTo, mentions, html))
     .then((id) => setStatus(roomId, localId, STATUS_SENT, id)).catch(() => setStatus(roomId, localId, STATUS_FAILED));
 }
-const textContent = (text: string, replyTo?: string, mentions: string[] = []) => ({
+const textContent = (text: string, replyTo?: string, mentions: string[] = [], html?: string) => ({
   msgtype: "m.text", body: text,
+  ...(html ? { format: "org.matrix.html", formatted_body: html } : {}),
   ...(replyTo ? { "m.relates_to": { "m.in_reply_to": { event_id: replyTo } } } : {}),
   ...(mentions.length ? { "m.mentions": { user_ids: mentions } } : {}),
 });
@@ -359,15 +378,16 @@ function armReminders() {
     const fire = () => {
       timers.delete(r.id);
       set({ reminders: state.reminders.filter((x) => x.id !== r.id) }); lsSet("pager.reminders", state.reminders);
-      if (window.pagerDesktop) window.pagerDesktop.notify({ title: `Reminder: ${r.chat}`, body: "You asked to be reminded about this chat.", roomId: r.roomId });
+      if (r.snooze) { setTag(r.roomId, "u.archived", false); markUnread(r.roomId, true); }
+      if (window.pagerDesktop) window.pagerDesktop.notify({ title: r.snooze ? r.chat : `Reminder: ${r.chat}`, body: "You asked to be reminded about this chat.", roomId: r.roomId });
       else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(`Reminder: ${r.chat}`, { body: "You asked to be reminded about this chat." });
     };
     timers.set(r.id, window.setTimeout(fire, Math.max(0, Math.min(r.whenMs - now, 2 ** 31 - 1))));
   }
 }
-export function remind(roomId: string, whenMs: number) {
+export function remind(roomId: string, whenMs: number, snoozed = false) {
   const c = state.chats[roomId];
-  set({ reminders: [...state.reminders, { id: uuid(), roomId, chat: c ? displayName(c, me()) : "a chat", whenMs }] }); lsSet("pager.reminders", state.reminders);
+  set({ reminders: [...state.reminders, { id: uuid(), roomId, chat: c ? displayName(c, me()) : "a chat", whenMs, snooze: snoozed }] }); lsSet("pager.reminders", state.reminders);
   armReminders();
 }
 export function cancelReminder(r: Reminder) { window.clearTimeout(timers.get(r.id)); timers.delete(r.id); set({ reminders: state.reminders.filter((x) => x.id !== r.id) }); lsSet("pager.reminders", state.reminders); }
@@ -375,6 +395,16 @@ export function cancelReminder(r: Reminder) { window.clearTimeout(timers.get(r.i
 // ---- Search & link previews ---------------------------------------------------------------
 
 export const search = (term: string, roomId?: string): Promise<SearchHit[]> => matrix.search(term, roomId).catch(() => []);
+
+/** Searches everything already on this device. kind narrows by media type: all, images, videos, links, files. */
+export function searchLocal(term: string, roomId: string | undefined, kind: string): SearchHit[] {
+  const t = term.trim().toLowerCase(), url = /https?:\/\/\S+|www\.\S+/;
+  return Object.values(state.chats).filter((c) => !roomId || c.id === roomId).flatMap((c) =>
+    c.messages.filter((m) => m.status === STATUS_SENT && (kind === "images" ? m.type === "m.image" && !m.sticker : kind === "videos" ? m.type === "m.video" : kind === "files" ? m.type === "m.file" : kind === "links" ? url.test(m.body) : true) && (!t || m.body.toLowerCase().includes(t)))
+      .map((m) => ({ roomId: c.id, eventId: m.id, sender: m.sender, text: m.type === "m.text" || m.type === "m.notice" ? m.body : previewOf(m), ts: m.ts })),
+  ).sort((a, b) => b.ts - a.ts).slice(0, 200);
+}
+
 const previews = new Map<string, Promise<LinkPreview | undefined>>();
 export const preview = (u: string) => { if (!previews.has(u)) previews.set(u, matrix.previewUrl(u).catch(() => undefined)); return previews.get(u)!; };
 
@@ -388,9 +418,46 @@ export function loadOlder(roomId: string) {
   loading.add(roomId);
   matrix.messages(roomId, token).then(({ chunk, end }) => patchChat(roomId, (x) => applyHistory(x, chunk, end))).catch(() => {}).finally(() => loading.delete(roomId));
 }
-export function setTag(roomId: string, tag: string, on: boolean) {
-  patchChat(roomId, (c) => ({ ...c, tags: on ? [...new Set([...c.tags, tag])] : c.tags.filter((t) => t !== tag) }));
-  void matrix.setTag(me(), roomId, tag, on).catch(() => {});
+export function setTag(roomId: string, tag: string, on: boolean, order?: number) {
+  patchChat(roomId, (c) => ({
+    ...c, tags: on ? [...new Set([...c.tags, tag])] : c.tags.filter((t) => t !== tag),
+    ...(tag === "m.favourite" ? { pinOrder: on ? order ?? c.pinOrder : undefined } : {}),
+  }));
+  void matrix.setTag(me(), roomId, tag, on, order).catch(() => {});
+}
+
+const pinnedChats = () => Object.values(state.chats).filter(isPinned).sort((a, b) => (a.pinOrder ?? Number.MAX_VALUE) - (b.pinOrder ?? Number.MAX_VALUE));
+/** Pins a chat at the end of the pin row, or unpins it. */
+export function pin(roomId: string, on: boolean) {
+  if (!on) return setTag(roomId, "m.favourite", false);
+  const last = Math.max(0, ...pinnedChats().filter((c) => c.id !== roomId).map((c) => c.pinOrder ?? 0));
+  setTag(roomId, "m.favourite", true, last + 1);
+}
+/** Moves a pinned chat to [toIndex] within the pin row. */
+export function movePin(roomId: string, toIndex: number) {
+  const others = pinnedChats().filter((c) => c.id !== roomId);
+  const i = Math.max(0, Math.min(toIndex, others.length));
+  const before = others[i - 1]?.pinOrder, after = others[i]?.pinOrder;
+  const order = before === undefined && after === undefined ? 1 : before === undefined ? after! - 1 : after === undefined ? before + 1 : (before + after) / 2;
+  setTag(roomId, "m.favourite", true, order);
+}
+export const setLowPriority = (roomId: string, on: boolean) => setTag(roomId, "m.lowpriority", on);
+export const addLabel = (roomId: string, name: string) => setTag(roomId, LABEL_PREFIX + name.trim(), true);
+export const removeLabel = (roomId: string, name: string) => setTag(roomId, LABEL_PREFIX + name, false);
+export function renameLabel(old: string, next: string) {
+  if (!next.trim() || next === old) return;
+  Object.values(state.chats).filter((c) => labelsOf(c).includes(old)).forEach((c) => { removeLabel(c.id, old); addLabel(c.id, next); });
+}
+export const deleteLabel = (name: string) => Object.values(state.chats).filter((c) => labelsOf(c).includes(name)).forEach((c) => removeLabel(c.id, name));
+export function useLabels(): string[] {
+  const chats = useStore((s) => s.chats);
+  return useMemo(() => [...new Set(Object.values(chats).flatMap(labelsOf))].sort(), [chats]);
+}
+
+/** Beeper-style snooze: tuck the chat into the archive and bring it back, unread, at [whenMs]. */
+export function snooze(roomId: string, whenMs: number) {
+  setTag(roomId, "u.archived", true);
+  remind(roomId, whenMs, true);
 }
 
 const muteUntil: Record<string, number> = lsGet("pager.muteUntil", {});
@@ -433,9 +500,81 @@ declare global {
     pagerDesktop?: {
       notify(o: { title: string; body: string; roomId?: string; silent?: boolean }): void;
       setBadge(n: number): void;
-      getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean }): void;
+      getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean }): void; setZoom(z: number): void;
       onOpenRoom(cb: (roomId: string) => void): void;
       platform: string;
     };
   }
+}
+
+
+// ---- Polls, GIFs, stickers, contacts ---------------------------------------------------------------
+
+export function sendPoll(roomId: string, question: string, answers: string[], maxSelections: number, disclosed: boolean) {
+  const txn = uuid(), localId = `local-${txn}`;
+  const list = answers.map((text, i) => ({ id: `a${i + 1}`, text }));
+  addLocal(roomId, localMsg(localId, "m.poll", question, { txn, poll: { question, answers: list, maxSelections, disclosed } }));
+  matrix.send(roomId, "org.matrix.msc3381.poll.start", txn, {
+    "org.matrix.msc3381.poll.start": {
+      kind: disclosed ? "org.matrix.msc3381.poll.disclosed" : "org.matrix.msc3381.poll.undisclosed", max_selections: maxSelections,
+      question: { "org.matrix.msc1767.text": question, body: question, msgtype: "m.text" },
+      answers: list.map((a) => ({ id: a.id, "org.matrix.msc1767.text": a.text })),
+    },
+    "org.matrix.msc1767.text": `${question}\n${list.map((a, i) => `${i + 1}. ${a.text}`).join("\n")}`,
+  }).then((id) => setStatus(roomId, localId, STATUS_SENT, id)).catch(() => setStatus(roomId, localId, STATUS_FAILED));
+}
+
+export function votePoll(roomId: string, pollId: string, answerIds: string[]) {
+  patchChat(roomId, (c) => ({ ...c, pollVotes: { ...c.pollVotes, [pollId]: { ...(c.pollVotes[pollId] ?? {}), [me()]: answerIds } } }));
+  void matrix.send(roomId, "org.matrix.msc3381.poll.response", uuid(), { "m.relates_to": { rel_type: "m.reference", event_id: pollId }, "org.matrix.msc3381.poll.response": { answers: answerIds } }).catch(() => {});
+}
+
+export function endPoll(roomId: string, pollId: string) {
+  patchChat(roomId, (c) => ({ ...c, pollEnded: [...c.pollEnded, pollId] }));
+  void matrix.send(roomId, "org.matrix.msc3381.poll.end", uuid(), { "m.relates_to": { rel_type: "m.reference", event_id: pollId }, "org.matrix.msc1767.text": "The poll has ended." }).catch(() => {});
+}
+
+export async function sendGif(roomId: string, gif: Gif) {
+  const res = await fetch(gif.url);
+  if (!res.ok) throw new Error("Couldn't download that GIF");
+  const blob = await res.blob();
+  sendFile(roomId, new Blob([blob], { type: "image/gif" }), `${(gif.title || "gif").slice(0, 40)}.gif`, { w: gif.w || undefined, h: gif.h || undefined });
+}
+
+export function sendContact(roomId: string, name: string, phone: string) {
+  const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL;TYPE=CELL:${phone}\nEND:VCARD\n`;
+  sendFile(roomId, new Blob([vcard], { type: "text/vcard" }), `${name.replace(/[^A-Za-z0-9 ._-]/g, "")}.vcf`);
+}
+
+export function stickerPacks(roomId?: string): StickerPack[] {
+  return [...(state.userStickers?.stickers.length ? [state.userStickers] : []), ...(roomId ? state.chats[roomId]?.stickerPacks ?? [] : []).filter((p) => p.stickers.length)];
+}
+
+export function sendSticker(roomId: string, s: Sticker) {
+  const txn = uuid(), localId = `local-${txn}`;
+  addLocal(roomId, localMsg(localId, "m.image", s.body, { mxc: s.url, mime: s.mime, w: s.w, h: s.h, sticker: true, txn }));
+  matrix.send(roomId, "m.sticker", txn, { body: s.body, url: s.url, info: { mimetype: s.mime, w: s.w, h: s.h } })
+    .then((id) => setStatus(roomId, localId, STATUS_SENT, id)).catch(() => setStatus(roomId, localId, STATUS_FAILED));
+}
+
+/** Uploads images and adds them to your personal sticker pack (saved in your Matrix account). */
+export async function addStickers(files: File[]) {
+  const existing = state.userStickers?.stickers ?? [];
+  const added: Sticker[] = [];
+  for (const f of files) {
+    try {
+      const mxc = await matrix.upload(f, f.name);
+      const dims = await new Promise<{ w: number; h: number } | undefined>((res) => { const u = URL.createObjectURL(f), i = new Image(); i.onload = () => { res({ w: i.naturalWidth, h: i.naturalHeight }); URL.revokeObjectURL(u); }; i.onerror = () => res(undefined); i.src = u; });
+      const base = f.name.replace(/\.[^.]+$/, "");
+      added.push({ shortcode: `${base.replace(/[^A-Za-z0-9_-]/g, "_") || "sticker"}_${Date.now() % 100000}`, url: mxc, body: base, w: dims?.w, h: dims?.h, mime: f.type });
+    } catch { /* skip files that fail to upload */ }
+  }
+  if (!added.length) return;
+  const all = [...existing, ...added];
+  const pack: StickerPack = { key: "user", name: "My stickers", stickers: all };
+  set({ userStickers: pack }); lsSet("pager.userStickers", pack);
+  await matrix.putAccountData(me(), "im.ponies.user_emotes", {
+    pack: { display_name: "My stickers" },
+    images: Object.fromEntries(all.map((s) => [s.shortcode, { url: s.url, body: s.body, usage: ["sticker"], info: { mimetype: s.mime, w: s.w, h: s.h } }])),
+  }).catch(() => {});
 }

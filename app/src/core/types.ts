@@ -2,6 +2,11 @@ export const STATUS_SENT = 0;
 export const STATUS_SENDING = 1;
 export const STATUS_FAILED = 2;
 
+export interface PollAnswer { id: string; text: string }
+export interface PollInfo { question: string; answers: PollAnswer[]; maxSelections: number; disclosed: boolean }
+export interface Sticker { shortcode: string; url: string; body: string; w?: number; h?: number; mime?: string }
+export interface StickerPack { key: string; name: string; stickers: Sticker[] }
+
 export interface Msg {
   id: string;
   sender: string;
@@ -22,6 +27,9 @@ export interface Msg {
   sticker?: boolean;
   voice?: boolean;
   mentions: string[];
+  /** HTML from formatted_body (bridges send bold/italic/links this way). */
+  html?: string;
+  poll?: PollInfo;
 }
 
 export interface ReactionRef { target: string; key: string; sender: string }
@@ -47,6 +55,12 @@ export interface ChatState {
   markedUnread: boolean;
   memberCount: number;
   typing: string[];
+  /** Order among pinned chats (the m.favourite tag's order). */
+  pinOrder?: number;
+  /** poll event id -> user id -> chosen answer ids */
+  pollVotes: Record<string, Record<string, string[]>>;
+  pollEnded: string[];
+  stickerPacks: StickerPack[];
 }
 
 export interface Incoming {
@@ -58,6 +72,8 @@ export interface Incoming {
   isGroup: boolean;
   mentioned: boolean;
   ts: number;
+  /** The message replies to something you wrote. */
+  replyToMe?: boolean;
 }
 
 export interface ChatSummary {
@@ -74,26 +90,37 @@ export interface ChatSummary {
   muted: boolean;
   isGroup: boolean;
   draft?: string;
+  lowPriority: boolean;
+  labels: string[];
+  pinOrder: number;
+  unanswered: boolean;
+  lastFromMe: boolean;
+  typing: boolean;
 }
 
 export const emptyChat = (id: string): ChatState => ({
   id, name: "", network: "matrix", unread: 0, messages: [], members: {}, joined: [], heroes: [], reachedStart: false,
   reactions: {}, reactionRefs: {}, receipts: {}, tags: [], markedUnread: false, memberCount: 0, typing: [],
+  pollVotes: {}, pollEnded: [], stickerPacks: [],
 });
 
 export const isGroup = (c: ChatState) => c.memberCount > 2;
 export const isPinned = (c: ChatState) => c.tags.includes("m.favourite");
 export const isArchived = (c: ChatState) => c.tags.includes("u.archived");
+export const isLowPriority = (c: ChatState) => c.tags.includes("m.lowpriority");
+export const LABEL_PREFIX = "u.label.";
+export const labelsOf = (c: ChatState) => c.tags.filter((t) => t.startsWith(LABEL_PREFIX)).map((t) => t.slice(LABEL_PREFIX.length)).sort();
 export const nameOf = (c: ChatState, userId: string) => c.members[userId] ?? userId.replace(/^@/, "").split(":")[0];
 
 export function previewOf(m: Msg): string {
   switch (m.type) {
-    case "m.image": return m.sticker ? "Sticker" : "📷 Photo";
-    case "m.location": return "📍 Location";
+    case "m.image": return m.sticker ? "Sticker" : m.mime === "image/gif" ? "GIF" : "Photo";
+    case "m.location": return "Location";
+    case "m.poll": return `Poll: ${m.poll?.question ?? m.body}`;
     case "m.emote": return `* ${m.body}`;
-    case "m.video": return "🎬 Video";
-    case "m.audio": return m.voice ? "🎤 Voice message" : `🎵 ${m.body}`;
-    case "m.file": return `📎 ${m.body}`;
+    case "m.video": return "Video";
+    case "m.audio": return m.voice ? "Voice message" : m.body;
+    case "m.file": return m.mime?.includes("vcard") || m.body.endsWith(".vcf") ? `Contact: ${m.body.replace(/\.vcf$/, "")}` : m.body;
     default: return m.body;
   }
 }

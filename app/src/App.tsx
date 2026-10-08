@@ -1,5 +1,5 @@
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { applyTheme, useSettings } from "./core/settings";
 import { forward, getState, requestNotifications, restoreSession, useStore } from "./core/store";
 import { Auth } from "./ui/Auth";
@@ -10,6 +10,11 @@ import { NewChat } from "./ui/NewChat";
 import { Search } from "./ui/Search";
 import { ChatPicker } from "./ui/ChatPicker";
 import { AccountsModal } from "./ui/Accounts";
+import { Palette } from "./ui/Palette";
+import { SHORTCUTS } from "./core/settings";
+import { comboOf } from "./ui/Settings";
+import { markUnread, pin, setMuted, setTag, snooze, useInbox } from "./core/store";
+import { WhenModal } from "./ui/common";
 
 export function App() {
   const [booting, setBooting] = useState(true);
@@ -19,6 +24,11 @@ export function App() {
   // Routes: home | chat:<id> | settings[/<page>] | new | search[:<room>] | forward:<room>|<event>
   const [route, setRoute] = useState("home");
   const [accounts, setAccounts] = useState(false);
+  const [palette, setPalette] = useState(false);
+  const [snoozing, setSnoozing] = useState<string>();
+  const inbox = useInbox();
+  const routeRef = useRef(route); routeRef.current = route;
+  const inboxRef = useRef(inbox); inboxRef.current = inbox;
   const nav = useCallback((to: string) => setRoute(to), []);
 
   useEffect(() => { restoreSession().catch(() => {}).finally(() => setBooting(false)); }, []);
@@ -36,6 +46,44 @@ export function App() {
     return () => window.removeEventListener("pager:open", open);
   }, [nav]);
   useEffect(() => { if (session) requestNotifications(); }, [session]);
+  useEffect(() => { window.pagerDesktop?.setZoom(st.uiZoom); }, [st.uiZoom]);
+
+  // Keyboard shortcuts (rebindable in Settings → Keyboard shortcuts).
+  useEffect(() => {
+    if (!session) return;
+    const bound = (id: string) => st.shortcuts[id] ?? SHORTCUTS.find((s) => s.id === id)!.keys;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Control" || e.key === "Shift" || e.key === "Alt" || e.key === "Meta") return;
+      const combo = comboOf(e);
+      const hit = SHORTCUTS.find((s) => bound(s.id) === combo);
+      if (!hit) return;
+      const typing = (e.target as HTMLElement)?.matches?.("input, textarea, [contenteditable]");
+      if (typing && !combo.includes("Ctrl") && !combo.includes("Alt")) return;
+      const cur = routeRef.current.startsWith("chat:") ? routeRef.current.slice(5) : undefined;
+      const list = inboxRef.current.filter((c) => !c.archived && !c.lowPriority);
+      const move = (d: number, unreadOnly = false) => { const pool = unreadOnly ? list.filter((c) => c.unread > 0 || c.markedUnread || c.id === cur) : list; const i = pool.findIndex((c) => c.id === cur); const n = pool[(i + d + pool.length) % pool.length]; if (n) nav(`chat:${n.id}`); };
+      const c = inboxRef.current.find((x) => x.id === cur);
+      e.preventDefault();
+      switch (hit.id) {
+        case "palette": setPalette(true); break;
+        case "newChat": nav("new"); break;
+        case "search": nav("search"); break;
+        case "inChatSearch": if (cur) nav(`search:${cur}`); break;
+        case "settings": nav("settings"); break;
+        case "prevChat": move(-1); break;
+        case "nextChat": move(1); break;
+        case "nextUnread": move(1, true); break;
+        case "archive": if (c) setTag(c.id, "u.archived", !c.archived); break;
+        case "markUnread": if (c) markUnread(c.id, true); break;
+        case "mute": if (c) setMuted(c.id, !c.muted); break;
+        case "pin": if (c) pin(c.id, !c.pinned); break;
+        case "snooze": if (c) setSnoozing(c.id); break;
+        case "help": nav("settings/shortcuts"); break;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [session, st.shortcuts, nav]);
 
   if (booting) return <div className="splash"><span className="logo-mark big" /></div>;
   if (!session) return <Auth />;
@@ -56,10 +104,12 @@ export function App() {
   } else main = <div className="blank"><span className="logo-mark big" /><p>{synced ? "Pick a chat to start." : "Syncing…"}</p></div>;
 
   return (
-    <div className={"shell" + (route !== "home" ? " pane-open" : "")}>
+    <div className={"shell" + (route !== "home" ? " pane-open" : "")} style={{ ["--sidebar-w" as string]: `${st.sidebarWidth}px` }}>
       <Sidebar selected={roomId} onSelect={(id) => nav(`chat:${id}`)} nav={nav} onAccounts={() => setAccounts(true)} />
       <main className="main">{main}</main>
       {accounts && <AccountsModal onClose={() => setAccounts(false)} />}
+      {palette && <Palette nav={nav} current={roomId ?? undefined} onClose={() => setPalette(false)} onSnooze={setSnoozing} />}
+      {snoozing && <WhenModal title="Snooze until" onPick={(at) => { snooze(snoozing, at); setSnoozing(undefined); }} onClose={() => setSnoozing(undefined)} />}
     </div>
   );
 }

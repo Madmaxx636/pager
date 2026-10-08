@@ -1,6 +1,6 @@
 // Pager desktop shell: loads the bundled web client in a window, adds a tray icon, native notifications,
 // an unread badge, close-to-tray and launch-at-login. Everything else is the shared web app.
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, session, nativeImage } = require("electron");
+const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, session, nativeImage, globalShortcut } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -76,6 +76,8 @@ if (!app.requestSingleInstanceLock()) {
 
     try { tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "build", "tray.png")).resize({ width: 22, height: 22 })); tray.on("click", () => (win && win.isVisible() && win.isFocused() ? win.hide() : showWindow())); updateTray(); } catch { tray = null; }
     createWindow();
+    // Bring Pager forward from anywhere (not every Linux desktop allows global shortcuts, so failure is fine).
+    try { globalShortcut.register("CommandOrControl+Alt+P", () => (win && win.isVisible() && win.isFocused() ? win.hide() : showWindow())); } catch { /* unsupported */ }
 
     // Test hooks: PAGER_SHOT=/path/out.png renders the window once, saves a screenshot and exits.
     // PAGER_EVAL runs a script in the page first (used by automated checks).
@@ -92,6 +94,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on("before-quit", () => { quitting = true; });
+  app.on("will-quit", () => globalShortcut.unregisterAll());
   app.on("activate", showWindow);
   app.on("window-all-closed", () => { if (process.platform !== "darwin" && (quitting || !prefs.closeToTray || !tray)) app.quit(); });
 
@@ -105,4 +108,5 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle("autostart:get", getAutostart);
   ipcMain.on("autostart:set", (_e, on) => setAutostart(!!on));
   ipcMain.on("prefs", (_e, p) => { prefs = { ...prefs, ...p }; savePrefs(); });
+  ipcMain.on("zoom", (_e, z) => { if (win && typeof z === "number" && z >= 0.5 && z <= 3) win.webContents.setZoomFactor(z); });
 }

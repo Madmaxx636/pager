@@ -1,52 +1,40 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChatState, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, displayName, isArchived, isGroup, isPinned, nameOf, previewOf } from "../core/types";
+import {
+  AlarmClock, Archive, ArrowDownToLine, ArrowLeft, BellOff, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
+  Reply, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon,
+} from "lucide-react";
+import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, previewOf } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import { getSettings, useSettings, AppSettings } from "../core/settings";
 import {
-  cancelScheduled, edit, forward, loadOlder, markRead, markUnread, me, members, muteLeft, preview, react, remind, remove, rename, retry, schedule,
-  send, sendFile, sendLocation, setDraft, setMuted, setTag, leave, toggleStar, typing, useStore, mediaUrl, getState,
+  edit, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
+  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, toggleStar, typing, useStore, votePoll, getState,
 } from "../core/store";
-import { LinkPreview } from "../core/api";
-import { Avatar, EmojiPicker, Modal, TimePresetModal, humanSize, useMxc } from "./common";
+import { Avatar, EmojiPicker, IconButton, Modal, SheetItem, WhenModal, humanSize, useMxc } from "./common";
+import { MessageRow } from "./Message";
+import { AttachKind, AttachMenu, ContactModal, GifModal, PollModal, StickerModal } from "./Attach";
+import { firstUrl } from "./rich";
 import type { Nav } from "./Sidebar";
 
-// ---- helpers -------------------------------------------------------------------------------
-
-const URL_RE = /\b((?:https?:\/\/|www\.)[^\s<]+[^\s<.,;:!?)\]"'])/gi;
-const firstUrl = (t: string) => { URL_RE.lastIndex = 0; const m = URL_RE.exec(t); return m ? (m[1].startsWith("http") ? m[1] : `https://${m[1]}`) : undefined; };
-function Linkified({ text }: { text: string }) {
-  const parts: React.ReactNode[] = []; let last = 0; URL_RE.lastIndex = 0;
-  for (let m = URL_RE.exec(text); m; m = URL_RE.exec(text)) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-    const href = m[1].startsWith("http") ? m[1] : `https://${m[1]}`;
-    parts.push(<a key={m.index} href={href} target="_blank" rel="noreferrer noopener">{m[1]}</a>);
-    last = m.index + m[0].length;
-  }
-  parts.push(text.slice(last));
-  return <>{parts}</>;
-}
-
-const clock = (ts: number, mode: AppSettings["timeFormat"]) => new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", ...(mode === "system" ? {} : { hour12: mode === "12" }) });
-const senderHue = (n: string) => [...n].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
 const dayLabel = (d: Date) => {
   const t = new Date(); const y = new Date(); y.setDate(t.getDate() - 1);
   return d.toDateString() === t.toDateString() ? "Today" : d.toDateString() === y.toDateString() ? "Yesterday" : d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric", year: d.getFullYear() === t.getFullYear() ? undefined : "numeric" });
 };
 
-type Item = { kind: "day"; key: string; label: string } | { kind: "unread"; key: string } | { kind: "msg"; key: string; msg: Msg; index: number; first: boolean };
-function buildItems(messages: Msg[], unreadBefore?: string): Item[] {
+type Item = { kind: "day"; key: string; label: string } | { kind: "unread"; key: string } | { kind: "msg"; key: string; msg: Msg; index: number; first: boolean; last: boolean };
+function buildItems(messages: Msg[], unreadBefore: string | undefined, gapMs: number): Item[] {
   const out: Item[] = []; let lastDay = "";
   messages.forEach((m, i) => {
     const d = new Date(m.ts), k = d.toDateString();
     if (k !== lastDay) { out.push({ kind: "day", key: `day-${k}`, label: dayLabel(d) }); lastDay = k; }
     if (m.id === unreadBefore) out.push({ kind: "unread", key: "unread" });
-    const prev = out[out.length - 1];
-    out.push({ kind: "msg", key: m.id, msg: m, index: i, first: messages[i - 1]?.sender !== m.sender || prev.kind !== "msg" });
+    const prev = messages[i - 1], next = messages[i + 1], before = out[out.length - 1];
+    const first = !prev || prev.sender !== m.sender || m.ts - prev.ts > gapMs || before.kind !== "msg";
+    const last = !next || next.sender !== m.sender || next.ts - m.ts > gapMs || new Date(next.ts).toDateString() !== k || next.id === unreadBefore;
+    out.push({ kind: "msg", key: m.id, msg: m, index: i, first, last });
   });
   return out;
 }
-
-// ---- Chat ------------------------------------------------------------------------------------
 
 export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBack: () => void; nav: Nav; onForward: (m: Msg) => void }) {
   const chat = useStore((s) => s.chats[roomId]);
@@ -54,11 +42,12 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const st = useSettings();
   const user = me();
   const scroller = useRef<HTMLDivElement>(null);
-  const [infoOpen, setInfoOpen] = useState(() => window.innerWidth > 1280);
+  const [infoOpen, setInfoOpen] = useState(() => window.innerWidth > 1380);
   const [menu, setMenu] = useState<{ msg: Msg; x: number; y: number }>();
-  const [viewer, setViewer] = useState<Msg>();
+  const [viewer, setViewer] = useState<string>();
   const [picker, setPicker] = useState<Msg>();
   const [who, setWho] = useState<{ msg: Msg; key: string }>();
+  const [details, setDetails] = useState<Msg>();
   const [replyTo, setReplyTo] = useState<Msg>();
   const [editing, setEditing] = useState<Msg>();
   const [dragging, setDragging] = useState(false);
@@ -66,6 +55,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
 
   const messages = chat?.messages ?? [];
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  const images = useMemo(() => messages.filter((m) => m.type === "m.image" && m.mxc && !m.sticker), [messages]);
   const readIndex = useMemo(() => {
     const r = chat?.receipts ?? {};
     return Math.max(-1, ...Object.entries(r).filter(([u]) => u !== user).map(([, id]) => messages.findIndex((m) => m.id === id)));
@@ -80,7 +70,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const fresh = i >= 0 ? chat.messages.slice(i + 1) : chat.unread > 0 ? chat.messages.slice(-chat.unread) : [];
     return fresh.find((m) => m.sender !== user)?.id;
   }, [roomId, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
-  const items = useMemo(() => buildItems(messages, unreadBefore), [messages, unreadBefore]);
+  const items = useMemo(() => buildItems(messages, unreadBefore, st.groupGapMin * 60_000), [messages, unreadBefore, st.groupGapMin]);
 
   // Scroll: open at the unread divider (or bottom), stick to bottom for new messages, keep position when older ones load.
   const opened = useRef<string>("");
@@ -90,7 +80,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const el = scroller.current; if (!el || !chat) return;
     if (opened.current !== roomId) {
       opened.current = roomId;
-      const div = el.querySelector("#unread-divider");
+      const div = st.openAtFirstUnread ? el.querySelector("#unread-divider") : null;
       if (div) { (div as HTMLElement).scrollIntoView({ block: "center" }); stick.current = false; } else { el.scrollTop = el.scrollHeight; stick.current = true; }
     } else if (prevTop.current.first && messages[0]?.id !== prevTop.current.first && !stick.current) {
       el.scrollTop += el.scrollHeight - prevTop.current.height; // older messages were prepended
@@ -100,24 +90,27 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     prevTop.current = { first: messages[0]?.id, height: el.scrollHeight };
   }, [roomId, messages, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { opened.current = ""; stick.current = true; setReplyTo(undefined); setEditing(undefined); }, [roomId]);
-  useEffect(() => { if (stick.current && document.hasFocus()) markRead(roomId); }, [roomId, messages.length]);
-  useEffect(() => { const f = () => stick.current && markRead(roomId); window.addEventListener("focus", f); return () => window.removeEventListener("focus", f); }, [roomId]);
+  const mayMark = () => st.markReadMode === "open" || (st.markReadMode === "scrolled" && stick.current && document.hasFocus());
+  useEffect(() => { if (mayMark()) markRead(roomId); }, [roomId, messages.length, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const f = () => mayMark() && markRead(roomId); window.addEventListener("focus", f); return () => window.removeEventListener("focus", f); }, [roomId, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onScroll = () => {
     const el = scroller.current; if (!el) return;
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    if (stick.current) markRead(roomId);
+    if (stick.current && st.markReadMode === "scrolled") markRead(roomId);
     if (el.scrollTop < 120) loadOlder(roomId);
   };
   useEffect(() => { const el = scroller.current; if (el && el.scrollHeight <= el.clientHeight + 40) loadOlder(roomId); }, [roomId, messages.length]);
+  const [showJump, setShowJump] = useState(false);
+  useEffect(() => { const el = scroller.current; if (!el) return; const f = () => setShowJump(el.scrollHeight - el.scrollTop - el.clientHeight > 400); el.addEventListener("scroll", f); return () => el.removeEventListener("scroll", f); }, [roomId]);
 
   const openMsg = useCallback((m: Msg) => {
     if (m.type === "m.location" && m.geo) { const [lat, lon] = m.geo.replace("geo:", "").split(";")[0].split(","); window.open(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`, "_blank", "noopener"); }
-    else if (m.type === "m.image" && m.mxc) setViewer(m);
+    else if (m.type === "m.image" && m.mxc && !m.sticker) setViewer(m.id);
     else if ((m.type === "m.file" || m.type === "m.video") && m.mxc) void download(m);
   }, []);
 
-  if (!chat) return <section className="chat"><header><button className="icon back" onClick={onBack}>‹</button><div>Opening…</div></header></section>;
+  if (!chat) return <section className="chat"><header className="chat-head"><IconButton icon={ArrowLeft} label="Back" onClick={onBack} className="back" /><div>Opening…</div></header></section>;
   const name = displayName(chat, user);
   const meta = networkMeta(chat.network);
   const typingNames = chat.typing.map((u) => nameOf(chat, u));
@@ -126,52 +119,63 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   return (
     <section className={"chat" + (infoOpen ? " with-info" : "")} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); attachFiles(e.dataTransfer.files); }}>
       <div className="chat-col">
-        <header>
-          <button className="icon back" onClick={onBack} aria-label="Back">‹</button>
+        <header className="chat-head">
+          <IconButton icon={ArrowLeft} label="Back" onClick={onBack} className="back" />
           <button className="head-id" onClick={() => setInfoOpen(!infoOpen)}>
-            {st.showAvatars && <Avatar name={name} mxc={chat.avatarMxc} size={38} network={st.showNetworkBadges ? chat.network : undefined} />}
+            {st.showAvatars && <Avatar name={name} mxc={chat.avatarMxc} size={40} network={st.showNetworkBadges ? chat.network : undefined} />}
             <div>
               <div className="chat-title">{name}</div>
               {typingNames.length ? <div className="chat-sub typing">{typingNames.length === 1 ? `${typingNames[0]} is typing…` : "Several people are typing…"}</div>
                 : <div className="chat-sub"><i style={{ background: meta.color }} />{meta.label}{isGroup(chat) ? ` · ${chat.memberCount} members` : ""}</div>}
             </div>
           </button>
-          <button className="icon" onClick={() => nav(`search:${roomId}`)} title="Search in chat" aria-label="Search in chat">🔍</button>
-          <button className="icon" onClick={() => setInfoOpen(!infoOpen)} title="Chat info" aria-label="Chat info">ⓘ</button>
+          <IconButton icon={Search} label="Search in chat (Ctrl+F)" onClick={() => nav(`search:${roomId}`)} />
+          <IconButton icon={Info} label="Chat info" onClick={() => setInfoOpen(!infoOpen)} active={infoOpen} />
         </header>
 
         <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll}>
           {items.map((it) => it.kind === "day" ? <div key={it.key} className="day"><span>{it.label}</span></div>
             : it.kind === "unread" ? <div key={it.key} id="unread-divider" className="unread-divider"><span>New messages</span></div>
-            : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}
+            : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} last={it.last} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}
                 st={st} starred={stars.some((s) => s.eventId === it.msg.id)} onMenu={(x, y) => setMenu({ msg: it.msg, x, y })} onOpen={() => openMsg(it.msg)} onWho={(key) => setWho({ msg: it.msg, key })}
-                onReact={(key) => react(roomId, it.msg.id, key)} onReply={() => { setReplyTo(it.msg); setEditing(undefined); }} />)}
+                onReact={(key) => react(roomId, it.msg.id, key)} onReply={() => { setReplyTo(it.msg); setEditing(undefined); }}
+                onVote={(ids) => votePoll(roomId, it.msg.id, ids)} onEndPoll={() => endPoll(roomId, it.msg.id)} />)}
         </div>
+        {showJump && <button className="jump" onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: st.reduceMotion ? "auto" : "smooth" })} aria-label="Jump to latest"><ChevronDown size={20} /></button>}
 
-        <Composer roomId={roomId} chat={chat} replyTo={replyTo} editing={editing} st={st} group={group} onClearReply={() => setReplyTo(undefined)} onClearEdit={() => setEditing(undefined)} onFiles={attachFiles} />
+        <Composer roomId={roomId} chat={chat} replyTo={replyTo} editing={editing} st={st} group={group} nav={nav} onClearReply={() => setReplyTo(undefined)} onClearEdit={() => setEditing(undefined)} onFiles={attachFiles} />
         {dragging && <div className="drop-hint">Drop to send</div>}
       </div>
 
-      {infoOpen && <InfoPanel chat={chat} nav={nav} onClose={() => setInfoOpen(false)} />}
+      {infoOpen && <InfoPanel chat={chat} nav={nav} onClose={() => setInfoOpen(false)} onViewImage={setViewer} />}
 
       {menu && (
         <div className="ctx-backdrop" onClick={() => setMenu(undefined)} onContextMenu={(e) => { e.preventDefault(); setMenu(undefined); }}>
-          <div className="menu ctx msg-menu" style={{ left: Math.max(8, Math.min(menu.x, window.innerWidth - 270)), top: Math.max(8, Math.min(menu.y, window.innerHeight - 380)) }} onClick={(e) => e.stopPropagation()}>
+          <div className="menu ctx msg-menu" style={{ left: Math.max(8, Math.min(menu.x, window.innerWidth - 290)), top: Math.max(8, Math.min(menu.y, window.innerHeight - 440)) }} onClick={(e) => e.stopPropagation()}>
             <div className="quick">
               {st.quickReactions.map((e) => <button key={e} onClick={() => { react(roomId, menu.msg.id, e); setMenu(undefined); }}>{e}</button>)}
-              <button className="more" onClick={() => { setPicker(menu.msg); setMenu(undefined); }}>＋</button>
+              <button className="more" onClick={() => { setPicker(menu.msg); setMenu(undefined); }} aria-label="More reactions"><Plus size={18} /></button>
             </div>
-            <MenuItems roomId={roomId} m={menu.msg} mine={menu.msg.sender === user} starred={stars.some((s) => s.eventId === menu.msg.id)} close={() => setMenu(undefined)}
+            <MenuItems roomId={roomId} m={menu.msg} mine={menu.msg.sender === user} starred={stars.some((s) => s.eventId === menu.msg.id)} dev={st.developerMode} close={() => setMenu(undefined)}
               onReply={() => { setReplyTo(menu.msg); setEditing(undefined); }} onEdit={() => { setEditing(menu.msg); setReplyTo(undefined); }} onForward={() => onForward(menu.msg)}
-              onDelete={() => (st.confirmDelete ? setConfirmDel(menu.msg) : remove(roomId, menu.msg.id))} />
+              onDetails={() => setDetails(menu.msg)} onDelete={() => (st.confirmDelete ? setConfirmDel(menu.msg) : remove(roomId, menu.msg.id))} />
           </div>
         </div>
       )}
       {picker && <EmojiPicker recent={st.recentEmoji} onPick={(e) => { react(roomId, picker.id, e); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
       {who && (
         <Modal title={`${who.key}  ${chat.reactions[who.msg.id]?.[who.key]?.length ?? 0}`} onClose={() => setWho(undefined)}>
-          <div className="stack">{(chat.reactions[who.msg.id]?.[who.key] ?? []).map((u) => <div key={u}>{u === user ? "You" : nameOf(chat, u)}</div>)}</div>
-          {chat.reactions[who.msg.id]?.[who.key]?.includes(user) && <button className="link" onClick={() => { react(roomId, who.msg.id, who.key); setWho(undefined); }}>Remove mine</button>}
+          <div className="stack">{(chat.reactions[who.msg.id]?.[who.key] ?? []).map((u) => <div key={u} className="who"><Avatar name={nameOf(chat, u)} size={32} />{u === user ? "You" : nameOf(chat, u)}</div>)}</div>
+          {chat.reactions[who.msg.id]?.[who.key]?.includes(user) && <button className="link" onClick={() => { react(roomId, who.msg.id, who.key); setWho(undefined); }}>Remove my reaction</button>}
+        </Modal>
+      )}
+      {details && (
+        <Modal title="Message details" onClose={() => setDetails(undefined)}>
+          <dl className="details">
+            <dt>From</dt><dd>{nameOf(chat, details.sender)}</dd><dt>Sent</dt><dd>{new Date(details.ts).toLocaleString()}</dd><dt>Type</dt><dd>{details.type}</dd>
+            <dt>Status</dt><dd>{details.status === STATUS_SENT ? "Sent" : details.status === STATUS_FAILED ? "Failed" : "Sending"}</dd>{details.size ? <><dt>Size</dt><dd>{humanSize(details.size)}</dd></> : null}
+            {st.developerMode && <><dt>Event ID</dt><dd className="mono">{details.id}</dd></>}
+          </dl>
         </Modal>
       )}
       {confirmDel && (
@@ -180,7 +184,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
           <div className="row-end"><button className="link" onClick={() => setConfirmDel(undefined)}>Cancel</button><button className="primary danger" onClick={() => { remove(roomId, confirmDel.id); setConfirmDel(undefined); }}>Delete</button></div>
         </Modal>
       )}
-      {viewer && <ImageViewer msg={viewer} onClose={() => setViewer(undefined)} />}
+      {viewer && <ImageViewer images={images} startId={viewer} chat={chat} onClose={() => setViewer(undefined)} />}
     </section>
   );
 }
@@ -191,138 +195,41 @@ async function download(m: Msg) {
   const a = document.createElement("a"); a.href = u; a.download = m.body || "file"; a.click();
 }
 
-function MenuItems({ roomId, m, mine, starred, close, onReply, onEdit, onForward, onDelete }: { roomId: string; m: Msg; mine: boolean; starred: boolean; close: () => void; onReply: () => void; onEdit: () => void; onForward: () => void; onDelete: () => void }) {
+function MenuItems({ roomId, m, mine, starred, dev, close, onReply, onEdit, onForward, onDelete, onDetails }: { roomId: string; m: Msg; mine: boolean; starred: boolean; dev: boolean; close: () => void; onReply: () => void; onEdit: () => void; onForward: () => void; onDelete: () => void; onDetails: () => void }) {
   const run = (f: () => void) => () => { f(); close(); };
+  const Item = ({ icon: I, label, f, danger }: { icon: React.ComponentType<{ size?: number }>; label: string; f: () => void; danger?: boolean }) => <button className={danger ? "danger" : ""} onClick={run(f)}><I size={18} />{label}</button>;
   return (
     <>
-      <button onClick={run(onReply)}>Reply</button>
-      <button onClick={run(onForward)}>Forward</button>
-      {["m.text", "m.notice", "m.emote"].includes(m.type) && <button onClick={run(() => void navigator.clipboard.writeText(m.body))}>Copy text</button>}
-      <button onClick={run(() => toggleStar(roomId, m))}>{starred ? "Remove star" : "Star"}</button>
-      {mine && m.type === "m.text" && m.status === STATUS_SENT && <button onClick={run(onEdit)}>Edit</button>}
-      {mine && m.status === STATUS_SENT && <button className="danger" onClick={run(onDelete)}>Delete</button>}
+      <Item icon={Reply} label="Reply" f={onReply} />
+      <Item icon={Forward} label="Forward" f={onForward} />
+      {["m.text", "m.notice", "m.emote"].includes(m.type) && <Item icon={Copy} label="Copy text" f={() => void navigator.clipboard.writeText(m.body)} />}
+      <Item icon={Star} label={starred ? "Remove star" : "Star"} f={() => toggleStar(roomId, m)} />
+      {mine && m.type === "m.text" && m.status === STATUS_SENT && <Item icon={Pencil} label="Edit" f={onEdit} />}
+      <Item icon={Info} label="Details" f={onDetails} />
+      {dev && <Item icon={Code2} label="Copy event ID" f={() => void navigator.clipboard.writeText(m.id)} />}
+      {mine && m.status === STATUS_SENT && <Item icon={Trash2} label="Delete" f={onDelete} danger />}
     </>
-  );
-}
-
-// ---- One message ----------------------------------------------------------------------------------
-
-function MessageRow({ chat, msg, first, group, mine, read, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply }: {
-  chat: ChatState; msg: Msg; first: boolean; group: boolean; mine: boolean; read: boolean; reply?: Msg; st: AppSettings; starred: boolean;
-  onMenu: (x: number, y: number) => void; onOpen: () => void; onWho: (key: string) => void; onReact: (key: string) => void; onReply: () => void;
-}) {
-  const reactions = chat.reactions[msg.id] ?? {};
-  const author = nameOf(chat, msg.sender);
-  const bare = msg.sticker;
-  return (
-    <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "")} data-id={msg.id}>
-      {group && !mine && first && <div className="msg-sender" style={st.colorSenderNames ? { color: `hsl(${senderHue(author)} 60% 62%)` } : undefined}>{author}</div>}
-      <div className="msg-line">
-        <div className={"bubble" + (bare ? " bare" : "") + (msg.status === STATUS_FAILED ? " failed" : "")}
-          onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}
-          onDoubleClick={() => st.doubleTapReact && st.quickReactions[0] && onReact(st.quickReactions[0])}
-          onClick={() => (msg.status === STATUS_FAILED ? retry(chat.id, msg) : undefined)}>
-          {msg.replyTo && (
-            <div className="quote"><b>{reply ? nameOf(chat, reply.sender) : "Earlier message"}</b><span>{reply ? previewOf(reply) : "…"}</span></div>
-          )}
-          <Content msg={msg} chat={chat} st={st} onOpen={onOpen} />
-          {!bare && (st.showMessageTimes || (mine && st.showReadTicks) || msg.edited) && (
-            <div className="meta">
-              {msg.edited && <i>edited</i>}{st.showMessageTimes && <span>{clock(msg.ts, st.timeFormat)}</span>}
-              {mine && st.showReadTicks && <span className={"ticks" + (read ? " read" : "")}>{msg.status === STATUS_SENDING ? "⏳" : msg.status === STATUS_FAILED ? "⚠" : read ? "✓✓" : "✓"}</span>}
-            </div>
-          )}
-          {starred && <span className="star">⭐</span>}
-        </div>
-        <div className="hover-tools">
-          <button title="React" onClick={(e) => { const r = (e.target as HTMLElement).getBoundingClientRect(); onMenu(r.left, r.bottom); }}>😀</button>
-          <button title="Reply" onClick={onReply}>↩</button>
-          <button title="More" onClick={(e) => { const r = (e.target as HTMLElement).getBoundingClientRect(); onMenu(r.left, r.bottom); }}>⋯</button>
-        </div>
-      </div>
-      {msg.status === STATUS_FAILED && <div className="failed-note">Not sent · click the message to retry</div>}
-      {Object.keys(reactions).length > 0 && (
-        <div className="reactions">
-          {Object.entries(reactions).map(([key, users]) => (
-            <button key={key} className={users.includes(me()) ? "mine" : ""} onClick={() => onReact(key)} onContextMenu={(e) => { e.preventDefault(); onWho(key); }} title="Right-click to see who">{key}{users.length > 1 && <small>{users.length}</small>}</button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Content({ msg, chat, st, onOpen }: { msg: Msg; chat: ChatState; st: AppSettings; onOpen: () => void }) {
-  const auto = st.autoDownload === "always";
-  const [tapped, setTapped] = useState(false);
-  const allowed = auto || tapped || msg.status !== STATUS_SENT;
-  const isImg = msg.type === "m.image";
-  const img = useMxc(isImg ? msg.mxc : undefined, msg.sticker ? 320 : 640, allowed);
-  const media = useMxc(msg.type === "m.audio" || msg.type === "m.video" ? msg.mxc : undefined, 0, allowed);
-  const ratio = msg.w && msg.h ? Math.min(2, Math.max(0.5, msg.w / msg.h)) : 4 / 3;
-
-  switch (msg.type) {
-    case "m.image":
-      return img ? <img className={"media" + (msg.sticker ? " sticker" : "")} src={img} alt={msg.body} onClick={onOpen} />
-        : <div className="media placeholder" style={{ aspectRatio: String(ratio) }} onClick={() => setTapped(true)}>{msg.status === STATUS_SENDING ? "Sending…" : !allowed ? `Tap to load${msg.size ? ` · ${humanSize(msg.size)}` : ""}` : "📷"}</div>;
-    case "m.video":
-      return media ? <video className="media" src={media} controls preload="metadata" /> : <div className="file" onClick={() => setTapped(true)}>🎬 <span>{msg.body || "Video"}{msg.size ? <small>{humanSize(msg.size)} · tap to load</small> : null}</span></div>;
-    case "m.audio":
-      return media ? <audio src={media} controls preload="metadata" /> : <div className="file" onClick={() => setTapped(true)}>{msg.voice ? "🎤" : "🎵"} <span>{msg.voice ? "Voice message" : msg.body}{msg.durationMs ? <small>{Math.floor(msg.durationMs / 60000)}:{String(Math.floor(msg.durationMs / 1000) % 60).padStart(2, "0")} · tap to load</small> : null}</span></div>;
-    case "m.file":
-      return <div className="file" onClick={onOpen}>📎 <span>{msg.body || "File"}{msg.size ? <small>{humanSize(msg.size)}</small> : null}</span></div>;
-    case "m.location":
-      return <div className="file" onClick={onOpen}>📍 <span>Shared location<small>{msg.geo?.replace("geo:", "")} · open map</small></span></div>;
-    case "m.emote":
-      return <em>* {nameOf(chat, msg.sender)} {msg.body}</em>;
-    case "m.notice":
-      return <span className="notice"><Linkified text={msg.body} /></span>;
-    default: {
-      const url = st.linkPreviews ? firstUrl(msg.body) : undefined;
-      return <><span className="text"><Linkified text={msg.body} /></span>{url && <LinkCard url={url} />}</>;
-    }
-  }
-}
-
-function LinkCard({ url }: { url: string }) {
-  const [p, setP] = useState<LinkPreview>();
-  useEffect(() => { let live = true; void preview(url).then((r) => live && setP(r)); return () => { live = false; }; }, [url]);
-  const img = useMxc(p?.imageMxc, 480);
-  if (!p) return null;
-  return (
-    <a className="link-card" href={url} target="_blank" rel="noreferrer noopener">
-      {p.site && <small>{p.site}</small>}{p.title && <b>{p.title}</b>}{p.description && <span>{p.description}</span>}{img && <img src={img} alt="" />}
-    </a>
-  );
-}
-
-function ImageViewer({ msg, onClose }: { msg: Msg; onClose: () => void }) {
-  const src = useMxc(msg.mxc, 0);
-  const [zoom, setZoom] = useState(false);
-  useEffect(() => { const h = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [onClose]);
-  return (
-    <div className="viewer" onClick={onClose}>
-      {src ? <img src={src} alt={msg.body} className={zoom ? "zoom" : ""} onClick={(e) => { e.stopPropagation(); setZoom(!zoom); }} /> : <p>Loading…</p>}
-      <div className="viewer-bar" onClick={(e) => e.stopPropagation()}><button onClick={() => void download(msg)}>Download</button><button onClick={onClose}>Close</button></div>
-    </div>
   );
 }
 
 // ---- Composer ----------------------------------------------------------------------------------------
 
-function Composer({ roomId, chat, replyTo, editing, st, group, onClearReply, onClearEdit, onFiles }: {
-  roomId: string; chat: ChatState; replyTo?: Msg; editing?: Msg; st: AppSettings; group: boolean; onClearReply: () => void; onClearEdit: () => void; onFiles: (f: File[]) => void;
+function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply, onClearEdit, onFiles }: {
+  roomId: string; chat: ChatState; replyTo?: Msg; editing?: Msg; st: AppSettings; group: boolean; nav: Nav; onClearReply: () => void; onClearEdit: () => void; onFiles: (f: File[]) => void;
 }) {
   const [text, setText] = useState(() => getState().drafts[roomId] ?? "");
   const [attach, setAttach] = useState(false);
+  const [sheet, setSheet] = useState<AttachKind>();
   const [emoji, setEmoji] = useState(false);
   const [later, setLater] = useState(false);
   const [error, setError] = useState<string>();
   const [rec, setRec] = useState<{ ms: number } | null>(null);
   const mentionIds = useRef(new Map<string, string>());
   const ta = useRef<HTMLTextAreaElement>(null);
-  const file = useRef<HTMLInputElement>(null);
-  const recorder = useRef<{ mr: MediaRecorder; chunks: Blob[]; start: number; stream: MediaStream; timer: number; cancel?: boolean } | undefined>(undefined);
+  const files = useRef<HTMLInputElement>(null);
+  const photos = useRef<HTMLInputElement>(null);
+  const camera = useRef<HTMLInputElement>(null);
+  const recorder = useRef<{ mr: MediaRecorder; stream: MediaStream; cancel?: boolean } | undefined>(undefined);
   const user = me();
 
   useEffect(() => { setText(getState().drafts[roomId] ?? ""); mentionIds.current.clear(); }, [roomId]);
@@ -335,7 +242,7 @@ function Composer({ roomId, chat, replyTo, editing, st, group, onClearReply, onC
     return () => clearTimeout(t);
   }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { typing(roomId, false); }, [roomId]);
-  useLayoutEffect(() => { const el = ta.current; if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight + 2, 160)}px`; } }, [text]);
+  useLayoutEffect(() => { const el = ta.current; if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight + 2, 168)}px`; } }, [text]);
 
   const token = st.mentionSuggestions && group ? /(?:^|\s)@([^\s@]*)$/.exec(text)?.[1] : undefined;
   const people = token === undefined ? [] : Object.entries(chat.members).filter(([id, n]) => id !== user && n.toLowerCase().includes(token.toLowerCase())).slice(0, 8);
@@ -366,87 +273,143 @@ function Composer({ roomId, chat, replyTo, editing, st, group, onClearReply, onC
         const type = mr.mimeType.split(";")[0] || "audio/webm";
         sendFile(roomId, new Blob(chunks, { type }), `voice-message.${type.includes("ogg") ? "ogg" : "webm"}`, { voice: true, durationMs: ms });
       };
-      recorder.current = { mr, chunks, start, stream, timer }; setRec({ ms: 0 }); mr.start();
+      recorder.current = { mr, stream }; setRec({ ms: 0 }); mr.start();
     } catch { setError("Couldn't access the microphone."); }
   }
   const stopRec = (cancel: boolean) => { const r = recorder.current; if (!r) return; r.cancel = cancel; r.mr.stop(); };
 
   const where = () => navigator.geolocation?.getCurrentPosition((p) => sendLocation(roomId, p.coords.latitude, p.coords.longitude), () => setError("Couldn't get your location."), { timeout: 10000 });
+  const pick = (k: AttachKind) => {
+    setAttach(false);
+    if (k === "photos") photos.current?.click();
+    else if (k === "camera") camera.current?.click();
+    else if (k === "file") files.current?.click();
+    else if (k === "emoji") setEmoji(true);
+    else if (k === "location") where();
+    else setSheet(k);
+  };
   const hasText = text.trim().length > 0;
+  const input = (ref: React.RefObject<HTMLInputElement | null>, accept?: string, capture?: boolean) => (
+    <input ref={ref} type="file" multiple={!capture} accept={accept} {...(capture ? { capture: "environment" } : {})} hidden onChange={(e) => { if (e.target.files) onFiles(Array.from(e.target.files)); e.target.value = ""; }} />
+  );
 
   return (
     <div className="composer-wrap">
-      {replyTo && <div className="banner-bar"><div><b>Replying to {nameOf(chat, replyTo.sender)}</b><span>{previewOf(replyTo)}</span></div><button className="icon" onClick={onClearReply}>✕</button></div>}
-      {editing && <div className="banner-bar"><div><b>Editing message</b><span>{editing.body}</span></div><button className="icon" onClick={() => { onClearEdit(); setText(""); }}>✕</button></div>}
-      {people.length > 0 && <div className="mentions">{people.map(([id, n]) => <button key={id} onClick={() => { setText(text.slice(0, text.length - token!.length - 1) + `@${n} `); mentionIds.current.set(n, id); ta.current?.focus(); }}>@{n}</button>)}</div>}
+      {replyTo && <div className="banner-bar"><div><b>Replying to {nameOf(chat, replyTo.sender)}</b><span>{previewOf(replyTo)}</span></div><IconButton icon={X} label="Dismiss" onClick={onClearReply} /></div>}
+      {editing && <div className="banner-bar"><div><b>Editing message</b><span>{editing.body}</span></div><IconButton icon={X} label="Dismiss" onClick={() => { onClearEdit(); setText(""); }} /></div>}
+      {people.length > 0 && <div className="mentions">{people.map(([id, n]) => <button key={id} onClick={() => { setText(text.slice(0, text.length - token!.length - 1) + `@${n} `); mentionIds.current.set(n, id); ta.current?.focus(); }}><Avatar name={n} size={22} />@{n}</button>)}</div>}
       {error && <div className="error pad" onClick={() => setError(undefined)}>{error}</div>}
+      {input(files)}{input(photos, "image/*,video/*")}{input(camera, "image/*", true)}
       {rec ? (
-        <div className="composer rec"><i className="rec-dot" /><span>Recording {Math.floor(rec.ms / 60000)}:{String(Math.floor(rec.ms / 1000) % 60).padStart(2, "0")}</span><span className="grow" /><button className="link" onClick={() => stopRec(true)}>Cancel</button><button className="primary" onClick={() => stopRec(false)}>Send</button></div>
+        <div className="composer rec"><IconButton icon={Trash2} label="Cancel recording" onClick={() => stopRec(true)} /><i className="rec-dot" /><span className="grow">Recording {Math.floor(rec.ms / 60000)}:{String(Math.floor(rec.ms / 1000) % 60).padStart(2, "0")}</span><button className="send" onClick={() => stopRec(false)} aria-label="Send voice message"><Send size={18} /></button></div>
       ) : (
         <form className="composer" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-          <input ref={file} type="file" multiple hidden onChange={(e) => { if (e.target.files) onFiles(Array.from(e.target.files)); e.target.value = ""; }} />
           <div className="menu-wrap">
-            <button type="button" className="icon" onClick={() => setAttach(!attach)} aria-label="Attach">＋</button>
-            {attach && (
-              <div className="menu up" onMouseLeave={() => setAttach(false)} onClick={() => setAttach(false)}>
-                <button type="button" onClick={() => file.current?.click()}>📎 File or photo</button>
-                <button type="button" onClick={where}>📍 Location</button>
-              </div>
-            )}
+            <IconButton icon={Plus} label="Attach" onClick={() => setAttach(!attach)} active={attach} className="plus" />
+            {attach && <AttachMenu onPick={pick} onClose={() => setAttach(false)} />}
           </div>
-          <button type="button" className="icon" onClick={() => setEmoji(true)} aria-label="Emoji">😊</button>
-          <textarea ref={ta} rows={1} placeholder="Message" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={sendKey}
-            onPaste={(e) => { const fs = Array.from(e.clipboardData.files); if (fs.length) { e.preventDefault(); onFiles(fs); } }} />
+          <div className="field">
+            <textarea ref={ta} rows={1} placeholder="Message" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={sendKey} spellCheck
+              onPaste={(e) => { const fs = Array.from(e.clipboardData.files); if (fs.length) { e.preventDefault(); onFiles(fs); } }} />
+            <IconButton icon={Smile} label="Emoji" onClick={() => setEmoji(true)} />
+          </div>
           {hasText ? (
             <div className="send-group">
-              <button className="send" aria-label="Send">➤</button>
-              {!editing && <button type="button" className="send-more" onClick={() => setLater(true)} title="Send later">▾</button>}
+              <button className="send" aria-label="Send"><Send size={18} /></button>
+              {!editing && <button type="button" className="send-more" onClick={() => setLater(true)} title="Send later" aria-label="Send later"><ChevronDown size={16} /></button>}
             </div>
-          ) : <button type="button" className="send" onClick={startRec} aria-label="Record voice message" title="Record voice message">🎤</button>}
+          ) : <button type="button" className="send" onClick={startRec} aria-label="Record voice message" title="Record voice message"><Mic size={18} /></button>}
         </form>
       )}
       {emoji && <EmojiPicker recent={st.recentEmoji} onPick={(e) => { setText(text + e); setEmoji(false); ta.current?.focus(); }} onClose={() => setEmoji(false)} />}
-      {later && <TimePresetModal title="Send later" onClose={() => setLater(false)} onPick={async (at) => { setLater(false); const err = await schedule(roomId, text.trim(), Math.max(5000, at - Date.now())); if (err) setError(err); else { setText(""); onClearReply(); } }} />}
+      {sheet === "gif" && <GifModal onPick={(g) => { void sendGif(roomId, g).catch((e) => setError(e.message)); setSheet(undefined); }} onSettings={() => { setSheet(undefined); nav("settings/media"); }} onClose={() => setSheet(undefined)} />}
+      {sheet === "stickers" && <StickerModal roomId={roomId} onPick={(s) => { sendSticker(roomId, s); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
+      {sheet === "poll" && <PollModal onCreate={(q, a, max, disclosed) => { sendPoll(roomId, q, a, max, disclosed); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
+      {sheet === "contact" && <ContactModal onSend={(n, p) => { sendContact(roomId, n, p); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
+      {later && <WhenModal title="Send later" onClose={() => setLater(false)} onPick={async (at) => { setLater(false); const err = await schedule(roomId, text.trim(), Math.max(5000, at - Date.now())); if (err) setError(err); else { setText(""); onClearReply(); } }} />}
+    </div>
+  );
+}
+
+// ---- Photo viewer --------------------------------------------------------------------------------------
+
+function ImageViewer({ images, startId, chat, onClose }: { images: Msg[]; startId: string; chat: ChatState; onClose: () => void }) {
+  const [i, setI] = useState(Math.max(0, images.findIndex((m) => m.id === startId)));
+  const [zoom, setZoom] = useState(false);
+  const m = images[i];
+  const src = useMxc(m?.mxc, 0);
+  const step = (d: number) => { setI((x) => Math.min(images.length - 1, Math.max(0, x + d))); setZoom(false); };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); else if (e.key === "ArrowLeft") step(-1); else if (e.key === "ArrowRight") step(1); };
+    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+  }, [images.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!m) return null;
+  return (
+    <div className="viewer" onClick={onClose}>
+      <div className="viewer-top" onClick={(e) => e.stopPropagation()}>
+        <IconButton icon={X} label="Close" onClick={onClose} />
+        <div><b>{nameOf(chat, m.sender)}</b><small>{i + 1} of {images.length} · {new Date(m.ts).toLocaleString()}</small></div>
+        <span className="grow" />
+        <IconButton icon={Download} label="Download" onClick={() => void download(m)} />
+      </div>
+      {i > 0 && <button className="nav-arrow left" onClick={(e) => { e.stopPropagation(); step(-1); }} aria-label="Previous"><ChevronLeft size={28} /></button>}
+      {i < images.length - 1 && <button className="nav-arrow right" onClick={(e) => { e.stopPropagation(); step(1); }} aria-label="Next"><ChevronRight size={28} /></button>}
+      <div className="viewer-stage">{src ? <img src={src} alt={m.body} className={zoom ? "zoom" : ""} onClick={(e) => { e.stopPropagation(); setZoom(!zoom); }} /> : <p>Loading…</p>}</div>
     </div>
   );
 }
 
 // ---- Info drawer ----------------------------------------------------------------------------------------
 
-function InfoPanel({ chat, nav, onClose }: { chat: ChatState; nav: Nav; onClose: () => void }) {
+function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: Nav; onClose: () => void; onViewImage: (id: string) => void }) {
   const user = me();
   const muted = useStore((s) => s.muted.includes(chat.id));
   const [list, setList] = useState<Record<string, string>>();
   const [muteDlg, setMuteDlg] = useState(false);
-  const [remindDlg, setRemindDlg] = useState(false);
+  const [when, setWhen] = useState<"remind" | "snooze">();
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [tab, setTab] = useState<"photos" | "links" | "files">("photos");
   useEffect(() => { void members(chat.id).then(setList); }, [chat.id]);
   const name = displayName(chat, user);
-  const photos = useMemo(() => chat.messages.filter((m) => m.type === "m.image" && m.mxc && !m.sticker).slice(-24).reverse(), [chat.messages]);
+  const photos = useMemo(() => chat.messages.filter((m) => m.type === "m.image" && m.mxc && !m.sticker).reverse(), [chat.messages]);
+  const links = useMemo(() => chat.messages.flatMap((m) => { const u = firstUrl(m.body); return u ? [{ m, u }] : []; }).reverse(), [chat.messages]);
+  const files = useMemo(() => chat.messages.filter((m) => ["m.file", "m.audio", "m.video"].includes(m.type)).reverse(), [chat.messages]);
   const left = muted ? muteLeft(chat.id) : undefined;
+  const labels = labelsOf(chat);
   return (
     <aside className="info">
-      <header><b>Chat info</b><button className="icon" onClick={onClose}>✕</button></header>
+      <header><b>Chat info</b><IconButton icon={X} label="Close" onClick={onClose} /></header>
       <div className="info-body">
         <div className="info-id"><Avatar name={name} mxc={chat.avatarMxc} size={88} network={chat.network} /><h3>{name}</h3><small>{networkMeta(chat.network).label}{isGroup(chat) ? ` · ${chat.memberCount} members` : ""}</small>
           {isGroup(chat) && <button className="link" onClick={() => { const n = prompt("Rename group", chat.name); if (n?.trim()) rename(chat.id, n.trim()); }}>Rename group</button>}</div>
-        <button className="list-btn" onClick={() => nav(`search:${chat.id}`)}>🔍 Search in this chat</button>
-        <button className="list-btn" onClick={() => setRemindDlg(true)}>⏰ Remind me about this chat</button>
-        <label className="toggle"><span>Pinned</span><input type="checkbox" checked={isPinned(chat)} onChange={(e) => setTag(chat.id, "m.favourite", e.target.checked)} /></label>
-        <label className="toggle"><span>Muted{left && left > 0 ? ` · ${Math.ceil(left / 3.6e6)}h left` : ""}</span><input type="checkbox" checked={muted} onChange={(e) => (e.target.checked ? setMuteDlg(true) : setMuted(chat.id, false))} /></label>
-        <label className="toggle"><span>Archived</span><input type="checkbox" checked={isArchived(chat)} onChange={(e) => setTag(chat.id, "u.archived", e.target.checked)} /></label>
-        <label className="toggle"><span>Marked unread</span><input type="checkbox" checked={chat.markedUnread} onChange={(e) => markUnread(chat.id, e.target.checked)} /></label>
-        {photos.length > 0 && <><h4>Shared photos</h4><div className="photo-grid">{photos.map((m) => <Thumb key={m.id} mxc={m.mxc!} />)}</div></>}
-        <button className="list-btn danger" onClick={() => setConfirmLeave(true)}>Leave chat</button>
+        <div className="quick-actions">
+          <button onClick={() => nav(`search:${chat.id}`)}><span><Search size={20} /></span>Search</button>
+          <button className={isPinned(chat) ? "on" : ""} onClick={() => pin(chat.id, !isPinned(chat))}><span><Pin size={20} /></span>{isPinned(chat) ? "Unpin" : "Pin"}</button>
+          <button className={muted ? "on" : ""} onClick={() => (muted ? setMuted(chat.id, false) : setMuteDlg(true))}><span><BellOff size={20} /></span>{muted ? "Unmute" : "Mute"}</button>
+          <button onClick={() => setWhen("remind")}><span><AlarmClock size={20} /></span>Remind</button>
+        </div>
+        <div className="group-card flat">
+          <label className="toggle"><span>Low priority<small>Quiet, except @mentions and replies</small></span><input type="checkbox" checked={isLowPriority(chat)} onChange={(e) => setLowPriority(chat.id, e.target.checked)} /></label>
+          <label className="toggle"><span>Archived</span><input type="checkbox" checked={isArchived(chat)} onChange={(e) => setTag(chat.id, "u.archived", e.target.checked)} /></label>
+          <label className="toggle"><span>Marked unread</span><input type="checkbox" checked={chat.markedUnread} onChange={(e) => markUnread(chat.id, e.target.checked)} /></label>
+          {muted && left && left > 0 && <small className="pad">Muted for {Math.ceil(left / 3.6e6)} more hour(s)</small>}
+        </div>
+        <SheetItem icon={Tag} label="Labels" hint={labels.length ? labels.join(", ") : "None"} onClick={() => nav(`settings/labels`)} />
+        <SheetItem icon={Hourglass} label="Snooze…" hint="Hide this chat and bring it back later" onClick={() => setWhen("snooze")} />
+        <div className="tabs flat">{(["photos", "links", "files"] as const).map((t) => <button key={t} className={"tab" + (tab === t ? " on" : "")} onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)} {t === "photos" ? photos.length : t === "links" ? links.length : files.length}</button>)}</div>
+        {tab === "photos" && (photos.length ? <div className="photo-grid">{photos.slice(0, 60).map((m) => <Thumb key={m.id} mxc={m.mxc!} onClick={() => onViewImage(m.id)} />)}</div> : <p className="muted pad">No photos loaded yet. Scroll up in the chat to load more.</p>)}
+        {tab === "links" && (links.length ? <ul className="plain">{links.slice(0, 40).map(({ m, u }) => <li key={m.id}><a className="list-btn col" href={u} target="_blank" rel="noreferrer noopener"><span className="clip"><Link2 size={14} /> {u}</span><small>{nameOf(chat, m.sender)} · {new Date(m.ts).toLocaleDateString()}</small></a></li>)}</ul> : <p className="muted pad">No links shared.</p>)}
+        {tab === "files" && (files.length ? <ul className="plain">{files.slice(0, 40).map((m) => <li key={m.id}><button className="list-btn col" onClick={() => void download(m)}><span className="clip"><FileText size={14} /> {m.body || previewOf(m)}</span><small>{nameOf(chat, m.sender)}{m.size ? ` · ${humanSize(m.size)}` : ""}</small></button></li>)}</ul> : <p className="muted pad">No files shared.</p>)}
+        <SheetItem icon={LogOut} label="Leave chat" danger onClick={() => setConfirmLeave(true)} />
         <h4>Members{list ? ` (${Object.keys(list).length})` : ""}</h4>
-        <ul className="plain">{Object.entries(list ?? chat.members).sort((a, b) => a[1].localeCompare(b[1])).map(([id, n]) => <li key={id} className="member"><Avatar name={n} size={32} /><div>{id === user ? `${n} (you)` : n}<small>{id}</small></div></li>)}</ul>
+        <ul className="plain">{Object.entries(list ?? chat.members).sort((a, b) => a[1].localeCompare(b[1])).map(([id, n]) => <li key={id} className="member"><Avatar name={n} size={34} /><div>{id === user ? `${n} (you)` : n}<small>{id}</small></div></li>)}</ul>
       </div>
       {muteDlg && <Modal title={`Mute ${name}`} onClose={() => setMuteDlg(false)}><div className="stack">{([["For 1 hour", 3.6e6], ["For 8 hours", 8 * 3.6e6], ["For 1 week", 7 * 864e5], ["Until I turn it back on", undefined]] as [string, number | undefined][]).map(([l, ms]) => <button key={l} className="row-btn" onClick={() => { setMuted(chat.id, true, ms); setMuteDlg(false); }}><b>{l}</b></button>)}</div></Modal>}
-      {remindDlg && <TimePresetModal title={`Remind me about ${name}`} onPick={(at) => { remind(chat.id, at); setRemindDlg(false); }} onClose={() => setRemindDlg(false)} />}
+      {when && <WhenModal title={when === "snooze" ? "Snooze until" : `Remind me about ${name}`} onPick={(at) => { if (when === "snooze") snooze(chat.id, at); else remind(chat.id, at); setWhen(undefined); }} onClose={() => setWhen(undefined)} />}
       {confirmLeave && <Modal title="Leave this chat?" onClose={() => setConfirmLeave(false)}><p className="muted">It will disappear from your inbox. The conversation on {networkMeta(chat.network).label} isn't deleted.</p><div className="row-end"><button className="link" onClick={() => setConfirmLeave(false)}>Cancel</button><button className="primary danger" onClick={() => { leave(chat.id); nav("home"); }}>Leave</button></div></Modal>}
     </aside>
   );
 }
-function Thumb({ mxc }: { mxc: string }) { const s = useMxc(mxc, 200); return <div className="thumb">{s && <img src={s} alt="" />}</div>; }
+function Thumb({ mxc, onClick }: { mxc: string; onClick: () => void }) { const s = useMxc(mxc, 200); return <button className="thumb" onClick={onClick}>{s && <img src={s} alt="" />}</button>; }
 
-export { cancelScheduled };
+export { ImageIcon, Archive, ArrowDownToLine, MailOpen, _forward };

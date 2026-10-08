@@ -80,10 +80,11 @@ export const matrix = {
   redact: (roomId: string, eventId: string, txn: string) => call("PUT", `/_matrix/client/v3/rooms/${enc(roomId)}/redact/${enc(eventId)}/${enc(txn)}`, {}),
   receipt: (roomId: string, eventId: string, priv: boolean) => call("POST", `/_matrix/client/v3/rooms/${enc(roomId)}/receipt/${priv ? "m.read.private" : "m.read"}/${enc(eventId)}`, {}),
   typing: (me: string, roomId: string, on: boolean) => call("PUT", `/_matrix/client/v3/rooms/${enc(roomId)}/typing/${enc(me)}`, on ? { typing: true, timeout: 6000 } : { typing: false }),
-  setTag: (me: string, roomId: string, tag: string, on: boolean) => {
+  setTag: (me: string, roomId: string, tag: string, on: boolean, order?: number) => {
     const p = `/_matrix/client/v3/user/${enc(me)}/rooms/${enc(roomId)}/tags/${enc(tag)}`;
-    return on ? call("PUT", p, {}) : call("DELETE", p);
+    return on ? call("PUT", p, order !== undefined ? { order } : {}) : call("DELETE", p);
   },
+  putAccountData: (me: string, type: string, content: unknown) => call("PUT", `/_matrix/client/v3/user/${enc(me)}/account_data/${enc(type)}`, content),
   setMarkedUnread: (me: string, roomId: string, unread: boolean) => call("PUT", `/_matrix/client/v3/user/${enc(me)}/rooms/${enc(roomId)}/account_data/m.marked_unread`, { unread }),
   setMuted: (roomId: string, muted: boolean) => {
     const p = `/_matrix/client/v3/pushrules/global/override/${enc(roomId)}`;

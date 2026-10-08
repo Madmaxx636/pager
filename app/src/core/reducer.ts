@@ -1,5 +1,5 @@
 // Folds Matrix /sync and /messages responses into chat state. A direct port of the Android SyncReducer so both clients behave alike.
-import { ChatState, Incoming, Msg, STATUS_SENT, displayName, emptyChat, nameOf, previewOf } from "./types";
+import { ChatState, Incoming, Msg, PollAnswer, STATUS_SENT, StickerPack, displayName, emptyChat, nameOf, previewOf } from "./types";
 
 type J = Record<string, any>;
 const obj = (v: unknown): J => (v && typeof v === "object" && !Array.isArray(v) ? (v as J) : {});
@@ -13,6 +13,8 @@ export interface SyncResult {
   invites: string[];
   /** Rooms with notifications switched off; undefined when this sync carried no push-rule change. */
   muted?: string[];
+  /** The user's own sticker pack when this sync carried it. */
+  userStickers?: StickerPack;
 }
 
 export function applySync(old: Record<string, ChatState>, sync: J, me: string, initial: boolean): SyncResult {
@@ -33,11 +35,11 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
     else if (chat.prevBatch == null && chat.messages.length === 0 && prev != null) chat = { ...chat, prevBatch: prev };
 
     const pre = chat;
-    chat = process(chat, arr(tl.events).map(obj), true, (m) => {
+    chat = process(chat, arr(tl.events).map(obj), true, (m, parentSender) => {
       if (!initial && m.sender !== me) {
         const mine = pre.members[me] ?? me.replace(/^@/, "").split(":")[0];
         const mentioned = m.mentions.includes(me) || m.body.toLowerCase().includes(`@${mine}`.toLowerCase());
-        incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: pre.memberCount > 2, mentioned, ts: m.ts });
+        incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: pre.memberCount > 2, mentioned, ts: m.ts, replyToMe: parentSender === me });
       }
     });
 
@@ -55,8 +57,13 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
   for (const roomId of Object.keys(obj(rooms.leave))) delete chats[roomId];
 
   let muted: string[] | undefined;
-  for (const e of arr(obj(sync.account_data).events)) if (obj(e).type === "m.push_rules") muted = parseMuted(obj(e));
-  return { chats, incoming, invites, muted };
+  let userStickers: StickerPack | undefined;
+  for (const e of arr(obj(sync.account_data).events)) {
+    const ev = obj(e);
+    if (ev.type === "m.push_rules") muted = parseMuted(ev);
+    else if (ev.type === "im.ponies.user_emotes") userStickers = parseStickerPack("user", "My stickers", obj(ev.content));
+  }
+  return { chats, incoming, invites, muted, userStickers };
 }
 
 /** Merges a page of older events (as returned by /messages, newest first). */
@@ -65,7 +72,7 @@ export function applyHistory(chat: ChatState, chunk: J[], end: string | undefine
   return { ...next, prevBatch: end ?? null, reachedStart: end == null };
 }
 
-function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m: Msg) => void): ChatState {
+function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m: Msg, parentSender?: string) => void): ChatState {
   if (!events.length) return start;
   let chat = start;
   let msgs = [...start.messages];
@@ -73,6 +80,9 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
   const reactions: Record<string, Record<string, string[]>> = {};
   for (const [t, byKey] of Object.entries(start.reactions)) { reactions[t] = {}; for (const [k, v] of Object.entries(byKey)) reactions[t][k] = [...v]; }
   const refs = { ...start.reactionRefs };
+  const votes: Record<string, Record<string, string[]>> = {};
+  for (const [k, v] of Object.entries(start.pollVotes)) votes[k] = { ...v };
+  const ended = new Set(start.pollEnded);
 
   for (const e of events) {
     if (e.state_key != null) { if (applyStates) chat = applyState(chat, e); continue; }
@@ -84,12 +94,35 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
         if (!msg) continue;
         if (msg.txn) msgs = msgs.filter((m) => m.id !== `local-${msg.txn}`);
         if (ids.has(msg.id)) continue;
-        ids.add(msg.id); msgs.push(msg); onNew?.(msg);
+        ids.add(msg.id); msgs.push(msg);
+        onNew?.(msg, msg.replyTo ? msgs.find((m) => m.id === msg.replyTo)?.sender : undefined);
         break;
       }
       case "m.sticker": {
         const s = stickerMsg(e);
         if (s && !ids.has(s.id)) { ids.add(s.id); msgs.push(s); onNew?.(s); }
+        break;
+      }
+      case "org.matrix.msc3381.poll.start":
+      case "m.poll.start": {
+        const p = toPollMsg(e);
+        if (p && !ids.has(p.id)) { ids.add(p.id); msgs.push(p); onNew?.(p); }
+        break;
+      }
+      case "org.matrix.msc3381.poll.response":
+      case "m.poll.response": {
+        const target = str(obj(content["m.relates_to"]).event_id), sender = str(e.sender);
+        if (!target || !sender || ended.has(target)) break;
+        const answers = arr(obj(content["org.matrix.msc3381.poll.response"]).answers ?? content["m.selections"]).filter((a) => typeof a === "string");
+        (votes[target] ??= {})[sender] = answers;
+        break;
+      }
+      case "org.matrix.msc3381.poll.end":
+      case "m.poll.end": {
+        const target = str(obj(content["m.relates_to"]).event_id);
+        if (!target) break;
+        const owner = msgs.find((m) => m.id === target)?.sender;
+        if (!owner || owner === e.sender) ended.add(target);
         break;
       }
       case "m.reaction": {
@@ -124,7 +157,7 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
   msgs.sort((a, b) => a.ts - b.ts);
   const cleaned: Record<string, Record<string, string[]>> = {};
   for (const [t, byKey] of Object.entries(reactions)) if (Object.keys(byKey).length) cleaned[t] = byKey;
-  return { ...chat, messages: msgs, reactions: cleaned, reactionRefs: refs };
+  return { ...chat, messages: msgs, reactions: cleaned, reactionRefs: refs, pollVotes: votes, pollEnded: [...ended] };
 }
 
 function applyEdit(msgs: Msg[], e: J): Msg[] {
@@ -144,6 +177,10 @@ function applyState(chat: ChatState, e: J): ChatState {
   switch (e.type) {
     case "m.room.name": return { ...chat, name: str(content.name) ?? "" };
     case "m.room.avatar": return { ...chat, avatarMxc: str(content.url) };
+    case "im.ponies.room_emotes": {
+      const pack = parseStickerPack(key || "room", str(obj(content.pack).display_name) ?? "Room stickers", content);
+      return { ...chat, stickerPacks: [...chat.stickerPacks.filter((p) => p.key !== pack.key), pack] };
+    }
     case "m.bridge":
     case "uk.half-shot.bridge": {
       const id = str(obj(content.protocol).id);
@@ -174,9 +211,37 @@ function applyEphemeral(chat: ChatState, e: J, me: string): ChatState {
 
 function applyRoomAccountData(chat: ChatState, e: J): ChatState {
   const content = obj(e.content);
-  if (e.type === "m.tag") return { ...chat, tags: Object.keys(obj(content.tags)) };
+  if (e.type === "m.tag") { const tags = obj(content.tags); return { ...chat, tags: Object.keys(tags), pinOrder: num(obj(tags["m.favourite"]).order) }; }
   if (e.type === "m.marked_unread" || e.type === "com.famedly.marked_unread") return { ...chat, markedUnread: content.unread === true };
   return chat;
+}
+
+/** Sticker packs (MSC2545): images keyed by shortcode, usable as stickers unless marked emoji-only. */
+export function parseStickerPack(key: string, fallbackName: string, content: J): StickerPack {
+  const name = str(obj(content.pack).display_name) ?? fallbackName;
+  const stickers = Object.entries(obj(content.images)).flatMap(([shortcode, el]) => {
+    const o = obj(el), usage = arr(o.usage).filter((u) => typeof u === "string");
+    if (usage.length && !usage.includes("sticker")) return [];
+    const info = obj(o.info);
+    return typeof o.url === "string" ? [{ shortcode, url: o.url, body: str(o.body) ?? shortcode, w: num(info.w), h: num(info.h), mime: str(info.mimetype) }] : [];
+  });
+  return { key, name, stickers };
+}
+
+function pollText(el: unknown): string | undefined {
+  const o = obj(el);
+  return str(o["org.matrix.msc1767.text"]) ?? str(o.body) ?? arr(o["m.text"]).map((x) => str(obj(x).body)).find(Boolean) ?? str(el);
+}
+
+export function toPollMsg(e: J): Msg | undefined {
+  const content = obj(e.content);
+  const p = obj(content["org.matrix.msc3381.poll.start"] ?? content["m.poll"]);
+  const question = pollText(p.question);
+  const id = str(e.event_id), sender = str(e.sender);
+  if (!question || !id || !sender) return undefined;
+  const answers: PollAnswer[] = arr(p.answers).flatMap((a) => { const o = obj(a); const t = pollText(o); return typeof o.id === "string" && t ? [{ id: o.id, text: t }] : []; });
+  if (answers.length < 2) return undefined;
+  return { id, sender, ts: num(e.origin_server_ts) ?? 0, type: "m.poll", body: question, status: STATUS_SENT, mentions: [], poll: { question, answers, maxSelections: num(p.max_selections) ?? 1, disclosed: !String(p.kind ?? "").endsWith("undisclosed") } };
 }
 
 export function parseMuted(ev: J): string[] {
@@ -220,6 +285,7 @@ export function toMsg(e: J): Msg | undefined {
     voice: content["org.matrix.msc3245.voice"] != null || obj(content["org.matrix.msc1767.audio"]).waveform != null,
     mentions: arr(obj(content["m.mentions"]).user_ids).filter((u) => typeof u === "string"),
     status: STATUS_SENT,
+    html: content.format === "org.matrix.html" ? str(content.formatted_body) : undefined,
   };
 }
 

@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlarmClock, Archive, ArchiveRestore, BellOff, CheckCheck, CircleDot, Circle, CheckCircle2, Inbox, ListFilter, MailOpen, MessageSquareDot, MoreVertical, Pin,
+  PinOff, Search, Settings as SettingsIcon, Hourglass, SquarePen, Star, Tag, TriangleAlert, Users, ArrowDownToLine, ChevronLeft, ChevronRight, UserRoundCog, X,
+} from "lucide-react";
 import { ChatSummary } from "../core/types";
 import { networkMeta } from "../core/emoji";
-import { markAllRead, markRead, markUnread, remind, setMuted, setTag, signOut, useInbox, useStore, me } from "../core/store";
+import {
+  addLabel, markAllRead, markRead, markUnread, me, movePin, pin, remind, removeLabel, setLowPriority, setMuted, setTag, snooze, useInbox, useLabels, useStore, useChatsRaw,
+} from "../core/store";
 import { useSettings } from "../core/settings";
-import { Avatar, Modal, TimePresetModal } from "./common";
+import { Avatar, IconButton, Modal, SheetItem, WhenModal, EmptyState } from "./common";
 import { needsAttention } from "./Accounts";
 
 function timeLabel(ts: number) {
@@ -16,123 +22,243 @@ function timeLabel(ts: number) {
 
 export type Nav = (to: string) => void;
 
+interface Filters { groups: boolean; dms: boolean; drafts: boolean; unanswered: boolean; network?: string }
+const noFilters: Filters = { groups: false, dms: false, drafts: false, unanswered: false };
+const filterCount = (f: Filters) => [f.groups, f.dms, f.drafts, f.unanswered, !!f.network].filter(Boolean).length;
+
+function inTab(c: ChatSummary, tab: string) {
+  const unread = c.unread > 0 || c.markedUnread;
+  if (tab === "inbox") return !c.archived && !c.lowPriority;
+  if (tab === "unread") return !c.archived && !c.lowPriority && unread;
+  if (tab === "low") return c.lowPriority && !c.archived;
+  if (tab === "archive") return c.archived;
+  if (tab.startsWith("label:")) return c.labels.includes(tab.slice(6)) && !c.archived;
+  return true;
+}
+
 export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: string | null; onSelect: (id: string) => void; nav: Nav; onAccounts: () => void }) {
   const st = useSettings();
   const all = useInbox();
   const synced = useStore((s) => s.synced);
   const bridges = useStore((s) => s.bridges);
+  const labels = useLabels();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [archived, setArchived] = useState(false);
+  const [tab, setTab] = useState(st.defaultTab === "unread" ? "unread" : "inbox");
+  const [filters, setFilters] = useState<Filters>(noFilters);
   const [menu, setMenu] = useState(false);
   const [ctx, setCtx] = useState<{ c: ChatSummary; x: number; y: number }>();
-  const [muteFor, setMuteFor] = useState<ChatSummary>();
-  const [remindFor, setRemindFor] = useState<ChatSummary>();
+  const [filterModal, setFilterModal] = useState(false);
+  const [muteFor, setMuteFor] = useState<string[]>();
+  const [labelFor, setLabelFor] = useState<string[]>();
+  const [whenFor, setWhenFor] = useState<{ ids: string[]; kind: "snooze" | "remind" }>();
+  const [picked, setPicked] = useState<string[]>([]);
+  const [dragId, setDragId] = useState<string>();
   const search = useRef<HTMLInputElement>(null);
+  const selecting = picked.length > 0;
 
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); search.current?.focus(); search.current?.select(); } };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
+    const focus = () => { search.current?.focus(); search.current?.select(); };
+    window.addEventListener("pager:filter-chats", focus);
+    return () => window.removeEventListener("pager:filter-chats", focus);
   }, []);
 
-  const visible = useMemo(() => all.filter((c) => c.archived === archived), [all, archived]);
-  const networks = useMemo(() => [...new Set(visible.map((c) => c.network))].sort(), [visible]);
-  const unreadCount = visible.filter((c) => c.unread > 0 || c.markedUnread).length;
   const q = query.trim().toLowerCase();
-  const shown = visible.filter((c) => {
-    const ok = filter === "all" ? true : filter === "unread" ? c.unread > 0 || c.markedUnread : filter === "groups" ? c.isGroup : filter === "dms" ? !c.isGroup : filter === "fav" ? c.pinned : filter.startsWith("net:") ? c.network === filter.slice(4) : true;
-    return ok && (!q || c.name.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q));
-  });
-  const totalUnread = all.filter((c) => !c.archived && !c.muted && (c.unread > 0 || c.markedUnread)).length;
+  const pinsRow = st.showPinsRow && tab === "inbox" && !q && !filterCount(filters);
+  const pins = pinsRow ? all.filter((c) => c.pinned && !c.archived && !c.lowPriority).sort((a, b) => a.pinOrder - b.pinOrder) : [];
+  const pinIds = new Set(pins.map((p) => p.id));
+  const networks = useMemo(() => [...new Set(all.map((c) => c.network))].sort(), [all]);
+  const unreadCount = all.filter((c) => inTab(c, "unread")).length;
+  const shown = all.filter((c) =>
+    inTab(c, tab) && !pinIds.has(c.id) && (!filters.groups || c.isGroup) && (!filters.dms || !c.isGroup) && (!filters.drafts || !!c.draft) && (!filters.unanswered || c.unanswered)
+    && (!filters.network || c.network === filters.network) && (!q || c.name.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q)));
+  const totalUnread = all.filter((c) => !c.archived && !c.muted && !c.lowPriority && (c.unread > 0 || c.markedUnread)).length;
   const attention = [...new Set(bridges.flatMap((n) => n.logins.filter((l) => needsAttention(l.state_event)).map(() => n.name)))];
-  const archivedCount = all.filter((c) => c.archived).length;
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const open = (id: string) => (selecting ? toggle(id) : onSelect(id));
+
+  const tabs: [string, string, typeof Inbox, number?][] = [
+    ["inbox", "Inbox", Inbox], ["unread", "Unread", MessageSquareDot, unreadCount || undefined], ["low", "Low priority", ArrowDownToLine], ["archive", "Archive", Archive],
+    ...(st.showLabelsInFilterBar ? labels.map((l): [string, string, typeof Inbox] => [`label:${l}`, l, Tag]) : []),
+  ];
 
   return (
-    <aside className="sidebar">
-      <header>
-        <div className="logo"><span className="logo-mark" /><b>{archived ? "Archived" : "Pager"}</b>{!archived && totalUnread > 0 && <small className="muted">{totalUnread} unread</small>}</div>
-        <div className="header-actions">
-          <button className="icon" onClick={() => nav("new")} title="New chat" aria-label="New chat">✎</button>
-          <button className="icon" onClick={() => nav("search")} title="Search all messages" aria-label="Search">🔍</button>
-          <div className="menu-wrap">
-            <button className="icon" onClick={() => setMenu(!menu)} aria-label="Menu">⋯</button>
-            {menu && (
-              <div className="menu" onMouseLeave={() => setMenu(false)} onClick={() => setMenu(false)}>
-                <div className="menu-id">{me()}</div>
-                <button onClick={onAccounts}>Add or manage accounts</button>
-                <button onClick={markAllRead}>Mark all as read</button>
-                <button onClick={() => setArchived(!archived)}>{archived ? "Back to inbox" : `Archived (${archivedCount})`}</button>
-                <button onClick={() => nav("settings/starred")}>Starred messages</button>
-                <button onClick={() => nav("settings")}>Settings</button>
-                <button onClick={() => signOut()}>Sign out</button>
-              </div>
-            )}
+    <aside className="sidebar" style={{ width: st.sidebarWidth }}>
+      {selecting ? (
+        <header className="side-head sel">
+          <IconButton icon={X} label="Cancel selection" onClick={() => setPicked([])} />
+          <h1>{picked.length} selected</h1>
+          <div className="head-actions">
+            <IconButton icon={CheckCheck} label="Mark read" onClick={() => { picked.forEach(markRead); setPicked([]); }} />
+            <IconButton icon={MailOpen} label="Mark unread" onClick={() => { picked.forEach((id) => markUnread(id, true)); setPicked([]); }} />
+            <IconButton icon={Pin} label="Pin" onClick={() => { picked.forEach((id) => pin(id, true)); setPicked([]); }} />
+            <IconButton icon={Archive} label="Archive" onClick={() => { picked.forEach((id) => setTag(id, "u.archived", true)); setPicked([]); }} />
+            <IconButton icon={BellOff} label="Mute" onClick={() => setMuteFor(picked)} />
+            <IconButton icon={Tag} label="Labels" onClick={() => setLabelFor(picked)} />
           </div>
-        </div>
-      </header>
+        </header>
+      ) : (
+        <header className="side-head">
+          <div><h1>Chats</h1>{totalUnread > 0 && <small className="accent">{totalUnread} unread</small>}</div>
+          <div className="head-actions">
+            <IconButton icon={SquarePen} label="New chat (Ctrl+N)" onClick={() => nav("new")} />
+            <IconButton icon={Search} label="Search all messages (Ctrl+Shift+F)" onClick={() => nav("search")} />
+            <div className="menu-wrap">
+              <IconButton icon={MoreVertical} label="Menu" onClick={() => setMenu(!menu)} />
+              {menu && (
+                <div className="menu" onMouseLeave={() => setMenu(false)} onClick={() => setMenu(false)}>
+                  <div className="menu-id">{me()}</div>
+                  <button onClick={onAccounts}><UserRoundCog size={18} />Accounts</button>
+                  <button onClick={markAllRead}><CheckCheck size={18} />Mark all as read</button>
+                  <button onClick={() => nav("settings/starred")}><Star size={18} />Starred messages</button>
+                  <button onClick={() => nav("settings")}><SettingsIcon size={18} />Settings</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+      )}
 
-      <div className="search"><input ref={search} placeholder="Filter chats  (Ctrl+K)" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
+      <div className="pill-search">
+        <Search size={18} />
+        <input ref={search} placeholder="Search chats" value={query} onChange={(e) => setQuery(e.target.value)} />
+        {st.showFilterBar && <button className={"icon sm" + (filterCount(filters) ? " active" : "")} onClick={() => setFilterModal(true)} title="Filters" aria-label="Filters"><ListFilter size={18} />{filterCount(filters) > 0 && <i className="dot-badge" />}</button>}
+      </div>
 
-      {st.showFilterBar && !archived && (
-        <div className="chips">
-          <button className={filter === "all" ? "chip on" : "chip"} onClick={() => setFilter("all")}>All</button>
-          <button className={filter === "unread" ? "chip on" : "chip"} onClick={() => setFilter("unread")}>Unread{unreadCount ? ` ${unreadCount}` : ""}</button>
-          <button className={filter === "groups" ? "chip on" : "chip"} onClick={() => setFilter("groups")}>Groups</button>
-          <button className={filter === "dms" ? "chip on" : "chip"} onClick={() => setFilter("dms")}>DMs</button>
-          <button className={filter === "fav" ? "chip on" : "chip"} onClick={() => setFilter("fav")}>Favorites</button>
-          {networks.length > 1 && networks.map((n) => <button key={n} className={filter === `net:${n}` ? "chip on" : "chip"} onClick={() => setFilter(`net:${n}`)}><i style={{ background: networkMeta(n).color }} />{networkMeta(n).label}</button>)}
+      {st.showFilterBar && !selecting && (
+        <div className="tabs">
+          {tabs.map(([id, label, Icon, badge]) => (
+            <button key={id} className={"tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}><Icon size={15} />{label}{badge ? <b>{badge}</b> : null}</button>
+          ))}
         </div>
       )}
 
-      {attention.length > 0 && !archived && <button className="banner" onClick={() => nav("settings/bridges")}>⚠️ {attention.join(", ")} needs you to sign in again <b>Fix</b></button>}
+      {attention.length > 0 && !selecting && tab === "inbox" && (
+        <button className="banner" onClick={() => nav("settings/bridges")}><TriangleAlert size={18} /><span>{attention.join(", ")} needs you to sign in again</span><b>Fix</b></button>
+      )}
 
-      <ul className="chat-list">
-        {shown.map((c) => (
-          <li key={c.id}>
-            <button className={"chat-row" + (c.id === selected ? " sel" : "")} onClick={() => onSelect(c.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }}>
-              {st.showAvatars && <Avatar name={c.name} mxc={c.avatarMxc} network={st.showNetworkBadges ? c.network : undefined} size={st.density === "compact" ? 38 : 46} />}
-              <div className="chat-main">
-                <div className="chat-top">
-                  <span className={"chat-name" + (c.unread > 0 || c.markedUnread ? " unread-name" : "")}>{c.name}{c.muted && " 🔕"}</span>
-                  <span className={"chat-time" + ((c.unread > 0 || c.markedUnread) && !c.muted ? " hot" : "")}>{timeLabel(c.ts)}</span>
-                </div>
-                {st.showNetworkNameInRows && <div className="chat-net" style={{ color: networkMeta(c.network).color }}>{networkMeta(c.network).label}</div>}
-                <div className="chat-bottom">
-                  {c.draft ? <span className="chat-preview"><b className="draft">Draft:</b> {c.draft.replace(/\n/g, " ")}</span> : st.showPreviews ? <span className="chat-preview">{c.preview}</span> : <span />}
-                  {c.pinned && <span className="pin">📌</span>}
-                  {(c.unread > 0 || c.markedUnread) && c.id !== selected && <span className={"unread" + (c.muted ? " muted-badge" : "")}>{c.unread > 99 ? "99+" : c.unread || "•"}</span>}
-                </div>
-              </div>
-            </button>
-          </li>
-        ))}
-        {shown.length === 0 && (
-          <li className="empty-list">
-            {!synced ? <p>Syncing…</p> : all.length === 0 ? <><p>No chats yet.</p><button className="primary" onClick={onAccounts}>Connect your first account</button></> : <p>{archived ? "Nothing archived." : filter === "unread" ? "You're all caught up 🎉" : "No matches."}</p>}
-          </li>
+      <div className="chat-scroll">
+        {pins.length > 0 && (
+          <div className="pins">
+            {pins.map((c, i) => (
+              <button key={c.id} className={"pin-chip" + (c.id === selected ? " sel" : "") + (dragId === c.id ? " dragging" : "")} draggable
+                onDragStart={() => setDragId(c.id)} onDragEnd={() => setDragId(undefined)}
+                onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragId && dragId !== c.id) movePin(dragId, i); setDragId(undefined); }}
+                onClick={() => open(c.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }} title={c.name}>
+                <span className="pin-av"><Avatar name={c.name} mxc={c.avatarMxc} size={54} network={st.showNetworkBadges ? c.network : undefined} />{(c.unread > 0 || c.markedUnread) && <i className={"pin-dot" + (c.muted ? " muted" : "")} />}</span>
+                <span className="pin-name">{c.name}</span>
+              </button>
+            ))}
+          </div>
         )}
-      </ul>
+        <ul className="chat-list">
+          {shown.map((c) => {
+            const unread = c.unread > 0 || c.markedUnread;
+            return (
+              <li key={c.id}>
+                <button className={"chat-row" + (c.id === selected ? " sel" : "") + (picked.includes(c.id) ? " picked" : "")} onClick={() => open(c.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }}>
+                  {selecting && (picked.includes(c.id) ? <CheckCircle2 className="check on" size={22} /> : <Circle className="check" size={22} />)}
+                  {st.showAvatars && <Avatar name={c.name} mxc={c.avatarMxc} network={st.showNetworkBadges ? c.network : undefined} size={st.density === "compact" ? 40 : 50} />}
+                  <div className="chat-main">
+                    <div className="chat-top">
+                      <span className={"chat-name" + (unread ? " unread-name" : "")}>{c.name}</span>
+                      {c.muted && <BellOff size={13} className="muted-icon" />}
+                      {c.pinned && !st.showPinsRow && <Pin size={13} className="muted-icon" />}
+                      {st.inboxStyle !== "minimal" && <span className={"chat-time" + (unread && !c.muted ? " hot" : "")}>{timeLabel(c.ts)}</span>}
+                      {st.inboxStyle === "minimal" && unread && <span className={"unread" + (c.muted || c.lowPriority ? " muted-badge" : "")}>{c.unread || ""}</span>}
+                    </div>
+                    {st.showNetworkNameInRows && <div className="chat-net" style={{ color: networkMeta(c.network).color }}>{networkMeta(c.network).label}</div>}
+                    {st.inboxStyle !== "minimal" && (
+                      <div className="chat-bottom">
+                        {c.typing ? <span className="chat-preview accent">typing…</span>
+                          : c.draft ? <span className="chat-preview"><b className="accent">Draft:</b> {c.draft.replace(/\n/g, " ")}</span>
+                          : st.showPreviews ? <span className="chat-preview">{c.lastFromMe ? "You: " : ""}{c.preview}</span> : <span className="chat-preview" />}
+                        {unread && <span className={"unread" + (c.muted || c.lowPriority ? " muted-badge" : "")}>{c.unread > 99 ? "99+" : c.unread || ""}</span>}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+          {shown.length === 0 && pins.length === 0 && (
+            <li>
+              {!synced ? <EmptyState icon={Inbox} title="Syncing…" />
+                : all.length === 0 ? <EmptyState icon={Inbox} title="No chats yet" body="Connect an app to bring your conversations here."><button className="primary" onClick={onAccounts}>Connect an account</button></EmptyState>
+                : tab === "unread" ? <EmptyState icon={CheckCheck} title="You're all caught up" body="No unread chats." />
+                : tab === "archive" ? <EmptyState icon={Archive} title="Nothing archived" body="Archived chats come back when someone writes." />
+                : tab === "low" ? <EmptyState icon={ArrowDownToLine} title="No low-priority chats" body="They stay quiet except for @mentions and replies." />
+                : <EmptyState icon={Search} title="No matches" />}
+            </li>
+          )}
+        </ul>
+      </div>
 
-      {ctx && (
-        <div className="ctx-backdrop" onClick={() => setCtx(undefined)} onContextMenu={(e) => { e.preventDefault(); setCtx(undefined); }}>
-          <div className="menu ctx" style={{ left: Math.min(ctx.x, window.innerWidth - 220), top: Math.min(ctx.y, window.innerHeight - 260) }} onClick={() => setCtx(undefined)}>
-            <button onClick={() => setTag(ctx.c.id, "m.favourite", !ctx.c.pinned)}>{ctx.c.pinned ? "Unpin" : "Pin"}</button>
-            <button onClick={() => (ctx.c.muted ? setMuted(ctx.c.id, false) : setMuteFor(ctx.c))}>{ctx.c.muted ? "Unmute" : "Mute…"}</button>
-            <button onClick={() => (ctx.c.unread > 0 || ctx.c.markedUnread ? markRead(ctx.c.id) : markUnread(ctx.c.id, true))}>{ctx.c.unread > 0 || ctx.c.markedUnread ? "Mark as read" : "Mark as unread"}</button>
-            <button onClick={() => setTag(ctx.c.id, "u.archived", !ctx.c.archived)}>{ctx.c.archived ? "Unarchive" : "Archive"}</button>
-            <button onClick={() => setRemindFor(ctx.c)}>Remind me…</button>
-          </div>
-        </div>
-      )}
+      {ctx && <ChatMenu c={ctx.c} x={ctx.x} y={ctx.y} pins={pins} close={() => setCtx(undefined)}
+        onMute={() => setMuteFor([ctx.c.id])} onLabels={() => setLabelFor([ctx.c.id])} onWhen={(kind) => setWhenFor({ ids: [ctx.c.id], kind })} onSelect={() => toggle(ctx.c.id)} />}
       {muteFor && (
-        <Modal title={`Mute ${muteFor.name}`} onClose={() => setMuteFor(undefined)}>
+        <Modal title={muteFor.length === 1 ? "Mute chat" : `Mute ${muteFor.length} chats`} onClose={() => setMuteFor(undefined)}>
           <div className="stack">
-            {([["For 1 hour", 3.6e6], ["For 8 hours", 8 * 3.6e6], ["For 1 week", 7 * 864e5], ["Until I turn it back on", undefined]] as [string, number | undefined][]).map(([l, ms]) => <button key={l} className="row-btn" onClick={() => { setMuted(muteFor.id, true, ms); setMuteFor(undefined); }}><b>{l}</b></button>)}
+            {([["For 1 hour", 3.6e6], ["For 8 hours", 8 * 3.6e6], ["For 1 week", 7 * 864e5], ["Until I turn it back on", undefined]] as [string, number | undefined][]).map(([l, ms]) => (
+              <button key={l} className="row-btn" onClick={() => { muteFor.forEach((id) => setMuted(id, true, ms)); setMuteFor(undefined); setPicked([]); }}><b>{l}</b></button>
+            ))}
           </div>
         </Modal>
       )}
-      {remindFor && <TimePresetModal title={`Remind me about ${remindFor.name}`} onPick={(at) => { remind(remindFor.id, at); setRemindFor(undefined); }} onClose={() => setRemindFor(undefined)} />}
+      {labelFor && <LabelModal ids={labelFor} onClose={() => setLabelFor(undefined)} />}
+      {whenFor && <WhenModal title={whenFor.kind === "snooze" ? "Snooze until" : "Remind me"} onPick={(at) => { whenFor.ids.forEach((id) => (whenFor.kind === "snooze" ? snooze(id, at) : remind(id, at))); setWhenFor(undefined); }} onClose={() => setWhenFor(undefined)} />}
+      {filterModal && (
+        <Modal title="Filter chats" onClose={() => setFilterModal(false)}>
+          <div className="stack">
+            {([["groups", "Groups", Users], ["dms", "Direct messages", MessageSquareDot], ["drafts", "With a draft", SquarePen], ["unanswered", "Unanswered (they wrote last)", CircleDot]] as const).map(([key, label, Icon]) => (
+              <button key={key} className={"row-btn pick" + (filters[key] ? " on" : "")} onClick={() => setFilters({ ...filters, [key]: !filters[key], ...(key === "groups" && !filters.groups ? { dms: false } : {}), ...(key === "dms" && !filters.dms ? { groups: false } : {}) })}><Icon size={18} /><b>{label}</b>{filters[key] && <CheckCircle2 size={18} />}</button>
+            ))}
+            {networks.length > 1 && <><h4 className="sec">Network</h4>{networks.map((n) => <button key={n} className={"row-btn pick" + (filters.network === n ? " on" : "")} onClick={() => setFilters({ ...filters, network: filters.network === n ? undefined : n })}><i className="net-swatch" style={{ background: networkMeta(n).color }} /><b>{networkMeta(n).label}</b>{filters.network === n && <CheckCircle2 size={18} />}</button>)}</>}
+            {filterCount(filters) > 0 && <button className="link" onClick={() => { setFilters(noFilters); setFilterModal(false); }}>Clear filters</button>}
+          </div>
+        </Modal>
+      )}
     </aside>
+  );
+}
+
+function ChatMenu({ c, x, y, pins, close, onMute, onLabels, onWhen, onSelect }: { c: ChatSummary; x: number; y: number; pins: ChatSummary[]; close: () => void; onMute: () => void; onLabels: () => void; onWhen: (k: "snooze" | "remind") => void; onSelect: () => void }) {
+  const unread = c.unread > 0 || c.markedUnread;
+  const at = pins.findIndex((p) => p.id === c.id);
+  const run = (f: () => void) => () => { f(); close(); };
+  return (
+    <div className="ctx-backdrop" onClick={close} onContextMenu={(e) => { e.preventDefault(); close(); }}>
+      <div className="menu ctx" style={{ left: Math.min(x, window.innerWidth - 270), top: Math.max(8, Math.min(y, window.innerHeight - 470)) }} onClick={(e) => e.stopPropagation()}>
+        <div className="menu-id">{c.name}</div>
+        <button onClick={run(() => pin(c.id, !c.pinned))}>{c.pinned ? <PinOff size={18} /> : <Pin size={18} />}{c.pinned ? "Unpin" : "Pin to top"}</button>
+        {c.pinned && at > 0 && <button onClick={run(() => movePin(c.id, at - 1))}><ChevronLeft size={18} />Move earlier in pins</button>}
+        {c.pinned && at >= 0 && at < pins.length - 1 && <button onClick={run(() => movePin(c.id, at + 1))}><ChevronRight size={18} />Move later in pins</button>}
+        <button onClick={run(() => (unread ? markRead(c.id) : markUnread(c.id, true)))}>{unread ? <CheckCheck size={18} /> : <MailOpen size={18} />}{unread ? "Mark as read" : "Mark as unread"}</button>
+        <button onClick={run(() => (c.muted ? setMuted(c.id, false) : onMute()))}><BellOff size={18} />{c.muted ? "Unmute" : "Mute…"}</button>
+        <button onClick={run(() => setTag(c.id, "u.archived", !c.archived))}>{c.archived ? <ArchiveRestore size={18} /> : <Archive size={18} />}{c.archived ? "Move to inbox" : "Archive"}</button>
+        <button onClick={run(() => setLowPriority(c.id, !c.lowPriority))}><ArrowDownToLine size={18} />{c.lowPriority ? "Remove from low priority" : "Low priority"}</button>
+        <button onClick={run(() => onWhen("snooze"))}><Hourglass size={18} />Snooze…</button>
+        <button onClick={run(() => onWhen("remind"))}><AlarmClock size={18} />Remind me…</button>
+        <button onClick={run(onLabels)}><Tag size={18} />Labels…</button>
+        <button onClick={run(onSelect)}><CheckCircle2 size={18} />Select</button>
+      </div>
+    </div>
+  );
+}
+
+function LabelModal({ ids, onClose }: { ids: string[]; onClose: () => void }) {
+  const labels = useLabels();
+  const chats = useChatsRaw();
+  const [name, setName] = useState("");
+  const has = (l: string) => ids.every((id) => chats[id]?.tags.includes(`u.label.${l}`));
+  return (
+    <Modal title="Labels" onClose={onClose}>
+      <div className="stack">
+        {labels.map((l) => <button key={l} className={"row-btn pick" + (has(l) ? " on" : "")} onClick={() => ids.forEach((id) => (has(l) ? removeLabel(id, l) : addLabel(id, l)))}><Tag size={18} /><b>{l}</b>{has(l) && <CheckCircle2 size={18} />}</button>)}
+        <form className="inline-form" onSubmit={(e) => { e.preventDefault(); if (name.trim()) { ids.forEach((id) => addLabel(id, name)); setName(""); } }}>
+          <input placeholder="New label (Work, Family, Travel…)" value={name} onChange={(e) => setName(e.target.value)} />
+          <button className="primary" disabled={!name.trim()}>Add</button>
+        </form>
+      </div>
+    </Modal>
   );
 }
