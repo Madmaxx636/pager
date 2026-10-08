@@ -98,3 +98,6 @@ The mock accepts any username and password.
 - The login token is kept in app-private storage on Android and in the browser's localStorage on web/desktop (not encrypted at rest).
 - Scheduled send needs a Synapse with delayed events (MSC4140); if it isn't available the app says so.
 - Pager does not copy anyone's branding or assets; the name, logo and UI are original.
+
+## License
+AGPL-3.0. See [LICENSE](LICENSE). If you run a modified Pager as a service for others, you must share your changes.
