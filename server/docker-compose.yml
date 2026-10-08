@@ -1,0 +1,66 @@
+# Pager server stack. Run ./scripts/setup.sh first (generates configs), then `docker compose up -d`.
+name: pager
+
+x-bridge: &bridge
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks: [pager]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pager
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pager"]
+      interval: 5s
+      retries: 10
+    networks: [pager]
+
+  synapse:
+    image: matrixdotorg/synapse:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data/synapse:/data
+    networks: [pager]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      PAGER_DOMAIN: ${PAGER_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data
+    depends_on: [synapse]
+    networks: [pager]
+
+  whatsapp:
+    <<: *bridge
+    image: dock.mau.dev/mautrix/whatsapp:latest
+    volumes: ["./data/bridges/whatsapp:/data"]
+
+  signal:
+    <<: *bridge
+    image: dock.mau.dev/mautrix/signal:latest
+    volumes: ["./data/bridges/signal:/data"]
+
+  discord:
+    <<: *bridge
+    image: dock.mau.dev/mautrix/discord:latest
+    volumes: ["./data/bridges/discord:/data"]
+
+networks:
+  pager:
