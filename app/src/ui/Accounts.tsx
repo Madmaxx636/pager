@@ -134,6 +134,16 @@ export function AccountsModal({ onClose, initial }: { onClose: () => void; initi
 
 /** Settings → Bridges & accounts */
 export function BridgesPage() {
+  const [note, setNote] = useState("");
+  const [syncing, setSyncing] = useState("");
+  async function sync(n: Network, l: Login) {
+    setSyncing(l.id); setNote("");
+    try {
+      const made = await pager.syncChats(n.id, l.id, (d, tot) => setSyncing(`${l.id}:${d}/${tot}`));
+      setNote(`Synced ${made} chats. Old message history isn't available from ${n.name}; new messages will appear as they arrive.`);
+    } catch (e) { setNote((e as Error).message); }
+    setSyncing("");
+  }
   const networks = useStore((s) => s.bridges);
   const st = useSettings();
   const [relogin, setRelogin] = useState<Network>();
@@ -141,6 +151,7 @@ export function BridgesPage() {
   return (
     <>
       <p className="muted pad">Each app you connect is bridged through your own server. Pager shows if a connection needs attention.</p>
+      {note && <p className="muted pad">{note}</p>}
       {!networks.length && <p className="muted pad">Loading…</p>}
       {networks.map((n) => {
         const meta = networkMeta(n.id);
@@ -154,6 +165,7 @@ export function BridgesPage() {
                 <Row key={l.id} title={l.name || l.profile?.name || l.id} hint={label}>
                   <i className="dot" style={{ background: color }} />
                   {needsAttention(l.state_event) && <button className="pill" onClick={() => setRelogin(n)}>Sign in</button>}
+                  <button className="link" disabled={!!syncing} onClick={() => sync(n, l)}>{syncing.startsWith(l.id) ? `Syncing ${syncing.split(":")[1] ?? ""}` : "Sync chats"}</button>
                   <button className="link danger" onClick={async () => { if (confirm("Disconnect this account?")) { await pager.logout(n.id, l.id).catch(() => {}); void refreshBridges(); } }}>Disconnect</button>
                 </Row>
               );
