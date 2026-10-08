@@ -11,7 +11,8 @@ rand() { head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40; }
 
 if [ ! -f .env ]; then
   read -rp "Public domain for your server (e.g. matrix.example.com): " domain
-  printf 'PAGER_DOMAIN=%s\nPOSTGRES_PASSWORD=%s\n' "$domain" "$(rand)" > .env
+  printf 'PAGER_DOMAIN=%s\nPOSTGRES_PASSWORD=%s\nPROVISIONING_SECRET=%s\nINVITE_CODE=%s\nSIGNUP_MODE=invite\n' \
+    "$domain" "$(rand)" "$(rand)" "$(rand | head -c 12)" > .env
 fi
 set -a; . ./.env; set +a
 
@@ -32,6 +33,12 @@ if [ ! -f data/synapse/homeserver.yaml ]; then
     | .app_service_config_files = []" synapse/homeserver.yaml
 fi
 
+# The API needs Synapse's registration secret to create users.
+if ! grep -q '^REGISTRATION_SECRET=' .env; then
+  secret="$(yq '.registration_shared_secret' synapse/homeserver.yaml)"
+  echo "REGISTRATION_SECRET=$secret" >> .env
+fi
+
 # --- Bridges ---------------------------------------------------------------
 for b in "${BRIDGES[@]}"; do
   dir="data/bridges/$b"
@@ -47,6 +54,7 @@ for b in "${BRIDGES[@]}"; do
       | .database.type = \"postgres\"
       | .database.uri = \"postgres://pager:$POSTGRES_PASSWORD@postgres/$b?sslmode=disable\"
       | .bridge.permissions = {\"$PAGER_DOMAIN\":\"user\"}
+      | .provisioning.shared_secret = \"$PROVISIONING_SECRET\"
       | .encryption.allow = false" "bridges/$b/config.yaml"
   fi
   if [ ! -f "$dir/registration.yaml" ]; then
@@ -58,6 +66,5 @@ for b in "${BRIDGES[@]}"; do
 done
 
 echo
-echo "Done. Next:  docker compose up -d"
-echo "Then create your first user:"
-echo "  docker compose exec synapse register_new_matrix_user -c /data/homeserver.yaml -a http://localhost:8008"
+echo "Done. Next:  docker compose up -d --build"
+echo "Then open https://$PAGER_DOMAIN/ and sign up with invite code: $INVITE_CODE"

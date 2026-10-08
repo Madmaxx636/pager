@@ -44,6 +44,19 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy:/data
+      - ../app/dist:/srv/app:ro
+    depends_on: [synapse]
+    networks: [pager]
+
+  api:
+    build: ../api
+    restart: unless-stopped
+    environment:
+      PAGER_DOMAIN: ${PAGER_DOMAIN}
+      REGISTRATION_SECRET: ${REGISTRATION_SECRET}
+      PROVISIONING_SECRET: ${PROVISIONING_SECRET}
+      INVITE_CODE: ${INVITE_CODE}
+      SIGNUP_MODE: ${SIGNUP_MODE:-invite}
     depends_on: [synapse]
     networks: [pager]
 

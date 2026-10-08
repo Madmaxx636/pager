@@ -1,6 +1,19 @@
 {$PAGER_DOMAIN} {
-	reverse_proxy /_matrix/* synapse:8008
-	reverse_proxy /_synapse/client/* synapse:8008
-	# Pager API goes here later: reverse_proxy /api/* pager-api:8080
-	respond "Pager server is running" 200
+	encode zstd gzip
+
+	handle /_matrix/* {
+		reverse_proxy synapse:8008
+	}
+	handle /_synapse/client/* {
+		reverse_proxy synapse:8008
+	}
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+	# The Pager web app (build it with: cd app && npm ci && npm run build)
+	handle {
+		root * /srv/app
+		try_files {path} /index.html
+		file_server
+	}
 }
