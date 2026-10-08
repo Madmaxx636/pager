@@ -104,8 +104,8 @@ describe("applySync", () => {
       { type: "m.room.message", event_id: "$l", sender: mom, origin_server_ts: 2, content: { msgtype: "m.location", body: "Here", geo_uri: "geo:51.5,-0.12" } },
       { type: "m.room.message", event_id: "$v", sender: mom, origin_server_ts: 4, content: { msgtype: "m.audio", body: "v", url: "mxc://x/v", info: { duration: 9000 }, "org.matrix.msc3245.voice": {} } },
     ]), me, false).chats["!a:x"].messages;
-    expect(msgs[0]).toMatchObject({ sticker: true, type: "m.image" }); expect(previewOf(msgs[1])).toBe("📍 Location");
-    expect(msgs[2]).toMatchObject({ voice: true, durationMs: 9000 }); expect(previewOf(msgs[2])).toBe("🎤 Voice message");
+    expect(msgs[0]).toMatchObject({ sticker: true, type: "m.image" }); expect(previewOf(msgs[1])).toBe("Location");
+    expect(msgs[2]).toMatchObject({ voice: true, durationMs: 9000 }); expect(previewOf(msgs[2])).toBe("Voice message");
   });
   it("flags mentions and group chats for notifications", () => {
     const g = applySync({}, { rooms: { join: { "!g:x": { state: { events: [{ type: "m.room.name", state_key: "", content: { name: "Trip" } }] }, summary: { "m.joined_member_count": 4 }, timeline: { events: [] } } } } }, me, true).chats;

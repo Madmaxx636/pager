@@ -19,6 +19,14 @@ export interface AppSettings {
   showFilterBar: boolean;
   showReadTicks: boolean;
   showMessageTimes: boolean;
+  inboxStyle: "pro" | "minimal";
+  showPinsRow: boolean;
+  sortUnreadFirst: boolean;
+  defaultTab: "inbox" | "unread";
+  avatarShape: "circle" | "squircle";
+  showLabelsInFilterBar: boolean;
+  reduceMotion: boolean;
+  sidebarWidth: number;
   // Chats
   enterToSend: boolean;
   sendReadReceipts: boolean;
@@ -28,6 +36,14 @@ export interface AppSettings {
   unarchiveOnMessage: boolean;
   confirmDelete: boolean;
   mentionSuggestions: boolean;
+  markdown: boolean;
+  largeEmoji: boolean;
+  autoPlayGifs: boolean;
+  groupGapMin: number;
+  markReadMode: "open" | "scrolled" | "manual";
+  openAtFirstUnread: boolean;
+  gifProvider: "giphy" | "tenor";
+  gifKey: string;
   doubleTapReact: boolean;
   quickReactions: string[];
   recentEmoji: string[];
@@ -36,13 +52,19 @@ export interface AppSettings {
   notifPreview: "full" | "sender" | "hidden";
   notifSound: boolean;
   notifGroupMentionsOnly: boolean;
+  notifScope: "all" | "dm_mentions" | "favorites";
   notifMutedNetworks: string[];
   quietHoursEnabled: boolean;
   quietStartMin: number;
   quietEndMin: number;
   // Networks
   hiddenNetworks: string[];
+  // Advanced
+  developerMode: boolean;
+  // Keyboard shortcuts (desktop and web); values like "Ctrl+Shift+A"
+  shortcuts: Record<string, string>;
   // Desktop
+  uiZoom: number;
   closeToTray: boolean;
   startMinimized: boolean;
   launchAtLogin: boolean;
@@ -53,14 +75,34 @@ export const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"
 export const DEFAULTS: AppSettings = {
   themeMode: "system", accent: "teal", fontScale: 1, bubbleStyle: "round", wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
-  showReadTicks: true, showMessageTimes: true,
+  showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
+  avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360,
   enterToSend: true, sendReadReceipts: true, sendTyping: true, linkPreviews: true, autoDownload: "always", unarchiveOnMessage: true,
-  confirmDelete: true, mentionSuggestions: true, doubleTapReact: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
-  notifEnabled: true, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifMutedNetworks: [],
+  confirmDelete: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtFirstUnread: true, gifProvider: "giphy", gifKey: "", doubleTapReact: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
+  notifEnabled: true, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [],
   quietHoursEnabled: false, quietStartMin: 22 * 60, quietEndMin: 7 * 60,
   hiddenNetworks: [],
+  developerMode: false, shortcuts: {}, uiZoom: 1,
   closeToTray: true, startMinimized: false, launchAtLogin: false,
 };
+
+/** Every shortcut the app understands, with its default keys. Users can rebind them in Settings. */
+export const SHORTCUTS: { id: string; label: string; keys: string }[] = [
+  { id: "palette", label: "Command bar: jump to a chat or setting", keys: "Ctrl+K" },
+  { id: "newChat", label: "New chat", keys: "Ctrl+N" },
+  { id: "search", label: "Search all messages", keys: "Ctrl+Shift+F" },
+  { id: "inChatSearch", label: "Search in this chat", keys: "Ctrl+F" },
+  { id: "settings", label: "Open settings", keys: "Ctrl+," },
+  { id: "prevChat", label: "Previous chat", keys: "Alt+ArrowUp" },
+  { id: "nextChat", label: "Next chat", keys: "Alt+ArrowDown" },
+  { id: "nextUnread", label: "Next unread chat", keys: "Alt+Shift+ArrowDown" },
+  { id: "archive", label: "Archive or unarchive this chat", keys: "Ctrl+Shift+A" },
+  { id: "markUnread", label: "Mark this chat unread", keys: "Ctrl+Shift+U" },
+  { id: "mute", label: "Mute or unmute this chat", keys: "Ctrl+Shift+M" },
+  { id: "pin", label: "Pin or unpin this chat", keys: "Ctrl+Shift+P" },
+  { id: "snooze", label: "Snooze this chat", keys: "Ctrl+Shift+Z" },
+  { id: "help", label: "Show keyboard shortcuts", keys: "Ctrl+/" },
+];
 
 const KEY = "pager.settings";
 let state: AppSettings = load();
@@ -111,5 +153,6 @@ export function applyTheme(s: AppSettings) {
   r.style.setProperty("--font-scale", String(s.fontScale));
   r.dataset.bubble = s.bubbleStyle;
   r.dataset.density = s.density;
+  r.dataset.motion = s.reduceMotion ? "reduced" : "full";
   r.dataset.wallpaper = s.wallpaper;
 }

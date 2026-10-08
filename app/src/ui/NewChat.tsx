@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Contact, Network, pager } from "../core/api";
 import { useStore } from "../core/store";
-import { Avatar } from "./common";
+import { ChevronLeft, Search, UserPlus } from "lucide-react";
+import { Avatar, EmptyState, IconButton } from "./common";
 
 /** Start a chat with someone on a connected network: pick a network, search contacts, or type a phone number/username. */
 export function NewChat({ onBack, onOpen }: { onBack: () => void; onOpen: (roomId: string) => void }) {
@@ -37,16 +38,16 @@ export function NewChat({ onBack, onOpen }: { onBack: () => void; onOpen: (roomI
 
   return (
     <section className="page">
-      <header><button className="icon back always" onClick={onBack}>‹</button><h2>New chat</h2></header>
+      <header><IconButton icon={ChevronLeft} label="Back" onClick={onBack} className="back always" /><h2>New chat</h2></header>
       <div className="page-body">
-        {!networks ? <p className="muted pad">Loading…</p> : !networks.length ? <p className="muted pad">Connect an account first (Settings → Bridges &amp; accounts).</p> : (
+        {!networks ? <p className="muted pad">Loading…</p> : !networks.length ? <EmptyState icon={UserPlus} title="Connect an account first" body="Settings → Bridges & accounts" /> : (
           <>
-            <div className="chips pad">{networks.map((n) => <button key={n.id} className={n.id === selected?.id ? "chip on" : "chip"} onClick={() => { setSelected(n); setResults([]); }}>{n.name}</button>)}</div>
-            <div className="pad"><input autoFocus placeholder="Name, phone number or username" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
+            <div className="tabs pad-x">{networks.map((n) => <button key={n.id} className={n.id === selected?.id ? "tab on" : "tab"} onClick={() => { setSelected(n); setResults([]); }}>{n.name}</button>)}</div>
+            <div className="pill-search wide"><Search size={18} /><input autoFocus placeholder="Name, phone number or username" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
             {error && <div className="error pad">{error}</div>}
             <ul className="plain">
-              {query.trim() && <li><button className="list-btn" disabled={busy} onClick={() => start(query.trim())}><Avatar name="+" size={40} /><b>Message “{query.trim()}”</b></button></li>}
-              {results.map((c) => <li key={c.id}><button className="list-btn" disabled={busy} onClick={() => start(c.id)}><Avatar name={c.name} size={40} network={selected?.id} /><div><b>{c.name}</b>{c.detail && <small>{c.detail}</small>}</div></button></li>)}
+              {query.trim() && <li><button className="list-btn" disabled={busy} onClick={() => start(query.trim())}><span className="tile-icon"><UserPlus size={20} color="#fff" /></span><b>Message “{query.trim()}”</b></button></li>}
+              {results.map((c) => <li key={c.id}><button className="list-btn" disabled={busy} onClick={() => start(c.id)}><Avatar name={c.name} size={40} network={selected?.id} /><div className="col"><b>{c.name}</b>{c.detail && <small>{c.detail}</small>}</div></button></li>)}
             </ul>
             {busy && <p className="muted pad">Opening chat…</p>}
           </>

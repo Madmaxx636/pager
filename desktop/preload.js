@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld("pagerDesktop", {
   getAutostart: () => ipcRenderer.invoke("autostart:get"),
   setAutostart: (on) => ipcRenderer.send("autostart:set", on),
   setPrefs: (p) => ipcRenderer.send("prefs", p),
+  setZoom: (z) => ipcRenderer.send("zoom", z),
   onOpenRoom: (cb) => ipcRenderer.on("open-room", (_e, id) => cb(id)),
 });
