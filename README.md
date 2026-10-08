@@ -43,6 +43,8 @@ Not possible through bridges (the networks don't expose them): voice/video calls
 merging across networks and pinned messages are not built.
 Not built yet: iOS, push through Google/UnifiedPush, encrypted rooms (bridged rooms are plain), polls.
 
+See [DEPLOY.md](DEPLOY.md) for a full server walkthrough.
+
 ## Run your own server
 Requires Docker (or rootless Podman with `docker-compose`) and, for a real deployment, a domain pointing at the host.
 ```bash
