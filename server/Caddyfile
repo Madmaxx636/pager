@@ -1,0 +1,6 @@
+{$PAGER_DOMAIN} {
+	reverse_proxy /_matrix/* synapse:8008
+	reverse_proxy /_synapse/client/* synapse:8008
+	# Pager API goes here later: reverse_proxy /api/* pager-api:8080
+	respond "Pager server is running" 200
+}
