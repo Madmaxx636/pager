@@ -110,3 +110,16 @@ test("unknown networks and unlisted bridge paths are refused", async () => {
   assert.equal((await post("/api/bridges/nope/login/start/qr", {}, "goodtoken")).status, 404);
   assert.equal((await post("/api/bridges/whatsapp/admin/delete", {}, "goodtoken")).status, 404);
 });
+
+test("contact search and DM creation are proxied with login_id", async () => {
+  bridgeCalls.length = 0;
+  const r = await fetch(base + "/api/bridges/whatsapp/contacts?login_id=123&evil=1", { headers: { authorization: "Bearer goodtoken" } });
+  assert.equal(r.status, 200);
+  const url = bridgeCalls.at(-1)!.url;
+  assert.match(url, /^\/_matrix\/provision\/v3\/contacts\?login_id=123&user_id=/);
+  assert.ok(!url.includes("evil"));
+  assert.equal((await post("/api/bridges/whatsapp/search_users?login_id=123", { query: "al" }, "goodtoken")).status, 200);
+  assert.equal(bridgeCalls.at(-1)!.body.query, "al");
+  assert.equal((await post("/api/bridges/whatsapp/create_dm/%2B15551234567?login_id=123", {}, "goodtoken")).status, 200);
+  assert.match(bridgeCalls.at(-1)!.url, /create_dm\/%2B15551234567/);
+});

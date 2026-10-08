@@ -17,8 +17,11 @@ private fun JsonElement?.obj() = (this as? JsonObject) ?: JsonObject(emptyMap())
 private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
 data class ServerConfig(val domain: String, val inviteRequired: Boolean, val signupOpen: Boolean)
-data class Login(val id: String, val name: String)
+data class Login(val id: String, val name: String, val state: String = "")
 data class Network(val id: String, val name: String, val logins: List<Login>, val unavailable: Boolean)
+data class SearchHit(val roomId: String, val eventId: String, val sender: String, val text: String, val ts: Long)
+data class LinkPreview(val url: String, val title: String?, val description: String?, val imageMxc: String?, val site: String?)
+data class Contact(val id: String, val name: String, val detail: String?)
 data class LoginFlow(val id: String, val name: String, val description: String?)
 data class LoginField(val id: String, val name: String, val secret: Boolean, val hint: String?)
 data class LoginStep(
@@ -48,7 +51,12 @@ class PagerApi(private val http: Http) {
         val o = n.obj()
         Network(
             o["id"].str().orEmpty(), o["name"].str().orEmpty(),
-            o["logins"].arr().map { l -> l.obj().let { Login(it["id"].str().orEmpty(), it["name"].str() ?: it["id"].str().orEmpty()) } },
+            o["logins"].arr().map { l ->
+                l.obj().let {
+                    val st = it["state_event"].str() ?: it["state"].obj()["state_event"].str() ?: ""
+                    Login(it["id"].str().orEmpty(), it["name"].str() ?: it["profile"].obj()["name"].str() ?: it["id"].str().orEmpty(), st)
+                }
+            },
             o["error"] != null,
         )
     }
@@ -64,6 +72,30 @@ class PagerApi(private val http: Http) {
             values.forEach { (k, v) -> put(k, v) }
         }),
     )
+
+    suspend fun contacts(net: String, loginId: String?): List<Contact> =
+        parseContacts(http.request("GET", "/api/bridges/$net/contacts" + loginQuery(loginId)))
+
+    suspend fun searchUsers(net: String, loginId: String?, query: String): List<Contact> =
+        parseContacts(http.request("POST", "/api/bridges/$net/search_users" + loginQuery(loginId), buildJsonObject { put("query", query) }))
+
+    /** Opens (or creates) a DM with someone on a network. Returns the Matrix room id. */
+    suspend fun createDm(net: String, loginId: String?, identifier: String): String? =
+        http.request("POST", "/api/bridges/$net/create_dm/${enc(identifier)}" + loginQuery(loginId), JsonObject(emptyMap()))["dm_room_mxid"].str()
+
+    private fun loginQuery(loginId: String?) = if (loginId == null) "" else "?login_id=${enc(loginId)}"
+
+    private fun parseContacts(o: JsonObject): List<Contact> {
+        val list = (o["contacts"] ?: o["results"]).arr()
+        return list.map {
+            val c = it.obj()
+            Contact(
+                id = c["id"].str().orEmpty(),
+                name = c["name"].str() ?: c["identifiers"].arr().firstOrNull().str() ?: c["id"].str().orEmpty(),
+                detail = c["identifiers"].arr().firstOrNull().str()?.removePrefix("tel:"),
+            )
+        }.filter { it.id.isNotEmpty() }
+    }
 
     suspend fun logout(net: String, loginId: String) {
         http.request("POST", "/api/bridges/$net/logout/${enc(loginId)}", JsonObject(emptyMap()))
@@ -100,23 +132,105 @@ class MatrixApi(private val http: Http) {
     }
 
     suspend fun sync(since: String?): JsonObject {
-        val filter = enc("""{"room":{"timeline":{"limit":30}}}""")
+        // No presence, lazy-loaded members, and only the ephemeral/account data we use: keeps syncs small and fast.
+        val filter = enc(
+            """{"presence":{"types":[]},"room":{"timeline":{"limit":20},"state":{"lazy_load_members":true},""" +
+                """"ephemeral":{"types":["m.receipt","m.typing"]}}}""",
+        )
         val q = buildString {
-            append("/_matrix/client/v3/sync?filter=$filter")
+            append("/_matrix/client/v3/sync?set_presence=offline&filter=$filter")
             if (since != null) append("&since=${enc(since)}&timeout=30000") else append("&timeout=0")
         }
         return http.request("GET", q)
     }
 
+    /** One page of older events. Returns (events newest-first, next token or null at the start of the room). */
+    suspend fun messages(roomId: String, from: String): Pair<List<JsonObject>, String?> {
+        val filter = enc("""{"lazy_load_members":true}""")
+        val r = http.request("GET", "/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=40&from=${enc(from)}&filter=$filter")
+        return r["chunk"].arr().map { it.obj() } to r["end"].str()
+    }
+
+    suspend fun send(roomId: String, type: String, txnId: String, content: JsonObject): String =
+        http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/send/$type/${enc(txnId)}", content)["event_id"].str().orEmpty()
+
+    suspend fun redact(roomId: String, eventId: String, txnId: String) {
+        http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/redact/${enc(eventId)}/${enc(txnId)}", JsonObject(emptyMap()))
+    }
+
+    suspend fun setTag(me: String, roomId: String, tag: String, on: Boolean) {
+        val path = "/_matrix/client/v3/user/${enc(me)}/rooms/${enc(roomId)}/tags/${enc(tag)}"
+        if (on) http.request("PUT", path, JsonObject(emptyMap())) else http.request("DELETE", path)
+    }
+
+    suspend fun setMarkedUnread(me: String, roomId: String, unread: Boolean) {
+        http.request("PUT", "/_matrix/client/v3/user/${enc(me)}/rooms/${enc(roomId)}/account_data/m.marked_unread", buildJsonObject { put("unread", unread) })
+    }
+
+    suspend fun setMuted(roomId: String, muted: Boolean) {
+        val path = "/_matrix/client/v3/pushrules/global/override/${enc(roomId)}"
+        if (muted) http.request("PUT", path, buildJsonObject {
+            put("actions", JsonArray(emptyList()))
+            put("conditions", JsonArray(listOf(buildJsonObject { put("kind", "event_match"); put("key", "room_id"); put("pattern", roomId) })))
+        }) else http.request("DELETE", path)
+    }
+
+    suspend fun joinedMembers(roomId: String): Map<String, String> {
+        val joined = http.request("GET", "/_matrix/client/v3/rooms/${enc(roomId)}/joined_members")["joined"].obj()
+        return joined.mapValues { it.value.obj()["display_name"].str() ?: it.key.removePrefix("@").substringBefore(':') }
+    }
+
+    suspend fun leave(roomId: String) { http.request("POST", "/_matrix/client/v3/rooms/${enc(roomId)}/leave", JsonObject(emptyMap())) }
+
     suspend fun join(roomId: String) { http.request("POST", "/_matrix/client/v3/join/${enc(roomId)}", JsonObject(emptyMap())) }
 
-    suspend fun sendText(roomId: String, text: String, txnId: String): String =
-        http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/send/m.room.message/${enc(txnId)}", buildJsonObject {
-            put("msgtype", "m.text"); put("body", text)
-        })["event_id"].str().orEmpty()
+    suspend fun markRead(roomId: String, eventId: String, private: Boolean = false) {
+        val kind = if (private) "m.read.private" else "m.read"
+        http.request("POST", "/_matrix/client/v3/rooms/${enc(roomId)}/receipt/$kind/${enc(eventId)}", JsonObject(emptyMap()))
+    }
 
-    suspend fun markRead(roomId: String, eventId: String) {
-        http.request("POST", "/_matrix/client/v3/rooms/${enc(roomId)}/receipt/m.read/${enc(eventId)}", JsonObject(emptyMap()))
+    suspend fun typing(me: String, roomId: String, typing: Boolean) {
+        http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/typing/${enc(me)}", buildJsonObject {
+            put("typing", typing); if (typing) put("timeout", 6000)
+        })
+    }
+
+    suspend fun rename(roomId: String, name: String) {
+        http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/state/m.room.name", buildJsonObject { put("name", name) })
+    }
+
+    /** Full-text search over every chat (or one). Newest first. */
+    suspend fun search(term: String, roomId: String? = null): List<SearchHit> {
+        val r = http.request("POST", "/_matrix/client/v3/search", buildJsonObject {
+            putJsonObject("search_categories") {
+                putJsonObject("room_events") {
+                    put("search_term", term)
+                    put("keys", JsonArray(listOf(JsonPrimitive("content.body"))))
+                    put("order_by", "recent")
+                    if (roomId != null) putJsonObject("filter") { put("rooms", JsonArray(listOf(JsonPrimitive(roomId)))) }
+                }
+            }
+        })
+        return r["search_categories"].obj()["room_events"].obj()["results"].arr().mapNotNull {
+            val e = it.obj()["result"].obj()
+            val body = e["content"].obj()["body"].str() ?: return@mapNotNull null
+            SearchHit(e["room_id"].str() ?: return@mapNotNull null, e["event_id"].str().orEmpty(), e["sender"].str().orEmpty(), body, (e["origin_server_ts"] as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L)
+        }
+    }
+
+    suspend fun previewUrl(url: String): LinkPreview? {
+        val r = http.request("GET", "/_matrix/client/v1/media/preview_url?url=${enc(url)}")
+        val title = r["og:title"].str(); val desc = r["og:description"].str(); val img = r["og:image"].str()
+        if (title == null && desc == null && img == null) return null
+        return LinkPreview(url, title, desc, img, r["og:site_name"].str())
+    }
+
+    /** Scheduled send via delayed events (MSC4140). Returns the delay id, which can cancel it. */
+    suspend fun sendDelayed(roomId: String, type: String, txnId: String, content: JsonObject, delayMs: Long): String =
+        http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/send/$type/${enc(txnId)}?org.matrix.msc4140.delay=$delayMs", content)["delay_id"].str().orEmpty()
+
+    suspend fun cancelDelayed(delayId: String) {
+        http.request("POST", "/_matrix/client/unstable/org.matrix.msc4140/delayed_events/${enc(delayId)}", buildJsonObject { put("action", "cancel") })
     }
 
     suspend fun logout() { http.request("POST", "/_matrix/client/v3/logout", JsonObject(emptyMap())) }

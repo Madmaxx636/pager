@@ -1,8 +1,6 @@
 package app.pager.android
 
 import android.app.Application
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Intent
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -19,9 +17,7 @@ class PagerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         store = Store(this)
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL_MESSAGES, "Messages", NotificationManager.IMPORTANCE_HIGH))
-        nm.createNotificationChannel(NotificationChannel(CHANNEL_SYNC, "Background sync", NotificationManager.IMPORTANCE_MIN))
+        Notifier.createChannels(this)
 
         // Keep the process alive while signed in so messages arrive with the app closed.
         CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
@@ -34,7 +30,7 @@ class PagerApp : Application() {
     }
 
     companion object {
-        const val CHANNEL_MESSAGES = "messages"
-        const val CHANNEL_SYNC = "sync"
+        const val CHANNEL_MESSAGES = Notifier.CH_ALL
+        const val CHANNEL_SYNC = Notifier.CH_SYNC
     }
 }

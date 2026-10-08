@@ -19,10 +19,15 @@ android {
     buildFeatures { compose = true }
 
     buildTypes {
+        debug { manifestPlaceholders["cleartext"] = "true" }
         release {
+            // Plain HTTP only for local trial builds (-PdebugSign); real releases require HTTPS.
+            manifestPlaceholders["cleartext"] = if (project.hasProperty("debugSign")) "true" else "false"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Local trial builds only: ./gradlew assembleRelease -PdebugSign
+            if (project.hasProperty("debugSign")) signingConfig = signingConfigs.getByName("debug")
         }
     }
     testOptions { unitTests.isReturnDefaultValues = true }
@@ -40,6 +45,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    implementation("androidx.fragment:fragment-ktx:1.8.4")
+    implementation("androidx.biometric:biometric:1.1.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

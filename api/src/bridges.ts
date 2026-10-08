@@ -9,8 +9,12 @@ export async function bridgeRequest(
   method: string,
   path: string,
   body?: unknown,
+  query?: URLSearchParams,
 ) {
   const url = new URL(`${bridge.url}/_matrix/provision/v3${path}`);
+  // Only forward the query params the bridge understands.
+  const login = query?.get("login_id");
+  if (login) url.searchParams.set("login_id", login);
   url.searchParams.set("user_id", userId);
   const res = await fetch(url, {
     method,

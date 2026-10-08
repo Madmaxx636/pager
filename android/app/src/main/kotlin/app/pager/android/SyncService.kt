@@ -34,20 +34,7 @@ class SyncService : Service() {
         val store = (application as PagerApp).store
         scope.launch {
             store.incoming.collect { m ->
-                if (store.appInForeground) return@collect
-                val tap = PendingIntent.getActivity(
-                    this@SyncService, m.roomId.hashCode(),
-                    Intent(this@SyncService, MainActivity::class.java).putExtra("roomId", m.roomId),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                )
-                val note = NotificationCompat.Builder(this@SyncService, PagerApp.CHANNEL_MESSAGES)
-                    .setSmallIcon(R.drawable.ic_notif)
-                    .setContentTitle(m.chat)
-                    .setContentText(if (m.sender == m.chat) m.text else "${m.sender}: ${m.text}")
-                    .setContentIntent(tap)
-                    .setAutoCancel(true)
-                    .build()
-                runCatching { getSystemService(NotificationManager::class.java).notify(m.roomId.hashCode(), note) }
+                if (!store.appInForeground) Notifier.show(this@SyncService, store, m)
             }
         }
         return START_STICKY

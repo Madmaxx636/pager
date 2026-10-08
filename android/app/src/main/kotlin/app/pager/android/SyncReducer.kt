@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
@@ -11,11 +12,15 @@ import kotlinx.serialization.json.longOrNull
 private fun JsonElement?.obj(): JsonObject = (this as? JsonObject) ?: JsonObject(emptyMap())
 private fun JsonElement?.arr(): JsonArray = (this as? JsonArray) ?: JsonArray(emptyList())
 private fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+private fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.intOrNull
+private fun JsonElement?.long(): Long? = (this as? JsonPrimitive)?.longOrNull
 
 data class SyncResult(
     val chats: Map<String, ChatState>,
     val incoming: List<Incoming>,
     val invites: List<String>,
+    /** Rooms with notifications switched off; null when this sync carried no push-rule change. */
+    val muted: Set<String>?,
 )
 
 object SyncReducer {
@@ -24,42 +29,121 @@ object SyncReducer {
         val chats = old.toMutableMap()
         val incoming = mutableListOf<Incoming>()
         val rooms = sync["rooms"].obj()
-
         val invites = rooms["invite"].obj().keys.toList()
 
         for ((roomId, roomEl) in rooms["join"].obj()) {
             val room = roomEl.obj()
             var chat = chats[roomId] ?: ChatState(roomId)
-            val stateEvents = room["state"].obj()["events"].arr()
-            val timeline = room["timeline"].obj()["events"].arr()
+            for (e in room["state"].obj()["events"].arr()) chat = applyState(chat, e.obj())
 
-            // State can arrive in the state block and inline in the timeline.
-            for (e in stateEvents) chat = applyState(chat, e.obj())
-            val msgs = chat.messages.toMutableList()
-            val seen = msgs.mapTo(HashSet()) { it.id }
+            val tl = room["timeline"].obj()
+            val limited = (tl["limited"] as? JsonPrimitive)?.booleanOrNull == true
+            val prev = tl["prev_batch"].str()
+            // A gap means older loaded messages are no longer contiguous with the new ones; start over from here.
+            if (limited && chat.messages.isNotEmpty() && !initial) chat = chat.copy(messages = emptyList(), prevBatch = prev, reachedStart = false)
+            else if (chat.prevBatch == null && chat.messages.isEmpty() && prev != null) chat = chat.copy(prevBatch = prev)
 
-            for (el in timeline) {
-                val e = el.obj()
-                if (e["state_key"] != null) {
-                    chat = applyState(chat, e)
-                    continue
-                }
-                val msg = toMsg(chat, e) ?: continue
-                if (!seen.add(msg.id)) continue
-                msgs.add(msg)
-                if (!initial && msg.sender != me) {
-                    incoming.add(Incoming(roomId, chat.name.ifEmpty { "New message" }, msg.senderName, previewOf(msg)))
+            val pre = chat
+            chat = process(chat, tl["events"].arr().map { it.obj() }, applyStates = true) { m ->
+                if (!initial && m.sender != me) {
+                    val mine = pre.members[me] ?: me.removePrefix("@").substringBefore(':')
+                    val mentioned = me in m.mentions || m.body.contains("@$mine", ignoreCase = true)
+                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.memberCount > 2, mentioned, m.ts))
                 }
             }
-            msgs.sortBy { it.ts }
 
-            val count = room["unread_notifications"].obj()["notification_count"].let { (it as? JsonPrimitive)?.intOrNull }
-            chat = chat.copy(messages = msgs, unread = count ?: chat.unread)
-            chats[roomId] = chat
+            for (e in room["ephemeral"].obj()["events"].arr()) chat = applyEphemeral(chat, e.obj(), me)
+            for (e in room["account_data"].obj()["events"].arr()) chat = applyRoomAccountData(chat, e.obj())
+
+            room["summary"].obj()["m.heroes"].arr().mapNotNull { it.str() }.takeIf { it.isNotEmpty() }?.let { chat = chat.copy(heroes = it) }
+            room["summary"].obj()["m.joined_member_count"].int()?.let { chat = chat.copy(memberCount = it) }
+            val count = room["unread_notifications"].obj()["notification_count"].int()
+            chats[roomId] = chat.copy(unread = count ?: chat.unread)
         }
 
         for (roomId in rooms["leave"].obj().keys) chats.remove(roomId)
-        return SyncResult(chats, incoming, invites)
+
+        var muted: Set<String>? = null
+        for (e in sync["account_data"].obj()["events"].arr()) {
+            if (e.obj()["type"].str() == "m.push_rules") muted = parseMuted(e.obj())
+        }
+        return SyncResult(chats, incoming, invites, muted)
+    }
+
+    /** Merges a page of older events (as returned by /messages, newest first) into a chat. */
+    fun applyHistory(chat: ChatState, chunk: List<JsonObject>, end: String?): ChatState {
+        val chronological = chunk.asReversed()
+        return process(chat, chronological, applyStates = false, onNew = null).copy(prevBatch = end, reachedStart = end == null)
+    }
+
+    /** The core event loop shared by sync and history. */
+    private fun process(start: ChatState, events: List<JsonObject>, applyStates: Boolean, onNew: ((Msg) -> Unit)?): ChatState {
+        if (events.isEmpty()) return start
+        var chat = start
+        val msgs = start.messages.toMutableList()
+        val ids = msgs.mapTo(HashSet()) { it.id }
+        val reactions = start.reactions.mapValuesTo(HashMap()) { (_, v) -> v.mapValuesTo(HashMap()) { it.value.toMutableList() } }
+        val refs = start.reactionRefs.toMutableMap()
+
+        for (e in events) {
+            if (e["state_key"] != null) {
+                if (applyStates) chat = applyState(chat, e)
+                continue
+            }
+            val content = e["content"].obj()
+            when (e["type"].str()) {
+                "m.room.message" -> {
+                    if (content["m.relates_to"].obj()["rel_type"].str() == "m.replace") {
+                        applyEdit(msgs, e)
+                        continue
+                    }
+                    val msg = toMsg(e) ?: continue
+                    msg.txn?.let { txn -> msgs.removeAll { it.id == "local-$txn" } }
+                    if (!ids.add(msg.id)) continue
+                    msgs.add(msg)
+                    onNew?.invoke(msg)
+                }
+                "m.sticker" -> {
+                    val sticker = toMsg(e)?.copy(type = "m.image", sticker = true) ?: stickerMsg(e) ?: continue
+                    if (ids.add(sticker.id)) { msgs.add(sticker); onNew?.invoke(sticker) }
+                }
+                "m.reaction" -> {
+                    val rel = content["m.relates_to"].obj()
+                    val id = e["event_id"].str()
+                    val target = rel["event_id"].str()
+                    val key = rel["key"].str()
+                    val sender = e["sender"].str()
+                    if (rel["rel_type"].str() == "m.annotation" && id != null && target != null && key != null && sender != null && id !in refs) {
+                        refs[id] = ReactionRef(target, key, sender)
+                        val list = reactions.getOrPut(target) { HashMap() }.getOrPut(key) { mutableListOf() }
+                        if (sender !in list) list.add(sender)
+                    }
+                }
+                "m.room.redaction" -> {
+                    val target = e["redacts"].str() ?: content["redacts"].str() ?: continue
+                    if (msgs.removeAll { it.id == target }) ids.remove(target)
+                    refs.remove(target)?.let { ref ->
+                        reactions[ref.target]?.get(ref.key)?.remove(ref.sender)
+                        if (reactions[ref.target]?.get(ref.key)?.isEmpty() == true) reactions[ref.target]?.remove(ref.key)
+                    }
+                }
+            }
+        }
+        msgs.sortBy { it.ts }
+        return chat.copy(
+            messages = msgs,
+            reactions = reactions.mapValues { (_, v) -> v.mapValues { it.value.toList() } }.filterValues { it.isNotEmpty() },
+            reactionRefs = refs,
+        )
+    }
+
+    private fun applyEdit(msgs: MutableList<Msg>, e: JsonObject) {
+        val content = e["content"].obj()
+        val target = content["m.relates_to"].obj()["event_id"].str() ?: return
+        val i = msgs.indexOfFirst { it.id == target }
+        if (i < 0 || msgs[i].sender != e["sender"].str()) return
+        val body = content["m.new_content"].obj()["body"].str() ?: content["body"].str()?.removePrefix("* ") ?: return
+        msgs[i] = msgs[i].copy(body = body, edited = true)
     }
 
     private fun applyState(chat: ChatState, e: JsonObject): ChatState {
@@ -73,47 +157,112 @@ object SyncReducer {
                 if (id != null) chat.copy(network = if (id == "facebook") "messenger" else id) else chat
             }
             "m.room.member" -> {
-                val membership = content["membership"].str()
-                val name = content["displayname"].str() ?: key
+                val joined = content["membership"].str() == "join"
                 chat.copy(
-                    members = if (membership == "join") chat.members + (key to name) else chat.members - key,
-                    joined = if (membership == "join") chat.joined + key else chat.joined - key,
-                    // DMs from bridges often have no room name; fall back to the other person.
-                    name = chat.name,
+                    members = if (joined) chat.members + (key to (content["displayname"].str() ?: key.removePrefix("@").substringBefore(':'))) else chat.members,
+                    joined = if (joined) chat.joined + key else chat.joined - key,
                 )
             }
             else -> chat
         }
     }
 
-    private fun toMsg(chat: ChatState, e: JsonObject): Msg? {
-        if (e["type"].str() != "m.room.message") return null
+    private fun applyEphemeral(chat: ChatState, e: JsonObject, me: String): ChatState {
         val content = e["content"].obj()
-        if (content["m.relates_to"].obj()["rel_type"].str() == "m.replace") return null // edits
-        val sender = e["sender"].str() ?: return null
+        return when (e["type"].str()) {
+            "m.typing" -> chat.copy(typing = content["user_ids"].arr().mapNotNull { it.str() }.filter { it != me }.toSet())
+            "m.receipt" -> {
+                val receipts = chat.receipts.toMutableMap()
+                for ((eventId, kinds) in content) {
+                    for (user in kinds.obj()["m.read"].obj().keys) receipts[user] = eventId
+                }
+                chat.copy(receipts = receipts)
+            }
+            else -> chat
+        }
+    }
+
+    private fun applyRoomAccountData(chat: ChatState, e: JsonObject): ChatState {
+        val content = e["content"].obj()
+        return when (e["type"].str()) {
+            "m.tag" -> chat.copy(tags = content["tags"].obj().keys)
+            "m.marked_unread", "com.famedly.marked_unread" ->
+                chat.copy(markedUnread = (content["unread"] as? JsonPrimitive)?.booleanOrNull == true)
+            else -> chat
+        }
+    }
+
+    /** Rooms that have a "don't notify" push rule. */
+    fun parseMuted(ev: JsonObject): Set<String> {
+        val global = ev["content"].obj()["global"].obj()
+        val muted = mutableSetOf<String>()
+        fun silent(rule: JsonObject) = (rule["enabled"] as? JsonPrimitive)?.booleanOrNull != false &&
+            rule["actions"].arr().none { it.str() == "notify" }
+        for (r in global["override"].arr()) {
+            val rule = r.obj()
+            if (!silent(rule)) continue
+            val cond = rule["conditions"].arr().map { it.obj() }
+            val room = cond.firstOrNull { it["kind"].str() == "event_match" && it["key"].str() == "room_id" }?.get("pattern").str()
+            if (room != null && cond.size == 1) muted.add(room)
+        }
+        for (r in global["room"].arr()) {
+            val rule = r.obj()
+            if (silent(rule)) rule["rule_id"].str()?.let { muted.add(it) }
+        }
+        return muted
+    }
+
+    private fun stickerMsg(e: JsonObject): Msg? {
+        val c = e["content"].obj()
+        val info = c["info"].obj()
         return Msg(
-            id = e["event_id"].str() ?: return null,
-            sender = sender,
-            senderName = chat.members[sender] ?: sender,
-            ts = (e["origin_server_ts"] as? JsonPrimitive)?.longOrNull ?: 0L,
-            type = content["msgtype"].str() ?: "m.text",
-            body = content["body"].str() ?: "",
-            mxc = content["url"].str(),
+            id = e["event_id"].str() ?: return null, sender = e["sender"].str() ?: return null, ts = e["origin_server_ts"].long() ?: 0L,
+            type = "m.image", body = c["body"].str() ?: "Sticker", mxc = c["url"].str() ?: return null, mime = info["mimetype"].str(),
+            w = info["w"].int(), h = info["h"].int(), sticker = true,
         )
     }
 
-    fun previewOf(m: Msg) = when (m.type) {
-        "m.image" -> "📷 Photo"
-        "m.video" -> "🎬 Video"
-        "m.audio" -> "🎤 Voice message"
-        "m.file" -> "📎 ${m.body}"
-        else -> m.body
+    fun toMsg(e: JsonObject): Msg? {
+        if (e["type"].str() != "m.room.message") return null
+        val content = e["content"].obj()
+        val type = content["msgtype"].str() ?: return null // redacted events have empty content
+        val info = content["info"].obj()
+        val reply = content["m.relates_to"].obj()["m.in_reply_to"].obj()["event_id"].str()
+        var body = content["body"].str() ?: ""
+        if (reply != null) body = stripReplyFallback(body)
+        return Msg(
+            id = e["event_id"].str() ?: return null,
+            sender = e["sender"].str() ?: return null,
+            ts = e["origin_server_ts"].long() ?: 0L,
+            type = type,
+            body = body,
+            mxc = content["url"].str(),
+            mime = info["mimetype"].str(),
+            size = info["size"].long(),
+            w = info["w"].int(),
+            h = info["h"].int(),
+            durationMs = info["duration"].long() ?: content["org.matrix.msc1767.audio"].obj()["duration"].long(),
+            replyTo = reply,
+            txn = e["unsigned"].obj()["transaction_id"].str(),
+            geo = content["geo_uri"].str(),
+            voice = content["org.matrix.msc3245.voice"] != null || content["org.matrix.msc1767.audio"].obj()["waveform"] != null,
+            mentions = content["m.mentions"].obj()["user_ids"].arr().mapNotNull { it.str() },
+        )
+    }
+
+    /** Older clients prefix replies with a quoted copy of the parent ("> <@user> text\n\nreply"). */
+    fun stripReplyFallback(body: String): String {
+        if (!body.startsWith("> ")) return body
+        val lines = body.lines()
+        val firstReal = lines.indexOfFirst { !it.startsWith(">") }
+        if (firstReal < 0) return body
+        return lines.drop(firstReal).dropWhile { it.isBlank() }.joinToString("\n")
     }
 
     /** Display name for a chat, falling back to the other participant for unnamed DMs. */
     fun displayName(chat: ChatState, me: String): String {
         if (chat.name.isNotBlank()) return chat.name
-        val other = chat.joined.firstOrNull { it != me }
-        return other?.let { chat.members[it] } ?: "Unnamed chat"
+        val other = (chat.heroes + chat.joined).firstOrNull { it != me }
+        return other?.let { chat.members[it] ?: chat.nameOf(it) } ?: "Unnamed chat"
     }
 }
