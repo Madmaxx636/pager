@@ -201,3 +201,44 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 .sidebar { position: relative; }
 .undo-toast { position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 16px; border-radius: 14px; background: var(--text); color: var(--bg); font-size: .9rem; box-shadow: 0 6px 24px rgba(0,0,0,.35); z-index: 5; }
 .undo-toast button { color: var(--accent); font-weight: 700; padding: 6px 12px; border-radius: 10px; }
+
+/* Bubble fills, depth, styles and entrance animations */
+.bubble { background: var(--bubble-bg, var(--theirs)); }
+.msg.mine .bubble { --bubble-bg: var(--accent); background: var(--bubble-bg); }
+:root[data-fill="gradient"] .msg.mine .bubble { background: linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 62%, #7c3aed)); color: #fff; }
+:root[data-fill="gradient"] .msg.mine .bubble a, :root[data-fill="gradient"] .msg.mine .bubble .meta { color: inherit; }
+:root[data-fill="tinted"] .msg.mine .bubble { --bubble-bg: color-mix(in srgb, var(--accent) 24%, var(--panel)); color: var(--text); }
+:root[data-fill="tinted"] .msg.mine .bubble a { color: var(--accent); }
+:root[data-depth="flat"] .bubble { box-shadow: none; }
+:root[data-depth="raised"] .bubble { box-shadow: 0 3px 10px rgba(0,0,0,.22), 0 1px 2px rgba(0,0,0,.18); }
+.bubble.bare, .bubble.media-bubble { box-shadow: none; }
+
+/* Tail */
+:root[data-bubble="tail"] { --radius: 18px; --tight: 18px; }
+:root[data-bubble="tail"] .msg.last .bubble:not(.bare):not(.media-bubble)::after { content: ""; position: absolute; bottom: 0; width: 11px; height: 14px; background: var(--bubble-bg, var(--theirs)); }
+:root[data-bubble="tail"][data-fill="gradient"] .msg.mine.last .bubble::after { background: color-mix(in srgb, var(--accent) 62%, #7c3aed); }
+:root[data-bubble="tail"] .msg:not(.mine).last .bubble { border-bottom-left-radius: 4px; }
+:root[data-bubble="tail"] .msg:not(.mine).last .bubble::after { left: -7px; clip-path: path("M11 0 L11 14 L0 14 C 6 13 10 8 11 0 Z"); }
+:root[data-bubble="tail"] .msg.mine.last .bubble { border-bottom-right-radius: 4px; }
+:root[data-bubble="tail"] .msg.mine.last .bubble::after { right: -7px; clip-path: path("M0 0 L0 14 L11 14 C 5 13 1 8 0 0 Z"); }
+
+/* Outline */
+:root[data-bubble="outline"] .bubble:not(.bare):not(.media-bubble) { background: transparent; box-shadow: none; border: 1.5px solid var(--line); }
+:root[data-bubble="outline"] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: transparent; border-color: var(--accent); color: var(--text); }
+:root[data-bubble="outline"] .msg.mine .bubble a { color: var(--accent); }
+
+/* No bubbles: a clean list, your messages marked by an accent rule */
+:root[data-bubble="plain"] .bubble:not(.bare):not(.media-bubble) { background: transparent; box-shadow: none; padding: 3px 0 3px 10px; border-radius: 0; border-left: 3px solid var(--line); }
+:root[data-bubble="plain"] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: transparent; border-left-color: var(--accent); color: var(--text); }
+:root[data-bubble="plain"] .msg.mine .bubble a { color: var(--accent); }
+
+/* Entrance animations for brand-new messages only */
+@keyframes msg-pop { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
+@keyframes msg-slide { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes msg-fade { from { opacity: 0; } to { opacity: 1; } }
+:root[data-anim="pop"] .msg.fresh .bubble { animation: msg-pop .28s cubic-bezier(.2,1.2,.4,1); transform-origin: bottom left; }
+:root[data-anim="pop"] .msg.mine.fresh .bubble { transform-origin: bottom right; }
+:root[data-anim="slide"] .msg.fresh .bubble { animation: msg-slide .26s ease-out; }
+:root[data-anim="fade"] .msg.fresh .bubble { animation: msg-fade .35s ease-out; }
+.chat-col { position: relative; }
+.effects-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }

@@ -12,6 +12,7 @@ import {
 } from "../core/store";
 import { Avatar, EmojiPicker, IconButton, Modal, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
 import { MessageRow } from "./Message";
+import { Effects } from "./Effects";
 import { AttachKind, AttachMenu, ContactModal, GifModal, PollModal, StickerModal } from "./Attach";
 import { firstUrl } from "./rich";
 import type { Nav } from "./Sidebar";
@@ -119,6 +120,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   return (
     <section className={"chat" + (infoOpen ? " with-info" : "")} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); attachFiles(e.dataTransfer.files); }}>
       <div className="chat-col">
+        <Effects key={chat.id} messages={messages} />
         <header className="chat-head">
           <IconButton icon={ArrowLeft} label="Back" onClick={onBack} className="back" />
           <button className="head-id" onClick={() => setInfoOpen(!infoOpen)}>
