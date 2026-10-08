@@ -77,10 +77,13 @@ fun BridgesScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var relogin by remember { mutableStateOf<Network?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var syncing by remember { mutableStateOf<String?>(null) }
+    var note by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { store.refreshBridges() }
 
     SettingsPage("Bridges & accounts", onBack) {
         Text("Each app you connect is bridged through your own server. Pager shows if a connection needs attention.", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (note.isNotEmpty()) Text(note, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodyMedium)
         if (networks.isEmpty()) Text("Loading…", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         networks.forEach { n ->
             val meta = networkMeta(n.id)
@@ -91,6 +94,15 @@ fun BridgesScreen(onBack: () -> Unit) {
                         Box(Modifier.size(10.dp).clip(CircleShape).background(color))
                         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) { Text(l.name); Text(label, style = MaterialTheme.typography.labelMedium, color = color) }
                         if (needsAttention(l.state)) TextButton(onClick = { relogin = n }) { Text("Sign in") }
+                        TextButton(enabled = syncing == null, onClick = {
+                            scope.launch {
+                                syncing = l.id; note = ""
+                                runCatching { store.pager.syncChats(n.id, l.id) { d, tot -> note = "Syncing chats $d/$tot" } }
+                                    .onSuccess { note = "Synced $it chats. Old history isn't available from every network; new messages appear as they arrive." }
+                                    .onFailure { note = it.message ?: "Sync failed" }
+                                syncing = null
+                            }
+                        }) { Text("Sync chats") }
                         TextButton(onClick = { scope.launch { runCatching { store.pager.logout(n.id, l.id) }; store.refreshBridges() } }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
                     }
                     GroupDivider()

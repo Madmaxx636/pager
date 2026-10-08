@@ -83,6 +83,17 @@ class PagerApi(private val http: Http) {
     suspend fun createDm(net: String, loginId: String?, identifier: String): String? =
         http.request("POST", "/api/bridges/$net/create_dm/${enc(identifier)}" + loginQuery(loginId), JsonObject(emptyMap()))["dm_room_mxid"].str()
 
+    /** Creates a chat for every contact the bridge knows (networks like Signal never send old chats to a new device). */
+    suspend fun syncChats(net: String, loginId: String?, onProgress: (Int, Int) -> Unit = { _, _ -> }): Int {
+        val list = contacts(net, loginId)
+        var made = 0
+        list.forEachIndexed { i, c ->
+            if (runCatching { createDm(net, loginId, c.id) }.getOrNull() != null) made++
+            onProgress(i + 1, list.size)
+        }
+        return made
+    }
+
     private fun loginQuery(loginId: String?) = if (loginId == null) "" else "?login_id=${enc(loginId)}"
 
     private fun parseContacts(o: JsonObject): List<Contact> {

@@ -90,6 +90,7 @@ for row in "${BRIDGE_TABLE[@]}"; do
       | .database.uri = \"postgres://pager:$POSTGRES_PASSWORD@postgres/$id?sslmode=disable\"
       | .bridge.permissions = {\"$PAGER_DOMAIN\":\"user\"}
       | .provisioning.shared_secret = \"$PROVISIONING_SECRET\"
+      | .backfill.enabled = true
       | .encryption.allow = false${patch:+ | $patch}" "bridges/$id/config.yaml"
   fi
   if [ ! -f "$dir/registration.yaml" ]; then
