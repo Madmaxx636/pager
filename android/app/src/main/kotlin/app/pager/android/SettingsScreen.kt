@@ -405,7 +405,11 @@ private fun AppearancePage() {
     }
     SettingsGroup("Text & messages") {
         SliderRow("Text size", s.fontScale, 0.85f..1.4f, "${(s.fontScale * 100).toInt()}%") { v -> set { copy(fontScale = (v * 20).toInt() / 20f) } }; GroupDivider()
-        ChoiceRow("Bubble style", listOf("round" to "Rounded", "soft" to "Extra round", "square" to "Square"), s.bubbleStyle) { v -> set { copy(bubbleStyle = v) } }; GroupDivider()
+        ChoiceRow("Bubble style", listOf("round" to "Rounded", "soft" to "Extra round", "square" to "Square", "tail" to "Tail", "outline" to "Outline", "plain" to "No bubbles"), s.bubbleStyle) { v -> set { copy(bubbleStyle = v) } }; GroupDivider()
+        ChoiceRow("Bubble fill", listOf("solid" to "Solid", "gradient" to "Gradient", "tinted" to "Soft tint"), s.bubbleFill) { v -> set { copy(bubbleFill = v) } }; GroupDivider()
+        ChoiceRow("Bubble depth", listOf("flat" to "Flat", "soft" to "Soft shadow", "raised" to "Raised"), s.bubbleDepth) { v -> set { copy(bubbleDepth = v) } }; GroupDivider()
+        ChoiceRow("Message animation", listOf("none" to "None", "pop" to "Pop", "slide" to "Slide", "fade" to "Fade"), s.messageAnimation) { v -> set { copy(messageAnimation = v) } }; GroupDivider()
+        SwitchRow("Screen effects", "Confetti, hearts, balloons and more when a message calls for it", s.screenEffects) { v -> set { copy(screenEffects = v) } }; GroupDivider()
         ChoiceRow("Chat wallpaper", listOf("none" to "None", "dusk" to "Dusk", "forest" to "Forest", "ocean" to "Ocean", "sand" to "Sand", "graphite" to "Graphite"), s.wallpaper) { v -> set { copy(wallpaper = v) } }; GroupDivider()
         ChoiceRow("Avatar shape", listOf("circle" to "Circle", "squircle" to "Rounded square"), s.avatarShape) { v -> set { copy(avatarShape = v) } }; GroupDivider()
         ChoiceRow("Time format", listOf("system" to "Follow system", "12" to "12-hour", "24" to "24-hour"), s.timeFormat) { v -> set { copy(timeFormat = v) } }; GroupDivider()

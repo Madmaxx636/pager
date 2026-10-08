@@ -81,3 +81,24 @@ class FeaturesTest {
         assertEquals("Reconnecting…", loginStateLabel("TRANSIENT_DISCONNECT").first)
     }
 }
+
+class EffectsTest {
+    @Test fun picksEffectsFromContent() {
+        assertEquals(Effect.Confetti, Effects.effectFor("congrats!! 🎉"))
+        assertEquals(Effect.Balloons, Effects.effectFor("Happy Birthday"))
+        assertEquals(Effect.Snow, Effects.effectFor("it's snowing ❄️"))
+        assertEquals(Effect.Sparkles, Effects.effectFor("✨"))
+        assertEquals(Effect.Hearts, Effects.effectFor("❤️❤️"))
+        assertEquals(Effect.Hearts, Effects.effectFor("love you"))
+    }
+    @Test fun ignoresOrdinaryText() {
+        assertEquals(null, Effects.effectFor("see you at 5"))
+        assertEquals(null, Effects.effectFor("I ❤️ this really long sentence about pizza"))
+    }
+    @Test fun animationFinishes() {
+        val ps = Effects.spawn(Effect.Confetti, 400f, 300f)
+        var alive = true; var n = 0
+        while (alive && n++ < 2000) alive = Effects.step(ps, Effect.Confetti, 300f)
+        assertFalse(alive)
+    }
+}
