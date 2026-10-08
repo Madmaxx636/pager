@@ -195,7 +195,8 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 /* Hover quick actions + undo toast (desktop's take on swipe actions) */
 .chat-li { position: relative; }
 .row-actions { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: none; gap: 4px; padding: 3px; border-radius: 12px; background: var(--panel); box-shadow: 0 2px 10px rgba(0,0,0,.25); }
-.chat-li:hover .row-actions, .chat-li:focus-within .row-actions { display: flex; }
+.chat-li:hover .row-actions, .chat-li:has(:focus-visible) .row-actions { display: flex; }
+.chat-li:hover .chat-time { opacity: 0; }
 .chat-preview.no-msgs { color: var(--muted); font-style: italic; }
 .sidebar { position: relative; }
 .undo-toast { position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 16px; border-radius: 14px; background: var(--text); color: var(--bg); font-size: .9rem; box-shadow: 0 6px 24px rgba(0,0,0,.35); z-index: 5; }

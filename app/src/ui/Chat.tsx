@@ -10,7 +10,7 @@ import {
   edit, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, toggleStar, typing, useStore, votePoll, getState,
 } from "../core/store";
-import { Avatar, EmojiPicker, IconButton, Modal, SheetItem, WhenModal, humanSize, useMxc } from "./common";
+import { Avatar, EmojiPicker, IconButton, Modal, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
 import { MessageRow } from "./Message";
 import { AttachKind, AttachMenu, ContactModal, GifModal, PollModal, StickerModal } from "./Attach";
 import { firstUrl } from "./rich";
@@ -389,9 +389,9 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
           <button onClick={() => setWhen("remind")}><span><AlarmClock size={20} /></span>Remind</button>
         </div>
         <div className="group-card flat">
-          <label className="toggle"><span>Low priority<small>Quiet, except @mentions and replies</small></span><input type="checkbox" checked={isLowPriority(chat)} onChange={(e) => setLowPriority(chat.id, e.target.checked)} /></label>
-          <label className="toggle"><span>Archived</span><input type="checkbox" checked={isArchived(chat)} onChange={(e) => setTag(chat.id, "u.archived", e.target.checked)} /></label>
-          <label className="toggle"><span>Marked unread</span><input type="checkbox" checked={chat.markedUnread} onChange={(e) => markUnread(chat.id, e.target.checked)} /></label>
+          <div className="toggle"><span>Low priority<small>Quiet, except @mentions and replies</small></span><Switch checked={isLowPriority(chat)} onChange={(v) => setLowPriority(chat.id, v)} /></div>
+          <div className="toggle"><span>Archived</span><Switch checked={isArchived(chat)} onChange={(v) => setTag(chat.id, "u.archived", v)} /></div>
+          <div className="toggle"><span>Marked unread</span><Switch checked={chat.markedUnread} onChange={(v) => markUnread(chat.id, v)} /></div>
           {muted && left && left > 0 && <small className="pad">Muted for {Math.ceil(left / 3.6e6)} more hour(s)</small>}
         </div>
         <SheetItem icon={Tag} label="Labels" hint={labels.length ? labels.join(", ") : "None"} onClick={() => nav(`settings/labels`)} />
