@@ -137,7 +137,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
         val r = chat?.receipts ?: emptyMap()
         r.filterKeys { it != me }.values.maxOfOrNull { id -> messages.indexOfFirst { it.id == id } } ?: -1
     }
-    val group = remember(messages, chat?.memberCount) { (chat?.memberCount ?: 0) > 2 || messages.map { it.sender }.toSet().size > 2 }
+    val group = remember(messages, chat?.memberCount, chat?.roomType) { (chat?.isGroup ?: false) || messages.map { it.sender }.toSet().size > 2 }
     val images = remember(messages) { messages.filter { it.type == "m.image" && it.mxc != null && !it.sticker } }
 
     // Where the unread messages begin; computed once when the chat opens.
@@ -249,7 +249,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                         } else chat?.let {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(7.dp).clip(CircleShape).background(networkMeta(it.network).color))
-                                Text(" ${networkMeta(it.network).label}${if (it.isGroup) " · ${it.memberCount} members" else ""}", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                                Text(" ${networkMeta(it.network).label}${if (it.isGroup) " · ${it.peopleCount} members" else ""}", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
                             }
                         }
                     }

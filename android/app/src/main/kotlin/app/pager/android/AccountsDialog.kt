@@ -22,6 +22,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -83,7 +84,7 @@ fun AccountsDialog(store: Store, initial: Network? = null, onClose: () -> Unit) 
                     networks?.forEach { n ->
                         val meta = networkMeta(n.id)
                         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            NetDot(meta)
+                            NetDot(meta, n.id)
                             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                                 Text(n.name, fontWeight = FontWeight.SemiBold)
                                 if (n.unavailable) Text("Unavailable right now", fontSize = 12.sp, color = Color(0xFFF5B85A))
@@ -109,9 +110,10 @@ fun AccountsDialog(store: Store, initial: Network? = null, onClose: () -> Unit) 
 }
 
 @Composable
-private fun NetDot(meta: NetworkMeta) {
+private fun NetDot(meta: NetworkMeta, id: String) {
     Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(meta.color), contentAlignment = Alignment.Center) {
-        Text(meta.glyph, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        val icon = networkIcon(id)
+        if (icon != null) Icon(icon, null, Modifier.size(22.dp), tint = Color.White) else Text(meta.glyph, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
     }
 }
 
@@ -154,7 +156,7 @@ private fun LoginFlowView(store: Store, net: Network, onCancel: () -> Unit, onDo
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        NetDot(meta)
+        NetDot(meta, net.id)
         Text("Connect ${meta.label}", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp))
     }
     Spacer(Modifier.height(16.dp))

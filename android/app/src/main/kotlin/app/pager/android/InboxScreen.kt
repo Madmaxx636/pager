@@ -404,7 +404,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
                         c.draft != null -> Text(buildAnnotatedString {
                             pushStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)); append("Draft: "); pop(); append(c.draft.replace('\n', ' '))
                         }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        s.showPreviews -> Text((if (c.lastFromMe) "You: " else "") + c.preview, color = muted, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        s.showPreviews -> Text(if (c.preview.isEmpty()) "No messages yet" else (if (c.lastFromMe) "You: " else "") + c.preview, color = muted, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         else -> Spacer(Modifier.weight(1f))
                     }
                     if (unread) UnreadBadge(c)
