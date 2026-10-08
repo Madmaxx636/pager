@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
-import { Login, LoginFlow, LoginStep, Network, pager } from "../core/api";
+import { Login, LoginFlow, LoginStep, Network, pager, parseCookies } from "../core/api";
 import { networkMeta } from "../core/emoji";
 import { refreshBridges, useStore } from "../core/store";
 import { updateSettings, useSettings } from "../core/settings";
@@ -25,6 +25,46 @@ function Qr({ data }: { data: string }) {
 }
 
 /** Walks one bridge login: start → (QR / form / wait)* → complete. */
+/** Browser sign-in: the desktop app opens a sign-in window; anywhere else, paste the cookies. */
+function CookieStep({ step, busy, onValues, onError }: { step: LoginStep; busy: boolean; onValues: (v: Record<string, string>) => void; onError: (m: string) => void }) {
+  const [paste, setPaste] = useState("");
+  const desktop = window.pagerDesktop;
+  async function viaWindow() {
+    onError("");
+    try {
+      const v = await desktop!.cookieLogin(step.cookies);
+      if (v) onValues(v);
+    } catch (e) { onError((e as Error).message); }
+  }
+  const missing = (step.cookies?.fields ?? []).filter((f) => f.required).map((f) => f.id).filter((id) => !parseCookies(paste)[id]);
+  return (
+    <div className="stack">
+      {desktop?.cookieLogin ? (
+        <>
+          <p className="instructions">Sign in to your account in a separate window. Pager only reads the sign-in cookies it needs, and closes the window when it has them.</p>
+          <button className="primary" disabled={busy} onClick={viaWindow}>{busy ? "Connecting…" : "Open sign-in window"}</button>
+          <details><summary className="muted">Or paste cookies instead</summary>{pasteBox()}</details>
+        </>
+      ) : (
+        <>
+          <p className="instructions">This network needs a browser sign-in. Easiest: use the Pager desktop app. Otherwise, sign in at the address below, then copy your cookies (browser developer tools → Network → any request → Copy as cURL) and paste them here.</p>
+          <a className="link" href={step.cookies?.url} target="_blank" rel="noreferrer">Open sign-in page</a>
+          {pasteBox()}
+        </>
+      )}
+    </div>
+  );
+  function pasteBox() {
+    return (
+      <>
+        <textarea rows={5} placeholder="Paste a cURL command, a Cookie header, or a JSON object" value={paste} onChange={(e) => setPaste(e.target.value)} />
+        {paste && missing.length > 0 && <p className="muted">Still missing: {missing.join(", ")}</p>}
+        <button className="primary" disabled={busy || !paste || missing.length > 0} onClick={() => onValues(parseCookies(paste))}>Connect</button>
+      </>
+    );
+  }
+}
+
 export function LoginFlowView({ network, onDone, onCancel }: { network: { id: string }; onDone: () => void; onCancel: () => void }) {
   const [flows, setFlows] = useState<LoginFlow[]>();
   const [step, setStep] = useState<LoginStep>();
@@ -78,7 +118,11 @@ export function LoginFlowView({ network, onDone, onCancel }: { network: { id: st
           <button className="primary" disabled={busy}>{busy ? "Checking…" : "Continue"}</button>
         </form>
       )}
-      {step?.type === "cookies" && <p className="muted">This network needs a browser sign-in, which Pager doesn't support yet.</p>}
+      {step?.type === "cookies" && <CookieStep step={step} busy={busy} onValues={async (v) => {
+        setBusy(true); setError("");
+        try { advance(await pager.step(network.id, step, v)); } catch (err) { setError((err as Error).message); }
+        setBusy(false);
+      }} onError={setError} />}
       {step?.type === "complete" && <div className="stack center"><div className="check">✓</div><p>{meta.label} is connected. Your chats will appear shortly.</p></div>}
       {error && <div className="error">{error}</div>}
       {!flows && !step && !error && <p className="muted"><span className="spinner" /> Starting…</p>}

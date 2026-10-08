@@ -507,6 +507,7 @@ declare global {
       setBadge(n: number): void;
       getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean }): void; setZoom(z: number): void;
       onOpenRoom(cb: (roomId: string) => void): void;
+      cookieLogin(spec: unknown): Promise<Record<string, string> | null>;
       platform: string;
     };
   }

@@ -105,6 +105,36 @@ if (!app.requestSingleInstanceLock()) {
     n.show();
   });
   ipcMain.on("badge", (_e, n) => { unread = Number(n) || 0; app.setBadgeCount(unread); updateTray(); });
+  // Browser sign-in for networks that need your cookies (Google Messages). Opens a separate, throwaway browser window;
+  // nothing from it is kept. Resolves with { field id: cookie value }, or null if the window is closed first.
+  ipcMain.handle("cookie-login", (_e, spec) => new Promise((resolve, reject) => {
+    let start;
+    try { start = new URL(spec && spec.url); } catch { return reject(new Error("Bad sign-in address")); }
+    if (start.protocol !== "https:") return reject(new Error("Sign-in address must be https"));
+    const fields = Array.isArray(spec.fields) ? spec.fields.slice(0, 40) : [];
+    const ses = session.fromPartition(`login-${Date.now()}`); // in memory, discarded with the window
+    const platform = process.platform === "darwin" ? "Macintosh; Intel Mac OS X 10_15_7" : process.platform === "win32" ? "Windows NT 10.0; Win64; x64" : "X11; Linux x86_64";
+    ses.setUserAgent(`Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`);
+    const w = new BrowserWindow({ width: 520, height: 740, parent: win || undefined, title: "Sign in", autoHideMenuBar: true, webPreferences: { session: ses, sandbox: true, contextIsolation: true, nodeIntegration: false } });
+    let done = false;
+    const finish = (v) => { if (done) return; done = true; clearInterval(timer); if (!w.isDestroyed()) w.destroy(); resolve(v); };
+    const timer = setInterval(async () => {
+      try {
+        const all = await ses.cookies.get({});
+        const out = {}; let ok = true;
+        for (const f of fields) {
+          const src = (f.sources || []).find((s) => s.type === "cookie");
+          const dom = ((src && src.cookie_domain) || "").replace(/^\./, "");
+          const hit = src && all.find((c) => c.name === src.name && (!dom || c.domain.replace(/^\./, "").endsWith(dom)));
+          if (hit) out[f.id] = hit.value; else if (f.required) ok = false;
+        }
+        if (ok && fields.length) finish(out);
+      } catch { /* keep polling */ }
+    }, 1500);
+    w.on("closed", () => finish(null));
+    w.webContents.setWindowOpenHandler(({ url }) => { try { if (new URL(url).protocol === "https:") w.loadURL(url); } catch { /* ignore */ } return { action: "deny" }; });
+    w.loadURL(spec.url).catch((e) => { if (!done) { done = true; clearInterval(timer); if (!w.isDestroyed()) w.destroy(); reject(e); } });
+  }));
   ipcMain.handle("autostart:get", getAutostart);
   ipcMain.on("autostart:set", (_e, on) => setAutostart(!!on));
   ipcMain.on("prefs", (_e, p) => { prefs = { ...prefs, ...p }; savePrefs(); });
