@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
 import { ChevronRight, MessageCircle, MessageSquare, Phone, Send, Camera, Gamepad2, MessagesSquare, User, X } from "lucide-react";
-import { mediaUrl } from "../core/store";
+import { cachedMedia, mediaUrl } from "../core/store";
 import { EMOJI_CATEGORIES, networkMeta } from "../core/emoji";
 import { useSettings } from "../core/settings";
 
@@ -12,11 +12,12 @@ const hueOf = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) 
 
 /** Loads a Matrix image (thumbnail of `thumb` px; 0 = original) with auth. */
 export function useMxc(mxc: string | undefined, thumb = 0, enabled = true): string | undefined {
-  const [src, setSrc] = useState<string>();
+  const [src, setSrc] = useState<string | undefined>(() => (mxc && enabled ? cachedMedia(mxc, thumb) : undefined));
   useEffect(() => {
-    setSrc(undefined);
+    const hit = mxc && enabled ? cachedMedia(mxc, thumb) : undefined;
+    setSrc(hit);
     let live = true;
-    if (mxc && enabled) void mediaUrl(mxc, thumb).then((u) => live && setSrc(u));
+    if (mxc && enabled && !hit) void mediaUrl(mxc, thumb).then((u) => live && setSrc(u));
     return () => { live = false; };
   }, [mxc, thumb, enabled]);
   return src;

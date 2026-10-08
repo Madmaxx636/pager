@@ -484,6 +484,8 @@ window.setInterval(() => { if (document.visibilityState === "visible") void refr
 
 const blobCache = new Map<string, string>();
 const inflight = new Map<string, Promise<string | undefined>>();
+/** Already-downloaded media, available synchronously (avoids flashing placeholders). */
+export const cachedMedia = (mxc: string, thumb = 0) => blobCache.get(`${mxc}|${thumb}`);
 export function mediaUrl(mxc: string, thumb = 0): Promise<string | undefined> {
   const key = `${mxc}|${thumb}`;
   const hit = blobCache.get(key); if (hit) return Promise.resolve(hit);
