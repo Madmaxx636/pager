@@ -11,7 +11,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 
 @Serializable
-data class Reminder(val id: Int, val roomId: String, val chat: String, val whenMs: Long)
+data class Reminder(val id: Int, val roomId: String, val chat: String, val whenMs: Long, val snooze: Boolean = false)
 
 /** "Remind me about this chat": local alarms that survive restarts. */
 class Reminders(private val context: Context) {
@@ -21,8 +21,8 @@ class Reminders(private val context: Context) {
     fun all(): List<Reminder> = runCatching { json.decodeFromString(ser, prefs.getString("json", "[]")!!) }.getOrDefault(emptyList())
     private fun save(list: List<Reminder>) = prefs.edit().putString("json", json.encodeToString(ser, list)).apply()
 
-    fun add(roomId: String, chat: String, whenMs: Long) {
-        val r = Reminder((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), roomId, chat, whenMs)
+    fun add(roomId: String, chat: String, whenMs: Long, snooze: Boolean = false) {
+        val r = Reminder((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), roomId, chat, whenMs, snooze)
         save(all() + r)
         schedule(r)
     }
@@ -51,11 +51,12 @@ class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val store = (context.applicationContext as PagerApp).store
         val r = store.reminders.due(intent.getIntExtra("id", -1)) ?: return
+        if (r.snooze) { store.setTag(r.roomId, "u.archived", false); store.markUnread(r.roomId, true) }
         val tap = PendingIntent.getActivity(
             context, r.id, Intent(context, MainActivity::class.java).putExtra("roomId", r.roomId), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val n = NotificationCompat.Builder(context, PagerApp.CHANNEL_MESSAGES)
-            .setSmallIcon(R.drawable.ic_notif).setContentTitle("Reminder: ${r.chat}").setContentText("You asked to be reminded about this chat.")
+            .setSmallIcon(R.drawable.ic_notif).setContentTitle(if (r.snooze) r.chat else "Reminder: ${r.chat}").setContentText(if (r.snooze) "Snoozed chat is back in your inbox." else "You asked to be reminded about this chat.")
             .setContentIntent(tap).setAutoCancel(true).build()
         runCatching { NotificationManagerCompat.from(context).notify(r.id, n) }
     }

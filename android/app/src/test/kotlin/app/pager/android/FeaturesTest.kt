@@ -42,9 +42,9 @@ class FeaturesTest {
                {"type":"m.room.message","event_id":"${'$'}v","sender":"@a:x","origin_server_ts":4,"content":{"msgtype":"m.audio","body":"v","url":"mxc://x/v","info":{"duration":9000},"org.matrix.msc3245.voice":{}}}"""), me, false)
             .chats.getValue("!g:x").messages
         assertTrue(msgs[0].sticker); assertEquals("m.image", msgs[0].type)
-        assertEquals("geo:51.5,-0.12", msgs[1].geo); assertEquals("📍 Location", previewOf(msgs[1]))
+        assertEquals("geo:51.5,-0.12", msgs[1].geo); assertEquals("Location", previewOf(msgs[1]))
         assertEquals("* waves", previewOf(msgs[2]))
-        assertTrue(msgs[3].voice); assertEquals(9000L, msgs[3].durationMs); assertEquals("🎤 Voice message", previewOf(msgs[3]))
+        assertTrue(msgs[3].voice); assertEquals(9000L, msgs[3].durationMs); assertEquals("Voice message", previewOf(msgs[3]))
     }
 
     @Test fun quietHoursHandleWrapAroundMidnight() {

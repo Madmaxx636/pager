@@ -36,6 +36,8 @@ const people = {
   "!c:pager.test": { name: "Alex Rivera", net: "signal", who: "@sg_alex:pager.test" },
   "!d:pager.test": { name: "Bridge bot", net: "whatsapp", who: "@whatsappbot:pager.test" },
   "!e:pager.test": { name: "Sam (SMS)", net: "gmessages", who: "@gm_sam:pager.test" },
+  "!f:pager.test": { name: "Product News", net: "discord", who: "@dc_news:pager.test" },
+  "!g:pager.test": { name: "Priya", net: "whatsapp", who: "@wa_priya:pager.test" },
 };
 const roomState = (id) => {
   const p = people[id];
@@ -68,13 +70,30 @@ const timelines = {
   ],
   "!c:pager.test": [msg("$c1", "@sg_alex:pager.test", 30, "Dinner on Friday?"), msg("$c2", "@sg_alex:pager.test", 29, "I found a great Thai place")],
   "!d:pager.test": [msg("$d1", "@whatsappbot:pager.test", 5000, "Login successful")],
+  "!f:pager.test": [msg("$f1", "@dc_news:pager.test", 600, "v2.4 is out: new inbox filters and sticker packs 🎉")],
+  "!g:pager.test": [
+    msg("$g1", "@wa_priya:pager.test", 45, "Are we still on for lunch?"),
+    msg("$g2", ME, 44, "Yes! Same place?"),
+    { type: "m.sticker", event_id: "$g3", sender: "@wa_priya:pager.test", origin_server_ts: NOW - 40 * MIN, content: { body: "thumbs up", url: "mxc://pager.test/stk1", info: { w: 200, h: 200, mimetype: "image/png" } } },
+    { ...msg("$g4", "@wa_priya:pager.test", 38, "Priya Patel.vcf", { msgtype: "m.file", url: "mxc://pager.test/vcf1", info: { mimetype: "text/vcard", size: 140 } }) },
+    msg("$g5", "@wa_priya:pager.test", 20, "**Heads up:** the reservation is at *12:30*. Menu: https://example.com", { format: "org.matrix.html", formatted_body: "<b>Heads up:</b> the reservation is at <i>12:30</i>. Menu: <a href=\"https://example.com\">example.com</a>" }),
+    { type: "org.matrix.msc3381.poll.start", event_id: "$gp", sender: "@wa_priya:pager.test", origin_server_ts: NOW - 15 * MIN, content: { "org.matrix.msc3381.poll.start": { kind: "org.matrix.msc3381.poll.disclosed", max_selections: 1, question: { "org.matrix.msc1767.text": "Where should we eat?" }, answers: [{ id: "a1", "org.matrix.msc1767.text": "Thai place" }, { id: "a2", "org.matrix.msc1767.text": "Pizza" }, { id: "a3", "org.matrix.msc1767.text": "Sushi" }] } } },
+    { type: "org.matrix.msc3381.poll.response", event_id: "$gv1", sender: "@wa_priya:pager.test", origin_server_ts: NOW - 14 * MIN, content: { "m.relates_to": { rel_type: "m.reference", event_id: "$gp" }, "org.matrix.msc3381.poll.response": { answers: ["a1"] } } },
+    msg("$g6", "@wa_priya:pager.test", 10, "😂😂"),
+  ],
   "!e:pager.test": [
     msg("$e1x", ME, 2900, "Running late"),
     { ...msg("$e2x", "@gm_sam:pager.test", 2880, "Voice note", { msgtype: "m.audio", url: "mxc://pager.test/aud1", info: { mimetype: "audio/ogg", duration: 14000 } }) },
   ],
 };
-const unread = { "!a:pager.test": 1, "!b:pager.test": 0, "!c:pager.test": 2, "!e:pager.test": 0 };
-const tags = { "!b:pager.test": { "m.favourite": { order: 0.5 } }, "!e:pager.test": { "u.archived": {} } };
+const unread = { "!a:pager.test": 1, "!b:pager.test": 0, "!c:pager.test": 2, "!e:pager.test": 0, "!f:pager.test": 1, "!g:pager.test": 3 };
+const tags = {
+  "!b:pager.test": { "m.favourite": { order: 1 } },
+  "!a:pager.test": { "m.favourite": { order: 2 }, "u.label.Family": {} },
+  "!g:pager.test": { "u.label.Friends": {} },
+  "!f:pager.test": { "m.lowpriority": {} },
+  "!e:pager.test": { "u.archived": {} },
+};
 const receipts = { "!a:pager.test": { $a5: { "m.read": { "@wa_mom:pager.test": { ts: NOW } } } } };
 
 const joinBlock = () => Object.fromEntries(Object.keys(people).map((id) => [id, {
@@ -128,6 +147,7 @@ createServer(async (req, res) => {
     { id: "jordan", name: "Jordan Lee", identifiers: ["tel:+15550003333"] }, { id: "jo", name: "Joanna Park", identifiers: ["tel:+15550005555"] } ].filter((c) => c.name.toLowerCase().includes(q)) }); }
   if (p.includes("/create_dm/")) return json(res, 200, { id: "x", dm_room_mxid: "!a:pager.test" });
 
+  if (p.startsWith("/_matrix/client/v1/media/") && p.endsWith("/vcf1")) { res.writeHead(200, { "content-type": "text/vcard" }); return res.end("BEGIN:VCARD\nVERSION:3.0\nFN:Priya Patel\nTEL;TYPE=CELL:+1 555 010 4242\nEND:VCARD\n"); }
   if (p.startsWith("/_matrix/client/v1/media/")) {
     const thumb = p.includes("/thumbnail/");
     const id = p.split("/").pop();
@@ -141,7 +161,10 @@ createServer(async (req, res) => {
   if (p === "/_matrix/client/v3/sync") {
     const first = !url.searchParams.get("since");
     if (!first) await new Promise((r) => setTimeout(r, 8000));
-    return json(res, 200, { next_batch: "s1", rooms: first ? { join: joinBlock() } : {}, account_data: { events: first ? [{ type: "m.push_rules", content: { global: { override: [] } } }] : [] } });
+    return json(res, 200, { next_batch: "s1", rooms: first ? { join: joinBlock() } : {}, account_data: { events: first ? [
+      { type: "m.push_rules", content: { global: { override: [] } } },
+      { type: "im.ponies.user_emotes", content: { pack: { display_name: "My stickers" }, images: { thumbs: { url: "mxc://pager.test/stk1", body: "thumbs up", usage: ["sticker"], info: { w: 200, h: 200, mimetype: "image/png" } }, party: { url: "mxc://pager.test/stk2", body: "party", usage: ["sticker"], info: { w: 200, h: 200, mimetype: "image/png" } }, heart: { url: "mxc://pager.test/stk3", body: "heart", usage: ["sticker"], info: { w: 200, h: 200, mimetype: "image/png" } } } } },
+    ] : [] } });
   }
   if (p.endsWith("/messages")) {
     const from = url.searchParams.get("from") ?? "older-0";

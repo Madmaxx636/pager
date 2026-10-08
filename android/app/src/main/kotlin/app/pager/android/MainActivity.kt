@@ -140,7 +140,7 @@ class MainActivity : FragmentActivity() {
             screen.startsWith("chat:") -> {
                 BackHandler { screen = "inbox" }
                 ChatScreen(arg, onBack = { screen = "inbox" }, onInfo = { screen = "info:$arg" }, onSearch = { go("search:$arg") },
-                    onForward = { m -> screen = "forward:$arg|${m.id}" })
+                    onForward = { m -> screen = "forward:$arg|${m.id}" }, onSettings = { p -> screen = if (p.isEmpty()) "settings" else "settings/$p" })
             }
             screen.startsWith("info:") -> {
                 BackHandler { screen = "chat:$arg" }

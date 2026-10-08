@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,10 +28,8 @@ import androidx.compose.ui.unit.sp
 
 val LocalStore = staticCompositionLocalOf<Store> { error("Store not provided") }
 
-fun hueColor(s: String): Color {
-    val h = s.fold(7) { acc, c -> (acc * 31 + c.code) % 360 }
-    return Color.hsv(h.toFloat(), 0.45f, 0.55f)
-}
+fun hueOf(s: String): Float = s.fold(7) { acc, c -> (acc * 31 + c.code) % 360 }.toFloat()
+fun hueColor(s: String): Color = Color.hsv(hueOf(s), 0.45f, 0.55f)
 
 /** Loads a Matrix image (thumbnail of [thumb] px; 0 = original). Returns null while loading or on failure. */
 @Composable
@@ -45,7 +45,9 @@ fun rememberMxcImage(mxc: String?, thumb: Int, enabled: Boolean = true): ImageBi
 fun Avatar(name: String, network: String?, size: Dp = 46.dp, mxc: String? = null) {
     Box(Modifier.size(size)) {
         val img = rememberMxcImage(mxc, (size.value * 3).toInt())
-        Box(Modifier.size(size).clip(CircleShape).background(hueColor(name)), contentAlignment = Alignment.Center) {
+        val shape = if (LocalSettings.current.avatarShape == "squircle") RoundedCornerShape(size * 0.32f) else CircleShape
+        val h = hueOf(name)
+        Box(Modifier.size(size).clip(shape).background(Brush.linearGradient(listOf(Color.hsv(h, 0.55f, 0.78f), Color.hsv((h + 28f) % 360f, 0.65f, 0.58f)))), contentAlignment = Alignment.Center) {
             if (img != null) Image(img, null, Modifier.size(size), contentScale = ContentScale.Crop)
             else {
                 val initial = name.dropWhile { !it.isLetterOrDigit() }.firstOrNull()?.uppercase() ?: "?"
@@ -55,7 +57,7 @@ fun Avatar(name: String, network: String?, size: Dp = 46.dp, mxc: String? = null
         if (network != null && network != "matrix") {
             val meta = networkMeta(network)
             Box(
-                Modifier.size(size * 0.4f).align(Alignment.BottomEnd).clip(CircleShape).background(MaterialTheme.colorScheme.surface),
+                Modifier.size(size * 0.42f).align(Alignment.BottomEnd).clip(CircleShape).background(MaterialTheme.colorScheme.background),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(Modifier.size(size * 0.33f).clip(CircleShape).background(meta.color), contentAlignment = Alignment.Center) {

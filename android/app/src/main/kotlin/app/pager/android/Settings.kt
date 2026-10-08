@@ -31,6 +31,14 @@ data class AppSettings(
     val swipeLeft: String = "archive",
     val showReadTicks: Boolean = true,
     val showMessageTimes: Boolean = true,
+    val inboxStyle: String = "pro",            // pro (unread counts + network badge) | minimal (titles only)
+    val showPinsRow: Boolean = true,
+    val sortUnreadFirst: Boolean = false,
+    val defaultTab: String = "inbox",          // inbox | unread
+    val avatarShape: String = "circle",        // circle | squircle
+    val showLabelsInFilterBar: Boolean = true,
+    val reduceMotion: Boolean = false,
+    val haptics: Boolean = true,
     val doubleTapReact: Boolean = true,
 
     // --- Chats ---
@@ -42,6 +50,16 @@ data class AppSettings(
     val unarchiveOnMessage: Boolean = true,
     val confirmDelete: Boolean = true,
     val mentionSuggestions: Boolean = true,
+    val markdown: Boolean = true,              // **bold**, _italic_, ~~strike~~, `code` on send
+    val largeEmoji: Boolean = true,
+    val autoPlayGifs: Boolean = true,
+    val imageQuality: String = "original",     // original | high
+    val swipeToReply: Boolean = true,
+    val groupGapMin: Int = 5,
+    val markReadMode: String = "scrolled",     // open | scrolled | manual
+    val openAtFirstUnread: Boolean = true,
+    val gifProvider: String = "giphy",         // giphy | tenor
+    val gifKey: String = "",
     val quickReactions: List<String> = DEFAULT_QUICK_REACTIONS,
     val recentEmoji: List<String> = emptyList(),
 
@@ -52,6 +70,7 @@ data class AppSettings(
     val notifVibrate: Boolean = true,
     val notifActions: Boolean = true,          // Reply / Mark read buttons
     val notifGroupMentionsOnly: Boolean = false,
+    val notifScope: String = "all",            // all | dm_mentions | favorites
     val notifMutedNetworks: Set<String> = emptySet(),
     val quietHoursEnabled: Boolean = false,
     val quietStartMin: Int = 22 * 60,
@@ -64,6 +83,10 @@ data class AppSettings(
     val appLock: Boolean = false,
     val lockAfterSec: Int = 0,
     val hideInRecents: Boolean = false,
+
+    // --- Advanced ---
+    val developerMode: Boolean = false,
+    val backgroundSync: Boolean = true,
 )
 
 class SettingsStore(context: Context) {

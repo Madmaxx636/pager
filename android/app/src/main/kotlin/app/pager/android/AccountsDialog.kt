@@ -69,9 +69,9 @@ fun AccountsDialog(store: Store, initial: Network? = null, onClose: () -> Unit) 
     }
     LaunchedEffect(Unit) { refresh() }
 
-    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
+    Sheet(onClose) {
+        run {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp)) {
                 val net = active
                 if (net != null) {
                     LoginFlowView(store, net, onCancel = { if (initial != null) onClose() else active = null }, onDone = { active = null; refresh(); scope.launch { store.refreshBridges() }; if (initial != null) onClose() })
