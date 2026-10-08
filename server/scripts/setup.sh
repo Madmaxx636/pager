@@ -23,8 +23,10 @@ domain_now="$(grep '^PAGER_DOMAIN=' .env | cut -d= -f2)"
 if ! grep -q '^PAGER_ADDRESS=' .env && [[ "$domain_now" =~ ^(localhost|[0-9.]+|.*\.local)$ ]]; then
   printf 'PAGER_ADDRESS=http://:80\nHTTP_PORT=8080\nHTTPS_PORT=8443\n' >> .env
 fi
-if [ -n "$USERNS" ] && ! grep -q '^SYNAPSE_UID=' .env; then
-  printf 'SYNAPSE_UID=0\nSYNAPSE_GID=0\nBRIDGE_UID=0\nBRIDGE_GID=0\n' >> .env
+# The containers must run as whoever owns the generated config and keys (they are created as you, with mode 600).
+if ! grep -q '^SYNAPSE_UID=' .env; then
+  if [ -n "$USERNS" ]; then u=0; g=0; else u="$(id -u)"; g="$(id -g)"; fi
+  printf 'SYNAPSE_UID=%s\nSYNAPSE_GID=%s\nBRIDGE_UID=%s\nBRIDGE_GID=%s\n' "$u" "$g" "$u" "$g" >> .env
 fi
 # DuckDNS: set DUCKDNS_TOKEN and DUCKDNS_SUBDOMAIN (the part before .duckdns.org) in .env to keep the name pointed at this IP.
 if grep -q '^DUCKDNS_TOKEN=.' .env && ! grep -q '^COMPOSE_PROFILES=' .env; then echo 'COMPOSE_PROFILES=duckdns' >> .env; fi
