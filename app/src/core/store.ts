@@ -1,6 +1,6 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, pager, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
-import { applyHistory, applySync } from "./reducer";
+import { applyHistory, applySync, setOwnIdentity } from "./reducer";
 import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings } from "./settings";
 import {
   ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
@@ -419,7 +419,7 @@ export function loadOlder(roomId: string) {
   if (!c || c.reachedStart || loading.has(roomId)) return;
   const token = c.prevBatch ?? since; if (!token) return;
   loading.add(roomId);
-  matrix.messages(roomId, token).then(({ chunk, end }) => patchChat(roomId, (x) => applyHistory(x, chunk, end))).catch(() => {}).finally(() => loading.delete(roomId));
+  matrix.messages(roomId, token).then(({ chunk, end, state: st }) => patchChat(roomId, (x) => applyHistory(x, chunk, end, st ?? [], state.session?.userId ?? ""))).catch(() => {}).finally(() => loading.delete(roomId));
 }
 export function setTag(roomId: string, tag: string, on: boolean, order?: number) {
   patchChat(roomId, (c) => ({
@@ -477,7 +477,29 @@ export const members = (roomId: string) => matrix.joinedMembers(roomId).catch(()
 export function rename(roomId: string, name: string) { patchChat(roomId, (c) => ({ ...c, name })); void matrix.rename(roomId, name).catch(() => {}); }
 export function leave(roomId: string) { const { [roomId]: _gone, ...rest } = state.chats; set({ chats: rest }); void matrix.leave(roomId).catch(() => {}); }
 
-export async function refreshBridges() { if (!state.session) return; try { set({ bridges: await pager.networks() }); } catch { /* bridge API may be down */ } }
+/** localpart escaping used by the bridges for ghost user ids (uppercase and odd characters are escaped). */
+const escLocalpart = (s: string) => [...s].map((c) => (/[a-z0-9\-./=]/.test(c) ? c : c === "_" ? "__" : /[A-Z]/.test(c) ? "_" + c.toLowerCase() : "=" + c.charCodeAt(0).toString(16).padStart(2, "0"))).join("");
+const savedIdentity = lsGet<{ key: string; names: string[]; ids: string[] } | null>("pager.identity2", null);
+let identityKey = savedIdentity?.key ?? "";
+if (savedIdentity) setOwnIdentity(savedIdentity.names, savedIdentity.ids);
+function applyIdentity(nets: Network[]) {
+  const domain = state.session?.userId.split(":").slice(1).join(":") ?? "";
+  const names: string[] = [], ids: string[] = [];
+  for (const n of nets) for (const l of n.logins) {
+    ids.push(`@${n.id}_${escLocalpart(l.id)}:${domain}`);
+    for (const nm of [l.name, l.profile?.name]) if (nm) names.push(nm);
+  }
+  const key = JSON.stringify([names.sort(), ids.sort()]);
+  if (key === identityKey) return;
+  identityKey = key; lsSet("pager.identity2", { key, names, ids });
+  setOwnIdentity(names, ids);
+  // Messages already loaded were attributed before we knew who you are on each network: start over once.
+  if (state.session) { since = undefined; set({ chats: {}, synced: false }); syncAbort?.abort(); syncAbort = new AbortController(); void syncLoop(state.session, syncAbort.signal); }
+}
+export async function refreshBridges() {
+  if (!state.session) return;
+  try { const nets = await pager.networks(); applyIdentity(nets); set({ bridges: nets }); } catch { /* bridge API may be down */ }
+}
 window.setInterval(() => { if (document.visibilityState === "visible") void refreshBridges(); }, 120_000);
 
 // ---- Media (Synapse requires auth for downloads) ------------------------------------------------
