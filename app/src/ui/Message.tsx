@@ -21,7 +21,7 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, reply, s
   const bare = !!msg.sticker || big;
   const tick = msg.status === STATUS_SENDING ? <Clock size={13} /> : msg.status === STATUS_FAILED ? <AlertCircle size={13} /> : read ? <CheckCheck size={14} /> : <Check size={14} />;
   return (
-    <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "") + (last ? " last" : "")} data-id={msg.id}>
+    <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "") + (last ? " last" : "") + (Date.now() - msg.ts < 4000 ? " fresh" : "")} data-id={msg.id}>
       {group && !mine && first && <div className="msg-sender" style={st.colorSenderNames ? { color: `hsl(${senderHue(author)} 60% 62%)` } : undefined}>{author}</div>}
       <div className="msg-line">
         <div className={"bubble" + (bare ? " bare" : "") + (msg.type === "m.image" && !msg.sticker ? " media-bubble" : "") + (msg.status === STATUS_FAILED ? " failed" : "")}

@@ -206,7 +206,11 @@ function Appearance() {
       </Group>
       <Group title="Text & messages">
         <Row title="Text size" hint={`${Math.round(s.fontScale * 100)}%`}><input type="range" min="0.85" max="1.4" step="0.05" value={s.fontScale} onChange={(e) => updateSettings({ fontScale: Number(e.target.value) })} /></Row>
-        <Select title="Bubble style" value={s.bubbleStyle} options={[["round", "Rounded"], ["soft", "Extra round"], ["square", "Square"]]} onChange={(v) => updateSettings({ bubbleStyle: v })} />
+        <Select title="Bubble style" value={s.bubbleStyle} options={[["round", "Rounded"], ["soft", "Extra round"], ["square", "Square"], ["tail", "Tail"], ["outline", "Outline"], ["plain", "No bubbles"]]} onChange={(v) => updateSettings({ bubbleStyle: v })} />
+        <Select title="Bubble fill" hint="How your own messages are colored" value={s.bubbleFill} options={[["solid", "Solid"], ["gradient", "Gradient"], ["tinted", "Soft tint"]]} onChange={(v) => updateSettings({ bubbleFill: v })} />
+        <Select title="Bubble depth" value={s.bubbleDepth} options={[["flat", "Flat"], ["soft", "Soft shadow"], ["raised", "Raised"]]} onChange={(v) => updateSettings({ bubbleDepth: v })} />
+        <Select title="Message animation" hint="When a new message appears" value={s.messageAnimation} options={[["none", "None"], ["pop", "Pop"], ["slide", "Slide"], ["fade", "Fade"]]} onChange={(v) => updateSettings({ messageAnimation: v })} />
+        <SwitchRow title="Screen effects" hint="Confetti, hearts, balloons and more when a message calls for it (🎉 ❤️ 🎈 ❄️ ✨)" checked={s.screenEffects} onChange={(v) => updateSettings({ screenEffects: v })} />
         <Select title="Chat wallpaper" value={s.wallpaper} options={[["none", "None"], ["dusk", "Dusk"], ["forest", "Forest"], ["ocean", "Ocean"], ["sand", "Sand"], ["graphite", "Graphite"]]} onChange={(v) => updateSettings({ wallpaper: v })} />
         <Select title="Avatar shape" value={s.avatarShape} options={[["circle", "Circle"], ["squircle", "Rounded square"]]} onChange={(v) => updateSettings({ avatarShape: v })} />
         <Select title="Time format" value={s.timeFormat} options={[["system", "Follow system"], ["12", "12-hour"], ["24", "24-hour"]]} onChange={(v) => updateSettings({ timeFormat: v })} />

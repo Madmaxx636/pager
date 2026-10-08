@@ -8,7 +8,11 @@ export interface AppSettings {
   themeMode: "system" | "light" | "dark" | "black";
   accent: string; // teal | blue | purple | pink | orange | green | red
   fontScale: number;
-  bubbleStyle: "round" | "soft" | "square";
+  bubbleStyle: "round" | "soft" | "square" | "tail" | "outline" | "plain";
+  bubbleFill: "solid" | "gradient" | "tinted";
+  bubbleDepth: "flat" | "soft" | "raised";
+  messageAnimation: "none" | "pop" | "slide" | "fade";
+  screenEffects: boolean;
   wallpaper: string;
   timeFormat: "system" | "12" | "24";
   colorSenderNames: boolean;
@@ -78,7 +82,7 @@ export interface AppSettings {
 export const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 export const DEFAULTS: AppSettings = {
-  themeMode: "system", accent: "teal", fontScale: 1, bubbleStyle: "round", wallpaper: "none", timeFormat: "system", colorSenderNames: true,
+  themeMode: "system", accent: "teal", fontScale: 1, bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, rowAction1: "read", rowAction2: "archive",
@@ -157,6 +161,9 @@ export function applyTheme(s: AppSettings) {
   r.style.setProperty("--accent-ink", dark ? a.onDark : a.onLight);
   r.style.setProperty("--font-scale", String(s.fontScale));
   r.dataset.bubble = s.bubbleStyle;
+  r.dataset.fill = s.bubbleFill;
+  r.dataset.depth = s.bubbleDepth;
+  r.dataset.anim = s.messageAnimation;
   r.dataset.density = s.density;
   r.dataset.motion = s.reduceMotion ? "reduced" : "full";
   r.dataset.wallpaper = s.wallpaper;
