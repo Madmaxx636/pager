@@ -142,3 +142,8 @@ input:focus, textarea:focus { border-color: var(--accent); }
   .back { display: grid; }
   .msg { max-width: 86%; }
 }
+
+.attach { flex: none; width: 42px; height: 42px; font-size: 18px; }
+.upload-note { padding: 6px 18px; font-size: 13px; color: var(--muted); background: var(--panel); }
+.file { color: inherit; text-decoration: underline; }
+audio { max-width: 100%; }

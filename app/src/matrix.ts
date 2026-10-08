@@ -10,6 +10,7 @@ let version = 0;
 const listeners = new Set<() => void>();
 const bump = () => {
   version++;
+  queueMicrotask(updateTitle);
   listeners.forEach((l) => l());
 };
 
@@ -36,11 +37,37 @@ function start(session: Session) {
     if (member.userId === c.getUserId() && member.membership === "invite") c.joinRoom(member.roomId).catch(() => {});
   });
   c.on(sdk.ClientEvent.Sync, bump);
-  c.on(sdk.RoomEvent.Timeline, bump);
+  c.on(sdk.RoomEvent.Timeline, (ev, room, toStart) => {
+    bump();
+    if (!toStart && room) notify(ev, room);
+  });
   c.on(sdk.RoomEvent.Name, bump);
   c.on(sdk.RoomEvent.Receipt, bump);
   c.on(sdk.RoomEvent.MyMembership, bump);
   return c.startClient({ initialSyncLimit: 30 });
+}
+
+/** Desktop/browser notification for new incoming messages while the tab is in the background. */
+function notify(ev: sdk.MatrixEvent, room: sdk.Room) {
+  const c = client;
+  if (!c || ev.getType() !== "m.room.message" || ev.getSender() === c.getUserId()) return;
+  if (c.getSyncState() !== "SYNCING" || document.hasFocus()) return;
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  const n = new Notification(room.name || "New message", { body: previewOf(ev), tag: room.roomId });
+  n.onclick = () => {
+    window.focus();
+    window.dispatchEvent(new CustomEvent("pager:open", { detail: room.roomId }));
+  };
+}
+
+export function requestNotifications() {
+  if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission();
+}
+
+/** Show the total unread count in the tab title. */
+function updateTitle() {
+  const n = chatSummaries().reduce((sum, c) => sum + c.unread, 0);
+  document.title = n ? `(${n}) Pager` : "Pager";
 }
 
 export async function restoreSession() {
@@ -176,6 +203,18 @@ export function messagesOf(roomId: string): Message[] {
 
 export async function sendMessage(roomId: string, text: string) {
   await client?.sendTextMessage(roomId, text);
+}
+
+export async function sendFile(roomId: string, file: File) {
+  if (!client) return;
+  const { content_uri } = await client.uploadContent(file, { name: file.name, type: file.type });
+  const kind = file.type.startsWith("image/") ? "m.image" : file.type.startsWith("video/") ? "m.video" : file.type.startsWith("audio/") ? "m.audio" : "m.file";
+  await client.sendMessage(roomId, {
+    msgtype: kind,
+    body: file.name,
+    url: content_uri,
+    info: { mimetype: file.type || "application/octet-stream", size: file.size },
+  } as never);
 }
 
 export function markRead(roomId: string) {

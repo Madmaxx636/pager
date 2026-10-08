@@ -31,4 +31,8 @@ cd ../api && npm ci && npm test
 
 ## Notes
 - WhatsApp, Instagram and similar networks don't officially support third-party clients.
-- Not yet built: Telegram and Instagram/Messenger bridges, push notifications, native mobile apps, sending media.
+- Bridges: WhatsApp, Signal, Discord, Google Messages, Instagram and Messenger are on by default. Telegram needs an API key
+  from https://my.telegram.org: add `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` to `server/.env` and re-run `setup.sh`.
+  Instagram, Messenger, Google Messages and Telegram bridge setups are written from the docs but never run.
+- The web app is installable on phones (Add to Home Screen) and shows browser notifications while open.
+- Not yet built: true background push (needs Sygnal/UnifiedPush plus a native app), native Android/iOS apps, reactions and replies.

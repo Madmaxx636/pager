@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 export interface BridgeConfig {
   id: string;
   name: string;
@@ -35,6 +36,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     registrationSecret: need("REGISTRATION_SECRET"),
     provisioningSecret: need("PROVISIONING_SECRET"),
     signup: { mode, inviteCode: env.INVITE_CODE ?? "" },
-    bridges: env.BRIDGES ? JSON.parse(env.BRIDGES) : DEFAULT_BRIDGES,
+    bridges: env.BRIDGES_FILE ? JSON.parse(readFileSync(env.BRIDGES_FILE, "utf8")) : DEFAULT_BRIDGES,
   };
 }
