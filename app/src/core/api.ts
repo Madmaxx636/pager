@@ -49,6 +49,16 @@ export const pager = {
   searchUsers: async (net: string, login: string | undefined, query: string): Promise<Contact[]> => parseContacts(await call("POST", `/api/bridges/${net}/search_users${loginQ(login)}`, { query })),
   createDm: async (net: string, login: string | undefined, identifier: string): Promise<string | undefined> =>
     (await call("POST", `/api/bridges/${net}/create_dm/${enc(identifier)}${loginQ(login)}`, {})).dm_room_mxid,
+  /** Create a chat for every contact the bridge knows. Networks like Signal never send old chats to a new device. */
+  syncChats: async (net: string, login?: string, onProgress?: (done: number, total: number) => void): Promise<number> => {
+    const list = await pager.contacts(net, login);
+    let made = 0;
+    for (let i = 0; i < list.length; i++) {
+      try { if (await pager.createDm(net, login, list[i].id)) made++; } catch { /* skip contacts that can't be reached */ }
+      onProgress?.(i + 1, list.length);
+    }
+    return made;
+  },
 };
 const loginQ = (l?: string) => (l ? `?login_id=${enc(l)}` : "");
 const parseContacts = (o: any): Contact[] =>
