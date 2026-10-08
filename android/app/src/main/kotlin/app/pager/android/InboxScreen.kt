@@ -60,6 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -146,10 +147,14 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
     val networks = all.map { it.network }.distinct().sorted()
 
     fun toggleSelect(id: String) { if (id in selected) selected.remove(id) else selected.add(id); if (s.haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+    var undo by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
+    LaunchedEffect(undo) { if (undo != null) { kotlinx.coroutines.delay(4500); undo = null } }
     fun act(action: String, c: ChatSummary) {
         val unread = c.unread > 0 || c.markedUnread
         when (action) {
-            "archive" -> store.setTag(c.id, "u.archived", !c.archived)
+            "archive" -> { store.setTag(c.id, "u.archived", !c.archived); undo = (if (c.archived) "Moved to inbox" else "Archived") to { store.setTag(c.id, "u.archived", c.archived) } }
+            "low" -> { store.setLowPriority(c.id, !c.lowPriority); undo = (if (c.lowPriority) "Moved to inbox" else "Moved to low priority") to { store.setLowPriority(c.id, c.lowPriority) } }
+            "snooze" -> { store.snooze(c.id, System.currentTimeMillis() + 3 * 3600_000L); undo = "Snoozed for 3 hours" to { store.setTag(c.id, "u.archived", c.archived) } }
             "read" -> if (unread) store.markRead(c.id) else store.markUnread(c.id, true)
             "pin" -> store.pin(c.id, !c.pinned)
             "mute" -> if (c.muted) store.setMuted(c.id, false) else muteFor = listOf(c.id)
@@ -249,6 +254,16 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
                 }
             }
         }
+        undo?.let { (label, revert) ->
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp, start = 16.dp, end = 96.dp).clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.inverseSurface).padding(start = 16.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label, color = MaterialTheme.colorScheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f, fill = false))
+                TextButton(onClick = { revert(); undo = null }) { Text("Undo", color = MaterialTheme.colorScheme.inversePrimary, fontWeight = FontWeight.SemiBold) }
+            }
+        }
         if (!selecting) {
             Box(
                 Modifier.align(Alignment.BottomEnd).padding(20.dp).size(60.dp).clip(RoundedCornerShape(20.dp))
@@ -338,13 +353,26 @@ private fun swipeLabel(action: String, c: ChatSummary) = when (action) {
     "read" -> if (c.unread > 0 || c.markedUnread) "Mark read" else "Mark unread"
     "pin" -> if (c.pinned) "Unpin" else "Pin"
     "mute" -> if (c.muted) "Unmute" else "Mute"
+    "low" -> if (c.lowPriority) "Move to inbox" else "Low priority"
+    "snooze" -> "Snooze 3h"
     else -> ""
+}
+
+private fun swipeColor(action: String) = when (action) {
+    "archive" -> androidx.compose.ui.graphics.Color(0xFF2E9E6B)
+    "read" -> androidx.compose.ui.graphics.Color(0xFF3B82F6)
+    "pin" -> androidx.compose.ui.graphics.Color(0xFFF59E0B)
+    "low" -> androidx.compose.ui.graphics.Color(0xFF0EA5A5)
+    "snooze" -> androidx.compose.ui.graphics.Color(0xFF8B5CF6)
+    else -> androidx.compose.ui.graphics.Color(0xFF64748B)
 }
 
 private fun swipeIcon(action: String, c: ChatSummary) = when (action) {
     "archive" -> if (c.archived) Icons.Rounded.Unarchive else Icons.Rounded.Archive
     "read" -> if (c.unread > 0 || c.markedUnread) Icons.Rounded.MarkChatRead else Icons.Rounded.MarkChatUnread
     "pin" -> Icons.Rounded.PushPin
+    "low" -> Icons.Rounded.LowPriority
+    "snooze" -> Icons.Rounded.Snooze
     else -> Icons.Rounded.NotificationsOff
 }
 
@@ -354,6 +382,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
     val unread = c.unread > 0 || c.markedUnread
     val minimal = s.inboxStyle == "minimal"
 
+    val haptic = LocalHapticFeedback.current
     val dismiss = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
         when (v) {
             SwipeToDismissBoxValue.StartToEnd -> onSwipe(s.swipeRight)
@@ -362,6 +391,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
         }
         false // always snap back; the action already happened
     })
+    LaunchedEffect(dismiss.targetValue) { if (s.haptics && dismiss.targetValue != SwipeToDismissBoxValue.Settled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
     val vPad = if (s.density == "compact") 6.dp else 10.dp
     val avatar = if (s.density == "compact") 44.dp else 52.dp
 
@@ -372,10 +402,12 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
         backgroundContent = {
             val start = dismiss.dismissDirection == SwipeToDismissBoxValue.StartToEnd
             val action = if (start) s.swipeRight else s.swipeLeft
-            Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary).padding(horizontal = 24.dp), horizontalArrangement = if (start) Arrangement.Start else Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                Icon(swipeIcon(action, c), null, tint = MaterialTheme.colorScheme.onPrimary)
+            val armed = dismiss.targetValue != SwipeToDismissBoxValue.Settled
+            val tint by androidx.compose.animation.animateColorAsState(if (armed) swipeColor(action) else swipeColor(action).copy(alpha = 0.55f), label = "swipe")
+            Row(Modifier.fillMaxSize().background(tint).padding(horizontal = 24.dp), horizontalArrangement = if (start) Arrangement.Start else Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                Icon(swipeIcon(action, c), null, tint = androidx.compose.ui.graphics.Color.White)
                 Spacer(Modifier.width(8.dp))
-                Text(swipeLabel(action, c), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.SemiBold)
+                Text(swipeLabel(action, c), color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.SemiBold)
             }
         },
     ) {

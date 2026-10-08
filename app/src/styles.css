@@ -191,3 +191,12 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
   @keyframes rise { from { transform: translateY(30px); opacity: 0; } }
 }
 @media (max-width: 1100px) { .info { position: absolute; right: 0; top: 0; bottom: 0; z-index: 20; box-shadow: var(--shadow); } }
+
+/* Hover quick actions + undo toast (desktop's take on swipe actions) */
+.chat-li { position: relative; }
+.row-actions { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: none; gap: 4px; padding: 3px; border-radius: 12px; background: var(--panel); box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+.chat-li:hover .row-actions, .chat-li:focus-within .row-actions { display: flex; }
+.chat-preview.no-msgs { color: var(--muted); font-style: italic; }
+.sidebar { position: relative; }
+.undo-toast { position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 16px; border-radius: 14px; background: var(--text); color: var(--bg); font-size: .9rem; box-shadow: 0 6px 24px rgba(0,0,0,.35); z-index: 5; }
+.undo-toast button { color: var(--accent); font-weight: 700; padding: 6px 12px; border-radius: 10px; }

@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from "react";
 
 /** Everything the user can tune. One JSON blob in localStorage. */
+export type RowAction = "none" | "archive" | "read" | "pin" | "mute" | "low" | "snooze";
+
 export interface AppSettings {
   // Appearance
   themeMode: "system" | "light" | "dark" | "black";
@@ -27,6 +29,9 @@ export interface AppSettings {
   showLabelsInFilterBar: boolean;
   reduceMotion: boolean;
   sidebarWidth: number;
+  /** Quick actions that appear when hovering a chat row (desktop's version of swipe actions). */
+  rowAction1: RowAction;
+  rowAction2: RowAction;
   // Chats
   enterToSend: boolean;
   sendReadReceipts: boolean;
@@ -76,7 +81,7 @@ export const DEFAULTS: AppSettings = {
   themeMode: "system", accent: "teal", fontScale: 1, bubbleStyle: "round", wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
-  avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360,
+  avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, rowAction1: "read", rowAction2: "archive",
   enterToSend: true, sendReadReceipts: true, sendTyping: true, linkPreviews: true, autoDownload: "always", unarchiveOnMessage: true,
   confirmDelete: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtFirstUnread: true, gifProvider: "giphy", gifKey: "", doubleTapReact: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
   notifEnabled: true, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [],

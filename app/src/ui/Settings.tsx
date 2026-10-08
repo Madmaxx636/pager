@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus } from "lucide-react";
-import { ACCENTS, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useSettings } from "../core/settings";
+import { RowAction, ACCENTS, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useSettings } from "../core/settings";
 import { addStickers, cancelReminder, cancelScheduled, deleteLabel, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
@@ -117,6 +117,8 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
         </Group>
         <Group title="Chat list">
           <Select title="Density" value={s.density} options={[["comfortable", "Comfortable"], ["compact", "Compact"]]} onChange={(v) => u({ density: v })} />
+          <Select title="Hover action 1" hint="Quick button when you point at a chat" value={s.rowAction1} options={ROW_ACTIONS} onChange={(v) => u({ rowAction1: v })} />
+          <Select title="Hover action 2" value={s.rowAction2} options={ROW_ACTIONS} onChange={(v) => u({ rowAction2: v })} />
           <Row title="Sidebar width" hint={`${s.sidebarWidth}px`}><input type="range" min="280" max="520" step="10" value={s.sidebarWidth} onChange={(e) => u({ sidebarWidth: Number(e.target.value) })} /></Row>
           <SwitchRow title="Show avatars" checked={s.showAvatars} onChange={(v) => u({ showAvatars: v })} />
           <SwitchRow title="Show network badges" hint="The small WhatsApp / Signal icon on avatars" checked={s.showNetworkBadges} onChange={(v) => u({ showNetworkBadges: v })} />
@@ -222,6 +224,7 @@ function Appearance() {
   );
 }
 
+const ROW_ACTIONS: [RowAction, string][] = [["none", "Nothing"], ["read", "Mark read / unread"], ["archive", "Archive"], ["pin", "Pin"], ["mute", "Mute"], ["low", "Low priority"], ["snooze", "Snooze 3 hours"]];
 const fmtMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const parseMin = (v: string) => { const [h, m] = v.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
 

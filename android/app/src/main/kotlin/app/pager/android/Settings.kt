@@ -27,7 +27,7 @@ data class AppSettings(
     val showNetworkNameInRows: Boolean = false,
     val showPreviews: Boolean = true,
     val showFilterBar: Boolean = true,
-    val swipeRight: String = "read",           // none | archive | read | pin | mute
+    val swipeRight: String = "read",           // none | archive | read | pin | mute | low | snooze
     val swipeLeft: String = "archive",
     val showReadTicks: Boolean = true,
     val showMessageTimes: Boolean = true,
