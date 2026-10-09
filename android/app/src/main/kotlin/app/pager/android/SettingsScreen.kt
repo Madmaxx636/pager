@@ -467,10 +467,13 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
     val networks by store.bridges.collectAsState()
     val known = (listOf("whatsapp", "signal", "gmessages", "messenger", "telegram", "discord", "instagram") + networks.map { it.id }).distinct()
     val dayNames = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+    var diagnosis by remember { mutableStateOf<String?>(null) }
+    diagnosis?.let { d -> AlertDialog(onDismissRequest = { diagnosis = null }, title = { Text("Priority & bubbles") }, text = { Text(d) }, confirmButton = { TextButton(onClick = { diagnosis = null }) { Text("OK") } }) }
     SettingsPage("Notifications", { navigate("") }) {
         SettingsGroup {
             SwitchRow("Notifications", "Master switch for message alerts", s.notifEnabled) { v -> set { copy(notifEnabled = v) } }; GroupDivider()
-            ButtonRow("Send a test notification") { Notifier.test(context, store) }
+            ButtonRow("Send a test notification") { Notifier.test(context, store) }; GroupDivider()
+            ButtonRow("Check priority & bubbles") { diagnosis = Notifier.diagnose(context) }
         }
         SettingsGroup("What to notify", footer = "Muted and Low priority pages stay quiet except for @mentions, replies to your messages and your keywords.") {
             ChoiceRow("Notify me about", listOf("all" to "Every message", "dm_mentions" to "Direct messages and mentions", "favorites" to "Pinned pages and mentions"), s.notifScope, s.notifEnabled) { v -> set { copy(notifScope = v) } }; GroupDivider()
