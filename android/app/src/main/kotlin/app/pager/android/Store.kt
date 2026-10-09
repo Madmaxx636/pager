@@ -219,6 +219,7 @@ class Store(private val context: Context) {
             if (c.userId != userId) return
             // Caches from before room types were tracked can't tell DMs from groups: resync from scratch.
             if (c.chats.values.any { it.network != "matrix" && it.roomType == null }) { cacheFile.delete(); return }
+            c.chats.values.forEach { ch -> ch.messages.forEach { m -> m.enc?.let(MediaCrypt::register) } } // after a restart, saved pictures still need their keys
             _chats.value = c.chats
             since = c.since
             _synced.value = true

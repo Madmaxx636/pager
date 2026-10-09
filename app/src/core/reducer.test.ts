@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyHistory, applySync, parseMuted, stripReplyFallback } from "./reducer";
+import { encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { ChatState, STATUS_SENDING, displayName, isBotRoom, previewOf } from "./types";
 import { inQuietHours, DEFAULTS } from "./settings";
 
@@ -69,6 +70,20 @@ describe("applySync", () => {
     // and when a later sync carries no summary, the count is remembered
     const again = applySync({ "!n:x": c }, { rooms: { join: { "!n:x": { timeline: { events: [] } } } } }, me, false).chats["!n:x"];
     expect(isBotRoom(again, me)).toBe(false);
+  });
+  it("a picture that arrives as an edit in an encrypted room keeps its file keys, and they survive a restart", () => {
+    const file = { url: "mxc://x/abc", key: { k: "k" }, iv: "iv", hashes: { sha256: "h" }, v: "v2" };
+    const c = base();
+    const after = applySync(c, join([
+      { type: "m.room.message", event_id: "$p", sender: mom, origin_server_ts: 5000, content: { msgtype: "m.text", body: "Photo" } },
+      { type: "m.room.message", event_id: "$e", sender: mom, origin_server_ts: 5001, content: { msgtype: "m.image", body: "* Photo", "m.relates_to": { rel_type: "m.replace", event_id: "$p" }, "m.new_content": { msgtype: "m.image", body: "Photo", file, info: { mimetype: "image/jpeg", w: 10, h: 20 } } } },
+    ]), me, false).chats["!a:x"];
+    const photo = after.messages.find((m) => m.id === "$p")!;
+    expect(photo.type).toBe("m.image"); expect(photo.mxc).toBe("mxc://x/abc"); expect(photo.enc?.url).toBe("mxc://x/abc");
+    expect(encryptedInfo("mxc://x/abc")?.mime).toBe("image/jpeg");
+    // a fresh start: the registry is empty, then rebuilt from the saved messages
+    registerAllEncrypted({ "!a:x": { messages: [{ enc: { ...file, url: "mxc://x/other" } as never, mime: "image/png" }] } });
+    expect(encryptedInfo("mxc://x/other")?.mime).toBe("image/png");
   });
   it("notifies only for others' new messages and dedupes", () => {
     const r = applySync(base(), join([text("$2", me, 2000, "Yes!"), text("$3", mom, 3000, "Great")]), me, false);

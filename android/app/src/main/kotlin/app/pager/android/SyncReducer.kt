@@ -201,11 +201,17 @@ object SyncReducer {
         val prev = msgs[i]
         var next = prev.copy(body = body, edited = true)
         // Some bridges (Google Messages, WhatsApp) send a picture or file as an edit of an earlier message: take its media too.
-        val url = nc["url"].str()
+        // In an encrypted room the picture is an encrypted file ("file"), not a plain address ("url").
+        val nf = nc["file"].obj()
+        val encFile = nf["url"].str()?.let { u ->
+            val k = nf["key"].obj()["k"].str(); val iv = nf["iv"].str(); val sha = nf["hashes"].obj()["sha256"].str()
+            if (k != null && iv != null && sha != null) EncFile(u, k, iv, sha).also { MediaCrypt.register(it) } else null
+        }
+        val url = encFile?.url ?: nc["url"].str()
         if (url != null) {
             val info = nc["info"].obj()
             next = next.copy(
-                type = nc["msgtype"].str() ?: prev.type, mxc = url, mime = info["mimetype"].str(),
+                enc = encFile, type = nc["msgtype"].str() ?: prev.type, mxc = url, mime = info["mimetype"].str(),
                 size = (info["size"] as? JsonPrimitive)?.longOrNull, w = (info["w"] as? JsonPrimitive)?.intOrNull, h = (info["h"] as? JsonPrimitive)?.intOrNull,
                 edited = prev.edited, // adding the media isn't an edit the reader should see
             )

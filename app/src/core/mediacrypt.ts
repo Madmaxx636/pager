@@ -34,3 +34,8 @@ export async function decryptAttachment(cipher: ArrayBuffer, file: Pick<EncFile,
 const known = new Map<string, EncFile & { mime?: string }>();
 export const registerEncrypted = (f: EncFile, mime?: string) => { if (f?.url) known.set(f.url, { ...f, mime }); };
 export const encryptedInfo = (mxc: string) => known.get(mxc);
+
+/** After a restart, saved messages still carry their file keys: teach the registry about them again. */
+export function registerAllEncrypted(chats: Record<string, { messages: { enc?: EncFile; mime?: string }[] }>) {
+  for (const c of Object.values(chats)) for (const m of c.messages) if (m.enc) registerEncrypted(m.enc, m.mime);
+}
