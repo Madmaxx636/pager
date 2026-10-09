@@ -13,7 +13,7 @@ export function ChatPicker({ title, onBack, onPick }: { title: string; onBack: (
     <section className="page">
       <header><IconButton icon={ChevronLeft} label="Back" onClick={onBack} className="back always" /><h2>{title}</h2></header>
       <div className="page-body">
-        <div className="pill-search wide"><Search size={18} /><input autoFocus placeholder="Search chats" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <div className="pill-search wide"><Search size={18} /><input autoFocus placeholder="Search pages" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <ul className="plain">{shown.map((c) => <li key={c.id}><button className="list-btn" onClick={() => onPick(c.id)}><Avatar name={c.name} mxc={c.avatarMxc} size={42} network={c.network} /><div className="col"><b>{c.name}</b><small>{networkMeta(c.network).label}</small></div></button></li>)}</ul>
       </div>
     </section>

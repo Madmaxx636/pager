@@ -442,7 +442,7 @@ function armReminders() {
 }
 export function remind(roomId: string, whenMs: number, snoozed = false) {
   const c = state.chats[roomId];
-  set({ reminders: [...state.reminders, { id: uuid(), roomId, chat: c ? displayName(c, me()) : "a chat", whenMs, snooze: snoozed }] }); lsSet("pager.reminders", state.reminders);
+  set({ reminders: [...state.reminders, { id: uuid(), roomId, chat: c ? displayName(c, me()) : "a page", whenMs, snooze: snoozed }] }); lsSet("pager.reminders", state.reminders);
   armReminders();
 }
 export function cancelReminder(r: Reminder) { window.clearTimeout(timers.get(r.id)); timers.delete(r.id); set({ reminders: state.reminders.filter((x) => x.id !== r.id) }); lsSet("pager.reminders", state.reminders); }

@@ -594,7 +594,7 @@ class Store(private val context: Context) {
     }
 
     fun remind(roomId: String, atMs: Long) {
-        val name = _chats.value[roomId]?.let { SyncReducer.displayName(it, me) } ?: "a chat"
+        val name = _chats.value[roomId]?.let { SyncReducer.displayName(it, me) } ?: "a page"
         reminders.add(roomId, name, atMs)
     }
 
@@ -690,7 +690,7 @@ class Store(private val context: Context) {
     /** Beeper-style snooze: tuck the chat into the archive and bring it back, unread, at [atMs]. */
     fun snooze(roomId: String, atMs: Long) {
         setTag(roomId, "u.archived", true)
-        val name = _chats.value[roomId]?.let { SyncReducer.displayName(it, me) } ?: "a chat"
+        val name = _chats.value[roomId]?.let { SyncReducer.displayName(it, me) } ?: "a page"
         reminders.add(roomId, name, atMs, snooze = true)
     }
 

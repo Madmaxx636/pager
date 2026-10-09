@@ -224,7 +224,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
                         }
                     }
                 }
-                SearchPill(query, { query = it }, "Search chats", Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                SearchPill(query, { query = it }, "Search pages", Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                     if (s.showFilterBar) Box(contentAlignment = Alignment.TopEnd) {
                         IconBtn(Icons.Rounded.Tune, "Filters", { filterSheet = true }, tint = if (filters.count > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, size = 36)
                         if (filters.count > 0) Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
@@ -260,10 +260,10 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
                 if (shown.isEmpty() && pins.isEmpty()) item("empty") {
                     when {
                         !synced -> MascotEmpty("Syncing…", null, MascotMood.Ring)
-                        all.isEmpty() -> MascotEmpty("No chats yet", "Connect an app to bring your conversations here.") { androidx.compose.material3.Button(onClick = { accounts = true }) { Text("Connect an account") } }
-                        tab == "unread" -> EmptyState(Icons.Rounded.CheckCircle, "You're all caught up", "No unread chats.")
-                        tab == "archive" -> EmptyState(Icons.Rounded.Archive, "Nothing archived", "Archived chats come back when someone writes.")
-                        tab == "low" -> EmptyState(Icons.Rounded.LowPriority, "No low-priority chats", "Low-priority chats stay quiet except for @mentions and replies.")
+                        all.isEmpty() -> MascotEmpty("No pages yet", "Connect an app to bring your conversations here.") { androidx.compose.material3.Button(onClick = { accounts = true }) { Text("Connect an account") } }
+                        tab == "unread" -> EmptyState(Icons.Rounded.CheckCircle, "You're all caught up", "No unread pages.")
+                        tab == "archive" -> EmptyState(Icons.Rounded.Archive, "Nothing archived", "Archived pages come back when someone writes.")
+                        tab == "low" -> EmptyState(Icons.Rounded.LowPriority, "No low-priority pages", "Low-priority pages stay quiet except for @mentions and replies.")
                         else -> EmptyState(Icons.Rounded.Search, "No matches")
                     }
                 }
@@ -321,24 +321,24 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             SheetItem(Icons.Rounded.Alarm, "Remind me…", { menuFor = null; remindFor = c.id })
             SheetItem(Icons.AutoMirrored.Rounded.Label, "Labels…", { menuFor = null; labelFor = listOf(c.id) })
             SheetItem(Icons.Rounded.RadioButtonUnchecked, "Select", { menuFor = null; toggleSelect(c.id) })
-            SheetItem(Icons.Rounded.Delete, "Delete chat…", { menuFor = null; deleteFor = listOf(c.id) }, danger = true)
+            SheetItem(Icons.Rounded.Delete, "Delete page…", { menuFor = null; deleteFor = listOf(c.id) }, danger = true)
         }
     }
     deleteFor?.let { ids ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { deleteFor = null },
-            title = { Text(if (ids.size == 1) "Delete this chat?" else "Delete ${ids.size} chats?") },
-            text = { Text("They will be removed from Pager. The conversations on the other apps aren't deleted, and a chat comes back if someone writes again.") },
+            title = { Text(if (ids.size == 1) "Delete this page?" else "Delete ${ids.size} pages?") },
+            text = { Text("They will be removed from Pager. The conversations on the other apps aren't deleted, and a page comes back if someone writes again.") },
             confirmButton = { TextButton(onClick = { ids.forEach { store.leave(it) }; deleteFor = null; selected.clear() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("Cancel") } },
         )
     }
     labelFor?.let { LabelSheet(it) { labelFor = null } }
-    muteFor?.let { ids -> MuteSheet(if (ids.size == 1) "Mute chat" else "Mute ${ids.size} chats", { ms -> ids.forEach { store.setMuted(it, true, ms) }; muteFor = null; selected.clear() }, { muteFor = null }) }
+    muteFor?.let { ids -> MuteSheet(if (ids.size == 1) "Mute page" else "Mute ${ids.size} pages", { ms -> ids.forEach { store.setMuted(it, true, ms) }; muteFor = null; selected.clear() }, { muteFor = null }) }
     snoozeFor?.let { id -> WhenSheet("Snooze until", { store.snooze(id, it); snoozeFor = null }, { snoozeFor = null }) }
     remindFor?.let { id -> WhenSheet("Remind me", { store.remind(id, it); remindFor = null }, { remindFor = null }) }
     if (filterSheet) Sheet({ filterSheet = false }) {
-        SheetTitle("Filter chats")
+        SheetTitle("Filter pages")
         FilterRow("Groups", filters.groups) { filters = filters.copy(groups = it, dms = if (it) false else filters.dms) }
         FilterRow("Direct messages", filters.dms) { filters = filters.copy(dms = it, groups = if (it) false else filters.groups) }
         FilterRow("With a draft", filters.drafts) { filters = filters.copy(drafts = it) }

@@ -91,7 +91,7 @@ export function StickerModal({ roomId, onPick, onClose }: { roomId: string; onPi
     <Modal title="Stickers" onClose={onClose} wide>
       <input ref={file} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) void addStickers(Array.from(e.target.files)); e.target.value = ""; }} />
       {!packs.length ? (
-        <EmptyState icon={StickerIcon} title="No stickers yet" body="Add images from your computer and they become stickers you can send in any chat."><button className="primary" onClick={add}>Add stickers</button></EmptyState>
+        <EmptyState icon={StickerIcon} title="No stickers yet" body="Add images from your computer and they become stickers you can send in any page."><button className="primary" onClick={add}>Add stickers</button></EmptyState>
       ) : (
         <>
           <div className="tabs flat">{packs.map((p, i) => <button key={p.key + i} className={"tab" + (tab === i ? " on" : "")} onClick={() => setTab(i)}>{p.name}</button>)}<button className="icon sm" onClick={add} title="Add stickers" aria-label="Add stickers"><Plus size={18} /></button></div>

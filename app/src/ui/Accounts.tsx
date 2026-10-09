@@ -158,7 +158,7 @@ export function AccountsModal({ onClose, initial }: { onClose: () => void; initi
   useEffect(() => { void refreshBridges(); }, []);
 
   async function disconnect(n: Network, l: Login) {
-    if (!confirm(`Disconnect this ${n.name} account? Its chats will stop syncing.`)) return;
+    if (!confirm(`Disconnect this ${n.name} account? Its pages will stop syncing.`)) return;
     try { await pager.logout(n.id, l.id); } catch (e) { setError((e as Error).message); }
     void refreshBridges();
   }
@@ -203,7 +203,7 @@ export function BridgesPage() {
     setSyncing(l.id); setNote("");
     try {
       const made = await pager.syncChats(n.id, l.id, (d, tot) => setSyncing(`${l.id}:${d}/${tot}`));
-      setNote(`Synced ${made} chats. Old message history isn't available from ${n.name}; new messages will appear as they arrive.`);
+      setNote(`Synced ${made} pages. Old message history isn't available from ${n.name}; new messages will appear as they arrive.`);
     } catch (e) { setNote((e as Error).message); }
     setSyncing("");
   }
@@ -231,13 +231,13 @@ export function BridgesPage() {
                 <Row key={l.id} title={l.name || l.profile?.name || l.id} hint={label}>
                   <i className="dot" style={{ background: color }} />
                   {needsAttention(l.state_event) && <button className="pill" onClick={() => setRelogin(n)}>Sign in</button>}
-                  <button className="link" disabled={!!syncing} onClick={() => sync(n, l)}>{syncing.startsWith(l.id) ? `Syncing ${syncing.split(":")[1] ?? ""}` : "Sync chats"}</button>
+                  <button className="link" disabled={!!syncing} onClick={() => sync(n, l)}>{syncing.startsWith(l.id) ? `Syncing ${syncing.split(":")[1] ?? ""}` : "Sync pages"}</button>
                   <button className="link danger" onClick={async () => { if (confirm("Disconnect this account?")) { await pager.logout(n.id, l.id).catch(() => {}); void refreshBridges(); } }}>Disconnect</button>
                 </Row>
               );
             })}
             <div className="pad"><button className="link" onClick={() => setRelogin(n)}>{`Add another ${meta.label} account`}</button></div>
-            <SwitchRow title={`Show ${meta.label} chats in inbox`} checked={!st.hiddenNetworks.includes(n.id)} onChange={(on) => updateSettings({ hiddenNetworks: on ? st.hiddenNetworks.filter((x) => x !== n.id) : [...st.hiddenNetworks, n.id] })} />
+            <SwitchRow title={`Show ${meta.label} pages in inbox`} checked={!st.hiddenNetworks.includes(n.id)} onChange={(on) => updateSettings({ hiddenNetworks: on ? st.hiddenNetworks.filter((x) => x !== n.id) : [...st.hiddenNetworks, n.id] })} />
           </section>
         );
       })}

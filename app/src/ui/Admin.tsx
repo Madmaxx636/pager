@@ -13,7 +13,7 @@ const CATALOG: { id: string; name: string; how: string }[] = [
   { id: "messenger", name: "Messenger", how: "Built in." }, { id: "slack", name: "Slack", how: "Built in." }, { id: "twitter", name: "X (Twitter) DMs", how: "Built in." },
   { id: "bluesky", name: "Bluesky", how: "Built in." }, { id: "linkedin", name: "LinkedIn", how: "Built in." },
   { id: "telegram", name: "Telegram", how: "Get an API ID and hash at my.telegram.org, add TELEGRAM_API_ID and TELEGRAM_API_HASH to server/.env, then run ./scripts/setup.sh and docker compose up -d." },
-  { id: "discord", name: "Discord", how: "Add ENABLE_DISCORD=1 to server/.env, run ./scripts/setup.sh and docker compose up -d. It signs in through its bot chat." },
+  { id: "discord", name: "Discord", how: "Add ENABLE_DISCORD=1 to server/.env, run ./scripts/setup.sh and docker compose up -d. It signs in through its bot page." },
 ];
 
 type Tab = "accounts" | "bridges" | "server";

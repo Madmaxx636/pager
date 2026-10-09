@@ -80,6 +80,7 @@ object Greetings {
         "Roger that!",
         "10-4, good buddy",
         "Wassup?!",
+        "What's the sitch?",
     )
     fun pick(random: kotlin.random.Random = kotlin.random.Random) = all[random.nextInt(all.size)]
 

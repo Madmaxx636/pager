@@ -127,19 +127,19 @@ export const DEFAULTS: AppSettings = {
 
 /** Every shortcut the app understands, with its default keys. Users can rebind them in Settings. */
 export const SHORTCUTS: { id: string; label: string; keys: string }[] = [
-  { id: "palette", label: "Command bar: jump to a chat or setting", keys: "Ctrl+K" },
-  { id: "newChat", label: "New chat", keys: "Ctrl+N" },
+  { id: "palette", label: "Command bar: jump to a page or setting", keys: "Ctrl+K" },
+  { id: "newChat", label: "New page", keys: "Ctrl+N" },
   { id: "search", label: "Search all messages", keys: "Ctrl+Shift+F" },
-  { id: "inChatSearch", label: "Search in this chat", keys: "Ctrl+F" },
+  { id: "inChatSearch", label: "Search in this page", keys: "Ctrl+F" },
   { id: "settings", label: "Open settings", keys: "Ctrl+," },
-  { id: "prevChat", label: "Previous chat", keys: "Alt+ArrowUp" },
-  { id: "nextChat", label: "Next chat", keys: "Alt+ArrowDown" },
-  { id: "nextUnread", label: "Next unread chat", keys: "Alt+Shift+ArrowDown" },
-  { id: "archive", label: "Archive or unarchive this chat", keys: "Ctrl+Shift+A" },
-  { id: "markUnread", label: "Mark this chat unread", keys: "Ctrl+Shift+U" },
-  { id: "mute", label: "Mute or unmute this chat", keys: "Ctrl+Shift+M" },
-  { id: "pin", label: "Pin or unpin this chat", keys: "Ctrl+Shift+P" },
-  { id: "snooze", label: "Snooze this chat", keys: "Ctrl+Shift+Z" },
+  { id: "prevChat", label: "Previous page", keys: "Alt+ArrowUp" },
+  { id: "nextChat", label: "Next page", keys: "Alt+ArrowDown" },
+  { id: "nextUnread", label: "Next unread page", keys: "Alt+Shift+ArrowDown" },
+  { id: "archive", label: "Archive or unarchive this page", keys: "Ctrl+Shift+A" },
+  { id: "markUnread", label: "Mark this page unread", keys: "Ctrl+Shift+U" },
+  { id: "mute", label: "Mute or unmute this page", keys: "Ctrl+Shift+M" },
+  { id: "pin", label: "Pin or unpin this page", keys: "Ctrl+Shift+P" },
+  { id: "snooze", label: "Snooze this page", keys: "Ctrl+Shift+Z" },
   { id: "help", label: "Show keyboard shortcuts", keys: "Ctrl+/" },
 ];
 

@@ -25,7 +25,7 @@ class SyncService : Service() {
         val n: Notification = NotificationCompat.Builder(this, PagerApp.CHANNEL_SYNC)
             .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle("Pager")
-            .setContentText("Keeping your chats up to date")
+            .setContentText("Keeping your pages up to date")
             .setContentIntent(open)
             .setOngoing(true)
             .build()

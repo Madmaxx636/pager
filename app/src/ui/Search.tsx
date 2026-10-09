@@ -31,12 +31,12 @@ export function Search({ roomId, onBack, onOpen }: { roomId?: string; onBack: ()
   }, [q, kind, roomId]);
   return (
     <section className="page">
-      <header><IconButton icon={ChevronLeft} label="Back" onClick={onBack} className="back always" /><div className="pill-search grow"><SearchIcon size={18} /><input autoFocus placeholder={roomId ? "Search this chat" : "Search all messages"} value={q} onChange={(e) => setQ(e.target.value)} /></div></header>
+      <header><IconButton icon={ChevronLeft} label="Back" onClick={onBack} className="back always" /><div className="pill-search grow"><SearchIcon size={18} /><input autoFocus placeholder={roomId ? "Search this page" : "Search all messages"} value={q} onChange={(e) => setQ(e.target.value)} /></div></header>
       <div className="tabs pad-x">{KINDS.map(([id, label, Icon]) => <button key={id} className={"tab" + (kind === id ? " on" : "")} onClick={() => setKind(id)}><Icon size={15} />{label}</button>)}</div>
       <div className="page-body">
-        {!hits ? <EmptyState icon={SearchIcon} title="Search your chats" body="Find messages, photos, links and files across every network." />
+        {!hits ? <EmptyState icon={SearchIcon} title="Search your pages" body="Find messages, photos, links and files across every network." />
           : !hits.length ? <EmptyState icon={SearchIcon} title={busy ? "Searching…" : "No matches"} />
-          : <ul className="plain">{hits.map((h) => { const c = getState().chats[h.roomId]; const name = c ? displayName(c, me()) : "Chat"; return (
+          : <ul className="plain">{hits.map((h) => { const c = getState().chats[h.roomId]; const name = c ? displayName(c, me()) : "Page"; return (
             <li key={h.roomId + h.eventId + h.ts}><button className="list-btn" onClick={() => onOpen(h.roomId)}>
               <Avatar name={name} mxc={c?.avatarMxc} size={42} network={c?.network} />
               <div className="col"><small className="accent">{c ? nameOf(c, h.sender) : h.sender}{!roomId ? ` · ${name}` : ""}</small><span className="clip2">{h.text}</span><small>{new Date(h.ts).toLocaleString()}</small></div>

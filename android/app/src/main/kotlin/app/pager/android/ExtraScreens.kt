@@ -104,19 +104,19 @@ fun BridgesScreen(onBack: () -> Unit) {
                         TextButton(enabled = syncing == null, onClick = {
                             scope.launch {
                                 syncing = l.id; note = ""
-                                runCatching { store.pager.syncChats(n.id, l.id) { d, tot -> note = "Syncing chats $d/$tot" } }
-                                    .onSuccess { note = "Synced $it chats. Old history isn't available from every network; new messages appear as they arrive." }
+                                runCatching { store.pager.syncChats(n.id, l.id) { d, tot -> note = "Syncing pages $d/$tot" } }
+                                    .onSuccess { note = "Synced $it pages. Old history isn't available from every network; new messages appear as they arrive." }
                                     .onFailure { note = it.message ?: "Sync failed" }
                                 syncing = null
                             }
-                        }) { Text("Sync chats") }
+                        }) { Text("Sync pages") }
                         TextButton(onClick = { scope.launch { runCatching { store.pager.logout(n.id, l.id) }; store.refreshBridges() } }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
                     }
                     GroupDivider()
                 }
                 ButtonRow("Add another ${meta.label} account") { relogin = n }
                 GroupDivider()
-                SwitchRow("Show ${meta.label} chats in inbox", null, n.id !in s.hiddenNetworks) { on -> store.settings.update { copy(hiddenNetworks = if (on) hiddenNetworks - n.id else hiddenNetworks + n.id) } }
+                SwitchRow("Show ${meta.label} pages in inbox", null, n.id !in s.hiddenNetworks) { on -> store.settings.update { copy(hiddenNetworks = if (on) hiddenNetworks - n.id else hiddenNetworks + n.id) } }
             }
         }
     }
@@ -150,7 +150,7 @@ fun ScheduledScreen(onBack: () -> Unit) {
     var reminders by remember { mutableStateOf(store.reminders.all()) }
     val fmt = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
     SettingsPage("Scheduled & reminders", onBack) {
-        SettingsGroup("Scheduled messages", footer = if (scheduled.isEmpty()) "Hold the send button in a chat to schedule a message." else null) {
+        SettingsGroup("Scheduled messages", footer = if (scheduled.isEmpty()) "Hold the send button in a page to schedule a message." else null) {
             scheduled.sortedBy { it.whenMs }.forEachIndexed { i, m ->
                 if (i > 0) GroupDivider()
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -160,7 +160,7 @@ fun ScheduledScreen(onBack: () -> Unit) {
             }
             if (scheduled.isEmpty()) Text("No scheduled messages", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        SettingsGroup("Reminders & snoozed chats", footer = if (reminders.isEmpty()) "Long-press a chat in the inbox and choose Remind me or Snooze." else null) {
+        SettingsGroup("Reminders & snoozed pages", footer = if (reminders.isEmpty()) "Long-press a page in the inbox and choose Remind me or Snooze." else null) {
             reminders.sortedBy { it.whenMs }.forEachIndexed { i, r ->
                 if (i > 0) GroupDivider()
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -198,7 +198,7 @@ fun SearchScreen(roomId: String?, onBack: () -> Unit, onOpen: (String) -> Unit) 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(Modifier.fillMaxWidth().padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             BackButton(onBack)
-            SearchPill(q, { q = it }, if (roomId == null) "Search all messages" else "Search this chat", Modifier.weight(1f))
+            SearchPill(q, { q = it }, if (roomId == null) "Search all messages" else "Search this page", Modifier.weight(1f))
         }
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("all" to ("All" to Icons.Rounded.Search), "images" to ("Photos" to Icons.Rounded.Image), "videos" to ("Videos" to Icons.Rounded.Videocam), "links" to ("Links" to Icons.Rounded.Link), "files" to ("Files" to Icons.Rounded.InsertDriveFile)).forEach { (id, v) ->
@@ -213,12 +213,12 @@ fun SearchScreen(roomId: String?, onBack: () -> Unit, onOpen: (String) -> Unit) 
         }
         val list = hits
         when {
-            list == null -> EmptyState(Icons.Rounded.Search, "Search your chats", "Find messages, photos, links and files across every network.")
+            list == null -> EmptyState(Icons.Rounded.Search, "Search your pages", "Find messages, photos, links and files across every network.")
             list.isEmpty() -> EmptyState(Icons.Rounded.Search, if (busy) "Searching…" else "No matches")
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
                 items(list, key = { it.roomId + it.eventId + it.ts }) { h ->
                     val chat = store.chatNow(h.roomId)
-                    val name = chat?.let { SyncReducer.displayName(it, store.me) } ?: "Chat"
+                    val name = chat?.let { SyncReducer.displayName(it, store.me) } ?: "Page"
                     Row(Modifier.fillMaxWidth().clickable { onOpen(h.roomId) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(name, chat?.network, 44.dp, chat?.avatarMxc); Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
@@ -242,7 +242,7 @@ fun ChatPicker(title: String, onBack: () -> Unit, onPick: (String) -> Unit) {
     val shown = all.filter { q.isBlank() || it.name.contains(q.trim(), ignoreCase = true) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         TopBar(title, onBack)
-        SearchPill(q, { q = it }, "Search chats", Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        SearchPill(q, { q = it }, "Search pages", Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         LazyColumn(Modifier.fillMaxSize()) {
             items(shown, key = { it.id }) { c ->
                 Row(Modifier.fillMaxWidth().clickable { onPick(c.id) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {

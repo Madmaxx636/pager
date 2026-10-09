@@ -109,7 +109,7 @@ export function App() {
   else if (kind === "forward") {
     const [from, id] = arg.split("|");
     main = <ChatPicker title="Forward to…" onBack={() => nav(`chat:${from}`)} onPick={(target) => { const m = getState().chats[from]?.messages.find((x) => x.id === id); if (m) forward(m, target); nav(`chat:${target}`); }} />;
-  } else main = <div className="blank"><Mascot size={170} mood={synced ? "idle" : "ring"} /><p>{synced ? "Pick a chat to start." : "Syncing…"}</p></div>;
+  } else main = <div className="blank"><Mascot size={170} mood={synced ? "idle" : "ring"} /><p>{synced ? "Pick a page to start." : "Syncing…"}</p></div>;
 
   return (
     <div className={"shell" + (route !== "home" ? " pane-open" : "")} style={{ ["--sidebar-w" as string]: `${st.sidebarWidth}px` }}>
