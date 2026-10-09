@@ -209,7 +209,7 @@ private fun LoginFlowView(store: Store, net: Network, onCancel: () -> Unit, onDo
         }
         "complete" -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("✓", fontSize = 40.sp, color = MaterialTheme.colorScheme.primary)
-            Text("${meta.label} is connected. Your chats will appear shortly.")
+            Text("${meta.label} is connected. Your pages will appear shortly.")
         }
         else -> Text("This network needs a browser sign-in, which Pager doesn't support yet.", color = muted)
     }

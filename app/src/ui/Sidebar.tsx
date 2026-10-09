@@ -142,7 +142,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
 
       <div className="pill-search">
         <Search size={18} />
-        <input ref={search} placeholder="Search chats" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input ref={search} placeholder="Search pages" value={query} onChange={(e) => setQuery(e.target.value)} />
         {st.showFilterBar && <button className={"icon sm" + (filterCount(filters) ? " active" : "")} onClick={() => setFilterModal(true)} title="Filters" aria-label="Filters"><ListFilter size={18} />{filterCount(filters) > 0 && <i className="dot-badge" />}</button>}
       </div>
 
@@ -220,10 +220,10 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
           {shown.length === 0 && pins.length === 0 && (
             <li>
               {!synced ? <EmptyState icon={Inbox} title="Syncing…" />
-                : all.length === 0 ? <EmptyState icon={Inbox} title="No chats yet" body="Connect an app to bring your conversations here."><button className="primary" onClick={onAccounts}>Connect an account</button></EmptyState>
-                : tab === "unread" ? <EmptyState icon={CheckCheck} title="You're all caught up" body="No unread chats." />
-                : tab === "archive" ? <EmptyState icon={Archive} title="Nothing archived" body="Archived chats come back when someone writes." />
-                : tab === "low" ? <EmptyState icon={ArrowDownToLine} title="No low-priority chats" body="They stay quiet except for @mentions and replies." />
+                : all.length === 0 ? <EmptyState icon={Inbox} title="No pages yet" body="Connect an app to bring your conversations here."><button className="primary" onClick={onAccounts}>Connect an account</button></EmptyState>
+                : tab === "unread" ? <EmptyState icon={CheckCheck} title="You're all caught up" body="No unread pages." />
+                : tab === "archive" ? <EmptyState icon={Archive} title="Nothing archived" body="Archived pages come back when someone writes." />
+                : tab === "low" ? <EmptyState icon={ArrowDownToLine} title="No low-priority pages" body="They stay quiet except for @mentions and replies." />
                 : <EmptyState icon={Search} title="No matches" />}
             </li>
           )}
@@ -233,13 +233,13 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
       {ctx && <ChatMenu c={ctx.c} x={ctx.x} y={ctx.y} pins={pins} close={() => setCtx(undefined)}
         onMute={() => setMuteFor([ctx.c.id])} onLabels={() => setLabelFor([ctx.c.id])} onWhen={(kind) => setWhenFor({ ids: [ctx.c.id], kind })} onSelect={() => toggle(ctx.c.id)} onDelete={() => setDeleteFor([ctx.c.id])} />}
       {deleteFor && (
-        <Modal title={deleteFor.length === 1 ? "Delete this chat?" : `Delete ${deleteFor.length} chats?`} onClose={() => setDeleteFor(undefined)}>
-          <p className="muted">They will be removed from Pager. The conversations on the other apps aren't deleted, and a chat comes back if someone writes again.</p>
+        <Modal title={deleteFor.length === 1 ? "Delete this page?" : `Delete ${deleteFor.length} pages?`} onClose={() => setDeleteFor(undefined)}>
+          <p className="muted">They will be removed from Pager. The conversations on the other apps aren't deleted, and a page comes back if someone writes again.</p>
           <div className="row-end"><button className="link" onClick={() => setDeleteFor(undefined)}>Cancel</button><button className="primary danger" onClick={() => { deleteFor.forEach(leave); setDeleteFor(undefined); setPicked([]); }}>Delete</button></div>
         </Modal>
       )}
       {muteFor && (
-        <Modal title={muteFor.length === 1 ? "Mute chat" : `Mute ${muteFor.length} chats`} onClose={() => setMuteFor(undefined)}>
+        <Modal title={muteFor.length === 1 ? "Mute page" : `Mute ${muteFor.length} pages`} onClose={() => setMuteFor(undefined)}>
           <div className="stack">
             {([["For 1 hour", 3.6e6], ["For 8 hours", 8 * 3.6e6], ["For 1 week", 7 * 864e5], ["Until I turn it back on", undefined]] as [string, number | undefined][]).map(([l, ms]) => (
               <button key={l} className="row-btn" onClick={() => { muteFor.forEach((id) => setMuted(id, true, ms)); setMuteFor(undefined); setPicked([]); }}><b>{l}</b></button>
@@ -250,7 +250,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
       {labelFor && <LabelModal ids={labelFor} onClose={() => setLabelFor(undefined)} />}
       {whenFor && <WhenModal title={whenFor.kind === "snooze" ? "Snooze until" : "Remind me"} onPick={(at) => { whenFor.ids.forEach((id) => (whenFor.kind === "snooze" ? snooze(id, at) : remind(id, at))); setWhenFor(undefined); }} onClose={() => setWhenFor(undefined)} />}
       {filterModal && (
-        <Modal title="Filter chats" onClose={() => setFilterModal(false)}>
+        <Modal title="Filter pages" onClose={() => setFilterModal(false)}>
           <div className="stack">
             {([["groups", "Groups", Users], ["dms", "Direct messages", MessageSquareDot], ["drafts", "With a draft", SquarePen], ["unanswered", "Unanswered (they wrote last)", CircleDot]] as const).map(([key, label, Icon]) => (
               <button key={key} className={"row-btn pick" + (filters[key] ? " on" : "")} onClick={() => setFilters({ ...filters, [key]: !filters[key], ...(key === "groups" && !filters.groups ? { dms: false } : {}), ...(key === "dms" && !filters.dms ? { groups: false } : {}) })}><Icon size={18} /><b>{label}</b>{filters[key] && <CheckCircle2 size={18} />}</button>
@@ -284,7 +284,7 @@ function ChatMenu({ c, x, y, pins, close, onMute, onLabels, onWhen, onSelect, on
         <button onClick={run(() => onWhen("remind"))}><AlarmClock size={18} />Remind me…</button>
         <button onClick={run(onLabels)}><Tag size={18} />Labels…</button>
         <button onClick={run(onSelect)}><CheckCircle2 size={18} />Select</button>
-        <button className="danger" onClick={run(onDelete)}><Trash2 size={18} />Delete chat…</button>
+        <button className="danger" onClick={run(onDelete)}><Trash2 size={18} />Delete page…</button>
       </div>
     </div>
   );

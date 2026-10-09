@@ -380,6 +380,6 @@ object SyncReducer {
         if (chat.isStories) return "Stories"
         if (chat.name.isNotBlank()) return Names.pretty(chat.name)
         val other = (chat.heroes + chat.joined).firstOrNull { it != me }
-        return other?.let { chat.nameOf(it) } ?: "Unnamed chat"
+        return other?.let { chat.nameOf(it) } ?: "Unnamed page"
     }
 }

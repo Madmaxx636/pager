@@ -183,7 +183,7 @@ fun StickerSheet(roomId: String, onPick: (Sticker) -> Unit, onAdd: () -> Unit, o
     var tab by remember { mutableStateOf(0) }
     Sheet(onDismiss) {
         Column(Modifier.heightIn(min = 380.dp, max = 520.dp)) {
-            if (packs.isEmpty()) EmptyState(Icons.Rounded.StickyNote2, "No stickers yet", "Add images from your photos and they become stickers you can send in any chat.") { Button(onClick = onAdd) { Text("Add stickers") } }
+            if (packs.isEmpty()) EmptyState(Icons.Rounded.StickyNote2, "No stickers yet", "Add images from your photos and they become stickers you can send in any page.") { Button(onClick = onAdd) { Text("Add stickers") } }
             else {
                 LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(packs.size) { i ->

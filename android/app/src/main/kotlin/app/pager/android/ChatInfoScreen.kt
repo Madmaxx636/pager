@@ -87,7 +87,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
     var viewer by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        TopBar("Chat info", onBack)
+        TopBar("Page info", onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 40.dp)) {
             Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Avatar(name, c.network, 96.dp, c.avatarMxc)
@@ -107,7 +107,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 SwitchRow("Archived", checked = c.archived) { store.setTag(roomId, "u.archived", it) }; GroupDivider()
                 SwitchRow("Marked unread", checked = c.markedUnread) { store.markUnread(roomId, it) }; GroupDivider()
                 NavRow("Labels", if (c.labels.isEmpty()) "None" else c.labels.joinToString(), Icons.AutoMirrored.Rounded.Label, Color(0xFFF59E0B)) { labelSheet = true }; GroupDivider()
-                NavRow("Snooze…", "Hide this chat and bring it back later", Icons.Rounded.Snooze, Color(0xFF8B5CF6)) { snoozeSheet = true }
+                NavRow("Snooze…", "Hide this page and bring it back later", Icons.Rounded.Snooze, Color(0xFF8B5CF6)) { snoozeSheet = true }
             }
 
             // Shared media, links and files from what's loaded on this device.
@@ -119,7 +119,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 }
             }
             when (tab) {
-                "photos" -> if (photos.isEmpty()) Text("No photos loaded yet. Scroll up in the chat to load more.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                "photos" -> if (photos.isEmpty()) Text("No photos loaded yet. Scroll up in the page to load more.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     photos.take(60).chunked(3).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -149,7 +149,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 if (members == null) Text("Loading members…", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             SettingsGroup { NavRow("Notifications", notifSummary(LocalRawSettings.current.notifChat[roomId]), Icons.Rounded.Notifications) { notifSheet = true } }
-            SettingsGroup { ButtonRow("Delete chat", danger = true) { confirmLeave = true } }
+            SettingsGroup { ButtonRow("Delete page", danger = true) { confirmLeave = true } }
         }
     }
 
@@ -164,11 +164,11 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
             ChoiceRow("Sound", listOf("default" to "Use my general settings", "off" to "Silent"), p.sound) { upd(p.copy(sound = it)) }
             ChoiceRow("Vibration", listOf("default" to "Use my general settings", "off" to "No vibration"), p.vibrate) { upd(p.copy(vibrate = it)) }
             ChoiceRow("Message previews", listOf("default" to "Use my general settings", "show" to "Show message", "hide" to "Hide message"), p.preview) { upd(p.copy(preview = it)) }
-            Text("Mute and Low priority still apply: muted chats only notify for mentions, replies and your keywords.", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Mute and Low priority still apply: muted pages only notify for mentions, replies and your keywords.", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     if (confirmLeave) AlertDialog(
-        onDismissRequest = { confirmLeave = false }, title = { Text("Delete this chat?") },
+        onDismissRequest = { confirmLeave = false }, title = { Text("Delete this page?") },
         text = { Text("It will be removed from Pager. The conversation on ${networkMeta(c.network).label} isn't deleted, and it comes back if someone writes again.") },
         confirmButton = { TextButton(onClick = { confirmLeave = false; store.leave(roomId); onLeft() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Cancel") } },

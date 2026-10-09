@@ -127,8 +127,8 @@ fun NewChatScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         scope.launch {
             busy = true; error = ""; choose = null
             runCatching { store.pager.createDm(w.net.id, w.login, w.id) }
-                .onSuccess { room -> if (room != null) onOpen(room) else error = "Couldn't open that chat" }
-                .onFailure { error = it.message ?: "Couldn't start the chat" }
+                .onSuccess { room -> if (room != null) onOpen(room) else error = "Couldn't open that page" }
+                .onFailure { error = it.message ?: "Couldn't start the page" }
             busy = false
         }
     }
@@ -184,7 +184,7 @@ fun NewChatScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                     }
                     if (loading) item("loading") { Text("Finding your contacts…", color = muted, modifier = Modifier.padding(16.dp)) }
                     if (!loading && shown.isEmpty()) item("none") { Text(if (q.isEmpty()) "No contacts yet." else "No one by that name yet. Use the row above to message a number or username.", color = muted, modifier = Modifier.padding(16.dp)) }
-                    if (busy) item("busy") { Text("Opening chat…", color = muted, modifier = Modifier.padding(16.dp)) }
+                    if (busy) item("busy") { Text("Opening page…", color = muted, modifier = Modifier.padding(16.dp)) }
                 }
             }
         }

@@ -262,8 +262,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                         }
                     }
                 }
-                IconBtn(Icons.Rounded.Search, "Search in chat", onSearch)
-                IconBtn(Icons.Rounded.Info, "Chat info", onInfo)
+                IconBtn(Icons.Rounded.Search, "Search in page", onSearch)
+                IconBtn(Icons.Rounded.Info, "Page info", onInfo)
             }
 
             Box(Modifier.weight(1f).fillMaxWidth().let { if (wallpaper != null) it.background(wallpaper) else it }) {
@@ -437,7 +437,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
     confirmDelete?.let { m ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null }, title = { Text("Delete message?") },
-            text = { Text("It will be removed for everyone in the chat where the network allows it.") },
+            text = { Text("It will be removed for everyone in the page where the network allows it.") },
             confirmButton = { TextButton(onClick = { store.delete(roomId, m.id); confirmDelete = null }) { Text("Delete", color = scheme.error) } },
             dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } },
         )

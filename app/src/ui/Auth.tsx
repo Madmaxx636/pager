@@ -44,7 +44,7 @@ export function Auth() {
       <form className="auth-card" onSubmit={submit}>
         <div className="logo"><Mascot size={64} /><b>Pager</b></div>
         <h1>{mode === "in" ? "Welcome back" : "Create your account"}</h1>
-        <p className="muted">All your chats, one inbox, on your own server.</p>
+        <p className="muted">All your pages, one inbox, on your own server.</p>
         {remote && <label>Server<input value={server} onChange={(e) => setServer(e.target.value)} placeholder="matrix.example.com" autoFocus autoCapitalize="none" required /></label>}
         <label>Username<input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus={!remote} autoCapitalize="none" required />
           {cfg && <small>@{username.trim().toLowerCase() || "you"}:{cfg.domain}</small>}</label>

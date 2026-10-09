@@ -179,7 +179,7 @@ val SETTINGS_INDEX = listOf(
     SettingEntry("appearance", "Small screen layout", "Appearance", "compact tiny watch"),
     SettingEntry("appearance", "Text size", "Appearance", "font zoom bigger smaller accessibility"),
     SettingEntry("appearance", "Bubble style", "Appearance", "rounded square"),
-    SettingEntry("appearance", "Chat wallpaper", "Appearance", "background"),
+    SettingEntry("appearance", "Page wallpaper", "Appearance", "background"),
     SettingEntry("appearance", "Time format", "Appearance", "12 24 hour clock"),
     SettingEntry("appearance", "Avatar shape", "Appearance", "circle squircle"),
     SettingEntry("appearance", "Large emoji", "Appearance", "big emoji only"),
@@ -188,28 +188,28 @@ val SETTINGS_INDEX = listOf(
     SettingEntry("appearance", "Reduce motion", "Appearance", "animations accessibility"),
     SettingEntry("layout", "Inbox style", "Inbox & layout", "minimal pro compact titles only"),
     SettingEntry("layout", "Density", "Inbox & layout", "compact comfortable spacing"),
-    SettingEntry("layout", "Pinned chats row", "Inbox & layout", "pins favorites circles"),
-    SettingEntry("layout", "Unread chats first", "Inbox & layout", "sort order"),
+    SettingEntry("layout", "Pinned pages row", "Inbox & layout", "pins favorites circles"),
+    SettingEntry("layout", "Unread pages first", "Inbox & layout", "sort order"),
     SettingEntry("layout", "Default tab", "Inbox & layout", "start unread inbox"),
     SettingEntry("layout", "Swipe actions", "Inbox & layout", "gestures archive read mute pin"),
     SettingEntry("layout", "Network badges", "Inbox & layout", "icons whatsapp signal"),
     SettingEntry("layout", "Message previews", "Inbox & layout", "snippet"),
     SettingEntry("layout", "Filter bar", "Inbox & layout", "tabs labels"),
     SettingEntry("layout", "Read ticks", "Inbox & layout", "delivered seen"),
-    SettingEntry("chats", "Enter key sends", "Chats", "return newline keyboard"),
-    SettingEntry("chats", "Markdown formatting", "Chats", "bold italic code strikethrough"),
-    SettingEntry("chats", "Swipe to reply", "Chats", "gesture"),
-    SettingEntry("chats", "Message grouping", "Chats", "gap minutes consecutive"),
-    SettingEntry("chats", "Mark as read when", "Chats", "open scroll manual"),
-    SettingEntry("chats", "Open at first unread", "Chats", "jump"),
-    SettingEntry("chats", "Send read receipts", "Chats", "privacy seen"),
-    SettingEntry("chats", "Send typing indicators", "Chats", "privacy typing"),
-    SettingEntry("chats", "Link previews", "Chats", "url cards"),
-    SettingEntry("chats", "Auto-download media", "Chats", "wifi data photos"),
-    SettingEntry("chats", "Auto-play GIFs", "Chats", "animated"),
-    SettingEntry("chats", "Image upload quality", "Chats", "compress original"),
-    SettingEntry("chats", "Unarchive on new message", "Chats", "archive returns"),
-    SettingEntry("chats", "Confirm before deleting", "Chats", "delete"),
+    SettingEntry("chats", "Enter key sends", "Pages", "return newline keyboard"),
+    SettingEntry("chats", "Markdown formatting", "Pages", "bold italic code strikethrough"),
+    SettingEntry("chats", "Swipe to reply", "Pages", "gesture"),
+    SettingEntry("chats", "Message grouping", "Pages", "gap minutes consecutive"),
+    SettingEntry("chats", "Mark as read when", "Pages", "open scroll manual"),
+    SettingEntry("chats", "Open at first unread", "Pages", "jump"),
+    SettingEntry("chats", "Send read receipts", "Pages", "privacy seen"),
+    SettingEntry("chats", "Send typing indicators", "Pages", "privacy typing"),
+    SettingEntry("chats", "Link previews", "Pages", "url cards"),
+    SettingEntry("chats", "Auto-download media", "Pages", "wifi data photos"),
+    SettingEntry("chats", "Auto-play GIFs", "Pages", "animated"),
+    SettingEntry("chats", "Image upload quality", "Pages", "compress original"),
+    SettingEntry("chats", "Unarchive on new message", "Pages", "archive returns"),
+    SettingEntry("chats", "Confirm before deleting", "Pages", "delete"),
     SettingEntry("notifications", "Notifications", "Notifications", "master alerts"),
     SettingEntry("notifications", "Notification content", "Notifications", "preview hide sender"),
     SettingEntry("notifications", "Notify me about", "Notifications", "scope all dms mentions favorites"),
@@ -256,19 +256,19 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
             SettingsGroup("Inbox") {
                 ChoiceRow("Inbox style", listOf("pro" to "Pro: unread counts and network badges", "minimal" to "Minimal: titles only"), s.inboxStyle) { v -> set { copy(inboxStyle = v) } }; GroupDivider()
                 ChoiceRow("Default tab", listOf("inbox" to "Inbox", "unread" to "Unread"), s.defaultTab) { v -> set { copy(defaultTab = v) } }; GroupDivider()
-                SwitchRow("Pinned chats row", "Pinned chats sit above the list as circles", s.showPinsRow) { v -> set { copy(showPinsRow = v) } }; GroupDivider()
-                SwitchRow("Unread chats first", "Unread above read, newest first", s.sortUnreadFirst) { v -> set { copy(sortUnreadFirst = v) } }; GroupDivider()
+                SwitchRow("Pinned pages row", "Pinned pages sit above the list as circles", s.showPinsRow) { v -> set { copy(showPinsRow = v) } }; GroupDivider()
+                SwitchRow("Unread pages first", "Unread above read, newest first", s.sortUnreadFirst) { v -> set { copy(sortUnreadFirst = v) } }; GroupDivider()
                 SwitchRow("Show filter bar", checked = s.showFilterBar) { v -> set { copy(showFilterBar = v) } }; GroupDivider()
                 SwitchRow("Show labels in the filter bar", checked = s.showLabelsInFilterBar, enabled = s.showFilterBar) { v -> set { copy(showLabelsInFilterBar = v) } }
             }
-            SettingsGroup("Chat list") {
+            SettingsGroup("Page list") {
                 ChoiceRow("Density", listOf("comfortable" to "Comfortable", "compact" to "Compact"), s.density) { v -> set { copy(density = v) } }; GroupDivider()
                 SwitchRow("Show avatars", checked = s.showAvatars) { v -> set { copy(showAvatars = v) } }; GroupDivider()
                 SwitchRow("Show network badges", "The small WhatsApp / Signal icon on avatars", s.showNetworkBadges) { v -> set { copy(showNetworkBadges = v) } }; GroupDivider()
-                SwitchRow("Show network name", "Under each chat name", s.showNetworkNameInRows) { v -> set { copy(showNetworkNameInRows = v) } }; GroupDivider()
+                SwitchRow("Show network name", "Under each page name", s.showNetworkNameInRows) { v -> set { copy(showNetworkNameInRows = v) } }; GroupDivider()
                 SwitchRow("Show message previews", checked = s.showPreviews) { v -> set { copy(showPreviews = v) } }
             }
-            SettingsGroup("Swipe actions", footer = "Swipe a chat in the list. Long-press a chat to see every action.") {
+            SettingsGroup("Swipe actions", footer = "Swipe a page in the list. Long-press a page to see every action.") {
                 val swipe = listOf("none" to "Nothing", "archive" to "Archive", "read" to "Mark read / unread", "pin" to "Pin", "mute" to "Mute", "low" to "Low priority", "snooze" to "Snooze 3 hours")
                 ChoiceRow("Swipe right", swipe, s.swipeRight) { v -> set { copy(swipeRight = v) } }; GroupDivider()
                 ChoiceRow("Swipe left", swipe, s.swipeLeft) { v -> set { copy(swipeLeft = v) } }
@@ -279,7 +279,7 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
                 SwitchRow("Haptic feedback", checked = s.haptics) { v -> set { copy(haptics = v) } }
             }
         }
-        "chats" -> SettingsPage("Chats", home) {
+        "chats" -> SettingsPage("Pages", home) {
             SettingsGroup("Sending") {
                 SwitchRow("Enter key sends", "Off: Enter adds a new line", s.enterSends) { v -> set { copy(enterSends = v) } }; GroupDivider()
                 SwitchRow("Markdown formatting", "**bold**, _italic_, ~~strike~~ and `code` are sent as formatted text", s.markdown) { v -> set { copy(markdown = v) } }; GroupDivider()
@@ -288,7 +288,7 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
                 ChoiceRow("Image upload quality", listOf("original" to "Original", "high" to "High (smaller)"), s.imageQuality) { v -> set { copy(imageQuality = v) } }
             }
             SettingsGroup("Reading") {
-                ChoiceRow("Mark as read when", listOf("open" to "I open the chat", "scrolled" to "I reach the newest message", "manual" to "I do it myself"), s.markReadMode) { v -> set { copy(markReadMode = v) } }; GroupDivider()
+                ChoiceRow("Mark as read when", listOf("open" to "I open the page", "scrolled" to "I reach the newest message", "manual" to "I do it myself"), s.markReadMode) { v -> set { copy(markReadMode = v) } }; GroupDivider()
                 SwitchRow("Open at first unread", "Jump to the 'New messages' line", s.openAtFirstUnread) { v -> set { copy(openAtFirstUnread = v) } }; GroupDivider()
                 ChoiceRow("Message grouping", listOf("1" to "Within 1 minute", "5" to "Within 5 minutes", "15" to "Within 15 minutes", "60" to "Within an hour"), s.groupGapMin.toString()) { v -> set { copy(groupGapMin = v.toInt()) } }; GroupDivider()
                 SwitchRow("Large emoji", "Emoji-only messages are shown big", s.largeEmoji) { v -> set { copy(largeEmoji = v) } }
@@ -303,7 +303,7 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
                 SwitchRow("Auto-play GIFs", checked = s.autoPlayGifs) { v -> set { copy(autoPlayGifs = v) } }
             }
             SettingsGroup("Inbox behavior") {
-                SwitchRow("Unarchive on new message", "Archived chats come back when someone writes (unless muted)", s.unarchiveOnMessage) { v -> set { copy(unarchiveOnMessage = v) } }; GroupDivider()
+                SwitchRow("Unarchive on new message", "Archived pages come back when someone writes (unless muted)", s.unarchiveOnMessage) { v -> set { copy(unarchiveOnMessage = v) } }; GroupDivider()
                 SwitchRow("Confirm before deleting", checked = s.confirmDelete) { v -> set { copy(confirmDelete = v) } }
             }
         }
@@ -351,12 +351,12 @@ private fun SettingsHome(navigate: (String) -> Unit, onBack: () -> Unit) {
             SettingsGroup {
                 NavRow("Appearance", "Theme, colors, text size, bubbles", Icons.Rounded.Palette, Color(0xFF8E6CF0)) { navigate("appearance") }; GroupDivider()
                 NavRow("Inbox & layout", "Tabs, pins, swipe actions, density", Icons.Rounded.Tune, Color(0xFF3B82F6)) { navigate("layout") }; GroupDivider()
-                NavRow("Chats", "Sending, reading, privacy, media", Icons.Rounded.Chat, Color(0xFF10B981)) { navigate("chats") }; GroupDivider()
+                NavRow("Pages", "Sending, reading, privacy, media", Icons.Rounded.Chat, Color(0xFF10B981)) { navigate("chats") }; GroupDivider()
                 NavRow("Notifications", "Previews, scope, quiet hours", Icons.Rounded.Notifications, Color(0xFFEF4444)) { navigate("notifications") }
             }
             SettingsGroup {
                 NavRow("Bridges & accounts", "Connected apps and their status", Icons.Rounded.Link, Color(0xFF0EA5E9)) { navigate("bridges") }; GroupDivider()
-                NavRow("Labels", "Organize chats into folders", Icons.AutoMirrored.Rounded.Label, Color(0xFFF59E0B)) { navigate("labels") }; GroupDivider()
+                NavRow("Labels", "Organize pages into folders", Icons.AutoMirrored.Rounded.Label, Color(0xFFF59E0B)) { navigate("labels") }; GroupDivider()
                 NavRow("Stickers & GIFs", "Your stickers, GIF search", Icons.Rounded.EmojiEmotions, Color(0xFFEC4899)) { navigate("media") }
             }
             SettingsGroup {
@@ -430,7 +430,7 @@ private fun AppearancePage() {
         ChoiceRow("Bubble depth", listOf("flat" to "Flat", "soft" to "Soft shadow", "raised" to "Raised"), s.bubbleDepth) { v -> set { copy(bubbleDepth = v) } }; GroupDivider()
         ChoiceRow("Message animation", listOf("none" to "None", "pop" to "Pop", "slide" to "Slide", "fade" to "Fade"), s.messageAnimation) { v -> set { copy(messageAnimation = v) } }; GroupDivider()
         SwitchRow("Screen effects", "Confetti, hearts, balloons and more when a message calls for it", s.screenEffects) { v -> set { copy(screenEffects = v) } }; GroupDivider()
-        ChoiceRow("Chat wallpaper", listOf("none" to "None", "dusk" to "Dusk", "forest" to "Forest", "ocean" to "Ocean", "sand" to "Sand", "graphite" to "Graphite"), s.wallpaper) { v -> set { copy(wallpaper = v) } }; GroupDivider()
+        ChoiceRow("Page wallpaper", listOf("none" to "None", "dusk" to "Dusk", "forest" to "Forest", "ocean" to "Ocean", "sand" to "Sand", "graphite" to "Graphite"), s.wallpaper) { v -> set { copy(wallpaper = v) } }; GroupDivider()
         ChoiceRow("Avatar shape", listOf("circle" to "Circle", "squircle" to "Rounded square"), s.avatarShape) { v -> set { copy(avatarShape = v) } }; GroupDivider()
         ChoiceRow("Time format", listOf("system" to "Follow system", "12" to "12-hour", "24" to "24-hour"), s.timeFormat) { v -> set { copy(timeFormat = v) } }; GroupDivider()
         SwitchRow("Color sender names in groups", checked = s.colorSenderNames) { v -> set { copy(colorSenderNames = v) } }; GroupDivider()
@@ -472,13 +472,13 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
             SwitchRow("Notifications", "Master switch for message alerts", s.notifEnabled) { v -> set { copy(notifEnabled = v) } }; GroupDivider()
             ButtonRow("Send a test notification") { Notifier.test(context, store) }
         }
-        SettingsGroup("What to notify", footer = "Muted and Low priority chats stay quiet except for @mentions, replies to your messages and your keywords.") {
-            ChoiceRow("Notify me about", listOf("all" to "Every message", "dm_mentions" to "Direct messages and mentions", "favorites" to "Pinned chats and mentions"), s.notifScope, s.notifEnabled) { v -> set { copy(notifScope = v) } }; GroupDivider()
+        SettingsGroup("What to notify", footer = "Muted and Low priority pages stay quiet except for @mentions, replies to your messages and your keywords.") {
+            ChoiceRow("Notify me about", listOf("all" to "Every message", "dm_mentions" to "Direct messages and mentions", "favorites" to "Pinned pages and mentions"), s.notifScope, s.notifEnabled) { v -> set { copy(notifScope = v) } }; GroupDivider()
             ChoiceRow("Direct messages", listOf("all" to "Every message", "mentions" to "Mentions and replies only", "none" to "Nothing"), s.notifDirectMode, s.notifEnabled) { v -> set { copy(notifDirectMode = v) } }; GroupDivider()
-            ChoiceRow("Group chats", listOf("all" to "Every message", "mentions" to "Mentions and replies only", "none" to "Nothing"), s.notifGroupMode, s.notifEnabled) { v -> set { copy(notifGroupMode = v) } }; GroupDivider()
-            SwitchRow("Groups: only when mentioned", "Group chats stay quiet unless someone @mentions you", s.notifGroupMentionsOnly, s.notifEnabled) { v -> set { copy(notifGroupMentionsOnly = v) } }
+            ChoiceRow("Group pages", listOf("all" to "Every message", "mentions" to "Mentions and replies only", "none" to "Nothing"), s.notifGroupMode, s.notifEnabled) { v -> set { copy(notifGroupMode = v) } }; GroupDivider()
+            SwitchRow("Groups: only when mentioned", "Group pages stay quiet unless someone @mentions you", s.notifGroupMentionsOnly, s.notifEnabled) { v -> set { copy(notifGroupMentionsOnly = v) } }
         }
-        SettingsGroup("Keywords", footer = "A message with one of these words always notifies you, even in a muted chat. Whole words only.") {
+        SettingsGroup("Keywords", footer = "A message with one of these words always notifies you, even in a muted page. Whole words only.") {
             if (s.notifKeywords.isNotEmpty()) FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 s.notifKeywords.forEach { k ->
                     Row(Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable { set { copy(notifKeywords = notifKeywords - k) } }.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -502,7 +502,7 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
                 context.startActivity(Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName).putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Notifier.CH_ALL).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
         }
-        SettingsGroup("Delay", footer = "Waits, then skips the alert if you already read the chat on another device or app.") {
+        SettingsGroup("Delay", footer = "Waits, then skips the alert if you already read the page on another device or app.") {
             ChoiceRow("Wait before alerting", listOf(0 to "Don't wait", 5 to "5 seconds", 15 to "15 seconds", 30 to "30 seconds", 60 to "1 minute").map { it.first.toString() to it.second }, s.notifDelaySec.toString(), s.notifEnabled) { v -> set { copy(notifDelaySec = v.toInt()) } }
         }
         SettingsGroup("Quiet hours", footer = "Messages still arrive, silently.") {
@@ -517,10 +517,10 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
                     }
                 }
                 GroupDivider()
-                SwitchRow("Let important ones through", "Pinned chats, mentions, replies and keywords still make a sound", s.notifQuietBreakThrough) { v -> set { copy(notifQuietBreakThrough = v) } }
+                SwitchRow("Let important ones through", "Pinned pages, mentions, replies and keywords still make a sound", s.notifQuietBreakThrough) { v -> set { copy(notifQuietBreakThrough = v) } }
             }
         }
-        SettingsGroup("Per network", footer = "Pick how each app notifies you. A chat's own setting (in its info page) wins.") {
+        SettingsGroup("Per network", footer = "Pick how each app notifies you. A page's own setting (in its info page) wins.") {
             known.forEachIndexed { i, id ->
                 if (i > 0) GroupDivider()
                 ChoiceRow(
@@ -530,7 +530,7 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
             }
         }
         val custom = s.notifChat.filterValues { !it.isDefault }
-        if (custom.isNotEmpty()) SettingsGroup("Chats with their own settings") {
+        if (custom.isNotEmpty()) SettingsGroup("Pages with their own settings") {
             val chats by store.chats.collectAsState()
             custom.entries.forEachIndexed { i, (room, p) ->
                 if (i > 0) GroupDivider()
@@ -602,7 +602,7 @@ private fun StickersAndGifsPage(onBack: () -> Unit) {
             ChoiceRow("Provider", listOf("giphy" to "Giphy", "tenor" to "Tenor"), s.gifProvider) { v -> store.settings.update { copy(gifProvider = v) } }; GroupDivider()
             TextFieldRow("API key", s.gifKey, "Paste your key", secret = true) { v -> store.settings.update { copy(gifKey = v) } }
         }
-        SettingsGroup("My stickers", footer = "Stickers are saved to your Matrix account, so they follow you to other devices. Chats you share a sticker pack with appear in the sticker tray too.") {
+        SettingsGroup("My stickers", footer = "Stickers are saved to your Matrix account, so they follow you to other devices. Pages you share a sticker pack with appear in the sticker tray too.") {
             ButtonRow("Add stickers from photos…") { pick.launch("image/*") }
             GroupDivider()
             Text(if (pack?.stickers.isNullOrEmpty()) "No stickers yet" else "${pack!!.stickers.size} stickers", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -618,14 +618,14 @@ private fun LabelsPage(onBack: () -> Unit) {
     var renaming by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<String?>(null) }
     SettingsPage("Labels", onBack) {
-        Text("Labels work like folders. Add one from a chat's menu, then filter your inbox by it.", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (labels.isEmpty()) EmptyState(Icons.AutoMirrored.Rounded.Label, "No labels yet", "Long-press a chat, choose Labels, and create one.")
+        Text("Labels work like folders. Add one from a page's menu, then filter your inbox by it.", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (labels.isEmpty()) EmptyState(Icons.AutoMirrored.Rounded.Label, "No labels yet", "Long-press a page, choose Labels, and create one.")
         else SettingsGroup {
             labels.forEachIndexed { i, name ->
                 if (i > 0) GroupDivider()
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconTile(Icons.AutoMirrored.Rounded.Label, Color(0xFFF59E0B))
-                    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) { Text(name); Text("${chats.values.count { name in it.labels }} chats", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) { Text(name); Text("${chats.values.count { name in it.labels }} pages", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     TextButton(onClick = { renaming = name }) { Text("Rename") }
                     IconBtn(Icons.Rounded.Delete, "Delete label", { confirmDelete = name }, tint = MaterialTheme.colorScheme.error)
                 }
@@ -639,7 +639,7 @@ private fun LabelsPage(onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancel") } })
     }
     confirmDelete?.let { name ->
-        AlertDialog(onDismissRequest = { confirmDelete = null }, title = { Text("Delete “$name”?") }, text = { Text("The label is removed from every chat. The chats themselves aren't touched.") },
+        AlertDialog(onDismissRequest = { confirmDelete = null }, title = { Text("Delete “$name”?") }, text = { Text("The label is removed from every page. The pages themselves aren't touched.") },
             confirmButton = { TextButton(onClick = { store.deleteLabel(name); confirmDelete = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } })
     }
@@ -662,7 +662,7 @@ private fun StorageSettings(navigate: (String) -> Unit) {
             ButtonRow("Restore settings from clipboard") { message = if (store.importSettings(clipboard.getText()?.text.orEmpty())) "Settings restored." else "The clipboard doesn't contain Pager settings." }
             message?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium) }
         }
-        SettingsGroup("Reset", footer = "Puts every setting back to its default. Your chats and accounts aren't touched.") { ButtonRow("Reset all settings", danger = true) { confirmReset = true } }
+        SettingsGroup("Reset", footer = "Puts every setting back to its default. Your pages and accounts aren't touched.") { ButtonRow("Reset all settings", danger = true) { confirmReset = true } }
     }
     if (confirmReset) AlertDialog(
         onDismissRequest = { confirmReset = false }, title = { Text("Reset all settings?") },
@@ -719,7 +719,7 @@ fun DeleteProfileDialog(onDismiss: () -> Unit) {
         onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Delete your profile?") },
         text = {
             Column {
-                Text("This deletes your account on this server, disconnects all your apps and removes your messages here. Your chats on WhatsApp, Signal and the others are not touched. This can't be undone.")
+                Text("This deletes your account on this server, disconnects all your apps and removes your messages here. Your pages on WhatsApp, Signal and the others are not touched. This can't be undone.")
                 androidx.compose.material3.OutlinedTextField(pw, { pw = it }, Modifier.padding(top = 12.dp), singleLine = true, label = { Text("Your password") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
                 if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
             }

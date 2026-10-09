@@ -149,8 +149,8 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
               {<div className="chat-sub"><i style={{ background: meta.color }} />{meta.label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</div>}
             </div>
           </button>
-          <IconButton icon={Search} label="Search in chat (Ctrl+F)" onClick={() => nav(`search:${roomId}`)} />
-          <IconButton icon={Info} label="Chat info" onClick={() => setInfoOpen(!infoOpen)} active={infoOpen} />
+          <IconButton icon={Search} label="Search in page (Ctrl+F)" onClick={() => nav(`search:${roomId}`)} />
+          <IconButton icon={Info} label="Page info" onClick={() => setInfoOpen(!infoOpen)} active={infoOpen} />
         </header>
 
         <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll}>
@@ -213,7 +213,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
       )}
       {confirmDel && (
         <Modal title="Delete message?" onClose={() => setConfirmDel(undefined)}>
-          <p className="muted">It will be removed for everyone in the chat where the network allows it.</p>
+          <p className="muted">It will be removed for everyone in the page where the network allows it.</p>
           <div className="row-end"><button className="link" onClick={() => setConfirmDel(undefined)}>Cancel</button><button className="primary danger" onClick={() => { remove(roomId, confirmDel.id); setConfirmDel(undefined); }}>Delete</button></div>
         </Modal>
       )}
@@ -414,7 +414,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
   const labels = labelsOf(chat);
   return (
     <aside className="info">
-      <header><b>Chat info</b><IconButton icon={X} label="Close" onClick={onClose} /></header>
+      <header><b>Page info</b><IconButton icon={X} label="Close" onClick={onClose} /></header>
       <div className="info-body">
         <div className="info-id"><Avatar name={name} mxc={chat.avatarMxc} size={88} network={chat.network} /><h3>{name}</h3><small>{networkMeta(chat.network).label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</small>
           {isGroup(chat) && <button className="link" onClick={() => { const n = prompt("Rename group", chat.name); if (n?.trim()) rename(chat.id, n.trim()); }}>Rename group</button>}</div>
@@ -432,12 +432,12 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
         </div>
         <SheetItem icon={Tag} label="Labels" hint={labels.length ? labels.join(", ") : "None"} onClick={() => nav(`settings/labels`)} />
         <SheetItem icon={Bell} label="Notifications" hint={notifSummary(st.notifChat[chat.id])} onClick={() => setNotifDlg(true)} />
-        <SheetItem icon={Hourglass} label="Snooze…" hint="Hide this chat and bring it back later" onClick={() => setWhen("snooze")} />
+        <SheetItem icon={Hourglass} label="Snooze…" hint="Hide this page and bring it back later" onClick={() => setWhen("snooze")} />
         <div className="tabs flat">{(["photos", "links", "files"] as const).map((t) => <button key={t} className={"tab" + (tab === t ? " on" : "")} onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)} {t === "photos" ? photos.length : t === "links" ? links.length : files.length}</button>)}</div>
-        {tab === "photos" && (photos.length ? <div className="photo-grid">{photos.slice(0, 60).map((m) => <Thumb key={m.id} mxc={m.mxc!} onClick={() => onViewImage(m.id)} />)}</div> : <p className="muted pad">No photos loaded yet. Scroll up in the chat to load more.</p>)}
+        {tab === "photos" && (photos.length ? <div className="photo-grid">{photos.slice(0, 60).map((m) => <Thumb key={m.id} mxc={m.mxc!} onClick={() => onViewImage(m.id)} />)}</div> : <p className="muted pad">No photos loaded yet. Scroll up in the page to load more.</p>)}
         {tab === "links" && (links.length ? <ul className="plain">{links.slice(0, 40).map(({ m, u }) => <li key={m.id}><a className="list-btn col" href={u} target="_blank" rel="noreferrer noopener"><span className="clip"><Link2 size={14} /> {u}</span><small>{nameOf(chat, m.sender)} · {new Date(m.ts).toLocaleDateString()}</small></a></li>)}</ul> : <p className="muted pad">No links shared.</p>)}
         {tab === "files" && (files.length ? <ul className="plain">{files.slice(0, 40).map((m) => <li key={m.id}><button className="list-btn col" onClick={() => void download(m)}><span className="clip"><FileText size={14} /> {m.body || previewOf(m)}</span><small>{nameOf(chat, m.sender)}{m.size ? ` · ${humanSize(m.size)}` : ""}</small></button></li>)}</ul> : <p className="muted pad">No files shared.</p>)}
-        <SheetItem icon={LogOut} label="Delete chat" danger onClick={() => setConfirmLeave(true)} />
+        <SheetItem icon={LogOut} label="Delete page" danger onClick={() => setConfirmLeave(true)} />
         <h4>Members{list ? ` (${Object.keys(list).length})` : ""}</h4>
         <ul className="plain">{Object.entries(list ?? chat.members).sort((a, b) => a[1].localeCompare(b[1])).map(([id, n]) => <li key={id} className="member"><Avatar name={n} size={34} /><div>{id === user ? `${n} (you)` : n}<small>{id}</small></div></li>)}</ul>
       </div>
@@ -455,14 +455,14 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
                 <Select title="Sound" value={p.sound ?? "default"} options={[["default", "Use my general settings"], ["off", "Silent"]]} onChange={(v) => set({ sound: v })} />
                 <Select title="Alert sound" value={p.soundId ?? "default"} options={[["default", "Use the app or network sound"], ...SOUNDS]} onChange={(v) => { set({ soundId: v }); if (v !== "default") playSound(v, st.notifSoundVolume); }} />
                 <Select title="Message previews" value={p.preview ?? "default"} options={[["default", "Use my general settings"], ["show", "Show message"], ["hide", "Hide message"]]} onChange={(v) => set({ preview: v })} />
-                <p className="muted">Mute and Low priority still apply: muted chats only notify for mentions, replies and your keywords.</p>
+                <p className="muted">Mute and Low priority still apply: muted pages only notify for mentions, replies and your keywords.</p>
                 <div className="row-end"><button className="link" onClick={() => { const { [chat.id]: _x, ...rest } = st.notifChat; updateSettings({ notifChat: rest }); }}>Reset</button><button className="primary" onClick={() => setNotifDlg(false)}>Done</button></div>
               </>;
             })()}
           </div>
         </Modal>
       )}
-      {confirmLeave && <Modal title="Delete this chat?" onClose={() => setConfirmLeave(false)}><p className="muted">It will be removed from Pager. The conversation on {networkMeta(chat.network).label} isn't deleted, and it comes back if someone writes again.</p><div className="row-end"><button className="link" onClick={() => setConfirmLeave(false)}>Cancel</button><button className="primary danger" onClick={() => { leave(chat.id); nav("home"); }}>Delete</button></div></Modal>}
+      {confirmLeave && <Modal title="Delete this page?" onClose={() => setConfirmLeave(false)}><p className="muted">It will be removed from Pager. The conversation on {networkMeta(chat.network).label} isn't deleted, and it comes back if someone writes again.</p><div className="row-end"><button className="link" onClick={() => setConfirmLeave(false)}>Cancel</button><button className="primary danger" onClick={() => { leave(chat.id); nav("home"); }}>Delete</button></div></Modal>}
     </aside>
   );
 }

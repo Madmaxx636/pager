@@ -76,7 +76,7 @@ export function NewChat({ onBack, onOpen }: { onBack: () => void; onOpen: (roomI
 
   async function start(w: Way) {
     setBusy(true); setError(""); setChoose(undefined);
-    try { const room = await pager.createDm(w.net.id, w.login, w.id); room ? onOpen(room) : setError("Couldn't open that chat"); }
+    try { const room = await pager.createDm(w.net.id, w.login, w.id); room ? onOpen(room) : setError("Couldn't open that page"); }
     catch (e) { setError((e as Error).message); }
     setBusy(false);
   }
@@ -116,7 +116,7 @@ export function NewChat({ onBack, onOpen }: { onBack: () => void; onOpen: (roomI
             </ul>
             {loading && <p className="muted pad">Finding your contacts…</p>}
             {!loading && !shown.length && <p className="muted pad">{q ? "No one by that name yet. Use the row above to message a number or username." : "No contacts yet."}</p>}
-            {busy && <p className="muted pad">Opening chat…</p>}
+            {busy && <p className="muted pad">Opening page…</p>}
             {note && <p className="accent pad">{note}</p>}
             <div className="pad"><button className="pill" onClick={() => file.current?.click()}><Upload size={15} /> Import contacts (.vcf)</button>
               <input ref={file} type="file" accept=".vcf,text/vcard,text/x-vcard" hidden onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = ""; }} />

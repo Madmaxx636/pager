@@ -47,7 +47,7 @@ fun AuthScreen(store: Store) {
         PagerMascot(120.dp)
         Spacer(Modifier.height(20.dp))
         Text(if (signingUp) "Create your account" else "Welcome to Pager", style = MaterialTheme.typography.headlineMedium)
-        Text("All your chats in one inbox, on your own server.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+        Text("All your pages in one inbox, on your own server.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(28.dp))
 
         OutlinedTextField(server, { server = it }, label = { Text("Server") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, placeholder = { Text("matrix.example.com") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
