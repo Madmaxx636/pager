@@ -340,7 +340,8 @@ async function syncLoop(s: Session, signal: AbortSignal) {
   while (!signal.aborted) {
     try {
       const res = await matrix.sync(since, signal);
-      await decryptSync(res);
+      // If reading the encrypted parts goes wrong, show the update with those messages still locked rather than never moving on.
+      try { await decryptSync(res); } catch (e) { console.warn("problem decrypting an update", e); }
       const initial = since === undefined;
       const r = applySync(state.chats, res, s.userId, initial);
       set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}), ...(r.userStickers ? { userStickers: r.userStickers } : {}) });
