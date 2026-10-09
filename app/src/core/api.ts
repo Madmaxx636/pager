@@ -86,6 +86,8 @@ export const pager = {
     bridges: () => call<{ bridges: { id: string; name: string; up: boolean }[] }>("GET", "/api/admin/bridges").then((r) => r.bridges),
   },
   config: () => call<ServerConfig>("GET", "/api/config"),
+  /** Asks the server to turn on encryption for a page from a connected app (you are not allowed to change those yourself). */
+  encryptRoom: (roomId: string) => call<{ ok: boolean; already?: boolean }>("POST", `/api/rooms/${enc(roomId)}/encrypt`, {}),
   signup: (username: string, password: string, invite: string) => call("POST", "/api/signup", { username, password, invite }),
   networks: () => call<{ networks: Network[] }>("GET", "/api/bridges").then((r) => r.networks),
   flows: (net: string) => call<{ flows: LoginFlow[] }>("GET", `/api/bridges/${net}/login/flows`).then((r) => r.flows),

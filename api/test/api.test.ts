@@ -2,6 +2,9 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { createHmac } from "node:crypto";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../src/app.ts";
 import type { Config } from "../src/config.ts";
@@ -21,6 +24,7 @@ let synapse: Server, bridge: Server, api: Server;
 let base: string;
 const registered: any[] = [];
 const adminCalls: { method: string; url: string; body: any }[] = [];
+const stateCalls: { url: string; auth?: string; body: any }[] = [];
 const bridgeCalls: { method: string; url: string; auth?: string; body: any }[] = [];
 
 before(async () => {
@@ -38,6 +42,14 @@ before(async () => {
       return req.headers.authorization === "Bearer goodtoken" ? json(res, 200, { user_id: "@alice:test.local" })
         : req.headers.authorization === "Bearer admintoken" ? json(res, 200, { user_id: "@root:test.local" })
         : json(res, 401, { errcode: "M_UNKNOWN_TOKEN" });
+    // Rooms: alice is in !room:test.local with the WhatsApp bot; nobody else is.
+    if (decodeURIComponent(req.url!).includes("/rooms/!room:test.local/joined_members")) return req.headers.authorization === "Bearer goodtoken" ? json(res, 200, { joined: { "@alice:test.local": {}, "@whatsappbot:test.local": {} } }) : json(res, 403, { errcode: "M_FORBIDDEN" });
+    if (decodeURIComponent(req.url!).includes("/rooms/!plain:test.local/joined_members")) return json(res, 200, { joined: { "@alice:test.local": {}, "@bob:test.local": {} } });
+    if (req.url!.includes("/state/m.room.encryption")) {
+      if (req.method === "GET") return json(res, 404, { errcode: "M_NOT_FOUND" });
+      stateCalls.push({ url: req.url!, auth: req.headers.authorization, body: await readBody(req) });
+      return json(res, 200, { event_id: "$e" });
+    }
     // Password check used by "recover account": only rootpass works for @root.
     if (req.url === "/_matrix/client/v3/login" && req.method === "POST") {
       const b = await readBody(req);
@@ -79,6 +91,7 @@ before(async () => {
     provisioningSecret: "provsecret",
     signup: { mode: "invite", inviteCode: "family", adminInviteCode: "boss" },
     bridges: [{ id: "whatsapp", name: "WhatsApp", url: `http://127.0.0.1:${bp}` }],
+    bridgesDir: (() => { const d = mkdtempSync(join(tmpdir(), "pager-reg-")); mkdirSync(join(d, "whatsapp")); writeFileSync(join(d, "whatsapp", "registration.yaml"), "id: whatsapp\nas_token: asbridge\nhs_token: x\nsender_localpart: whatsappbot\n"); return d; })(),
   };
   api = createApp(cfg);
   base = `http://127.0.0.1:${await listen(api)}`;
@@ -275,4 +288,22 @@ test("recover account: five wrong passwords lock the screen for a while", async 
   const call = (pw: string) => fetch(`${base}/api/admin/users/${encodeURIComponent("@alice:test.local")}/recover`, { method: "POST", headers: { authorization: "Bearer admintoken", "content-type": "application/json" }, body: JSON.stringify({ adminPassword: pw }) });
   for (let i = 0; i < 5; i++) assert.equal((await call("wrong")).status, 403);
   assert.equal((await call("rootpass")).status, 429);
+});
+
+test("a member can have the server turn on encryption for a page from a connected app, as that app's bot", async () => {
+  stateCalls.length = 0;
+  const r = await post("/api/rooms/" + encodeURIComponent("!room:test.local") + "/encrypt", {}, "goodtoken");
+  assert.equal(r.status, 200);
+  assert.equal(stateCalls.length, 1);
+  assert.equal(stateCalls[0].auth, "Bearer asbridge");
+  assert.ok(decodeURIComponent(stateCalls[0].url).includes("user_id=@whatsappbot:test.local"));
+  assert.equal(stateCalls[0].body.algorithm, "m.megolm.v1.aes-sha2");
+});
+
+test("turning on encryption this way needs you to be in the page, and the page to come from a connected app", async () => {
+  stateCalls.length = 0;
+  assert.equal((await post("/api/rooms/" + encodeURIComponent("!room:test.local") + "/encrypt", {}, "admintoken")).status, 403); // not a member
+  assert.equal((await post("/api/rooms/" + encodeURIComponent("!plain:test.local") + "/encrypt", {}, "goodtoken")).status, 400); // no bridge bot in it
+  assert.equal((await post("/api/rooms/" + encodeURIComponent("!room:test.local") + "/encrypt", {})).status, 401);
+  assert.equal(stateCalls.length, 0);
 });

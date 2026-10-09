@@ -309,7 +309,12 @@ export async function enableEncryption(roomId: string): Promise<void> {
   const bots = ids.filter((u) => /^@[a-z]*bot:/.test(u));
   if (!(await e2ee.botsCanEncrypt(bots))) throw new Error("This page's app isn't set up for encryption on your server yet (the server admin turns it on)");
   try { await matrix.setState(roomId, "m.room.encryption", { algorithm: "m.megolm.v1.aes-sha2", rotation_period_ms: 604_800_000, rotation_period_msgs: 100 }); }
-  catch (e) { throw new Error(e instanceof ApiError && e.status === 403 ? "Your account isn't allowed to change this page's settings" : (e as Error).message); }
+  catch (e) {
+    if (!(e instanceof ApiError && e.status === 403)) throw new Error((e as Error).message);
+    // Pages from connected apps belong to the app's bot, so you can't change them yourself: the server does it for you.
+    try { await pager.encryptRoom(roomId); }
+    catch (x) { throw new Error(x instanceof ApiError && x.status === 409 ? "The server isn't set up to turn encryption on for you (the admin turns on server control)" : (x as Error).message); }
+  }
   patchChat(roomId, (c) => ({ ...c, encrypted: true }));
 }
 

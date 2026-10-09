@@ -38,3 +38,12 @@ export function writeSettings(dir: string, id: string, values: Record<string, un
   if (changed.length) { writeFileSync(f + ".bak", readFileSync(f)); writeFileSync(f, String(doc)); }
   return changed;
 }
+
+/** What a bridge's registration file says about its bot: the token it acts with and the bot's name. */
+export function readRegistration(dir: string, id: string): { asToken: string; bot: string } | undefined {
+  const f = join(dir, id, "registration.yaml");
+  if (!existsSync(f)) return undefined;
+  const doc = parseDocument(readFileSync(f, "utf8"));
+  const asToken = doc.get("as_token"), bot = doc.get("sender_localpart");
+  return typeof asToken === "string" && typeof bot === "string" ? { asToken, bot } : undefined;
+}
