@@ -332,3 +332,18 @@ button:active:not(:disabled) { transform: scale(.94); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(16px) scale(.96); } }
 :root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+
+/* Admin page */
+.admin-bridges { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 16px 10px; }
+.admin-bridge { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; background: var(--panel-2); font-weight: 600; font-size: .9rem; } .admin-bridge i { width: 9px; height: 9px; border-radius: 50%; } .admin-bridge small { color: var(--muted); font-weight: 500; } .admin-bridge.down { outline: 1px solid var(--danger); }
+.admin-list { display: grid; gap: 12px; padding: 4px 12px 24px; }
+.admin-card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; } .admin-card.gone { opacity: .55; }
+.admin-card header { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; }
+.admin-av { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 1.1rem; flex: none; }
+.admin-who { flex: 1; min-width: 0; display: grid; } .admin-who b { font-size: 1.02rem; } .admin-who small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-badges { display: flex; gap: 6px; } .badge-pill { padding: 3px 10px; border-radius: 999px; background: var(--panel-2); font-size: .74rem; font-weight: 700; } .badge-pill.admin { background: var(--accent); color: var(--accent-ink); } .badge-pill.off { color: var(--danger); }
+.admin-apps { padding: 0 16px 6px; display: grid; gap: 2px; }
+.admin-app { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); } .admin-app div { display: grid; min-width: 0; } .admin-app small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-state { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; color: var(--muted); } .admin-state .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.admin-card footer { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--panel-2) 40%, transparent); }
+@media (max-width: 520px) { .admin-app { grid-template-columns: auto 1fr auto; } .admin-app .link { grid-column: 2 / -1; justify-self: start; } }

@@ -112,6 +112,22 @@ export function createApp(cfg: Config) {
       const target = parts[2] ? decodeURIComponent(parts[2]) : "";
       if (target && !/^@[a-z0-9._=\-/+]+:[a-z0-9.\-:]+$/i.test(target)) throw new HttpError(400, "Bad user id");
 
+      // Everyone, with what each person has connected, in one call.
+      if (parts[1] === "overview" && parts.length === 2 && method === "GET") {
+        const r = await synapseAdmin(cfg, token, "GET", "/_synapse/admin/v2/users?from=0&limit=500&guests=false&order_by=creation_ts");
+        const bots = new RegExp(`^@(${cfg.bridges.map((b) => b.id).join("|")})bot:`);
+        const people = (r.users ?? []).filter((u: any) => !bots.test(u.name) && !u.is_guest);
+        const users = await Promise.all(people.map(async (u: any) => {
+          const networks = u.deactivated ? [] : (await Promise.all(cfg.bridges.map(async (b) => {
+            try {
+              const who = await Promise.race([bridgeRequest(cfg, b, u.name, "GET", "/whoami"), new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timed out")), 4000))]);
+              return { id: b.id, name: b.name, logins: who.logins ?? [] };
+            } catch (e) { return { id: b.id, name: b.name, logins: [], error: (e as Error).message }; }
+          }))).filter((n) => n.logins.length || n.error);
+          return { id: u.name, displayname: u.displayname ?? "", admin: !!u.admin, deactivated: !!u.deactivated, created: u.creation_ts, you: u.name === me, networks };
+        }));
+        return send(res, 200, { users });
+      }
       if (parts[1] === "users" && parts.length === 2 && method === "GET") {
         const r = await synapseAdmin(cfg, token, "GET", "/_synapse/admin/v2/users?from=0&limit=500&guests=false&order_by=creation_ts");
         const bots = new RegExp(`^@(${cfg.bridges.map((b) => b.id).join("|")})bot:`);

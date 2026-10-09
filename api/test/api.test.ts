@@ -188,3 +188,12 @@ test("admins can close signups and make a new invite code", async () => {
   assert.notEqual(r.inviteCode, "family");
   assert.equal((await post("/api/signup", { username: "erin", password: "longenough", invite: "family" })).status, 403);
 });
+
+test("admins get everyone with their connected apps in one call", async () => {
+  const h = { authorization: "Bearer admintoken" };
+  const r: any = await (await fetch(base + "/api/admin/overview", { headers: h })).json();
+  assert.deepEqual(r.users.map((u: any) => u.id), ["@root:test.local", "@alice:test.local"]);
+  assert.equal(r.users[1].networks[0].id, "whatsapp");
+  assert.equal(r.users[1].networks[0].logins[0].id, "123");
+  assert.equal((await fetch(base + "/api/admin/overview", { headers: { authorization: "Bearer goodtoken" } })).status, 403);
+});

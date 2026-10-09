@@ -37,6 +37,7 @@ data class LoginStep(
 
 /** The Pager API (signup + in-app bridge login) on the user's own server. */
 data class AdminUser(val id: String, val admin: Boolean, val deactivated: Boolean, val created: Long, val you: Boolean)
+data class AdminPerson(val user: AdminUser, val displayname: String, val networks: List<Network>)
 data class ServerSettings(val domain: String, val signup: String, val inviteCode: String)
 
 class PagerApi(private val http: Http) {
@@ -46,6 +47,19 @@ class PagerApi(private val http: Http) {
         val o = it.obj()
         AdminUser(o["id"].str().orEmpty(), (o["admin"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true, (o["deactivated"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true,
             (o["created"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: 0L, (o["you"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true)
+    }
+    /** Everyone, with what each person has connected, in one call. */
+    suspend fun adminOverview(): List<AdminPerson> = http.request("GET", "/api/admin/overview")["users"].arr().map {
+        val o = it.obj()
+        AdminPerson(
+            AdminUser(o["id"].str().orEmpty(), (o["admin"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true, (o["deactivated"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true,
+                (o["created"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: 0L, (o["you"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true),
+            o["displayname"].str().orEmpty(),
+            o["networks"].arr().map { n ->
+                val no = n.obj()
+                Network(no["id"].str().orEmpty(), no["name"].str().orEmpty(), no["logins"].arr().map { l -> l.obj().let { lo -> Login(lo["id"].str().orEmpty(), lo["name"].str() ?: lo["profile"].obj()["name"].str() ?: lo["id"].str().orEmpty(), lo["state_event"].str() ?: "") } }, no["error"] != null)
+            },
+        )
     }
     suspend fun adminLogins(id: String): List<Network> = http.request("GET", "/api/admin/users/${enc(id)}/logins")["networks"].arr().map { n ->
         val o = n.obj()

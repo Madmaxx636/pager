@@ -49,11 +49,13 @@ export function parseCookies(text: string): Record<string, string> {
   return out;
 }
 
+export interface AdminPerson extends AdminUser { networks: (Network & { error?: string })[] }
 export interface AdminUser { id: string; displayname: string; admin: boolean; deactivated: boolean; created?: number; you: boolean }
 
 export const pager = {
   me: () => call<{ user_id: string; admin: boolean }>("GET", "/api/me"),
   admin: {
+    overview: () => call<{ users: AdminPerson[] }>("GET", "/api/admin/overview").then((r) => r.users),
     users: () => call<{ users: AdminUser[] }>("GET", "/api/admin/users").then((r) => r.users),
     logins: (id: string) => call<{ networks: Network[] }>("GET", `/api/admin/users/${enc(id)}/logins`).then((r) => r.networks),
     logout: (id: string, net: string, login: string) => call("POST", `/api/admin/users/${enc(id)}/logout/${enc(net)}/${enc(login)}`, {}),
