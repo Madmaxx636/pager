@@ -175,7 +175,9 @@ class Store(private val context: Context) {
         loadCache(s.userId)
         _session.value = s
         syncJob?.cancel()
-        syncJob = scope.launch { kotlinx.coroutines.withTimeoutOrNull(8_000) { startE2ee(s) }; syncLoop(s) } // messages wait a moment for encryption, never for long
+        // Messages wait for encryption to start (a slow phone can take a while). Starting must never be cut short or skipped: the keys other devices send
+        // arrive in the same updates, and an update read without encryption running loses them for good.
+        syncJob = scope.launch { kotlinx.coroutines.withTimeoutOrNull(90_000) { startE2ee(s) }; syncLoop(s) }
         scope.launch { refreshBridges() }
         scope.launch { runCatching { pager.isAdmin() }.onSuccess { _isAdmin.value = it } }
     }
@@ -351,7 +353,7 @@ class Store(private val context: Context) {
 
     private suspend fun decryptSync(res: JsonObject): JsonObject {
         val e = e2ee ?: return res
-        e.receiveSync(res)
+        try { e.receiveSync(res) } catch (x: CancellationException) { throw x } catch (_: Throwable) { delay(500); e.receiveSync(res) } // keys in this update must not be dropped
         val rooms = res["rooms"] as? JsonObject ?: return res
         val join = rooms["join"] as? JsonObject ?: return res
         val newJoin = JsonObject(join.mapValues { (roomId, room) ->
