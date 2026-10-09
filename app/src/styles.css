@@ -348,3 +348,16 @@ button:active:not(:disabled) { transform: scale(.94); }
 code.copy { display: block; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); font: 0.85rem ui-monospace, monospace; cursor: copy; overflow-x: auto; white-space: nowrap; }
 .admin-log { max-height: 55vh; overflow: auto; margin: 0 0 12px; padding: 12px; border-radius: 12px; background: #0a0d12; color: #c9d4e3; font: 0.78rem/1.45 ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; }
 .admin-set { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 0; } .admin-set div { display: grid; } .admin-set small { color: var(--muted); } .admin-set input[type=number] { width: 110px; }
+
+/* Pages header and the Stories row */
+.pages-title { display: flex; align-items: center; gap: 8px; }
+.pages-title .mascot { flex: none; animation-duration: 3s; }
+.stories-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; margin: 2px 0 6px; text-align: left; border-radius: 14px; }
+.stories-row:hover, .stories-row.sel { background: var(--panel-2); }
+.stories-row .col { flex: 1; min-width: 0; display: flex; flex-direction: column; } .stories-row small { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stories-ring { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); border: 2px dashed var(--line); }
+.stories-ring.new { color: var(--accent); border: 2px solid var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.page-hero { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 16px 6px; text-align: center; } .page-hero h3 { margin: 0; font-size: 1.15rem; }
+.way-chips { display: flex; gap: 4px; margin-left: auto; } .way-chips i { font-style: normal; font-size: .62rem; font-weight: 700; color: #fff; border-radius: 6px; padding: 2px 5px; }
+.way-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; margin: 0 6px; }
+.modal.sheet { max-width: 360px; padding: 18px; } .modal.sheet h3 { margin: 0 0 2px; }

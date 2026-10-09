@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -127,7 +128,9 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
     val store = LocalStore.current
     val s = LocalSettings.current
     val session by store.session.collectAsState()
-    val all by store.inbox.collectAsState()
+    val everything by store.inbox.collectAsState()
+    val stories = everything.firstOrNull { it.stories }
+    val all = remember(everything) { everything.filter { !it.stories } }
     val synced by store.synced.collectAsState()
     val bridges by store.bridges.collectAsState()
     val labels by store.labels.collectAsState()
@@ -202,7 +205,11 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             } else {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 4.dp, top = 8.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Chats", style = MaterialTheme.typography.headlineMedium)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            PagerMascot(34.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Pages", style = MaterialTheme.typography.headlineMedium)
+                        }
                         if (totalUnread > 0) Text("$totalUnread unread", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                     }
                     IconBtn(Icons.Rounded.Search, "Search all messages", onSearch)
@@ -246,6 +253,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             }
 
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+                if (stories != null && tab == "inbox" && q.isEmpty() && !selecting) item("stories") { StoriesRow(stories) { onOpen(stories.id) } }
                 if (pins.isNotEmpty()) item("pins") {
                     PinnedGrid(pins, onOpen = { id -> if (selecting) toggleSelect(id) else onOpen(id) }, onMenu = { menuFor = it }, onMove = { id, to -> store.movePin(id, to) })
                 }
@@ -287,7 +295,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
                 Modifier.align(Alignment.BottomEnd).padding(20.dp).size(60.dp).clip(RoundedCornerShape(20.dp))
                     .background(MaterialTheme.colorScheme.primary).clickable(onClick = onNewChat),
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.Edit, "New chat", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(26.dp)) }
+            ) { Icon(Icons.Rounded.Edit, "Page someone", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(26.dp)) }
         }
     }
 
@@ -549,5 +557,23 @@ private fun PinnedGrid(pins: List<ChatSummary>, onOpen: (String) -> Unit, onMenu
                 repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
+    }
+}
+
+/** WhatsApp stories: the bridge keeps every status update in one room, shown here as a row of its own. */
+@Composable
+private fun StoriesRow(c: ChatSummary, onClick: () -> Unit) {
+    val fresh = c.unread > 0
+    val accent = MaterialTheme.colorScheme.primary
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(48.dp).border(if (fresh) 2.5.dp else 1.5.dp, if (fresh) accent else MaterialTheme.colorScheme.outlineVariant, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.AutoAwesome, null, tint = if (fresh) accent else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Stories", style = MaterialTheme.typography.titleMedium)
+            Text(c.preview.ifEmpty { "WhatsApp status updates show up here" }, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (fresh) Text("${c.unread}", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelMedium, modifier = Modifier.clip(CircleShape).background(accent).padding(horizontal = 8.dp, vertical = 2.dp))
     }
 }

@@ -19,7 +19,7 @@ export function Palette({ nav, current, onClose, onSnooze }: { nav: Nav; current
 
   const entries = useMemo<Entry[]>(() => {
     const actions: Entry[] = [
-      { id: "a-new", label: "New chat", icon: SquarePen, run: go("new"), group: "Actions" },
+      { id: "a-new", label: "Page someone", icon: SquarePen, run: go("new"), group: "Actions" },
       { id: "a-search", label: "Search all messages", icon: Search, run: go("search"), group: "Actions" },
       { id: "a-read", label: "Mark all chats as read", icon: CheckCheck, run: () => { markAllRead(); onClose(); }, group: "Actions" },
       { id: "a-star", label: "Starred messages", icon: Star, run: go("settings/starred"), group: "Actions" },

@@ -54,6 +54,7 @@ data class Scheduled(val delayId: String, val roomId: String, val chat: String, 
 
 /** Process-wide state: the signed-in session, all chats, and the sync loop that keeps them current. */
 class Store(private val context: Context) {
+    init { Names.init(context) }
     private val prefs = context.getSharedPreferences("pager", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val http = Http(prefs.getString("baseUrl", "") ?: "")
@@ -113,7 +114,8 @@ class Store(private val context: Context) {
     }
 
     /** The inbox list, computed off the main thread whenever chats or settings change. */
-    val inbox: StateFlow<List<ChatSummary>> = combine(_chats, _muted, _session, _drafts, settings.state) { chats, muted, s, drafts, st ->
+    private data class InboxInputs(val chats: Map<String, ChatState>, val muted: Set<String>, val s: Session?, val drafts: Map<String, String>, val st: AppSettings)
+    val inbox: StateFlow<List<ChatSummary>> = combine(combine(_chats, _muted, _session, _drafts, settings.state) { a, b, c, d, e -> InboxInputs(a, b, c, d, e) }, Names.version) { (chats, muted, s, drafts, st), _ ->
         val me = s?.userId ?: ""
         chats.values.filter { !it.isBotRoom(me) && it.network !in st.hiddenNetworks }.map {
             val last = it.messages.lastOrNull()
@@ -121,7 +123,7 @@ class Store(private val context: Context) {
                 it.id, SyncReducer.displayName(it, me), it.network, it.avatarMxc, it.preview, it.lastTs, it.unread,
                 it.markedUnread, it.pinned, it.archived, it.id in muted, it.isGroup, drafts[it.id]?.takeIf { d -> d.isNotBlank() },
                 lowPriority = it.lowPriority, labels = it.labels, pinOrder = it.pinOrder ?: Double.MAX_VALUE,
-                unanswered = last != null && last.sender != me, lastFromMe = last?.sender == me, typing = it.typing.isNotEmpty(),
+                unanswered = last != null && last.sender != me, lastFromMe = last?.sender == me, typing = it.typing.isNotEmpty(), stories = it.isStories,
             )
         }.sortedWith(
             compareByDescending<ChatSummary> { it.pinned }.thenBy { if (it.pinned) it.pinOrder else 0.0 }
@@ -886,7 +888,16 @@ class Store(private val context: Context) {
 
     suspend fun refreshBridges() {
         if (_session.value == null) return
-        runCatching { pager.networks() }.onSuccess { applyIdentity(it); _bridges.value = it }
+        runCatching { pager.networks() }.onSuccess { applyIdentity(it); _bridges.value = it; scope.launch { loadPhonebook(it) } }
+    }
+
+    // Names for bare phone numbers come from your phone's contacts and your bridges' contact lists (WhatsApp, Signal and Google Messages know your address book).
+    private var bookAt = 0L
+    private suspend fun loadPhonebook(nets: List<Network>) {
+        Names.loadDevice(context)
+        if (System.currentTimeMillis() - bookAt < 30 * 60_000L) return
+        bookAt = System.currentTimeMillis()
+        for (n in nets) for (l in n.logins) runCatching { pager.contacts(n.id, l.id) }.onSuccess { cs -> Names.add(cs.mapNotNull { c -> c.detail?.let { it to c.name } }) }
     }
 
     /** localpart escaping used by the bridges for ghost user ids (uppercase and odd characters are escaped). */

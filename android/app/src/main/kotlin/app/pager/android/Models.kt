@@ -104,7 +104,10 @@ data class ChatState(
     val preview: String
         get() = messages.lastOrNull()?.let { previewOf(it) } ?: ""
 
-    fun nameOf(userId: String) = members[userId] ?: userId.removePrefix("@").substringBefore(':')
+    fun nameOf(userId: String) = Names.pretty(members[userId] ?: userId.removePrefix("@").substringBefore(':'))
+
+    /** The WhatsApp stories room: the bridge puts every status update in one room. */
+    val isStories get() = Regex("status.?broadcast", RegexOption.IGNORE_CASE).containsMatchIn(name) && network == "whatsapp"
 
     /** Bridge bots keep a management DM for login commands; users never need to see it. */
     fun isBotRoom(me: String): Boolean {
@@ -148,6 +151,7 @@ data class ChatSummary(
     val unanswered: Boolean = false,
     val lastFromMe: Boolean = false,
     val typing: Boolean = false,
+    val stories: Boolean = false,
 )
 
 /** A message that just arrived from someone else, for notifications. */
