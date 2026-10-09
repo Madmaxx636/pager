@@ -6,7 +6,7 @@
   "author": "Pager contributors",
   "main": "main.js",
   "scripts": {
-    "icons": "electron scripts/make-icons.cjs",
+    "icons": "node scripts/make-icons.mjs",
     "web": "cd ../app && npm ci && npm run build && rm -rf ../desktop/app-dist && cp -r dist ../desktop/app-dist",
     "start": "electron .",
     "dist": "node scripts/check-files.mjs && npm run icons && npm run web && electron-builder --linux AppImage deb",
@@ -54,6 +54,7 @@
     }
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3"
   },
