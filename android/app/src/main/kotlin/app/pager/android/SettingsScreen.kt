@@ -776,7 +776,7 @@ private fun EncryptionGroup() {
     LaunchedEffect(Unit) { store.refreshEncryptionStatus() }
     var dialog by remember { mutableStateOf<String?>(null) }
     SettingsGroup("Encryption", footer = "Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.") {
-        NavRow("Encryption on this device", if (e.ready) "Ready · device ${e.deviceId}" else "Starting…", Icons.Rounded.Lock) {}
+        NavRow("Encryption on this device", if (e.ready) "Ready · device ${e.deviceId}" else if (e.error != null) "Couldn't start: ${e.error}. Tap to try again" else "Starting…", Icons.Rounded.Lock) { if (!e.ready && e.error != null) scope.launch { store.retryEncryptionStart() } }
         if (e.ready) { GroupDivider(); NavRow("Device fingerprint", e.fingerprint.chunked(4).joinToString(" "), Icons.Rounded.Key) {} }
         GroupDivider()
         NavRow(

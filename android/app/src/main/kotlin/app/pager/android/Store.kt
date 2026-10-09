@@ -174,7 +174,7 @@ class Store(private val context: Context) {
         loadCache(s.userId)
         _session.value = s
         syncJob?.cancel()
-        syncJob = scope.launch { startE2ee(s); syncLoop(s) }
+        syncJob = scope.launch { kotlinx.coroutines.withTimeoutOrNull(8_000) { startE2ee(s) }; syncLoop(s) } // messages wait a moment for encryption, never for long
         scope.launch { refreshBridges() }
         scope.launch { runCatching { pager.isAdmin() }.onSuccess { _isAdmin.value = it } }
     }
@@ -244,7 +244,9 @@ class Store(private val context: Context) {
 
     // --- End-to-end encryption -----------------------------------------------------
 
-    data class EncryptionStatus(val ready: Boolean = false, val backupHere: Boolean = false, val backupOnServer: Boolean = false, val deviceId: String = "", val fingerprint: String = "")
+    /** [error] says why encryption could not start, if it could not. */
+    data class EncryptionStatus(val ready: Boolean = false, val backupHere: Boolean = false, val backupOnServer: Boolean = false, val deviceId: String = "", val fingerprint: String = "", val error: String? = null)
+    private var startError: String? = null
     private val _encryption = MutableStateFlow(EncryptionStatus())
     val encryption: StateFlow<EncryptionStatus> = _encryption.asStateFlow()
     private var e2ee: E2ee? = null
@@ -253,21 +255,24 @@ class Store(private val context: Context) {
     private val memberCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<String>>>()
 
     private suspend fun startE2ee(s: Session) {
-        e2ee?.close(); e2ee = null; waiting.clear()
+        e2ee?.close(); e2ee = null; waiting.clear(); startError = null
         try {
             val device = prefs.getString("deviceId", null)?.takeIf { it.isNotEmpty() }
                 ?: (http.request("GET", "/_matrix/client/v3/account/whoami")["device_id"] as? JsonPrimitive)?.contentOrNull?.also { prefs.edit().putString("deviceId", it).apply() }
-                ?: return
+                ?: throw java.io.IOException("the server did not say which device this is. Sign out and in again")
             val c = E2ee.create(context, { m, p, b -> http.request(m, p, b) }, s.userId, device)
             c.onKeys = { rooms -> scope.launch { retryWaiting(rooms) } }
             e2ee = c
-            c.pump() // upload this device's keys
-            refreshEncryptionStatus()
-        } catch (e: Throwable) { android.util.Log.w("Pager", "encryption could not start", e) }
+            kotlinx.coroutines.withTimeoutOrNull(15_000) { c.pump() } // upload this device's keys (it keeps trying in the background if slow)
+        } catch (e: Throwable) { startError = e.message ?: e.toString(); android.util.Log.w("Pager", "encryption could not start", e) }
+        refreshEncryptionStatus()
     }
 
+    /** Tries again (from the settings screen) after a failed start. */
+    suspend fun retryEncryptionStart() { _session.value?.let { startE2ee(it) } }
+
     suspend fun refreshEncryptionStatus() {
-        val e = e2ee ?: run { _encryption.value = EncryptionStatus(); return }
+        val e = e2ee ?: run { _encryption.value = EncryptionStatus(error = startError); return }
         _encryption.value = EncryptionStatus(true, e.backupOn(), e.backupVersion() != null, e.deviceId, e.fingerprint())
     }
 
@@ -1124,7 +1129,7 @@ class Store(private val context: Context) {
         val s = _session.value ?: return
         syncJob?.cancel()
         since = null; _chats.value = emptyMap(); _synced.value = false; cacheFile.delete()
-        syncJob = scope.launch { startE2ee(s); syncLoop(s) }
+        syncJob = scope.launch { kotlinx.coroutines.withTimeoutOrNull(8_000) { startE2ee(s) }; syncLoop(s) } // messages wait a moment for encryption, never for long
     }
 
     private suspend fun bridgeLoop() {
