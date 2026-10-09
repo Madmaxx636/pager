@@ -263,14 +263,19 @@ async function roomMembers(roomId: string): Promise<string[]> {
 export interface EncryptionStatus { ready: boolean; backupHere: boolean; backupOnServer: boolean; deviceId: string; fingerprint: string; /** Why encryption could not start, if it could not. */ error?: string }
 let encStatus: EncryptionStatus = { ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "" };
 const encListeners = new Set<() => void>();
-function setEncStatus(s: EncryptionStatus) { encStatus = s; encListeners.forEach((l) => l()); }
+function setEncStatus(s: EncryptionStatus) {
+  if (JSON.stringify(s) === JSON.stringify(encStatus)) return; // nothing new: do not wake the screen (and so do not ask the server again)
+  encStatus = s; encListeners.forEach((l) => l());
+}
 export async function refreshEncryptionStatus() {
   if (!e2ee) { setEncStatus({ ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "", error: startError }); return; }
   const [backupHere, ver] = await Promise.all([e2ee.backupOn(), e2ee.backupVersion()]);
   setEncStatus({ ready: true, backupHere, backupOnServer: !!ver, deviceId: e2ee.deviceId, fingerprint: e2ee.machine.identityKeys.ed25519.toBase64() });
 }
+// One fixed function: a new one on every render would make React subscribe again each time, and each subscribe asks the server.
+const subscribeEncryption = (l: () => void) => { encListeners.add(l); void refreshEncryptionStatus(); return () => { encListeners.delete(l); }; };
 export function useEncryption(): EncryptionStatus {
-  return useSyncExternalStore((l) => { encListeners.add(l); void refreshEncryptionStatus(); return () => { encListeners.delete(l); }; }, () => encStatus);
+  return useSyncExternalStore(subscribeEncryption, () => encStatus);
 }
 /** Starts the recovery backup and returns the recovery key to show once. */
 export async function createRecoveryKey(): Promise<string> {
