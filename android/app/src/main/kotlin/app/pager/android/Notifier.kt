@@ -71,6 +71,15 @@ object Notifier {
      * That puts it in the "Conversations" section of the shade and adds the system's own Priority, Bubble and Silent options
      * to each page (long-press the notification, or Settings → Notifications → Conversations).
      */
+    /** A test notification for one page, using that page's own settings, so you can long-press it and change Priority or Bubble for it. */
+    fun testFor(context: Context, store: Store, roomId: String, name: String, network: String, isGroup: Boolean) {
+        val s = store.settings.value
+        val p = s.notifChat[roomId]
+        val preview = when (p?.preview) { "hide" -> "hidden"; "show" -> "full"; else -> s.notifPreview }
+        val silent = !s.notifSound || p?.sound == "off" || p?.level == "silent"
+        show(context, store, Incoming(roomId, name, name, "This is a test notification for this page.", network, isGroup, false, System.currentTimeMillis(), false, silent, preview))
+    }
+
     fun show(context: Context, store: Store, m: Incoming) {
         scope.launch {
             val avatar = store.inbox.value.firstOrNull { it.id == m.roomId }?.avatarMxc
