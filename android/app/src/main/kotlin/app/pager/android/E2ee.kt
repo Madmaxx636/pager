@@ -210,6 +210,24 @@ class E2ee private constructor(
         return bots.all { ((keys?.get(it) as? JsonObject)?.size ?: 0) > 0 }
     }
 
+    /**
+     * Asks the recovery backup for the key to one message we could not read. Other devices of yours save the keys they receive to the
+     * backup, so a phone that was off, or newer than the message, can still get it. Returns true if a key was fetched.
+     */
+    suspend fun fetchKeyFromBackup(roomId: String, sessionId: String): Boolean = try {
+        val stored = withContext(Dispatchers.IO) { machine.getBackupKeys() } ?: return false
+        val key = stored.recoveryKey()
+        val version = stored.backupVersion()
+        val data = tx("GET", "/_matrix/client/v3/room_keys/keys/${enc(roomId)}/${enc(sessionId)}?version=${enc(version)}", null)
+        val sd = data["session_data"] as? JsonObject ?: return false
+        fun field(k: String) = (sd[k] as? JsonPrimitive)?.contentOrNull
+        val clear = key.decryptV1(field("ephemeral") ?: return false, field("mac") ?: return false, field("ciphertext") ?: return false)
+        val export = E2eeBodies.backupToExport(buildJsonObject { putJsonObject(roomId) { put(sessionId, kotlinx.serialization.json.Json.parseToJsonElement(clear)) } })
+        val listener = object : ProgressListener { override fun onProgress(progress: Int, total: Int) {} }
+        withContext(Dispatchers.IO) { machine.importRoomKeysFromBackup(export.toString(), version, listener) }
+        true
+    } catch (_: Exception) { false }
+
     // ---- Key file (a second way back in) ------------------------------------------------------------------------
     // Every message key this device has, scrambled with a passphrase you choose, as text you can store anywhere. If the recovery key is
     // ever lost, this file and its passphrase read your history; and it works without the server.

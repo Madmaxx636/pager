@@ -193,6 +193,7 @@ const waiting = new Map<string, { roomId: string; event: any }>();
 const memberCache = new Map<string, { at: number; ids: string[] }>();
 
 let startError: string | undefined;
+let retryTimer: number | undefined;
 const withTimeout = <T,>(p: Promise<T>, ms: number, what: string) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`${what} took too long`)), ms))]);
 
 async function startCrypto(s: Session) {
@@ -210,6 +211,7 @@ async function startCrypto(s: Session) {
     e2ee = c;
     await withTimeout(c.pump(), 15000, "Uploading encryption keys").catch(() => { /* it keeps trying in the background */ });
     void retryWaiting(); // messages saved while waiting for a key may have their key now
+    window.clearInterval(retryTimer); retryTimer = window.setInterval(() => void retryWaiting(), 45_000); // and keys can turn up later, from the backup
   } catch (e) { startError = (e as Error).message || String(e); console.warn("encryption could not start", e); }
   void refreshEncryptionStatus();
 }
@@ -227,7 +229,7 @@ async function decryptEvents(roomId: string, events: any[]): Promise<any[]> {
     if (!isEncryptedType(e?.type)) { out.push(e); continue; }
     const clear = await e2ee.decrypt(roomId, e);
     if (clear) out.push(clear);
-    else out.push(unreadable(e));
+    else { out.push(unreadable(e)); window.setTimeout(() => void retryWaiting([roomId]), 4000); }
   }
   return out;
 }
@@ -242,12 +244,16 @@ async function decryptSync(res: any) {
 }
 
 /** Opens messages that were waiting for a key, in the pages whose keys just arrived (or everywhere with no list). They are kept on the message itself, so this also works after a restart. */
+const askedBackup = new Map<string, number>();
 async function retryWaiting(rooms?: string[]) {
   if (!e2ee) return;
   for (const [roomId, chat] of Object.entries(state.chats)) {
     if (rooms && !rooms.includes(roomId)) continue;
     for (const m of chat.messages) {
       if (!m.sealed) continue;
+      // The recovery backup may hold this message's key (another device of yours saved it there): ask, at most once a minute per key.
+      const sid = (m.sealed as any)?.content?.session_id as string | undefined;
+      if (sid && Date.now() - (askedBackup.get(roomId + sid) ?? 0) > 60_000) { askedBackup.set(roomId + sid, Date.now()); await e2ee.fetchKeyFromBackup(roomId, sid); }
       const clear = await e2ee.decrypt(roomId, m.sealed as any);
       if (clear) patchChat(roomId, (c) => replaceDecrypted(c, clear));
     }
@@ -401,7 +407,7 @@ export async function signOut() {
 }
 async function signOutLocal() {
   syncAbort?.abort();
-  e2ee?.close(); e2ee = undefined; waiting.clear(); memberCache.clear();
+  window.clearInterval(retryTimer); e2ee?.close(); e2ee = undefined; waiting.clear(); memberCache.clear();
   localStorage.removeItem(SESSION_KEY);
   try { localStorage.removeItem("pager.identity2"); } catch { /* ignore */ }
   await dbDel("cache");

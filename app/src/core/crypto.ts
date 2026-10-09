@@ -182,6 +182,24 @@ export class Crypto {
     return bots.every((b) => Object.keys(r.device_keys?.[b] ?? {}).length > 0);
   }
 
+  /**
+   * Asks the recovery backup for the key to one message we could not read. Other devices of yours save the keys they receive to the
+   * backup, so a phone that was off, or newer than the message, can still get it. Returns true if a key was fetched.
+   */
+  async fetchKeyFromBackup(roomId: string, sessionId: string): Promise<boolean> {
+    try {
+      const keys = await this.machine.getBackupKeys();
+      const dk = keys?.decryptionKey, version = keys?.backupVersion;
+      if (!dk || !version) return false;
+      const data = await this.tx("GET", `/_matrix/client/v3/room_keys/keys/${enc(roomId)}/${enc(sessionId)}?version=${enc(version)}`);
+      const sd = data?.session_data;
+      if (!sd) return false;
+      const clear = JSON.parse(dk.decryptV1(sd.ephemeral, sd.mac, sd.ciphertext));
+      await this.machine.importBackedUpRoomKeys(new Map([[new sdk.RoomId(roomId), new Map([[sessionId, clear]])]]), () => {}, version);
+      return true;
+    } catch { return false; }
+  }
+
   // ---- Key file (a second way back in) ----------------------------------------------------------------------------------
   // Every message key this device has, scrambled with a passphrase you choose, as text you can store anywhere. If the recovery key is
   // ever lost, this file and its passphrase read your history; and it works without the server.

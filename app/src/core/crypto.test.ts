@@ -50,6 +50,8 @@ class FakeServer {
       }
       if (path.includes("/room_keys/keys")) {
         if (method === "PUT") { for (const [r, v] of Object.entries<any>(body.rooms)) for (const [s, d] of Object.entries<any>(v.sessions)) ((this.backup.keys[r] ??= { sessions: {} }).sessions)[s] = d; return { count: 1, etag: "x" }; }
+        const one = /\/room_keys\/keys\/([^/?]+)\/([^/?]+)/.exec(path);
+        if (one) { const s = this.backup.keys[decodeURIComponent(one[1])]?.sessions?.[decodeURIComponent(one[2])]; if (!s) throw new Error("M_NOT_FOUND"); return s; }
         return { rooms: this.backup.keys };
       }
       return base(method, path, body);
@@ -128,6 +130,27 @@ describe("end-to-end encryption", () => {
     await expect(bob2.restoreBackup(lost)).rejects.toThrow(/doesn't match/);
     expect(await bob2.restoreBackup(fresh)).toBe(1);
     expect((await bob2.decrypt("!room:x", ev))?.content.body).toBe("keep me");
+    alice.close(); bob1.close(); bob2.close();
+  }, 30000);
+
+  it("a message whose key never reached this device is opened with its key from the backup", async () => {
+    const server = new FakeServer();
+    const alice = await Crypto.create(server.tx("@alice:x", "A"), "@alice:x", "A");
+    const bob1 = await Crypto.create(server.backupTx(server.tx("@bob:x", "B1")), "@bob:x", "B1");
+    const bob2 = await Crypto.create(server.backupTx(server.tx("@bob:x", "B2")), "@bob:x", "B2");
+    await alice.receiveSync({}); await bob1.receiveSync({}); await bob2.receiveSync({});
+    const recovery = await bob1.createBackup();
+    await bob2.restoreBackup(recovery).catch(() => 0); // nothing in the backup yet: this just gives bob2 the backup key
+    const sent = await alice.encrypt("!room:x", "m.room.message", { msgtype: "m.text", body: "only bob1 got the key" }, ["@alice:x", "@bob:x"]);
+    // the key goes to both of bob's devices, but suppose bob2 never gets its copy
+    await bob1.receiveSync({ to_device: { events: server.takeInbox("@bob:x", "B1") } });
+    server.takeInbox("@bob:x", "B2");
+    await bob1.pump(); await bob1.pump(); // bob1 saves the key to the backup
+    const ev = { type: "m.room.encrypted", event_id: "$1", sender: "@alice:x", origin_server_ts: 1, content: sent };
+    expect(await bob2.decrypt("!room:x", ev)).toBeUndefined();
+    expect(await bob2.fetchKeyFromBackup("!room:x", sent.session_id)).toBe(true);
+    expect((await bob2.decrypt("!room:x", ev))?.content.body).toBe("only bob1 got the key");
+    expect(await bob2.fetchKeyFromBackup("!room:x", "nope")).toBe(false);
     alice.close(); bob1.close(); bob2.close();
   }, 30000);
 
