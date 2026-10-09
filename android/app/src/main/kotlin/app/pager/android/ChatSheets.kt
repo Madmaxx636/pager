@@ -249,6 +249,9 @@ fun ActionsSheet(
 @Composable
 fun DetailsSheet(msg: Msg, chat: ChatState?, onDismiss: () -> Unit) {
     val fmt = remember { java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.LONG, java.text.DateFormat.MEDIUM) }
+    val me = LocalStore.current.me
+    val mine = msg.sender == me && msg.status == STATUS_SENT
+    val readers = if (mine && chat != null) chat.readersOf(msg.id, me) else emptyList()
     Sheet(onDismiss) {
         SheetTitle("Message details")
         listOf(
@@ -257,9 +260,16 @@ fun DetailsSheet(msg: Msg, chat: ChatState?, onDismiss: () -> Unit) {
             "Type" to msg.type,
             "Status" to when (msg.status) { STATUS_SENT -> "Sent"; STATUS_SENDING -> "Sending"; else -> "Failed" },
             "Size" to (msg.size?.takeIf { it > 0 }?.let { humanSize(it) } ?: "—"),
+        ).plus(
+            if (!mine) emptyList()
+            else listOf("Read" to if (readers.isEmpty()) "Not yet" else readers.joinToString("\n") { (u, ts) -> (chat?.nameOf(u) ?: u) + (ts?.let { " · " + fmt.format(java.util.Date(it)) } ?: "") }),
         ).forEach { (k, v) ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) { Text(k, Modifier.width(90.dp), color = MaterialTheme.colorScheme.onSurfaceVariant); Text(v) }
         }
+        if (mine && chat != null && chat.network != "matrix") Text(
+            "${networkMeta(chat.network).label} doesn't report delivery through the bridge. Pager shows when someone has read it.",
+            Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         if (LocalSettings.current.developerMode) Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) { Text("Event ID", Modifier.width(90.dp), color = MaterialTheme.colorScheme.onSurfaceVariant); Text(msg.id, style = MaterialTheme.typography.labelMedium) }
     }
 }
