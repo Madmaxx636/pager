@@ -228,10 +228,14 @@ object SyncReducer {
             "m.typing" -> chat.copy(typing = content["user_ids"].arr().mapNotNull { it.str() }.filter { it != me }.toSet())
             "m.receipt" -> {
                 val receipts = chat.receipts.toMutableMap()
+                val times = chat.receiptTs.toMutableMap()
                 for ((eventId, kinds) in content) {
-                    for (user in kinds.obj()["m.read"].obj().keys) receipts[user] = eventId
+                    for ((user, info) in kinds.obj()["m.read"].obj()) {
+                        receipts[user] = eventId
+                        (info.obj()["ts"] as? JsonPrimitive)?.longOrNull?.let { times[user] = it }
+                    }
                 }
-                chat.copy(receipts = receipts)
+                chat.copy(receipts = receipts, receiptTs = times)
             }
             else -> chat
         }

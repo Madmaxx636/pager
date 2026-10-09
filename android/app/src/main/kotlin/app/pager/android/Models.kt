@@ -70,6 +70,8 @@ data class ChatState(
     val reactionRefs: Map<String, ReactionRef> = emptyMap(),
     /** user id -> latest event they have read */
     val receipts: Map<String, String> = emptyMap(),
+    /** When each user's read receipt was sent (ms). */
+    val receiptTs: Map<String, Long> = emptyMap(),
     val tags: Set<String> = emptySet(),
     val markedUnread: Boolean = false,
     val memberCount: Int = 0,
@@ -85,6 +87,12 @@ data class ChatState(
 ) {
     val lastTs get() = messages.lastOrNull()?.ts ?: 0L
     /** Bridged rooms always hold the bridge bot and your own puppet, so raw member counts overstate. */
+    /** Who has read a message, and when: anyone whose read receipt is at or after it. The time is when they read up to that point. */
+    fun readersOf(msgId: String, sender: String): List<Pair<String, Long?>> {
+        val idx = messages.indexOfFirst { it.id == msgId }
+        if (idx < 0) return emptyList()
+        return receipts.filter { (user, ev) -> user != sender && messages.indexOfFirst { it.id == ev } >= idx }.map { (user, _) -> user to receiptTs[user] }
+    }
     val isGroup get() = roomType?.takeIf { it.isNotEmpty() }?.let { it != "dm" } ?: (memberCount > 2)
     val peopleCount get() = if (!roomType.isNullOrEmpty()) (memberCount - 2).coerceAtLeast(2) else memberCount
     val pinned get() = "m.favourite" in tags

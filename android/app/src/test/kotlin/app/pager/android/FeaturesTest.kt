@@ -132,3 +132,19 @@ class OwnGhostTest {
         assertEquals(ghost, SyncReducer.apply(emptyMap(), sync, me, true).chats["!r:x"]!!.messages[0].sender)
     }
 }
+
+class ReceiptTimesTest {
+    private val me = "@me:x"
+    private val amy = "@amy:x"
+    private fun parse(s: String) = json.parseToJsonElement(s).jsonObject
+    private fun text(id: String, sender: String, ts: Long) = """{"type":"m.room.message","event_id":"$id","sender":"$sender","origin_server_ts":$ts,"content":{"msgtype":"m.text","body":"$id"}}"""
+
+    @Test fun readersAndTimes() {
+        val sync = parse("""{"rooms":{"join":{"!r:x":{"timeline":{"events":[${text("\$1", me, 1000)},${text("\$2", me, 2000)},${text("\$3", amy, 3000)}]},"ephemeral":{"events":[{"type":"m.receipt","content":{"\$2":{"m.read":{"$amy":{"ts":5000}}}}}]}}}}}""")
+        val chat = SyncReducer.apply(emptyMap(), sync, me, true).chats["!r:x"]!!
+        assertEquals(listOf<Pair<String, Long?>>(amy to 5000L), chat.readersOf("\$1", me))
+        assertEquals(listOf<Pair<String, Long?>>(amy to 5000L), chat.readersOf("\$2", me))
+        assertTrue(chat.readersOf("\$3", amy).isEmpty())
+        assertTrue(chat.readersOf("\$3", me).isEmpty())
+    }
+}
