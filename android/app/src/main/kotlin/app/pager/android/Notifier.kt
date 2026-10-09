@@ -75,7 +75,7 @@ object Notifier {
         scope.launch {
             val avatar = store.inbox.value.firstOrNull { it.id == m.roomId }?.avatarMxc
             val bitmap = avatar?.let { withTimeoutOrNull(2500) { runCatching { store.media.bitmap(it, 128) }.getOrNull() } } ?: letterAvatar(m.chat, networkMeta(m.network).color.toArgb())
-            post(context, store, m, IconCompat.createWithBitmap(circle(bitmap)))
+            post(context, store, m, IconCompat.createWithAdaptiveBitmap(padded(bitmap)))
         }
     }
 
@@ -88,15 +88,33 @@ object Notifier {
         return bmp
     }
 
-    private fun circle(src: android.graphics.Bitmap): android.graphics.Bitmap {
-        val size = minOf(src.width, src.height)
+    /** Android crops conversation pictures to its own shape: give it a square with a safe margin (an "adaptive" bitmap). */
+    private fun padded(src: android.graphics.Bitmap): android.graphics.Bitmap {
+        val size = 216
         val out = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
         val c = android.graphics.Canvas(out)
-        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-        c.drawCircle(size / 2f, size / 2f, size / 2f, paint)
-        paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
-        c.drawBitmap(src, (size - src.width) / 2f, (size - src.height) / 2f, paint)
+        val inner = (size * 72 / 108f)
+        val off = (size - inner) / 2f
+        c.drawBitmap(src, null, android.graphics.RectF(off, off, off + inner, off + inner), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
         return out
+    }
+
+    /** What Android says about this app's conversation features, in plain words (for the "Check priority & bubbles" button). */
+    fun diagnose(context: Context): String {
+        val nm = context.getSystemService(NotificationManager::class.java)
+        val sdk = android.os.Build.VERSION.SDK_INT
+        val out = StringBuilder("Android ${android.os.Build.VERSION.RELEASE} (API $sdk)\n\n")
+        if (sdk < 30) return out.append("Priority conversations and bubbles need Android 11 or newer. This phone can't show them; Pager's own Priority setting (in each page's notification settings) still works.").toString()
+        out.append("Notifications: ").append(if (nm.areNotificationsEnabled()) "on" else "OFF in system settings").append('\n')
+        out.append("Message channel: ").append(nm.getNotificationChannel(CH_ALL)?.importance?.let { if (it >= NotificationManager.IMPORTANCE_DEFAULT) "ok" else "set too low (raise it to High)" } ?: "not created yet").append('\n')
+        out.append("Bubbles: ").append(
+            if (sdk >= 31) when (nm.bubblePreference) { NotificationManager.BUBBLE_PREFERENCE_ALL -> "allowed for all conversations"; NotificationManager.BUBBLE_PREFERENCE_SELECTED -> "allowed for selected conversations"; else -> "OFF for Pager (Settings → Apps → Pager → Notifications → Bubbles)" }
+            else if (nm.areBubblesAllowed()) "allowed" else "OFF for Pager (Settings → Apps → Pager → Notifications → Bubbles)",
+        ).append('\n')
+        val shortcuts = runCatching { ShortcutManagerCompat.getDynamicShortcuts(context).size }.getOrDefault(-1)
+        out.append("Conversation shortcuts: ").append(if (shortcuts > 0) "$shortcuts ready" else "none yet. They are made when a page sends you a notification. Use \"Send a test notification\" first").append("\n\n")
+        out.append("Then long-press the notification: Android shows Priority, Bubble and Silent only for conversations.")
+        return out.toString()
     }
 
     /** Opens Android's own settings for one conversation (Priority, Bubble, sound), where the system offers them. */
