@@ -47,6 +47,30 @@ Accounts and links don't carry over. Sign up again and relink. In Signal → Set
 Share the invite code (or change `INVITE_CODE` in `server/.env` and run `docker compose up -d api`). Each person gets their own
 account and links their own chat apps.
 
+## Encryption
+Three layers, each optional and independent of the others.
+
+1. **End-to-end encrypted chats.** Update the apps first (web, desktop, Android), then on the server:
+   ```bash
+   cd server && ./scripts/enable-encryption.sh signal     # try one network first
+   ./scripts/enable-encryption.sh                         # then all of them
+   ```
+   New chats on those networks are created encrypted; existing chats stay as they are. The message text is then ciphertext in Synapse's
+   database, and attachments are encrypted before they are uploaded. The bridge itself must read messages to pass them to WhatsApp/Signal,
+   so it holds the keys it needs (this is how every Matrix bridge works). Turn it off for new chats with `--off`.
+2. **A recovery key** (Settings → Privacy → Encryption, on any device). It backs up your message keys, encrypted, to your server, so a new
+   device or a reinstall can read your history. Save the key somewhere safe: Pager cannot recover it.
+3. **An encrypted vault for the bridges' data** (their configs, WhatsApp/Signal logins and keys, and bridge databases). It opens itself at
+   boot, so a reboot needs nobody to type anything:
+   ```bash
+   sudo ./scripts/vault-setup.sh --size 10G --owner $USER   # once: creates the LUKS image, the key and the boot service
+   ./scripts/vault-migrate.sh                               # moves the bridges in; keeps plain copies until you finish
+   ./scripts/vault-finish.sh                                # after checking your chats work: deletes the plain copies
+   ```
+   The key is on the same machine (`/etc/pager/vault.key`, root only), so this protects a copied vault image, a reused data disk and
+   backups of `server/data`, not someone who has the whole running machine. Back the key file up separately. The vault also holds
+   Postgres for the bridges only; Synapse's own data (accounts, rooms, and the appservice tokens in `data/synapse`) is not in it.
+
 ## Backups
 Everything lives in `server/data` (Synapse, Postgres, bridge logins and keys). Back it up regularly, and keep it private.
 ```bash

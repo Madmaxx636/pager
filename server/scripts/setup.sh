@@ -34,11 +34,14 @@ if grep -q '^DUCKDNS_TOKEN=.' .env && ! grep -q '^COMPOSE_PROFILES=' .env; then 
 grep -q '^COMPOSE_FILE=' .env || echo 'COMPOSE_FILE=docker-compose.yml:data/bridges.compose.yml' >> .env
 set -a; . ./.env; set +a
 
+# Bridge data (logins, message keys) can live in an encrypted vault with its own database: see scripts/vault-setup.sh.
+BRIDGE_DB_HOST=postgres; [ -n "${VAULT_DIR:-}" ] && BRIDGE_DB_HOST=bridgedb
+
 # id ; display name ; image ; binary ; extra yq patch ; required env var (empty = always on)
 BRIDGE_TABLE=(
   "whatsapp;WhatsApp;whatsapp;mautrix-whatsapp;;"
   "signal;Signal;signal;mautrix-signal;;"
-  "discord;Discord (experimental: legacy bridge, log in via its bot chat);discord;mautrix-discord;.appservice.database.type = \"postgres\" | .appservice.database.uri = \"postgres://pager:$POSTGRES_PASSWORD@postgres/discord?sslmode=disable\";ENABLE_DISCORD"
+  "discord;Discord (experimental: legacy bridge, log in via its bot chat);discord;mautrix-discord;.appservice.database.type = \"postgres\" | .appservice.database.uri = \"postgres://pager:$POSTGRES_PASSWORD@$BRIDGE_DB_HOST/discord?sslmode=disable\";ENABLE_DISCORD"
   "gmessages;Google Messages (SMS/RCS);gmessages;mautrix-gmessages;;"
   "slack;Slack;slack;mautrix-slack;;"
   "twitter;X (Twitter) DMs;twitter;mautrix-twitter;;"
@@ -100,11 +103,13 @@ for row in "${BRIDGE_TABLE[@]}"; do
       | .appservice.bot.username = \"${id}bot\"
       | .appservice.username_template = \"${id}_{{.}}\"
       | .database.type = \"postgres\"
-      | .database.uri = \"postgres://pager:$POSTGRES_PASSWORD@postgres/$id?sslmode=disable\"
+      | .database.uri = \"postgres://pager:$POSTGRES_PASSWORD@$BRIDGE_DB_HOST/$id?sslmode=disable\"
       | .bridge.permissions = {\"$PAGER_DOMAIN\":\"user\"}
       | .provisioning.shared_secret = \"$PROVISIONING_SECRET\"
       | .backfill.enabled = true
-      | .encryption.allow = false${patch:+ | $patch}" "bridges/$id/config.yaml"
+      | .encryption.allow = true
+      | .encryption.default = true
+      | .encryption.require = false${patch:+ | $patch}" "bridges/$id/config.yaml"
   fi
   if [ ! -f "$dir/config.yaml" ]; then echo "Skipping $name (its image could not be started)"; continue; fi
   if [ ! -f "$dir/registration.yaml" ]; then
@@ -114,9 +119,9 @@ for row in "${BRIDGE_TABLE[@]}"; do
 
   cp "$dir/registration.yaml" "data/synapse/appservice-$id.yaml"
   # An existing install's database was created before this bridge existed.
-  if docker compose ps --status running postgres 2>/dev/null | grep -q postgres; then
-    docker compose exec -T postgres psql -U pager -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$id'" | grep -q 1 \
-      || docker compose exec -T postgres psql -U pager -d postgres -c "CREATE DATABASE $id ENCODING 'UTF8' LC_COLLATE='C' LC_CTYPE='C' TEMPLATE=template0 OWNER pager" >/dev/null
+  if docker compose ps --status running "$BRIDGE_DB_HOST" 2>/dev/null | grep -q "$BRIDGE_DB_HOST"; then
+    docker compose exec -T "$BRIDGE_DB_HOST" psql -U pager -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$id'" | grep -q 1 \
+      || docker compose exec -T "$BRIDGE_DB_HOST" psql -U pager -d postgres -c "CREATE DATABASE $id ENCODING 'UTF8' LC_COLLATE='C' LC_CTYPE='C' TEMPLATE=template0 OWNER pager" >/dev/null
   fi
   yq -i ".app_service_config_files += [\"/data/appservice-$id.yaml\"]" synapse/homeserver.yaml
   yq -i ". += [{\"id\":\"$id\",\"name\":\"$name\",\"url\":\"http://$id:29318\"}]" bridges.json -o=json
@@ -128,7 +133,7 @@ for row in "${BRIDGE_TABLE[@]}"; do
       UID: \${BRIDGE_UID:-1337}
       GID: \${BRIDGE_GID:-1337}
     depends_on:
-      postgres:
+      $BRIDGE_DB_HOST:
         condition: service_healthy
     volumes: ["./data/bridges/$id:/data"]
     networks: [pager]
