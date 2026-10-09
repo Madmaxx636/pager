@@ -252,6 +252,7 @@ class Store(private val context: Context) {
     private val _encryption = MutableStateFlow(EncryptionStatus())
     val encryption: StateFlow<EncryptionStatus> = _encryption.asStateFlow()
     private var e2ee: E2ee? = null
+    private var retryJob: Job? = null
     /** Messages we could not read yet (their key has not arrived), by event id. */
     private val waiting = java.util.concurrent.ConcurrentHashMap<String, Pair<String, JsonObject>>()
     private val memberCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<String>>>()
@@ -267,6 +268,8 @@ class Store(private val context: Context) {
             e2ee = c
             kotlinx.coroutines.withTimeoutOrNull(15_000) { c.pump() } // upload this device's keys (it keeps trying in the background if slow)
             scope.launch { retryWaiting() } // messages saved while waiting for a key may have their key now
+            retryJob?.cancel()
+            retryJob = scope.launch { while (isActive) { delay(45_000); retryWaiting() } } // and keys can turn up later, from the backup
         } catch (e: Throwable) { startError = e.message ?: e.toString(); android.util.Log.w("Pager", "encryption could not start", e) }
         refreshEncryptionStatus()
     }
@@ -335,7 +338,7 @@ class Store(private val context: Context) {
         if (events.none { (it["type"] as? JsonPrimitive)?.contentOrNull == "m.room.encrypted" }) return events
         return events.map { ev ->
             if ((ev["type"] as? JsonPrimitive)?.contentOrNull != "m.room.encrypted") ev
-            else e.decrypt(roomId, ev) ?: unreadable(ev)
+            else e.decrypt(roomId, ev) ?: unreadable(ev).also { scope.launch { delay(4_000); retryWaiting(listOf(roomId)) } }
         }
     }
 
@@ -354,12 +357,16 @@ class Store(private val context: Context) {
     }
 
     /** Opens messages that were waiting for a key, in the pages whose keys just arrived (or everywhere with no list). They are kept on the message itself, so this also works after a restart. */
+    private val askedBackup = java.util.concurrent.ConcurrentHashMap<String, Long>()
     private suspend fun retryWaiting(rooms: List<String>? = null) {
         val e = e2ee ?: return
         for ((roomId, chat) in _chats.value.entries.toList()) {
             if (rooms != null && roomId !in rooms) continue
             for (m in chat.messages.filter { it.sealed != null }) {
                 val raw = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(m.sealed!!) as? JsonObject }.getOrNull() ?: continue
+                // The recovery backup may hold this message's key (another device of yours saved it there): ask, at most once a minute per key.
+                val sid = ((raw["content"] as? JsonObject)?.get("session_id") as? JsonPrimitive)?.contentOrNull
+                if (sid != null && System.currentTimeMillis() - (askedBackup[roomId + sid] ?: 0L) > 60_000L) { askedBackup[roomId + sid] = System.currentTimeMillis(); e.fetchKeyFromBackup(roomId, sid) }
                 val clear = e.decrypt(roomId, raw) ?: continue
                 update(roomId) { SyncReducer.replaceDecrypted(it, clear) }
             }
@@ -1181,7 +1188,7 @@ class Store(private val context: Context) {
 
     private fun signOutLocal() {
         syncJob?.cancel()
-        e2ee?.close(); e2ee = null; waiting.clear(); memberCache.clear()
+        retryJob?.cancel(); e2ee?.close(); e2ee = null; waiting.clear(); memberCache.clear()
         runCatching { File(context.filesDir, "e2ee").deleteRecursively() }
         _encryption.value = EncryptionStatus()
         prefs.edit().remove("token").remove("userId").remove("deviceId").remove("identity.key").remove("identity.names").remove("identity.ids").apply()
