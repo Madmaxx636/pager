@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus } from "lucide-react";
+import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { RowAction, ACCENTS, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
 import { addStickers, cancelReminder, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
 import { labelsOf } from "../core/types";
@@ -7,6 +7,7 @@ import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
 import { EmojiPicker, EmptyState, Group, IconButton, Modal, Row, Select, SwitchRow } from "./common";
 import { BridgesPage } from "./Accounts";
+import { AdminPage } from "./Admin";
 import type { Nav } from "./Sidebar";
 
 type Ico = React.ComponentType<{ size?: number; color?: string }>;
@@ -21,6 +22,7 @@ export const PAGES: { id: string; icon: Ico; tint: string; title: string; hint: 
   { id: "privacy", icon: Lock, tint: "#64748b", title: "Privacy", hint: "Receipts, typing, previews" },
   { id: "shortcuts", icon: Keyboard, tint: "#6366f1", title: "Keyboard shortcuts", hint: "See and change every shortcut" },
   { id: "desktop", icon: Monitor, tint: "#0d9488", title: "Desktop", hint: "Tray, startup, zoom", desktop: true },
+  { id: "admin", icon: ShieldCheck, tint: "#dc2626", title: "Admin", hint: "Profiles, bridges, signups" },
   { id: "storage", icon: HardDrive, tint: "#14b8a6", title: "Backup & reset", hint: "Export, import, reset" },
   { id: "advanced", icon: Code2, tint: "#475569", title: "Advanced", hint: "Developer tools" },
   { id: "starred", icon: Star, tint: "#f59e0b", title: "Starred messages", hint: "" },
@@ -87,15 +89,16 @@ export function Settings({ page, nav, onBack }: { page: string; nav: Nav; onBack
 }
 
 function Home({ nav }: { nav: Nav }) {
+  const isAdmin = useStore((s) => s.isAdmin);
   const [q, setQ] = useState("");
   const t = q.trim().toLowerCase();
   const hits = t ? SETTINGS_INDEX.filter((e) => `${e.title} ${e.where} ${e.keywords ?? ""}`.toLowerCase().includes(t)) : [];
-  const groups: string[][] = [["appearance", "layout", "chats", "notifications"], ["bridges", "labels", "media"], ["privacy", "shortcuts", "desktop", "storage", "advanced"], ["starred", "scheduled"], ["about"]];
+  const groups: string[][] = [["appearance", "layout", "chats", "notifications"], ["bridges", "labels", "media"], ["privacy", "shortcuts", "desktop", "admin", "storage", "advanced"], ["starred", "scheduled"], ["about"]];
   return (
     <>
       <div className="pill-search wide"><Search size={18} /><input autoFocus placeholder="Search settings" value={q} onChange={(e) => setQ(e.target.value)} /></div>
       {t ? (hits.length ? <Group>{hits.map((e) => <Row key={e.title} title={e.title} hint={e.where} onClick={() => nav(`settings/${e.page}`)} chevron />)}</Group> : <EmptyState icon={Search} title="No settings match" body="Try a different word." />)
-        : groups.map((g, i) => <Group key={i}>{g.map((id) => PAGES.find((p) => p.id === id)!).filter((p) => !p.desktop || window.pagerDesktop).map((p) => <Row key={p.id} title={p.title} hint={p.hint} icon={p.icon} tint={p.tint} onClick={() => nav(`settings/${p.id}`)} chevron />)}</Group>)}
+        : groups.map((g, i) => <Group key={i}>{g.map((id) => PAGES.find((p) => p.id === id)!).filter((p) => (!p.desktop || window.pagerDesktop) && (p.id !== "admin" || isAdmin)).map((p) => <Row key={p.id} title={p.title} hint={p.hint} icon={p.icon} tint={p.tint} onClick={() => nav(`settings/${p.id}`)} chevron />)}</Group>)}
     </>
   );
 }
@@ -162,6 +165,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
     );
     case "notifications": return <Notifications />;
     case "bridges": return <BridgesPage />;
+    case "admin": return <AdminPage />;
     case "labels": return <Labels />;
     case "media": return <Media />;
     case "privacy": return (

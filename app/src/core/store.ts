@@ -25,6 +25,8 @@ interface State {
   scheduled: Scheduled[];
   reminders: Reminder[];
   bridges: Network[];
+  /** This account is an administrator of the server. */
+  isAdmin: boolean;
   userStickers?: StickerPack;
 }
 
@@ -35,7 +37,7 @@ const lsSet = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.st
 let state: State = {
   chats: {}, synced: false, muted: [],
   drafts: lsGet("pager.drafts", {}), stars: lsGet("pager.stars", []), scheduled: lsGet("pager.scheduled", []),
-  reminders: lsGet("pager.reminders", []), bridges: [], userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
+  reminders: lsGet("pager.reminders", []), bridges: [], isAdmin: false, userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
 };
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
@@ -150,6 +152,7 @@ function begin(s: Session, cache?: { userId: string; since?: string; chats: Reco
   syncAbort = new AbortController();
   void syncLoop(s, syncAbort.signal);
   void refreshBridges();
+  void pager.me().then((m) => set({ isAdmin: m.admin })).catch(() => {});
   armReminders();
 }
 
@@ -230,7 +233,7 @@ async function signOutLocal() {
   await dbDel("cache");
   http.token = ""; since = undefined;
   blobCache.forEach((u) => URL.revokeObjectURL(u)); blobCache.clear();
-  set({ session: undefined, chats: {}, synced: false, muted: [], bridges: [] });
+  set({ session: undefined, chats: {}, synced: false, muted: [], bridges: [], isAdmin: false });
 }
 
 // ---- Notifications ----------------------------------------------------------------------
