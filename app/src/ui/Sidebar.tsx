@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlarmClock, Archive, ArchiveRestore, BellOff, CheckCheck, CircleDot, Circle, CheckCircle2, Inbox, ListFilter, MailOpen, MessageSquareDot, MoreVertical, Pin,
-  PinOff, Search, Settings as SettingsIcon, Hourglass, SquarePen, Star, Tag, TriangleAlert, Users, ArrowDownToLine, ChevronLeft, ChevronRight, UserRoundCog, X, BellRing, ArrowUpToLine,
+  PinOff, Trash2, Search, Settings as SettingsIcon, Hourglass, SquarePen, Star, Tag, TriangleAlert, Users, ArrowDownToLine, ChevronLeft, ChevronRight, UserRoundCog, X, BellRing, ArrowUpToLine,
 } from "lucide-react";
 import { ChatSummary } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import {
-  addLabel, markAllRead, markRead, markUnread, me, movePin, pin, remind, removeLabel, setLowPriority, setMuted, setTag, snooze, useInbox, useLabels, useStore, useChatsRaw,
+  addLabel, markAllRead, markRead, markUnread, me, movePin, pin, remind, removeLabel, setLowPriority, setMuted, setTag, snooze, leave, useInbox, useLabels, useStore, useChatsRaw,
 } from "../core/store";
 import { RowAction, useSettings } from "../core/settings";
 import { Avatar, IconButton, Modal, SheetItem, WhenModal, EmptyState } from "./common";
@@ -63,6 +63,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
   const [ctx, setCtx] = useState<{ c: ChatSummary; x: number; y: number }>();
   const [filterModal, setFilterModal] = useState(false);
   const [muteFor, setMuteFor] = useState<string[]>();
+  const [deleteFor, setDeleteFor] = useState<string[]>();
   const [undo, setUndo] = useState<{ label: string; revert: () => void }>();
   useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(undefined), 4500); return () => clearTimeout(t); }, [undo]);
   const [labelFor, setLabelFor] = useState<string[]>();
@@ -110,6 +111,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
             <IconButton icon={Archive} label="Archive" onClick={() => { picked.forEach((id) => setTag(id, "u.archived", true)); setPicked([]); }} />
             <IconButton icon={BellOff} label="Mute" onClick={() => setMuteFor(picked)} />
             <IconButton icon={Tag} label="Labels" onClick={() => setLabelFor(picked)} />
+            <IconButton icon={Trash2} label="Delete" onClick={() => setDeleteFor(picked)} />
           </div>
         </header>
       ) : (
@@ -218,7 +220,13 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
       </div>
 
       {ctx && <ChatMenu c={ctx.c} x={ctx.x} y={ctx.y} pins={pins} close={() => setCtx(undefined)}
-        onMute={() => setMuteFor([ctx.c.id])} onLabels={() => setLabelFor([ctx.c.id])} onWhen={(kind) => setWhenFor({ ids: [ctx.c.id], kind })} onSelect={() => toggle(ctx.c.id)} />}
+        onMute={() => setMuteFor([ctx.c.id])} onLabels={() => setLabelFor([ctx.c.id])} onWhen={(kind) => setWhenFor({ ids: [ctx.c.id], kind })} onSelect={() => toggle(ctx.c.id)} onDelete={() => setDeleteFor([ctx.c.id])} />}
+      {deleteFor && (
+        <Modal title={deleteFor.length === 1 ? "Delete this chat?" : `Delete ${deleteFor.length} chats?`} onClose={() => setDeleteFor(undefined)}>
+          <p className="muted">They will be removed from Pager. The conversations on the other apps aren't deleted, and a chat comes back if someone writes again.</p>
+          <div className="row-end"><button className="link" onClick={() => setDeleteFor(undefined)}>Cancel</button><button className="primary danger" onClick={() => { deleteFor.forEach(leave); setDeleteFor(undefined); setPicked([]); }}>Delete</button></div>
+        </Modal>
+      )}
       {muteFor && (
         <Modal title={muteFor.length === 1 ? "Mute chat" : `Mute ${muteFor.length} chats`} onClose={() => setMuteFor(undefined)}>
           <div className="stack">
@@ -246,7 +254,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
   );
 }
 
-function ChatMenu({ c, x, y, pins, close, onMute, onLabels, onWhen, onSelect }: { c: ChatSummary; x: number; y: number; pins: ChatSummary[]; close: () => void; onMute: () => void; onLabels: () => void; onWhen: (k: "snooze" | "remind") => void; onSelect: () => void }) {
+function ChatMenu({ c, x, y, pins, close, onMute, onLabels, onWhen, onSelect, onDelete }: { c: ChatSummary; x: number; y: number; pins: ChatSummary[]; close: () => void; onMute: () => void; onLabels: () => void; onWhen: (k: "snooze" | "remind") => void; onSelect: () => void; onDelete: () => void }) {
   const unread = c.unread > 0 || c.markedUnread;
   const at = pins.findIndex((p) => p.id === c.id);
   const run = (f: () => void) => () => { f(); close(); };
@@ -265,6 +273,7 @@ function ChatMenu({ c, x, y, pins, close, onMute, onLabels, onWhen, onSelect }: 
         <button onClick={run(() => onWhen("remind"))}><AlarmClock size={18} />Remind me…</button>
         <button onClick={run(onLabels)}><Tag size={18} />Labels…</button>
         <button onClick={run(onSelect)}><CheckCircle2 size={18} />Select</button>
+        <button className="danger" onClick={run(onDelete)}><Trash2 size={18} />Delete chat…</button>
       </div>
     </div>
   );

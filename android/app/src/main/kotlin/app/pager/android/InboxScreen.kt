@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.rounded.Label
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DoneAll
@@ -130,6 +131,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
     var labelFor by remember { mutableStateOf<List<String>?>(null) }
     var muteFor by remember { mutableStateOf<List<String>?>(null) }
     var snoozeFor by remember { mutableStateOf<String?>(null) }
+    var deleteFor by remember { mutableStateOf<List<String>?>(null) }
     var remindFor by remember { mutableStateOf<String?>(null) }
     val selected = remember { mutableStateListOf<String>() }
     val selecting = selected.isNotEmpty()
@@ -181,6 +183,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
                             DropdownMenuItem(text = { Text("Mute…") }, leadingIcon = { Icon(Icons.Rounded.NotificationsOff, null) }, onClick = { more = false; muteFor = selected.toList() })
                             DropdownMenuItem(text = { Text("Low priority") }, leadingIcon = { Icon(Icons.Rounded.LowPriority, null) }, onClick = { more = false; selected.forEach { store.setLowPriority(it, true) }; selected.clear() })
                             DropdownMenuItem(text = { Text("Labels…") }, leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Label, null) }, onClick = { more = false; labelFor = selected.toList() })
+                            DropdownMenuItem(text = { Text("Delete…", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error) }, onClick = { more = false; deleteFor = selected.toList() })
                         }
                     }
                 }
@@ -297,7 +300,17 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             SheetItem(Icons.Rounded.Alarm, "Remind me…", { menuFor = null; remindFor = c.id })
             SheetItem(Icons.AutoMirrored.Rounded.Label, "Labels…", { menuFor = null; labelFor = listOf(c.id) })
             SheetItem(Icons.Rounded.RadioButtonUnchecked, "Select", { menuFor = null; toggleSelect(c.id) })
+            SheetItem(Icons.Rounded.Delete, "Delete chat…", { menuFor = null; deleteFor = listOf(c.id) }, danger = true)
         }
+    }
+    deleteFor?.let { ids ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleteFor = null },
+            title = { Text(if (ids.size == 1) "Delete this chat?" else "Delete ${ids.size} chats?") },
+            text = { Text("They will be removed from Pager. The conversations on the other apps aren't deleted, and a chat comes back if someone writes again.") },
+            confirmButton = { TextButton(onClick = { ids.forEach { store.leave(it) }; deleteFor = null; selected.clear() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("Cancel") } },
+        )
     }
     labelFor?.let { LabelSheet(it) { labelFor = null } }
     muteFor?.let { ids -> MuteSheet(if (ids.size == 1) "Mute chat" else "Mute ${ids.size} chats", { ms -> ids.forEach { store.setMuted(it, true, ms) }; muteFor = null; selected.clear() }, { muteFor = null }) }
@@ -330,8 +343,9 @@ private fun FilterRow(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
 private fun Tab(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, on: Boolean, badge: Int?, click: () -> Unit) {
     val bg = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-    Row(Modifier.clip(RoundedCornerShape(50)).background(bg).clickable(onClick = click).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = fg, modifier = Modifier.size(16.dp))
+    val eink = LocalSettings.current.eink
+    Row(Modifier.clip(RoundedCornerShape(50)).background(bg).let { if (eink) it.border(2.dp, Color.Black, RoundedCornerShape(50)) else it }.clickable(onClick = click).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = fg, modifier = Modifier.size(if (eink) 20.dp else 16.dp))
         Spacer(Modifier.width(6.dp))
         Text(label + (badge?.let { "  $it" } ?: ""), color = fg, style = MaterialTheme.typography.labelLarge)
     }
@@ -405,7 +419,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
             val start = dismiss.dismissDirection == SwipeToDismissBoxValue.StartToEnd
             val action = if (start) s.swipeRight else s.swipeLeft
             val armed = dismiss.targetValue != SwipeToDismissBoxValue.Settled
-            val tint by androidx.compose.animation.animateColorAsState(if (armed) swipeColor(action) else swipeColor(action).copy(alpha = 0.55f), label = "swipe")
+            val tint by androidx.compose.animation.animateColorAsState(if (armed) swipeColor(action) else swipeColor(action).dim(0.55f), label = "swipe")
             Row(Modifier.fillMaxSize().background(tint).padding(horizontal = 24.dp), horizontalArrangement = if (start) Arrangement.Start else Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 Icon(swipeIcon(action, c), null, tint = androidx.compose.ui.graphics.Color.White)
                 Spacer(Modifier.width(8.dp))

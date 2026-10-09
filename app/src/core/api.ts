@@ -93,7 +93,7 @@ export const matrix = {
   messages: async (roomId: string, from: string): Promise<{ chunk: any[]; end?: string; state?: any[] }> =>
     call("GET", `/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=40&from=${enc(from)}&filter=${enc('{"lazy_load_members":true}')}`),
   join: (roomId: string) => call("POST", `/_matrix/client/v3/join/${enc(roomId)}`, {}),
-  leave: (roomId: string) => call("POST", `/_matrix/client/v3/rooms/${enc(roomId)}/leave`, {}),
+  leave: async (roomId: string) => { await call("POST", `/_matrix/client/v3/rooms/${enc(roomId)}/leave`, {}); await call("POST", `/_matrix/client/v3/rooms/${enc(roomId)}/forget`, {}).catch(() => {}); },
   send: (roomId: string, type: string, txn: string, content: unknown) =>
     call<{ event_id: string }>("PUT", `/_matrix/client/v3/rooms/${enc(roomId)}/send/${type}/${enc(txn)}`, content).then((r) => r.event_id),
   sendDelayed: (roomId: string, txn: string, content: unknown, delayMs: number) =>

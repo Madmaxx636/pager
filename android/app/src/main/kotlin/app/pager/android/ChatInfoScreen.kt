@@ -146,14 +146,14 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 }
                 if (members == null) Text("Loading members…", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            SettingsGroup { ButtonRow("Leave chat", danger = true) { confirmLeave = true } }
+            SettingsGroup { ButtonRow("Delete chat", danger = true) { confirmLeave = true } }
         }
     }
 
     if (confirmLeave) AlertDialog(
-        onDismissRequest = { confirmLeave = false }, title = { Text("Leave this chat?") },
-        text = { Text("It will disappear from your inbox. The conversation on ${networkMeta(c.network).label} isn't deleted.") },
-        confirmButton = { TextButton(onClick = { confirmLeave = false; store.leave(roomId); onLeft() }) { Text("Leave", color = MaterialTheme.colorScheme.error) } },
+        onDismissRequest = { confirmLeave = false }, title = { Text("Delete this chat?") },
+        text = { Text("It will be removed from Pager. The conversation on ${networkMeta(c.network).label} isn't deleted, and it comes back if someone writes again.") },
+        confirmButton = { TextButton(onClick = { confirmLeave = false; store.leave(roomId); onLeft() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Cancel") } },
     )
     if (rename) {

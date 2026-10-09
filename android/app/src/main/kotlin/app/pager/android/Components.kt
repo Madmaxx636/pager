@@ -63,7 +63,7 @@ fun Avatar(name: String, network: String?, size: Dp = 46.dp, mxc: String? = null
             else {
                 // Unnamed contacts show up as phone numbers: a person glyph beats a meaningless digit.
                 val unnamed = name.isNotEmpty() && name.all { it.isDigit() || it in "+ -()" }
-                if (unnamed) Icon(Icons.Rounded.Person, null, Modifier.size(size * 0.55f), tint = if (eink) Color.Black else Color.White.copy(alpha = 0.9f))
+                if (unnamed) Icon(Icons.Rounded.Person, null, Modifier.size(size * 0.55f), tint = if (eink) Color.Black else Color.White.dim(0.9f))
                 else {
                     val initial = name.dropWhile { !it.isLetterOrDigit() }.firstOrNull()?.uppercase() ?: "?"
                     Text(initial, color = if (eink) Color.Black else Color.White, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)

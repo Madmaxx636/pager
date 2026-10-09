@@ -136,14 +136,47 @@ function load(): AppSettings {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") }; } catch { return { ...DEFAULTS }; }
 }
 
+// ---- Per-device settings that follow your account ---------------------------------------------
+// Each kind of device (web, desktop, phone) keeps its own settings in your Matrix account data, so signing in on a new
+// computer brings your layout back. Things that only make sense on one machine are left out.
+const SYNC_EXCLUDE: (keyof AppSettings)[] = ["gifKey", "sidebarWidth"];
+const TS_KEY = "pager.settingsUpdatedAt";
+let updatedAt = (() => { try { return Number(localStorage.getItem(TS_KEY) ?? 0) || 0; } catch { return 0; } })();
+const localListeners = new Set<() => void>();
+export const settingsKind = () => (typeof window !== "undefined" && window.pagerDesktop ? "desktop" : "web");
+export const settingsSyncType = () => `app.pager.settings.${settingsKind()}`;
+export const getSettingsUpdatedAt = () => updatedAt;
+export function settingsPayload(): { v: 1; updatedAt: number; settings: Partial<AppSettings> } {
+  const s: Partial<AppSettings> = { ...raw };
+  for (const k of SYNC_EXCLUDE) delete s[k];
+  return { v: 1, updatedAt, settings: s };
+}
+/** Applies settings saved in the account if they are newer than ours. Returns whether anything changed. */
+export function applyRemoteSettings(content: unknown): boolean {
+  const c = content as { updatedAt?: number; settings?: Partial<AppSettings> } | undefined;
+  if (!c || typeof c.updatedAt !== "number" || !c.settings || c.updatedAt <= updatedAt) return false;
+  const next: Partial<AppSettings> = { ...c.settings };
+  for (const k of SYNC_EXCLUDE) delete next[k];
+  raw = { ...raw, ...next };
+  state = effective(raw);
+  updatedAt = c.updatedAt;
+  try { localStorage.setItem(KEY, JSON.stringify(raw)); localStorage.setItem(TS_KEY, String(updatedAt)); } catch { /* storage may be unavailable */ }
+  listeners.forEach((l) => l());
+  return true;
+}
+/** Called after you change a setting on this device (not when settings arrive from the account). */
+export function onLocalSettingsChange(cb: () => void) { localListeners.add(cb); return () => { localListeners.delete(cb); }; }
+
 export const getSettings = () => state;
 /** Your own choices, without E-ink's overrides (this is what gets saved and shown on the settings page). */
 export const getRawSettings = () => raw;
 export function updateSettings(patch: Partial<AppSettings>) {
   raw = { ...raw, ...patch };
   state = effective(raw);
-  try { localStorage.setItem(KEY, JSON.stringify(raw)); } catch { /* storage may be unavailable */ }
+  updatedAt = Date.now();
+  try { localStorage.setItem(KEY, JSON.stringify(raw)); localStorage.setItem(TS_KEY, String(updatedAt)); } catch { /* storage may be unavailable */ }
   listeners.forEach((l) => l());
+  localListeners.forEach((l) => l());
 }
 export const resetSettings = () => updateSettings({ ...DEFAULTS });
 export function useSettings(): AppSettings {
