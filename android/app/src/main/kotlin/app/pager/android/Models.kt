@@ -112,7 +112,8 @@ data class ChatState(
     /** Bridge bots keep a management DM for login commands; users never need to see it. */
     fun isBotRoom(me: String): Boolean {
         val others = joined.filter { it != me }
-        return others.size == 1 && BOT.containsMatchIn(others[0])
+        // Only some members are loaded at a time: a room with more people than that (like Signal's Note to Self: you, the bot and your own account) is not a bot room.
+        return others.size == 1 && BOT.containsMatchIn(others[0]) && (memberCount <= 0 || memberCount <= 2)
     }
 
     companion object { const val LABEL_PREFIX = "u.label."; private val BOT = Regex("^@[a-z]*bot:") }

@@ -46,6 +46,12 @@ describe("applySync", () => {
     const c = base();
     expect(isBotRoom(c["!bot:x"], me)).toBe(true); expect(isBotRoom(c["!a:x"], me)).toBe(false);
   });
+  it("keeps Note to Self (you, the bot and your own account) even when only the bot is loaded", () => {
+    const c = base();
+    const note = { ...c["!bot:x"], id: "!note:x", memberCount: 3 };
+    expect(isBotRoom(note, me)).toBe(false);
+    expect(isBotRoom({ ...c["!bot:x"], memberCount: 2 }, me)).toBe(true);
+  });
   it("notifies only for others' new messages and dedupes", () => {
     const r = applySync(base(), join([text("$2", me, 2000, "Yes!"), text("$3", mom, 3000, "Great")]), me, false);
     expect(r.chats["!a:x"].messages).toHaveLength(3);

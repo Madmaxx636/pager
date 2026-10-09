@@ -136,7 +136,8 @@ export function previewOf(m: Msg): string {
 /** Bridge bots keep a management DM for login commands; users never need to see it. */
 export function isBotRoom(c: ChatState, me: string): boolean {
   const others = c.joined.filter((u) => u !== me);
-  return others.length === 1 && /^@[a-z]*bot:/.test(others[0]);
+  // Only some members are loaded at a time: a room with more people than that (like Signal's Note to Self: you, the bot and your own account) is not a bot room.
+  return others.length === 1 && /^@[a-z]*bot:/.test(others[0]) && (!c.memberCount || c.memberCount <= 2);
 }
 
 export function displayName(c: ChatState, me: string): string {

@@ -168,6 +168,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
     var replyTo by remember(roomId) { mutableStateOf<Msg?>(null) }
     var editing by remember(roomId) { mutableStateOf<Msg?>(null) }
     var actions by remember { mutableStateOf<Msg?>(null) }
+    var selectable by remember { mutableStateOf<Msg?>(null) }
     var details by remember { mutableStateOf<Msg?>(null) }
     var viewerId by remember { mutableStateOf<String?>(null) }
     var attach by remember { mutableStateOf(false) }
@@ -408,6 +409,13 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
     if (pollSheet) PollSheet(onCreate = { q, a, max, disclosed -> store.sendPoll(roomId, q, a, max, disclosed); pollSheet = false }, onDismiss = { pollSheet = false })
     if (emojiForText) EmojiPickerDialog(s.recentEmoji, onPick = { e -> text += e; emojiForText = false }, onDismiss = { emojiForText = false })
 
+    selectable?.let { m ->
+        AlertDialog(
+            onDismissRequest = { selectable = null }, title = { Text("Select text") },
+            text = { androidx.compose.foundation.text.selection.SelectionContainer { Text(m.body) } },
+            confirmButton = { TextButton(onClick = { selectable = null }) { Text("Done") } },
+        )
+    }
     actions?.let { m ->
         val mine = m.sender == me
         ActionsSheet(
@@ -422,6 +430,20 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
             onEdit = if (mine && m.type == "m.text" && m.status == STATUS_SENT) ({ editing = m; replyTo = null; text = m.body; actions = null }) else null,
             onDelete = if (mine && m.status == STATUS_SENT) ({ actions = null; if (s.confirmDelete) confirmDelete = m else store.delete(roomId, m.id) }) else null,
             onInfo = { details = m; actions = null },
+            onSave = m.mxc?.let { x -> {
+                actions = null
+                scope.launch {
+                    val name = m.body.ifEmpty { "pager-${m.id.takeLast(6)}" }
+                    val ok = if (m.type == "m.image") store.media.saveToGallery(x, name, m.mime) else store.media.saveToDownloads(x, name, m.mime)
+                    // Older phones can't save without a permission: offer the share sheet, which includes "Save to device".
+                    if (!ok && android.os.Build.VERSION.SDK_INT < 29) store.media.share(x, name, m.mime)
+                    android.widget.Toast.makeText(context, if (ok) (if (m.type == "m.image") "Saved to your gallery" else "Saved to Downloads") else "Couldn't save that", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            } },
+            onOpen = m.mxc?.let { x -> { actions = null; scope.launch { if (!store.media.open(x, m.body.ifEmpty { "file" }, m.mime)) android.widget.Toast.makeText(context, "No app can open that", android.widget.Toast.LENGTH_SHORT).show() } } },
+            onShare = if (m.mxc != null) ({ actions = null; scope.launch { store.media.share(m.mxc, m.body.ifEmpty { "file" }, m.mime) } })
+                else ({ actions = null; context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, m.body), null).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }),
+            onSelectText = { selectable = m; actions = null },
         )
     }
     details?.let { DetailsSheet(it, chat) { details = null } }
