@@ -2,6 +2,10 @@
 
 package app.pager.android
 
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.graphicsLayer
@@ -503,28 +507,32 @@ private fun PinnedGrid(pins: List<ChatSummary>, onOpen: (String) -> Unit, onMenu
                             .onGloballyPositioned { bounds[c.id] = it.boundsInRoot() }
                             .zIndex(if (dragging) 1f else 0f)
                             .graphicsLayer { if (dragging) { translationX = drag.x; translationY = drag.y; scaleX = 1.1f; scaleY = 1.1f; alpha = 0.92f } }
+                            .clickable { onOpen(c.id) }
+                            // After the tap handler, so it sees touches first: a hold is ours (menu or drag), a quick tap is left to clickable.
                             .pointerInput(c.id) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = { dragId = c.id; drag = androidx.compose.ui.geometry.Offset.Zero; if (s.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
-                                    onDrag = { change, delta -> change.consume(); drag += delta },
-                                    onDragEnd = {
-                                        val from = bounds[c.id]
-                                        if (drag.getDistance() < 16f) onMenu(c)
-                                        else if (from != null) {
-                                            val centre = from.center + drag
-                                            val target = pins.firstOrNull { it.id != c.id && bounds[it.id]?.contains(centre) == true }
-                                            if (target != null) onMove(c.id, pins.indexOf(target))
-                                        }
-                                        dragId = null; drag = androidx.compose.ui.geometry.Offset.Zero
-                                    },
-                                    onDragCancel = {
-                                        // Holding without moving ends as a cancel, not an end: that is the menu.
-                                        if (drag.getDistance() < 16f && dragId == c.id) onMenu(c)
-                                        dragId = null; drag = androidx.compose.ui.geometry.Offset.Zero
-                                    },
-                                )
-                            }
-                            .clickable { onOpen(c.id) },
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+                                    dragId = c.id; drag = androidx.compose.ui.geometry.Offset.Zero
+                                    if (s.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    var moved = false
+                                    while (true) {
+                                        val ch = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                        ch.consume()
+                                        if (!ch.pressed) break
+                                        drag += ch.positionChange()
+                                        if (drag.getDistance() > 24f) moved = true
+                                    }
+                                    val from = bounds[c.id]
+                                    if (!moved) onMenu(c)
+                                    else if (from != null) {
+                                        val centre = from.center + drag
+                                        val target = pins.firstOrNull { it.id != c.id && bounds[it.id]?.contains(centre) == true }
+                                        if (target != null) onMove(c.id, pins.indexOf(target))
+                                    }
+                                    dragId = null; drag = androidx.compose.ui.geometry.Offset.Zero
+                                }
+                            },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Box {
