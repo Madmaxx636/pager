@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
-import { RowAction, ACCENTS, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
+import { RowAction, ACCENTS, accentTones, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
 import { addStickers, cancelReminder, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
@@ -219,13 +219,15 @@ function DeleteProfile({ onClose }: { onClose: () => void }) {
 }
 
 function Appearance() {
+  const [picker, setPicker] = useState(false);
   const s = useRawSettings();
   const [editing, setEditing] = useState<number>();
   return (
     <>
       <Group title="Theme">
         <Select title="Mode" value={s.themeMode} options={[["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black (AMOLED)"]]} onChange={(v) => updateSettings({ themeMode: v })} />
-        <Row title="Accent color"><div className="swatches">{Object.entries(ACCENTS).map(([name, c]) => <button key={name} className={s.accent === name ? "on" : ""} style={{ background: c.dark }} onClick={() => updateSettings({ accent: name })} aria-label={name}>{s.accent === name ? <Check size={16} color={c.onDark} /> : null}</button>)}</div></Row>
+        <Row title="Accent color"><div className="swatches">{Object.entries(ACCENTS).map(([name, c]) => <button key={name} className={s.accent === name ? "on" : ""} style={{ background: c.dark }} onClick={() => updateSettings({ accent: name })} aria-label={name}>{s.accent === name ? <Check size={16} color={c.onDark} /> : null}</button>)}<button className={"swatch-custom" + (s.accent === "custom" ? " on" : "")} style={s.accent === "custom" ? { background: s.accentCustom } : undefined} onClick={() => setPicker(true)} aria-label="Make your own">{s.accent === "custom" ? <Check size={16} color={accentTones("custom", s.accentCustom).onDark} /> : <Palette size={15} color="#fff" />}</button></div></Row>
+        {picker && <ColorDialog value={s.accent === "custom" ? s.accentCustom : accentTones(s.accent, s.accentCustom).light} onClose={() => setPicker(false)} onPick={(c) => { updateSettings({ accent: "custom", accentCustom: c }); setPicker(false); }} />}
       </Group>
       <Group title="Text & messages">
         <Row title="Text size" hint={`${Math.round(s.fontScale * 100)}%`}><input type="range" min="0.85" max="1.4" step="0.05" value={s.fontScale} onChange={(e) => updateSettings({ fontScale: Number(e.target.value) })} /></Row>
@@ -472,5 +474,21 @@ function Backup() {
         <Row title="Reset all settings" onClick={() => confirm("Reset all settings?") && resetSettings()}><span className="danger">Reset</span></Row>
       </Group>
     </>
+  );
+}
+
+/** "Make your own" accent: the system colour wheel, or type the colour code. */
+function ColorDialog({ value, onClose, onPick }: { value: string; onClose: () => void; onPick: (hex: string) => void }) {
+  const [hex, setHex] = useState(value.toLowerCase());
+  const ok = /^#[0-9a-f]{6}$/i.test(hex);
+  return (
+    <Modal title="Make your own" onClose={onClose}>
+      <div className="color-dialog">
+        <input type="color" aria-label="Colour wheel" value={ok ? hex : "#0d9488"} onChange={(e) => setHex(e.target.value)} />
+        <label>Colour code<input className={ok ? "" : "bad"} value={hex} maxLength={7} spellCheck={false} onChange={(e) => setHex(e.target.value.startsWith("#") ? e.target.value : "#" + e.target.value)} /></label>
+        <div className="color-preview" style={{ background: ok ? hex : "transparent" }} />
+      </div>
+      <div className="row-end"><button className="link" onClick={onClose}>Cancel</button><button className="primary" disabled={!ok} onClick={() => onPick(hex.toLowerCase())}>Use this colour</button></div>
+    </Modal>
   );
 }
