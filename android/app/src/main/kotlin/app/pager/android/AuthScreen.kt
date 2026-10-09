@@ -44,7 +44,7 @@ fun AuthScreen(store: Store) {
     val shape = RoundedCornerShape(16.dp)
 
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(28.dp), verticalArrangement = Arrangement.Center) {
-        PagerLogo(64.dp)
+        PagerMascot(120.dp)
         Spacer(Modifier.height(20.dp))
         Text(if (signingUp) "Create your account" else "Welcome to Pager", style = MaterialTheme.typography.headlineMedium)
         Text("All your chats in one inbox, on your own server.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))

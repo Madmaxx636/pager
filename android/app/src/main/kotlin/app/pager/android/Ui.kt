@@ -110,6 +110,19 @@ fun IconTile(icon: ImageVector, color: Color, size: Int = 34) {
 @Composable
 fun ChevronEnd() = Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.dim(0.7f))
 
+/** An empty state with the Pager mascot instead of an icon. */
+@Composable
+fun MascotEmpty(title: String, body: String? = null, mood: MascotMood = MascotMood.Idle, action: @Composable () -> Unit = {}) {
+    Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        PagerMascot(150.dp, mood = mood)
+        Spacer(Modifier.height(12.dp))
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        if (body != null) Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+        Spacer(Modifier.height(16.dp))
+        action()
+    }
+}
+
 @Composable
 fun EmptyState(icon: ImageVector, title: String, body: String? = null, action: @Composable () -> Unit = {}) {
     Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

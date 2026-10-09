@@ -251,8 +251,8 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
                 }
                 if (shown.isEmpty() && pins.isEmpty()) item("empty") {
                     when {
-                        !synced -> EmptyState(Icons.Rounded.Inbox, "Syncing…")
-                        all.isEmpty() -> EmptyState(Icons.Rounded.Inbox, "No chats yet", "Connect an app to bring your conversations here.") { androidx.compose.material3.Button(onClick = { accounts = true }) { Text("Connect an account") } }
+                        !synced -> MascotEmpty("Syncing…", null, MascotMood.Ring)
+                        all.isEmpty() -> MascotEmpty("No chats yet", "Connect an app to bring your conversations here.") { androidx.compose.material3.Button(onClick = { accounts = true }) { Text("Connect an account") } }
                         tab == "unread" -> EmptyState(Icons.Rounded.CheckCircle, "You're all caught up", "No unread chats.")
                         tab == "archive" -> EmptyState(Icons.Rounded.Archive, "Nothing archived", "Archived chats come back when someone writes.")
                         tab == "low" -> EmptyState(Icons.Rounded.LowPriority, "No low-priority chats", "Low-priority chats stay quiet except for @mentions and replies.")
