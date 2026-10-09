@@ -277,6 +277,8 @@ function Notifications() {
         <Row title="Send a test notification" hint="Check sound and how it looks" onClick={off ? undefined : test}><span className="accent">Test</span></Row></Group>
       <Group title="What to notify" footer="Muted and Low priority chats stay quiet except for @mentions, replies to your messages and your keywords.">
         <Select title="Notify me about" value={s.notifScope} disabled={off} options={[["all", "Every message"], ["dm_mentions", "Direct messages and mentions"], ["favorites", "Pinned chats and mentions"]]} onChange={(v) => updateSettings({ notifScope: v })} />
+        <Select title="Direct messages" value={s.notifDirectMode} disabled={off} options={[["all", "Every message"], ["mentions", "Mentions and replies only"], ["none", "Nothing"]]} onChange={(v) => updateSettings({ notifDirectMode: v })} />
+        <Select title="Group chats" value={s.notifGroupMode} disabled={off} options={[["all", "Every message"], ["mentions", "Mentions and replies only"], ["none", "Nothing"]]} onChange={(v) => updateSettings({ notifGroupMode: v })} />
         <SwitchRow title="Groups: only when mentioned" hint="Group chats stay quiet unless someone @mentions you" checked={s.notifGroupMentionsOnly} disabled={off} onChange={(v) => updateSettings({ notifGroupMentionsOnly: v })} />
       </Group>
       <Group title="Keywords" footer="A message with one of these words always notifies you, even in a muted chat. Whole words only.">

@@ -206,6 +206,7 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
         val controller = WindowCompat.getInsetsController(window, view)
         controller.isAppearanceLightStatusBars = !dark
         controller.isAppearanceLightNavigationBars = !dark
+        window.setWindowAnimations(if (settings.eink) 0 else android.R.style.Animation_Activity)
     }
     val colors = if (settings.accent == "dynamic" && Build.VERSION.SDK_INT >= 31) {
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

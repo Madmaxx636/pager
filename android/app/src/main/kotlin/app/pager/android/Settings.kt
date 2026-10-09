@@ -18,8 +18,9 @@ data class ChatNotifPrefs(
     val preview: String = "default",    // default | show | hide
     val sound: String = "default",      // default | off
     val vibrate: String = "default",    // default | off
+    val level: String = "default",      // default | priority | silent (like Android conversations)
 ) {
-    val isDefault get() = mode == "default" && preview == "default" && sound == "default" && vibrate == "default"
+    val isDefault get() = mode == "default" && preview == "default" && sound == "default" && vibrate == "default" && level == "default"
 }
 
 @Serializable
@@ -102,6 +103,9 @@ data class AppSettings(
     val notifNetworkMode: Map<String, String> = emptyMap(),
     /** Per chat overrides, set from the chat's info page. */
     val notifChat: Map<String, ChatNotifPrefs> = emptyMap(),
+    /** How direct messages and group chats notify when nothing more specific is set: all | mentions | none. */
+    val notifDirectMode: String = "all",
+    val notifGroupMode: String = "all",
     /** Words that always notify (even in muted chats), like a name or a nickname. */
     val notifKeywords: List<String> = emptyList(),
     /** Days of the week quiet hours apply on (0 = Sunday). */

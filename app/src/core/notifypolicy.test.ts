@@ -54,6 +54,18 @@ describe("notification policy", () => {
     expect(decide(msg({ nowMs: 20_000 }), dnd).show).toBe(true);
     expect(decide(msg({ nowMs: 5_000, mentioned: true }), { ...dnd, notifQuietBreakThrough: true }).show).toBe(true);
   });
+  it("priority chats get through mute, quiet hours and do not disturb; silent chats show quietly", () => {
+    const quiet = S({ quietHoursEnabled: true, dndUntil: 10_000, notifChat: { "!a": { level: "priority" } } });
+    expect(decide(msg({ quiet: true, nowMin: 23 * 60, nowMs: 5_000 }), quiet)).toMatchObject({ show: true, silent: false });
+    expect(decide(msg(), S({ notifChat: { "!a": { level: "silent" } } }))).toMatchObject({ show: true, silent: true });
+    expect(decide(msg(), S({ notifChat: { "!a": { level: "priority", mode: "none" } } })).show).toBe(false);
+  });
+  it("direct messages and groups have their own default modes", () => {
+    expect(decide(msg({ isGroup: true }), S({ notifGroupMode: "mentions" })).show).toBe(false);
+    expect(decide(msg({ isGroup: true, mentioned: true }), S({ notifGroupMode: "mentions" })).show).toBe(true);
+    expect(decide(msg(), S({ notifGroupMode: "none" })).show).toBe(true);
+    expect(decide(msg(), S({ notifDirectMode: "none" })).show).toBe(false);
+  });
   it("picks the sound: chat, then network, then the app's", () => {
     expect(decide(msg(), S()).sound).toBe("chime");
     expect(decide(msg(), S({ notifNetworkSound: { signal: "pop" } })).sound).toBe("pop");

@@ -29,6 +29,8 @@ interface State {
   /** This account is an administrator of the server. */
   isAdmin: boolean;
   userStickers?: StickerPack;
+  /** GIFs you starred, saved in your account so every device has them. */
+  favoriteGifs: Gif[];
 }
 
 const SESSION_KEY = "pager.session";
@@ -38,7 +40,7 @@ const lsSet = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.st
 let state: State = {
   chats: {}, synced: false, muted: [],
   drafts: lsGet("pager.drafts", {}), stars: lsGet("pager.stars", []), scheduled: lsGet("pager.scheduled", []),
-  reminders: lsGet("pager.reminders", []), bridges: [], isAdmin: false, userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
+  reminders: lsGet("pager.reminders", []), bridges: [], isAdmin: false, favoriteGifs: lsGet<Gif[]>("pager.favoriteGifs", []), userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
 };
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
@@ -186,6 +188,8 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}), ...(r.userStickers ? { userStickers: r.userStickers } : {}) });
       if (r.userStickers) lsSet("pager.userStickers", r.userStickers);
       handleSettingsSync(r.accountData?.[settingsSyncType()], s.userId);
+      const fav = r.accountData?.["app.pager.favorite_gifs"]?.gifs;
+      if (Array.isArray(fav)) { set({ favoriteGifs: fav as Gif[] }); lsSet("pager.favoriteGifs", fav); }
       r.invites.forEach((id) => void matrix.join(id).catch(() => {}));
       const muted = state.muted, st = getSettings();
       const when = new Date();
@@ -606,6 +610,30 @@ export function votePoll(roomId: string, pollId: string, answerIds: string[]) {
 export function endPoll(roomId: string, pollId: string) {
   patchChat(roomId, (c) => ({ ...c, pollEnded: [...c.pollEnded, pollId] }));
   void matrix.send(roomId, "org.matrix.msc3381.poll.end", uuid(), { "m.relates_to": { rel_type: "m.reference", event_id: pollId }, "org.matrix.msc1767.text": "The poll has ended." }).catch(() => {});
+}
+
+/** Stars or un-stars a GIF; the list lives in your Matrix account. */
+export function toggleFavoriteGif(g: Gif) {
+  const have = state.favoriteGifs.some((x) => x.url === g.url);
+  const next = have ? state.favoriteGifs.filter((x) => x.url !== g.url) : [g, ...state.favoriteGifs].slice(0, 200);
+  set({ favoriteGifs: next }); lsSet("pager.favoriteGifs", next);
+  void matrix.putAccountData(me(), "app.pager.favorite_gifs", { gifs: next }).catch(() => {});
+}
+
+/** Adds a picture from a chat to your own stickers: no re-upload, it just points at the same file. */
+export async function saveAsSticker(m: Msg) {
+  if (!m.mxc) return;
+  const existing = state.userStickers?.stickers ?? [];
+  if (existing.some((s) => s.url === m.mxc)) return;
+  const base = (m.body || "sticker").replace(/\.[^.]+$/, "").slice(0, 40) || "sticker";
+  const added: Sticker = { shortcode: `${base.replace(/[^A-Za-z0-9_-]/g, "_")}_${Date.now() % 100000}`, url: m.mxc, body: base, w: m.w, h: m.h, mime: m.mime };
+  const all = [...existing, added];
+  const pack: StickerPack = { key: "user", name: "My stickers", stickers: all };
+  set({ userStickers: pack }); lsSet("pager.userStickers", pack);
+  await matrix.putAccountData(me(), "im.ponies.user_emotes", {
+    pack: { display_name: "My stickers" },
+    images: Object.fromEntries(all.map((s) => [s.shortcode, { url: s.url, body: s.body, usage: ["sticker"], info: { mimetype: s.mime, w: s.w, h: s.h } }])),
+  }).catch(() => {});
 }
 
 export async function sendGif(roomId: string, gif: Gif) {

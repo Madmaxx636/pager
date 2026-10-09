@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { BarChart3, ContactRound, File as FileIcon, Image as ImageIcon, MapPin, Plus, Smile, Sticker as StickerIcon, X, Camera } from "lucide-react";
 import { Gif, searchGifs } from "../core/gifs";
 import { Sticker } from "../core/types";
-import { addStickers, stickerPacks, useStore } from "../core/store";
+import { addStickers, stickerPacks, toggleFavoriteGif, useStore } from "../core/store";
 import { useSettings } from "../core/settings";
 import { EmptyState, Modal, useMxc } from "./common";
 
@@ -36,19 +36,31 @@ export function AttachMenu({ onPick, onClose }: { onPick: (k: AttachKind) => voi
 
 export function GifModal({ onPick, onSettings, onClose }: { onPick: (g: Gif) => void; onSettings: () => void; onClose: () => void }) {
   const st = useSettings();
+  const favorites = useStore((s) => s.favoriteGifs);
+  const [tab, setTab] = useState<"favorites" | "search">(favorites.length || !st.gifKey ? "favorites" : "search");
   const [q, setQ] = useState("");
   const [gifs, setGifs] = useState<Gif[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (!st.gifKey) return;
+    if (!st.gifKey || tab !== "search") return;
     let live = true; setBusy(true); setErr("");
     const t = setTimeout(() => searchGifs(st.gifProvider, st.gifKey, q.trim()).then((r) => live && setGifs(r)).catch((e) => live && (setErr(e.message), setGifs([]))).finally(() => live && setBusy(false)), q ? 350 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [q, st.gifKey, st.gifProvider]);
+  }, [q, st.gifKey, st.gifProvider, tab]);
+  const grid = (list: Gif[]) => (
+    <div className="gif-grid">{list.map((g) => (
+      <div key={g.id + g.url} className="gif-cell" style={{ aspectRatio: g.w && g.h ? String(Math.min(2, Math.max(0.6, g.w / g.h))) : "1.4" }}>
+        <button onClick={() => onPick(g)}><img src={g.previewUrl} alt={g.title} loading="lazy" /></button>
+        <button className="gif-star" title={favorites.some((x) => x.url === g.url) ? "Remove from favorites" : "Add to favorites"} onClick={() => toggleFavoriteGif(g)}>{favorites.some((x) => x.url === g.url) ? "★" : "☆"}</button>
+      </div>))}</div>
+  );
   return (
     <Modal title="GIFs" onClose={onClose} wide>
-      {!st.gifKey ? (
+      <div className="tabs pad"><button className={"tab" + (tab === "favorites" ? " on" : "")} onClick={() => setTab("favorites")}>Favorites{favorites.length ? ` (${favorites.length})` : ""}</button><button className={"tab" + (tab === "search" ? " on" : "")} onClick={() => setTab("search")}>Search</button></div>
+      {tab === "favorites" ? (
+        favorites.length ? grid(favorites) : <EmptyState icon={ImageIcon} title="No favorite GIFs yet" body="Search for a GIF and tap ☆ to keep it here. Your favorites follow your account to every device." />
+      ) : !st.gifKey ? (
         <EmptyState icon={ImageIcon} title="Set up GIF search" body="Add a free Giphy or Tenor API key in Settings → Stickers & GIFs. Pager doesn't ship a shared key.">
           <button className="primary" onClick={onSettings}>Open settings</button>
         </EmptyState>
@@ -57,7 +69,7 @@ export function GifModal({ onPick, onSettings, onClose }: { onPick: (g: Gif) => 
           <div className="pill-search"><input autoFocus placeholder={`Search ${st.gifProvider === "tenor" ? "Tenor" : "GIPHY"}`} value={q} onChange={(e) => setQ(e.target.value)} /></div>
           {err && <div className="error pad">{err}</div>}
           {busy && !gifs.length && <p className="muted pad">Loading…</p>}
-          <div className="gif-grid">{gifs.map((g) => <button key={g.id} onClick={() => onPick(g)} style={{ aspectRatio: g.w && g.h ? String(Math.min(2, Math.max(0.6, g.w / g.h))) : "1.4" }}><img src={g.previewUrl} alt={g.title} loading="lazy" /></button>)}</div>
+          {grid(gifs)}
         </>
       )}
     </Modal>

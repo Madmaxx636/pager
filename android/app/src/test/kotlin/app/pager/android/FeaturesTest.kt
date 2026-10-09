@@ -198,3 +198,25 @@ class NotifyPolicyTest {
         assertTrue(d.show); assertTrue(d.silent); assertEquals("hidden", d.preview)
     }
 }
+
+class NotifyPriorityTest {
+    private fun msg(group: Boolean = false, mentioned: Boolean = false) = Incoming("!a", "Amy", "Amy", "hi", "signal", group, mentioned, 0L, false)
+    private fun decide(m: Incoming, s: AppSettings = AppSettings(), quiet: Boolean = false, nowMin: Int = 12 * 60) = NotifyPolicy.decide(m, quiet, false, nowMin, 2, s)
+
+    @Test fun priorityGetsThroughMuteAndQuietHours() {
+        val s = AppSettings(quietHoursEnabled = true, notifChat = mapOf("!a" to ChatNotifPrefs(level = "priority")))
+        val d = decide(msg(), s, quiet = true, nowMin = 23 * 60)
+        assertTrue(d.show); assertFalse(d.silent)
+        assertFalse(decide(msg(), AppSettings(notifChat = mapOf("!a" to ChatNotifPrefs(level = "priority", mode = "none")))).show)
+    }
+    @Test fun silentShowsQuietly() {
+        val d = decide(msg(), AppSettings(notifChat = mapOf("!a" to ChatNotifPrefs(level = "silent"))))
+        assertTrue(d.show); assertTrue(d.silent)
+    }
+    @Test fun directAndGroupModes() {
+        assertFalse(decide(msg(group = true), AppSettings(notifGroupMode = "mentions")).show)
+        assertTrue(decide(msg(group = true, mentioned = true), AppSettings(notifGroupMode = "mentions")).show)
+        assertFalse(decide(msg(), AppSettings(notifDirectMode = "none")).show)
+        assertTrue(decide(msg(), AppSettings(notifGroupMode = "none")).show)
+    }
+}
