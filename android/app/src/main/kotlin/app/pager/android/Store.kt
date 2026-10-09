@@ -249,9 +249,10 @@ class Store(private val context: Context) {
     // --- End-to-end encryption -----------------------------------------------------
 
     /** [error] says why encryption could not start, if it could not. */
-    data class EncryptionStatus(val ready: Boolean = false, val backupHere: Boolean = false, val backupOnServer: Boolean = false, val deviceId: String = "", val fingerprint: String = "", val error: String? = null, val mismatch: Boolean = false)
+    data class EncryptionStatus(val ready: Boolean = false, val backupHere: Boolean = false, val backupOnServer: Boolean = false, val deviceId: String = "", val fingerprint: String = "", val error: String? = null, val mismatch: Boolean = false, val missing: Boolean = false)
     private var startError: String? = null
     private var keyMismatch = false
+    private var keyMissing = false
     private val _encryption = MutableStateFlow(EncryptionStatus())
     val encryption: StateFlow<EncryptionStatus> = _encryption.asStateFlow()
     private var e2ee: E2ee? = null
@@ -270,10 +271,10 @@ class Store(private val context: Context) {
             c.onKeys = { rooms -> scope.launch { retryWaiting(rooms) } }
             e2ee = c
             kotlinx.coroutines.withTimeoutOrNull(15_000) { c.pump() } // upload this device's keys (it keeps trying in the background if slow)
-            keyMismatch = c.serverKeyMatches() == false
+            val ks = c.serverKeyMatches(); keyMismatch = ks == false; keyMissing = ks == null
             scope.launch { retryWaiting() } // messages saved while waiting for a key may have their key now
             retryJob?.cancel()
-            retryJob = scope.launch { while (isActive) { delay(45_000); retryWaiting() } } // and keys can turn up later, from the backup
+            retryJob = scope.launch { while (isActive) { delay(45_000); runCatching { c.pump() }; if (keyMissing) { keyMismatch = c.serverKeyMatches() == false; keyMissing = c.serverKeyMatches() == null; refreshEncryptionStatus() }; retryWaiting() } } // and keys can turn up later, from the backup
         } catch (e: Throwable) { startError = e.message ?: e.toString(); android.util.Log.w("Pager", "encryption could not start", e) }
         refreshEncryptionStatus()
     }
@@ -283,7 +284,7 @@ class Store(private val context: Context) {
 
     suspend fun refreshEncryptionStatus() {
         val e = e2ee ?: run { _encryption.value = EncryptionStatus(error = startError); return }
-        _encryption.value = EncryptionStatus(true, e.backupOn(), e.backupVersion() != null, e.deviceId, e.fingerprint(), mismatch = keyMismatch)
+        _encryption.value = EncryptionStatus(true, e.backupOn(), e.backupVersion() != null, e.deviceId, e.fingerprint(), mismatch = keyMismatch, missing = keyMissing)
     }
 
     /** Starts the recovery backup and returns the recovery key to show once. */

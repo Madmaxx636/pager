@@ -508,6 +508,7 @@ function EncryptionGroup() {
   return (
     <Group title="Encryption" footer="Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.">
       <Row title="Encryption on this device" hint={e.ready ? `Ready · device ${e.deviceId}` : e.error ? `Couldn't start: ${e.error}` : "Starting…"} onClick={!e.ready && e.error ? () => void retryEncryptionStart() : undefined}>{!e.ready && e.error && <span className="accent">Try again</span>}</Row>
+      {e.mismatch && <Row title="This device's keys don't match your account" hint="New messages can't be read here. Sign out, sign in again and enter your recovery key." onClick={() => signOut()}><span className="danger">Sign out</span></Row>}
       {e.ready && <Row title="Device fingerprint" hint={e.fingerprint.match(/.{1,4}/g)?.join(" ")} />}
       <Row title="Recovery key" hint={e.backupHere ? "On: your message keys are backed up" : e.backupOnServer ? "A backup exists. Enter the recovery key to read your history here" : "Not set up yet"}
         onClick={e.ready ? () => setDlg(e.backupOnServer && !e.backupHere ? "restore" : "create") : undefined}>

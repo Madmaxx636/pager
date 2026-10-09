@@ -161,7 +161,7 @@ function begin(s: Session, cache?: { userId: string; since?: string; chats: Reco
   syncAbort = new AbortController();
   const signal = syncAbort.signal;
   // Messages wait a moment for encryption to be ready (so encrypted ones can be read), but never for long.
-  void withTimeout(startCrypto(s), 8000, "Encryption").catch(() => {}).finally(() => { if (!signal.aborted) void syncLoop(s, signal); });
+  void withTimeout(startCrypto(s), 90_000, "Encryption").catch(() => {}).finally(() => { if (!signal.aborted) void syncLoop(s, signal); });
   void refreshBridges();
   void pager.me().then((m) => set({ isAdmin: m.admin })).catch(() => {});
   armReminders();
@@ -193,6 +193,7 @@ const waiting = new Map<string, { roomId: string; event: any }>();
 const memberCache = new Map<string, { at: number; ids: string[] }>();
 
 let startError: string | undefined;
+let keyMismatch = false;
 let retryTimer: number | undefined;
 const withTimeout = <T,>(p: Promise<T>, ms: number, what: string) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`${what} took too long`)), ms))]);
 
@@ -210,10 +211,20 @@ async function startCrypto(s: Session) {
     c.onKeys = (rooms) => void retryWaiting(rooms);
     e2ee = c;
     await withTimeout(c.pump(), 15000, "Uploading encryption keys").catch(() => { /* it keeps trying in the background */ });
+    keyMismatch = (await serverKeyMatches(s.userId, deviceId, c.machine.identityKeys.ed25519.toBase64())) === false;
     void retryWaiting(); // messages saved while waiting for a key may have their key now
-    window.clearInterval(retryTimer); retryTimer = window.setInterval(() => void retryWaiting(), 45_000); // and keys can turn up later, from the backup
+    window.clearInterval(retryTimer); retryTimer = window.setInterval(() => { void c.pump().catch(() => {}); void retryWaiting(); }, 45_000); // and keys can turn up later, from the backup
   } catch (e) { startError = (e as Error).message || String(e); console.warn("encryption could not start", e); }
   void refreshEncryptionStatus();
+}
+
+/** Does the server hold the same device key we do? If not, bridges encrypt to a key this device no longer has. Undefined when we could not ask. */
+async function serverKeyMatches(userId: string, deviceId: string, ours: string): Promise<boolean | undefined> {
+  try {
+    const r = await matrixCall("POST", "/_matrix/client/v3/keys/query", { timeout: 10000, device_keys: { [userId]: [deviceId] } });
+    const theirs = r.device_keys?.[userId]?.[deviceId]?.keys?.[`ed25519:${deviceId}`];
+    return theirs ? theirs === ours : undefined;
+  } catch { return undefined; }
 }
 
 /** Tries again (from the settings screen) after a failed start. */
@@ -236,7 +247,7 @@ async function decryptEvents(roomId: string, events: any[]): Promise<any[]> {
 
 async function decryptSync(res: any) {
   if (!e2ee) return;
-  await e2ee.receiveSync(res);
+  try { await e2ee.receiveSync(res); } catch { await new Promise((r) => setTimeout(r, 500)); await e2ee.receiveSync(res); } // keys in this update must not be dropped
   for (const [roomId, room] of Object.entries<any>(res.rooms?.join ?? {})) {
     const ev = room.timeline?.events;
     if (Array.isArray(ev)) room.timeline.events = await decryptEvents(roomId, ev);
@@ -269,7 +280,7 @@ async function roomMembers(roomId: string): Promise<string[]> {
 }
 
 // What the settings screen shows about encryption on this device.
-export interface EncryptionStatus { ready: boolean; backupHere: boolean; backupOnServer: boolean; deviceId: string; fingerprint: string; /** Why encryption could not start, if it could not. */ error?: string }
+export interface EncryptionStatus { ready: boolean; backupHere: boolean; backupOnServer: boolean; deviceId: string; fingerprint: string; /** The server holds a different key for this device than we do. */ mismatch?: boolean; /** Why encryption could not start, if it could not. */ error?: string }
 let encStatus: EncryptionStatus = { ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "" };
 const encListeners = new Set<() => void>();
 function setEncStatus(s: EncryptionStatus) {
@@ -279,7 +290,7 @@ function setEncStatus(s: EncryptionStatus) {
 export async function refreshEncryptionStatus() {
   if (!e2ee) { setEncStatus({ ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "", error: startError }); return; }
   const [backupHere, ver] = await Promise.all([e2ee.backupOn(), e2ee.backupVersion()]);
-  setEncStatus({ ready: true, backupHere, backupOnServer: !!ver, deviceId: e2ee.deviceId, fingerprint: e2ee.machine.identityKeys.ed25519.toBase64() });
+  setEncStatus({ ready: true, backupHere, backupOnServer: !!ver, deviceId: e2ee.deviceId, fingerprint: e2ee.machine.identityKeys.ed25519.toBase64(), mismatch: keyMismatch });
 }
 // One fixed function: a new one on every render would make React subscribe again each time, and each subscribe asks the server.
 const subscribeEncryption = (l: () => void) => { encListeners.add(l); void refreshEncryptionStatus(); return () => { encListeners.delete(l); }; };
