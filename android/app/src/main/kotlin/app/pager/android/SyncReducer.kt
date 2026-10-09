@@ -219,6 +219,7 @@ object SyncReducer {
         val key = e["state_key"].str() ?: ""
         return when (e["type"].str()) {
             "m.room.name" -> chat.copy(name = content["name"].str() ?: "")
+            "m.room.encryption" -> chat.copy(encrypted = true)
             "m.room.avatar" -> chat.copy(avatarMxc = content["url"].str())
             "im.ponies.room_emotes" -> {
                 val pack = parseStickerPack(key.ifEmpty { "room" }, content["pack"].obj()["display_name"].str() ?: "Room stickers", content)
@@ -342,16 +343,23 @@ object SyncReducer {
         val content = e["content"].obj()
         val type = content["msgtype"].str() ?: return null // redacted events have empty content
         val info = content["info"].obj()
+        // An encrypted attachment: the address and how to unscramble it.
+        val file = content["file"].obj()
+        val enc = file["url"].str()?.let { url ->
+            val key = file["key"].obj()["k"].str(); val iv = file["iv"].str(); val sha = file["hashes"].obj()["sha256"].str()
+            if (key != null && iv != null && sha != null) EncFile(url, key, iv, sha).also { MediaCrypt.register(it) } else null
+        }
         val reply = content["m.relates_to"].obj()["m.in_reply_to"].obj()["event_id"].str()
         var body = content["body"].str() ?: ""
         if (reply != null) body = stripReplyFallback(body)
         return Msg(
+            enc = enc,
             id = e["event_id"].str() ?: return null,
             sender = e["sender"].str() ?: return null,
             ts = e["origin_server_ts"].long() ?: 0L,
             type = type,
             body = body,
-            mxc = content["url"].str(),
+            mxc = enc?.url ?: content["url"].str(),
             mime = info["mimetype"].str(),
             size = info["size"].long(),
             w = info["w"].int(),
@@ -364,6 +372,13 @@ object SyncReducer {
             mentions = content["m.mentions"].obj()["user_ids"].arr().mapNotNull { it.str() },
             html = if (content["format"].str() == "org.matrix.html") content["formatted_body"].str() else null,
         )
+    }
+
+    /** Puts a message that could not be read before (it was waiting for its key) in place of its placeholder. */
+    fun replaceDecrypted(chat: ChatState, clear: JsonObject): ChatState {
+        val msg = toMsg(clear) ?: return chat
+        if (chat.messages.none { it.id == msg.id }) return chat
+        return chat.copy(messages = chat.messages.map { if (it.id == msg.id) msg.copy(status = it.status) else it })
     }
 
     /** Older clients prefix replies with a quoted copy of the parent ("> <@user> text\n\nreply"). */

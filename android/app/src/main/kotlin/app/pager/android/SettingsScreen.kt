@@ -62,6 +62,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.VpnKey
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -320,6 +325,7 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
                 if (s.appLock) { GroupDivider(); ChoiceRow("Lock after", listOf("0" to "Immediately", "30" to "30 seconds", "120" to "2 minutes", "600" to "10 minutes"), s.lockAfterSec.toString()) { v -> set { copy(lockAfterSec = v.toInt()) } } }
             }
             SettingsGroup("Screen") { SwitchRow("Hide in recent apps & block screenshots", checked = s.hideInRecents) { v -> set { copy(hideInRecents = v) } } }
+            EncryptionGroup()
             SettingsGroup("Receipts") {
                 SwitchRow("Send read receipts", checked = s.sendReadReceipts) { v -> set { copy(sendReadReceipts = v) } }; GroupDivider()
                 SwitchRow("Send typing indicators", checked = s.sendTyping) { v -> set { copy(sendTyping = v) } }
@@ -754,3 +760,75 @@ fun DeleteProfileDialog(onDismiss: () -> Unit) {
 }
 
 object BuildConfigVersion { const val NAME = "0.3.0" }
+
+/** End-to-end encryption on this device: the recovery key that brings your history back on a new device. */
+@Composable
+private fun EncryptionGroup() {
+    val store = LocalStore.current
+    val scope = rememberCoroutineScope()
+    val e by store.encryption.collectAsState()
+    LaunchedEffect(Unit) { store.refreshEncryptionStatus() }
+    var dialog by remember { mutableStateOf<String?>(null) }
+    SettingsGroup("Encryption", footer = "Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.") {
+        NavRow("Encryption on this device", if (e.ready) "Ready · device ${e.deviceId}" else "Starting…", Icons.Rounded.Lock) {}
+        if (e.ready) { GroupDivider(); NavRow("Device fingerprint", e.fingerprint.chunked(4).joinToString(" "), Icons.Rounded.Key) {} }
+        GroupDivider()
+        NavRow(
+            "Recovery key", if (e.backupHere) "On: your message keys are backed up" else if (e.backupOnServer) "A backup exists. Enter the recovery key to read your history here" else "Not set up yet",
+            Icons.Rounded.VpnKey, Color(0xFF14B8A6),
+        ) { if (e.ready) dialog = if (e.backupOnServer && !e.backupHere) "restore" else "create" }
+        if (e.backupOnServer && !e.backupHere) { GroupDivider(); NavRow("Make a new recovery key instead", null, Icons.Rounded.Refresh) { dialog = "create" } }
+    }
+    if (dialog == "create") {
+        var key by remember { mutableStateOf<String?>(null) }
+        var err by remember { mutableStateOf("") }
+        var saved by remember { mutableStateOf(false) }
+        val clipboard = LocalClipboardManager.current
+        LaunchedEffect(Unit) { runCatching { store.createRecoveryKey() }.onSuccess { key = it }.onFailure { err = it.message ?: "Couldn't make a key" } }
+        AlertDialog(
+            onDismissRequest = { if (key == null || saved) dialog = null }, title = { Text("Your recovery key") },
+            text = {
+                Column {
+                    when {
+                        err.isNotEmpty() -> Text(err, color = MaterialTheme.colorScheme.error)
+                        key == null -> Text("Making your key…")
+                        else -> {
+                            Text("Save this somewhere safe, like a password manager. Anyone with it can read your history, and without it lost devices mean lost history.")
+                            Spacer(Modifier.height(10.dp))
+                            androidx.compose.foundation.text.selection.SelectionContainer { Text(key!!, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.SemiBold, modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp)) }
+                            TextButton(onClick = { clipboard.setText(AnnotatedString(key!!)) }) { Text("Copy") }
+                            Row(verticalAlignment = Alignment.CenterVertically) { androidx.compose.material3.Checkbox(saved, { saved = it }); Text("I saved my recovery key") }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(enabled = key == null || saved, onClick = { dialog = null }) { Text(if (key != null) "Done" else "Close") } },
+        )
+    }
+    if (dialog == "restore") {
+        var text by remember { mutableStateOf("") }
+        var err by remember { mutableStateOf("") }
+        var busy by remember { mutableStateOf(false) }
+        var done by remember { mutableStateOf<Int?>(null) }
+        AlertDialog(
+            onDismissRequest = { dialog = null }, title = { Text("Enter your recovery key") },
+            text = {
+                Column {
+                    if (done != null) Text("Restored $done message keys. Older messages in your encrypted pages can be read now.")
+                    else {
+                        androidx.compose.material3.OutlinedTextField(text, { text = it }, placeholder = { Text("EsTc 4xYz …") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                        if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                if (done != null) TextButton(onClick = { dialog = null }) { Text("Close") }
+                else TextButton(enabled = !busy && text.isNotBlank(), onClick = {
+                    busy = true; err = ""
+                    scope.launch { runCatching { store.restoreWithRecoveryKey(text) }.onSuccess { done = it }.onFailure { err = it.message ?: "That didn't work" }; busy = false }
+                }) { Text(if (busy) "Restoring…" else "Restore") }
+            },
+            dismissButton = { if (done == null) TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+        )
+    }
+}

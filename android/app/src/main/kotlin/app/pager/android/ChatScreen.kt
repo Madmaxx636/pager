@@ -258,7 +258,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                         chat?.let {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(7.dp).clip(CircleShape).background(networkMeta(it.network).color))
-                                Text(" ${networkMeta(it.network).label}${if (it.isGroup) " · ${it.peopleCount} members" else ""}", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                                Text(" ${networkMeta(it.network).label}${if (it.isGroup) " · ${it.peopleCount} members" else ""}${if (it.encrypted) " · \uD83D\uDD12 Encrypted" else ""}", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
                             }
                         }
                     }

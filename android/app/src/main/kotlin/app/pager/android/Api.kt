@@ -222,8 +222,13 @@ class MatrixApi(private val http: Http) {
         return Triple(r["chunk"].arr().map { it.obj() }, r["end"].str(), r["state"].arr().map { it.obj() })
     }
 
-    suspend fun send(roomId: String, type: String, txnId: String, content: JsonObject): String =
-        http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/send/$type/${enc(txnId)}", content)["event_id"].str().orEmpty()
+    /** Lets the encryption layer change an event just before it is sent (it becomes m.room.encrypted in encrypted rooms). */
+    var sendHook: (suspend (roomId: String, type: String, content: JsonObject) -> Pair<String, JsonObject>)? = null
+
+    suspend fun send(roomId: String, type: String, txnId: String, content: JsonObject): String {
+        val (t, c) = sendHook?.invoke(roomId, type, content) ?: (type to content)
+        return http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/send/$t/${enc(txnId)}", c)["event_id"].str().orEmpty()
+    }
 
     suspend fun redact(roomId: String, eventId: String, txnId: String) {
         http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/redact/${enc(eventId)}/${enc(txnId)}", JsonObject(emptyMap()))

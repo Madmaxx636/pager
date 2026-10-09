@@ -45,6 +45,8 @@ data class Msg(
     /** Sanitized-later HTML from formatted_body (bridges send bold/italic/links this way). */
     val html: String? = null,
     val poll: PollInfo? = null,
+    /** Set when the attachment is end-to-end encrypted: how to unscramble it. */
+    val enc: EncFile? = null,
 )
 
 @Serializable
@@ -75,6 +77,8 @@ data class ChatState(
     val tags: Set<String> = emptySet(),
     val markedUnread: Boolean = false,
     val memberCount: Int = 0,
+    /** The room uses end-to-end encryption (m.room.encryption). */
+    val encrypted: Boolean = false,
     /** Bridge-reported room type ("dm", "group"...), when the room is bridged. */
     val roomType: String? = null,
     /** Order of this chat among pinned chats (m.favourite tag order). */
