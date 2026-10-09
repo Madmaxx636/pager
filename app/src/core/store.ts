@@ -2,6 +2,7 @@ import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, pager, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { applyHistory, applySync, setOwnIdentity } from "./reducer";
 import { Decision, decide } from "./notifypolicy";
+import { playSound } from "./sounds";
 import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
 import {
   ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
@@ -242,9 +243,11 @@ function notify(m: Incoming, d: Decision) {
   if (document.hasFocus() && document.visibilityState === "visible") return;
   const body = d.preview === "full" ? (m.isGroup ? `${m.sender}: ${m.text}` : m.text) : d.preview === "sender" ? m.sender : "New message";
   const desktop = window.pagerDesktop;
-  if (desktop) { desktop.notify({ title: m.chat, body, roomId: m.roomId, silent: d.silent }); return; }
+  // We play the sound ourselves (so it can differ per app and per contact) and keep the system notification quiet.
+  if (!d.silent) playSound(d.sound, getSettings().notifSoundVolume);
+  if (desktop) { desktop.notify({ title: m.chat, body, roomId: m.roomId, silent: true }); return; }
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-  const n = new Notification(m.chat, { body, tag: m.roomId, silent: d.silent });
+  const n = new Notification(m.chat, { body, tag: m.roomId, silent: true });
   n.onclick = () => { window.focus(); window.dispatchEvent(new CustomEvent("pager:open", { detail: m.roomId })); };
 }
 
@@ -558,6 +561,8 @@ export function mediaUrl(mxc: string, thumb = 0): Promise<string | undefined> {
   return p;
 }
 
+import type { SystemTheme } from "./settings";
+
 declare global {
   interface Window {
     pagerDesktop?: {
@@ -568,6 +573,10 @@ declare global {
       cookieLogin(spec: unknown): Promise<Record<string, string> | null>;
       platform: string;
       hostname?: string;
+      getSystemTheme(): Promise<SystemTheme>;
+      onSystemTheme(cb: (t: SystemTheme) => void): void;
+      getSpell(): Promise<{ enabled: boolean; languages: string[]; available: string[] }>;
+      setSpell(o: { enabled?: boolean; languages?: string[] }): void;
     };
   }
 }

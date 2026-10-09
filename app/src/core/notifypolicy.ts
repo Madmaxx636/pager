@@ -14,6 +14,8 @@ export interface PolicyInput {
   nowMin: number;
   /** 0 = Sunday. */
   day: number;
+  /** Current time in ms; only needed for Do not disturb. */
+  nowMs?: number;
 }
 export interface Decision {
   show: boolean;
@@ -22,6 +24,8 @@ export interface Decision {
   preview: "full" | "sender" | "hidden";
   /** It is about you: a mention, a reply or one of your keywords. */
   direct: boolean;
+  /** Which alert sound to play (a chat's own, else its network's, else the app's). */
+  sound: string;
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -29,7 +33,7 @@ export function keywordHit(text: string, keywords: string[]): boolean {
   return keywords.some((k) => k.trim() && new RegExp(`(^|[^\\p{L}\\p{N}])${escape(k.trim())}($|[^\\p{L}\\p{N}])`, "iu").test(text));
 }
 
-type Slice = Pick<AppSettings, "notifEnabled" | "notifScope" | "notifGroupMentionsOnly" | "notifMutedNetworks" | "notifNetworkMode" | "notifChat" | "notifKeywords" | "notifQuietDays" | "notifQuietBreakThrough" | "notifPreview" | "notifSound" | "quietHoursEnabled" | "quietStartMin" | "quietEndMin">;
+type Slice = Pick<AppSettings, "notifEnabled" | "notifScope" | "notifGroupMentionsOnly" | "notifMutedNetworks" | "notifNetworkMode" | "notifChat" | "notifKeywords" | "notifQuietDays" | "notifQuietBreakThrough" | "notifPreview" | "notifSoundId" | "notifNetworkSound" | "dndUntil" | "notifSound" | "quietHoursEnabled" | "quietStartMin" | "quietEndMin">;
 
 export function decide(m: PolicyInput, s: Slice): Decision {
   const direct = m.mentioned || !!m.replyToMe || keywordHit(m.text, s.notifKeywords);
@@ -37,9 +41,13 @@ export function decide(m: PolicyInput, s: Slice): Decision {
   const chatMode = chat.mode && chat.mode !== "default" ? chat.mode : undefined;
   const netMode = s.notifNetworkMode[m.network] ?? (s.notifMutedNetworks.includes(m.network) ? "none" : "all");
   const preview = chat.preview === "show" ? "full" : chat.preview === "hide" ? "hidden" : s.notifPreview;
-  const no: Decision = { show: false, silent: true, preview, direct };
+  const sound = chat.soundId && chat.soundId !== "default" ? chat.soundId : s.notifNetworkSound[m.network] ?? s.notifSoundId;
+  const no: Decision = { show: false, silent: true, preview, direct, sound };
 
   if (!s.notifEnabled || chatMode === "none") return no;
+  // Do not disturb: nothing alerts, except important things if you allowed that for quiet hours.
+  const dnd = (s.dndUntil ?? 0) > (m.nowMs ?? Date.now());
+  if (dnd && !(s.notifQuietBreakThrough && (m.pinned || direct))) return no;
 
   // Is this kind of message allowed at all?
   let allowed: boolean;
@@ -59,5 +67,5 @@ export function decide(m: PolicyInput, s: Slice): Decision {
   const inQuiet = s.notifQuietDays.includes(m.day) && inQuietHours(s as AppSettings, m.nowMin);
   const breaks = inQuiet && (m.pinned || direct) && s.notifQuietBreakThrough;
   const silent = (inQuiet && !breaks) || !s.notifSound || chat.sound === "off";
-  return { show: true, silent, preview, direct };
+  return { show: true, silent, preview, direct, sound };
 }

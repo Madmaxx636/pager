@@ -5,6 +5,7 @@ import { addStickers, cancelReminder, cancelScheduled, deleteLabel, deleteProfil
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
+import { SOUNDS, playSound } from "../core/sounds";
 import { EmojiPicker, EmptyState, Group, IconButton, Modal, Row, Select, SwitchRow } from "./common";
 import { BridgesPage } from "./Accounts";
 import { AdminPage } from "./Admin";
@@ -287,6 +288,19 @@ function Notifications() {
         <SwitchRow title="Sound" checked={s.notifSound} disabled={off} onChange={(v) => updateSettings({ notifSound: v })} />
         <Select title="Unread badge counts" hint="The number on the app icon" value={s.notifBadge} options={[["unmuted", "Chats that can notify me"], ["all", "Every unread chat"], ["off", "Nothing"]]} onChange={(v) => updateSettings({ notifBadge: v })} />
       </Group>
+      <Group title="Sounds" footer="Each app and each chat can have its own sound. Muted and quiet-hours messages stay silent.">
+        <Select title="Alert sound" value={s.notifSoundId} disabled={off} options={SOUNDS} onChange={(v) => { updateSettings({ notifSoundId: v }); playSound(v, s.notifSoundVolume); }} />
+        <Row title="Volume" hint={`${Math.round(s.notifSoundVolume * 100)}%`}><input type="range" min="0" max="1" step="0.05" value={s.notifSoundVolume} disabled={off} onChange={(e) => updateSettings({ notifSoundVolume: Number(e.target.value) })} onMouseUp={() => playSound(s.notifSoundId, s.notifSoundVolume)} /></Row>
+        {known.map((id) => <Select key={"snd" + id} title={`${networkMeta(id).label} sound`} value={s.notifNetworkSound[id] ?? ""} disabled={off}
+          options={[["", "Same as the app"], ...SOUNDS]} onChange={(v) => { const { [id]: _x, ...rest } = s.notifNetworkSound; updateSettings({ notifNetworkSound: v ? { ...rest, [id]: v } : rest }); if (v) playSound(v, s.notifSoundVolume); }} />)}
+      </Group>
+      <Group title="Do not disturb" footer="Messages still arrive, but nothing alerts you until it ends. Pinned chats and mentions can break through if you allow it under Quiet hours.">
+        <Row title={s.dndUntil > Date.now() ? `On until ${new Date(s.dndUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Off"}>
+          {[["1 hour", 3.6e6], ["8 hours", 8 * 3.6e6]].map(([l, ms]) => <button key={l as string} className="pill" disabled={off} onClick={() => updateSettings({ dndUntil: Date.now() + (ms as number) })}>{l as string}</button>)}
+          <button className="pill" disabled={off} onClick={() => { const d = new Date(); d.setHours(7, 0, 0, 0); if (d.getTime() < Date.now() + 6e4) d.setDate(d.getDate() + 1); updateSettings({ dndUntil: d.getTime() }); }}>Until morning</button>
+          {s.dndUntil > Date.now() && <button className="link" onClick={() => updateSettings({ dndUntil: 0 })}>Turn off</button>}
+        </Row>
+      </Group>
       <Group title="Delay" footer="Waits, then skips the alert if you already read the chat on another device or app.">
         <Select title="Wait before alerting" value={String(s.notifDelaySec)} disabled={off} options={[["0", "Don't wait"], ["5", "5 seconds"], ["15", "15 seconds"], ["30", "30 seconds"], ["60", "1 minute"]]} onChange={(v) => updateSettings({ notifDelaySec: Number(v) })} />
       </Group>
@@ -417,7 +431,9 @@ function Scheduled() {
 function Desktop() {
   const s = useRawSettings();
   const [auto, setAuto] = useState(false);
-  useEffect(() => { void window.pagerDesktop?.getAutostart().then(setAuto); }, []);
+  const [spell, setSpellState] = useState<{ enabled: boolean; languages: string[]; available: string[] }>();
+  useEffect(() => { void window.pagerDesktop?.getAutostart().then(setAuto); void window.pagerDesktop?.getSpell().then(setSpellState); }, []);
+  const setSpell = (o: { enabled?: boolean; languages?: string[] }) => { window.pagerDesktop?.setSpell(o); setSpellState((p) => p && { ...p, ...o }); };
   return (
     <>
       <Group title="Window">
@@ -425,6 +441,15 @@ function Desktop() {
         <SwitchRow title="Launch at login" checked={auto} onChange={(v) => { setAuto(v); window.pagerDesktop?.setAutostart(v); }} />
         <SwitchRow title="Start minimized to tray" checked={s.startMinimized} onChange={(v) => { updateSettings({ startMinimized: v }); window.pagerDesktop?.setPrefs({ startMinimized: v }); }} />
       </Group>
+      <Group title="Look" footer="Takes your colors from KDE Plasma, GNOME, Windows or macOS and follows them when you change them.">
+        <SwitchRow title="Match my system theme" hint="Colors, light or dark, and accent" checked={s.themeFollowSystem} onChange={(v) => updateSettings({ themeFollowSystem: v })} />
+      </Group>
+      {spell && (
+        <Group title="Spell check" footer="Right-click a misspelled word for suggestions or to add it to your dictionary.">
+          <SwitchRow title="Check spelling as I type" checked={spell.enabled} onChange={(v) => setSpell({ enabled: v })} />
+          <Select title="Language" value={spell.languages[0] ?? ""} disabled={!spell.enabled} options={spell.available.map((l): [string, string] => [l, new Intl.DisplayNames([navigator.language], { type: "language" }).of(l) ?? l])} onChange={(v) => setSpell({ languages: [v] })} />
+        </Group>
+      )}
     </>
   );
 }
