@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 enum class MascotMood { Idle, Ring }
 
 /**
- * Pager's mascot: a little pager that is going off and smiling. Built from stacked vector parts so the body, antenna, sound waves
+ * Pager's mascot: a little pager that is going off and smiling. Built from stacked vector parts so the body, sound waves
  * and ring marks each move on their own. Stays still with "Reduce motion" (and in E-ink mode).
  */
 @Composable
@@ -57,10 +57,6 @@ fun PagerMascot(size: Dp = 120.dp, modifier: Modifier = Modifier, mood: MascotMo
             },
         ) {
             Image(painterResource(R.drawable.pager_body), null, Modifier.size(size))
-            Image(
-                painterResource(R.drawable.pager_antenna), null,
-                Modifier.size(size).graphicsLayer { rotationZ = wiggle * 9f * s; transformOrigin = TransformOrigin(0.5f, 0.235f) },
-            )
         }
         Image(painterResource(R.drawable.pager_ring), null, Modifier.size(size).graphicsLayer { alpha = if (still) 0.9f else flash })
     }
