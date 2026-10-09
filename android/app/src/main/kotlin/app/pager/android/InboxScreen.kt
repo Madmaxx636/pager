@@ -517,7 +517,11 @@ private fun PinnedGrid(pins: List<ChatSummary>, onOpen: (String) -> Unit, onMenu
                                         }
                                         dragId = null; drag = androidx.compose.ui.geometry.Offset.Zero
                                     },
-                                    onDragCancel = { dragId = null; drag = androidx.compose.ui.geometry.Offset.Zero },
+                                    onDragCancel = {
+                                        // Holding without moving ends as a cancel, not an end: that is the menu.
+                                        if (drag.getDistance() < 16f && dragId == c.id) onMenu(c)
+                                        dragId = null; drag = androidx.compose.ui.geometry.Offset.Zero
+                                    },
                                 )
                             }
                             .clickable { onOpen(c.id) },

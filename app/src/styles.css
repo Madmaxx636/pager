@@ -66,7 +66,7 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 .side-head.sel h1 { font-size: 1.1rem; flex: 1; margin-left: 6px; } .head-actions { display: flex; gap: 2px; align-items: center; }
 .menu-wrap { position: relative; }
 .menu { position: absolute; right: 0; top: 42px; z-index: 30; min-width: 230px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 6px; }
-.menu.up { top: auto; bottom: 50px; left: 0; right: auto; } .menu.ctx { position: fixed; } .ctx-backdrop { position: fixed; inset: 0; z-index: 29; }
+.menu.up { top: auto; bottom: 50px; left: 0; right: auto; } .menu.ctx { position: fixed; right: auto; bottom: auto; width: max-content; min-width: 200px; max-width: min(280px, calc(100vw - 16px)); } .ctx-backdrop { position: fixed; inset: 0; z-index: 29; }
 .menu button { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 9px 12px; border-radius: 10px; } .menu button:hover { background: var(--panel-2); } .menu button svg { color: var(--muted); flex: none; } .menu button.danger, .menu button.danger svg { color: var(--danger); }
 .menu-id { padding: 8px 12px; font-size: 0.8rem; color: var(--muted); word-break: break-all; }
 .pill-search { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border-radius: 999px; padding: 0 8px 0 16px; margin: 4px 14px 8px; color: var(--muted); height: 44px; }

@@ -118,6 +118,13 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     else if ((m.type === "m.file" || m.type === "m.video") && m.mxc) void download(m);
   }, []);
 
+  // When someone starts typing and you are at the bottom, bring the dots into view.
+  const typingCount = chat?.typing.length ?? 0;
+  useEffect(() => {
+    const el = scroller.current;
+    if (el && typingCount && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTo({ top: el.scrollHeight });
+  }, [typingCount]);
+
   if (!chat) return <section className="chat"><header className="chat-head"><IconButton icon={ArrowLeft} label="Back" onClick={onBack} className="back" /><div>Opening…</div></header></section>;
   const name = displayName(chat, user);
   const meta = networkMeta(chat.network);

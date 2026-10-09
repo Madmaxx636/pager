@@ -155,6 +155,9 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
     val items = remember(messages, unreadBefore, s.groupGapMin) { buildItems(messages, unreadBefore, s.groupGapMin * 60_000L) }
 
     val list = rememberLazyListState()
+    // When someone starts typing and you are at the bottom, bring the dots into view.
+    val typingNow = chat?.typing?.isNotEmpty() == true
+    LaunchedEffect(typingNow) { if (typingNow && list.firstVisibleItemIndex <= 1) list.scrollToItem(0) }
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     var text by remember(roomId) { mutableStateOf(store.draftFor(roomId)) }
