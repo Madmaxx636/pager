@@ -139,7 +139,11 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
     val byId = remember(messages) { messages.associateBy { it.id } }
     val readIndex = remember(messages, chat?.receipts) {
         val r = chat?.receipts ?: emptyMap()
-        r.filterKeys { it != me }.values.maxOfOrNull { id -> messages.indexOfFirst { it.id == id } } ?: -1
+        r.filterKeys { it != me && !isBridgeBot(it) }.values.maxOfOrNull { id -> messages.indexOfFirst { it.id == id } } ?: -1
+    }
+    // Delivered = the bridge says it reached the other network (its bot sends that receipt).
+    val deliveredIndex = remember(messages, chat?.receipts) {
+        (chat?.receipts ?: emptyMap()).filterKeys { isBridgeBot(it) }.values.maxOfOrNull { id -> messages.indexOfFirst { it.id == id } } ?: -1
     }
     val group = remember(messages, chat?.memberCount, chat?.roomType) { (chat?.isGroup ?: false) || messages.map { it.sender }.toSet().size > 2 }
     val images = remember(messages) { messages.filter { it.type == "m.image" && it.mxc != null && !it.sticker } }
@@ -283,7 +287,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                             }
                             is Item.M -> MessageRow(
                                 chat = chat, msg = item.msg, me = me, group = group, first = item.first, last = item.last, dark = dark,
-                                reply = item.msg.replyTo?.let { byId[it] }, read = item.index <= readIndex, starred = stars.any { it.eventId == item.msg.id },
+                                reply = item.msg.replyTo?.let { byId[it] }, read = item.index <= readIndex, delivered = item.index <= deliveredIndex, starred = stars.any { it.eventId == item.msg.id },
                                 onLong = { actions = item.msg },
                                 onReact = { store.react(roomId, item.msg.id, it) },
                                 onWho = { key -> whoFor = item.msg to key },

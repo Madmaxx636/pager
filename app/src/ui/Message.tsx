@@ -11,15 +11,15 @@ import { Html, Linkified, firstUrl } from "./rich";
 const clock = (ts: number, mode: AppSettings["timeFormat"]) => new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", ...(mode === "system" ? {} : { hour12: mode === "12" }) });
 const senderHue = (n: string) => [...n].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
 
-export function MessageRow({ chat, msg, first, last, group, mine, read, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply, onVote, onEndPoll }: {
-  chat: ChatState; msg: Msg; first: boolean; last: boolean; group: boolean; mine: boolean; read: boolean; reply?: Msg; st: AppSettings; starred: boolean;
+export function MessageRow({ chat, msg, first, last, group, mine, read, delivered, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply, onVote, onEndPoll }: {
+  chat: ChatState; msg: Msg; first: boolean; last: boolean; group: boolean; mine: boolean; read: boolean; delivered?: boolean; reply?: Msg; st: AppSettings; starred: boolean;
   onMenu: (x: number, y: number) => void; onOpen: () => void; onWho: (key: string) => void; onReact: (key: string) => void; onReply: () => void; onVote: (ids: string[]) => void; onEndPoll: () => void;
 }) {
   const reactions = chat.reactions[msg.id] ?? {};
   const author = nameOf(chat, msg.sender);
   const big = st.largeEmoji && msg.type === "m.text" && !msg.html && isEmojiOnly(msg.body);
   const bare = !!msg.sticker || big;
-  const tick = msg.status === STATUS_SENDING ? <Clock size={13} /> : msg.status === STATUS_FAILED ? <AlertCircle size={13} /> : read ? <CheckCheck size={14} /> : <Check size={14} />;
+  const tick = msg.status === STATUS_SENDING ? <Clock size={13} /> : msg.status === STATUS_FAILED ? <AlertCircle size={13} /> : read ? <CheckCheck size={14} /> : delivered ? <CheckCheck size={14} style={{ opacity: 0.55 }} /> : <Check size={14} style={{ opacity: 0.55 }} />;
   return (
     <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "") + (last ? " last" : "") + (Date.now() - msg.ts < 4000 ? " fresh" : "")} data-id={msg.id}>
       {group && !mine && first && <div className="msg-sender" style={st.colorSenderNames ? { color: `hsl(${senderHue(author)} 60% 62%)` } : undefined}>{author}</div>}

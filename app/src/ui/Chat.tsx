@@ -3,7 +3,7 @@ import {
   AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
   Reply, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon,
 } from "lucide-react";
-import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf } from "../core/types";
+import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import { getSettings, useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
@@ -64,10 +64,15 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const messages = chat?.messages ?? [];
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
   const images = useMemo(() => messages.filter((m) => m.type === "m.image" && m.mxc && !m.sticker), [messages]);
+  // Read = a person read it. Delivered = the bridge says it reached the other network (its bot sends that receipt).
   const readIndex = useMemo(() => {
     const r = chat?.receipts ?? {};
-    return Math.max(-1, ...Object.entries(r).filter(([u]) => u !== user).map(([, id]) => messages.findIndex((m) => m.id === id)));
+    return Math.max(-1, ...Object.entries(r).filter(([u]) => u !== user && !isBridgeBot(u)).map(([, id]) => messages.findIndex((m) => m.id === id)));
   }, [chat?.receipts, messages, user]);
+  const deliveredIndex = useMemo(() => {
+    const r = chat?.receipts ?? {};
+    return Math.max(-1, ...Object.entries(r).filter(([u]) => isBridgeBot(u)).map(([, id]) => messages.findIndex((m) => m.id === id)));
+  }, [chat?.receipts, messages]);
   const group = chat ? isGroup(chat) || new Set(messages.map((m) => m.sender)).size > 2 : false;
 
   // Where the unread messages begin; computed once when the chat opens.
@@ -151,7 +156,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
         <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll}>
           {items.map((it) => it.kind === "day" ? <div key={it.key} className="day"><span>{it.label}</span></div>
             : it.kind === "unread" ? <div key={it.key} id="unread-divider" className="unread-divider"><span>New messages</span></div>
-            : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} last={it.last} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}
+            : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} last={it.last} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} delivered={it.index <= deliveredIndex} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}
                 st={st} starred={stars.some((s) => s.eventId === it.msg.id)} onMenu={(x, y) => setMenu({ msg: it.msg, x, y })} onOpen={() => openMsg(it.msg)} onWho={(key) => setWho({ msg: it.msg, key })}
                 onReact={(key) => react(roomId, it.msg.id, key)} onReply={() => { setReplyTo(it.msg); setEditing(undefined); }}
                 onVote={(ids) => votePoll(roomId, it.msg.id, ids)} onEndPoll={() => endPoll(roomId, it.msg.id)} />)}
