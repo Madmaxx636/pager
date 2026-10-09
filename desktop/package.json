@@ -9,7 +9,7 @@
     "icons": "node scripts/make-icons.mjs",
     "web": "cd ../app && npm ci && npm run build && rm -rf ../desktop/app-dist && cp -r dist ../desktop/app-dist",
     "start": "electron .",
-    "dist": "npm run icons && npm run web && electron-builder --linux AppImage deb",
+    "dist": "node scripts/check-files.mjs && npm run icons && npm run web && electron-builder --linux AppImage deb",
     "dist:mac": "npm run icons && npm run web && electron-builder --mac",
     "dist:win": "npm run icons && npm run web && electron-builder --win"
   },
@@ -19,6 +19,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "system-theme.js",
       "app-dist/**",
       "build/icon.png",
       "build/tray.png"
