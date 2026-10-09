@@ -39,9 +39,9 @@ Both clients share the same sync engine design (the web one is a port of the And
   boot-safe reminders, foreground sync service.
 - **Desktop extras:** tray icon, native notifications, unread badge, close-to-tray, launch at login.
 
-Not possible through bridges (the networks don't expose them): voice/video calls, stories/status, disappearing-message timers. Contact
+Not possible through bridges (the networks don't expose them): voice/video calls, disappearing-message timers. Contact
 merging across networks and pinned messages are not built.
-Not built yet: iOS, push through Google/UnifiedPush, encrypted rooms (bridged rooms are plain), polls.
+Not built yet: iOS, push through Google/UnifiedPush, cross-signing and device verification (encrypted chats use a recovery key instead).
 
 See [DEPLOY.md](DEPLOY.md) for a full server walkthrough.
 
