@@ -1,3 +1,4 @@
+import { Mascot } from "./Mascot";
 import { useEffect, useState } from "react";
 import { http, pager, ServerConfig } from "../core/api";
 import { normalizeServer, signIn } from "../core/store";
@@ -41,7 +42,7 @@ export function Auth() {
   return (
     <main className="auth">
       <form className="auth-card" onSubmit={submit}>
-        <div className="logo"><span className="logo-mark" /><b>Pager</b></div>
+        <div className="logo"><Mascot size={64} /><b>Pager</b></div>
         <h1>{mode === "in" ? "Welcome back" : "Create your account"}</h1>
         <p className="muted">All your chats, one inbox, on your own server.</p>
         {remote && <label>Server<input value={server} onChange={(e) => setServer(e.target.value)} placeholder="matrix.example.com" autoFocus autoCapitalize="none" required /></label>}

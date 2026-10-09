@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Check, CheckCheck, Clock, FileText, MapPin, Music, Pause, Play, Star, Video, UserRound, Mic } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, nameOf, previewOf } from "../core/types";
 import { isEmojiOnly } from "../core/format";
@@ -11,6 +11,44 @@ import { Html, Linkified, firstUrl } from "./rich";
 const clock = (ts: number, mode: AppSettings["timeFormat"]) => new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", ...(mode === "system" ? {} : { hour12: mode === "12" }) });
 const senderHue = (n: string) => [...n].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
 
+/**
+ * Swipe a message to the right to reply to it: drag with a finger or pen, or swipe sideways with two fingers on a trackpad.
+ * Returns props to spread on the row, how far along the swipe is (0 to 1) and applies the sideways shift itself.
+ */
+function useSwipeToReply(enabled: boolean, onReply: () => void) {
+  const [dx, setDx] = useState(0);
+  const start = useRef<{ x: number; y: number; id: number; locked: boolean } | null>(null);
+  const wheel = useRef({ sum: 0, at: 0, fired: false });
+  const LIMIT = 64;
+  const reset = () => { start.current = null; setDx(0); };
+  if (!enabled) return { bind: {}, progress: 0 };
+  return {
+    progress: Math.min(1, dx / LIMIT),
+    bind: {
+      style: dx ? { transform: `translateX(${dx}px)` } : undefined,
+      onPointerDown: (e: React.PointerEvent) => { if (e.pointerType !== "mouse") start.current = { x: e.clientX, y: e.clientY, id: e.pointerId, locked: false }; },
+      onPointerMove: (e: React.PointerEvent) => {
+        const s = start.current; if (!s || s.id !== e.pointerId) return;
+        const mx = e.clientX - s.x, my = e.clientY - s.y;
+        if (!s.locked) { if (Math.abs(my) > 12 && Math.abs(my) > Math.abs(mx)) return reset(); if (mx > 10 && mx > Math.abs(my)) { s.locked = true; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } else return; }
+        setDx(Math.max(0, Math.min(LIMIT * 1.3, mx * 0.7)));
+      },
+      onPointerUp: () => { const fire = dx >= LIMIT * 0.9; reset(); if (fire) onReply(); },
+      onPointerCancel: reset,
+      onWheel: (e: React.WheelEvent) => {
+        // Two-finger sideways swipe on a trackpad.
+        if (Math.abs(e.deltaX) < Math.abs(e.deltaY) * 1.5) return;
+        const w = wheel.current, now = Date.now();
+        if (now - w.at > 350) { w.sum = 0; w.fired = false; }
+        w.at = now; w.sum += -e.deltaX;
+        setDx(Math.max(0, Math.min(LIMIT * 1.3, w.sum * 0.5)));
+        if (w.sum > 140 && !w.fired) { w.fired = true; onReply(); }
+        window.setTimeout(() => { if (Date.now() - w.at >= 300) setDx(0); }, 320);
+      },
+    },
+  };
+}
+
 export function MessageRow({ chat, msg, first, last, group, mine, read, delivered, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply, onVote, onEndPoll }: {
   chat: ChatState; msg: Msg; first: boolean; last: boolean; group: boolean; mine: boolean; read: boolean; delivered?: boolean; reply?: Msg; st: AppSettings; starred: boolean;
   onMenu: (x: number, y: number) => void; onOpen: () => void; onWho: (key: string) => void; onReact: (key: string) => void; onReply: () => void; onVote: (ids: string[]) => void; onEndPoll: () => void;
@@ -20,10 +58,12 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
   const big = st.largeEmoji && msg.type === "m.text" && !msg.html && isEmojiOnly(msg.body);
   const bare = !!msg.sticker || big;
   const tick = msg.status === STATUS_SENDING ? <Clock size={13} /> : msg.status === STATUS_FAILED ? <AlertCircle size={13} /> : read ? <CheckCheck size={14} /> : delivered ? <CheckCheck size={14} style={{ opacity: 0.55 }} /> : <Check size={14} style={{ opacity: 0.55 }} />;
+  const swipe = useSwipeToReply(st.swipeToReply && msg.status === STATUS_SENT, onReply);
   return (
     <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "") + (last ? " last" : "") + (Date.now() - msg.ts < 4000 ? " fresh" : "")} data-id={msg.id}>
       {group && !mine && first && <div className="msg-sender" style={st.colorSenderNames ? { color: `hsl(${senderHue(author)} 60% 62%)` } : undefined}>{author}</div>}
-      <div className="msg-line">
+      <div className="msg-line swipe-line" {...swipe.bind}>
+        <span className="swipe-cue" style={{ opacity: swipe.progress, transform: `scale(${0.6 + 0.4 * swipe.progress})` }} aria-hidden>↩</span>
         <div className={"bubble" + (bare ? " bare" : "") + (msg.type === "m.image" && !msg.sticker ? " media-bubble" : "") + (msg.status === STATUS_FAILED ? " failed" : "")}
           onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}
           onDoubleClick={() => st.doubleTapReact && st.quickReactions[0] && onReact(st.quickReactions[0])}
