@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Contact, Network, pager } from "../core/api";
-import { useInbox } from "../core/store";
+import { syncContacts, useInbox } from "../core/store";
 import { addToPhonebook, parseVcf, phoneKey, prettyName, stripTag } from "../core/names";
 import { networkMeta } from "../core/emoji";
 import { ChevronLeft, Search, Upload, UserPlus } from "lucide-react";
@@ -21,6 +21,7 @@ export function NewChat({ onBack, onOpen }: { onBack: () => void; onOpen: (roomI
   const [choose, setChoose] = useState<{ title: string; ways: Way[] }>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [note, setNote] = useState("");
   const file = useRef<HTMLInputElement>(null);
   const chats = useInbox();
 
@@ -86,9 +87,10 @@ export function NewChat({ onBack, onOpen }: { onBack: () => void; onOpen: (roomI
   async function importFile(f?: File) {
     if (!f) return;
     const n = parseVcf(await f.text());
-    addToPhonebook(n, true);
+    if (addToPhonebook(n, true, true)) void syncContacts();
     setPeople((cur) => [...cur]);
     setError(n.length ? "" : "No contacts found in that file");
+    if (n.length) setNote(`Imported ${new Set(n.map((x) => x.number)).size} numbers`);
   }
 
   return (
@@ -115,9 +117,10 @@ export function NewChat({ onBack, onOpen }: { onBack: () => void; onOpen: (roomI
             {loading && <p className="muted pad">Finding your contacts…</p>}
             {!loading && !shown.length && <p className="muted pad">{q ? "No one by that name yet. Use the row above to message a number or username." : "No contacts yet."}</p>}
             {busy && <p className="muted pad">Opening chat…</p>}
+            {note && <p className="accent pad">{note}</p>}
             <div className="pad"><button className="pill" onClick={() => file.current?.click()}><Upload size={15} /> Import contacts (.vcf)</button>
               <input ref={file} type="file" accept=".vcf,text/vcard,text/x-vcard" hidden onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = ""; }} />
-              <p className="muted small">Names from a contacts file replace phone numbers everywhere in Pager.</p></div>
+              <p className="muted small">Names from a contacts file replace phone numbers everywhere in Pager, and sync to your account so your other devices get them too.</p></div>
           </>
         )}
       </div>

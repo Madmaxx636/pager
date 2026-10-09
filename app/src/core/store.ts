@@ -9,7 +9,7 @@ import {
   labelsOf, lastPreview, lastTs, nameOf, previewOf,
 } from "./types";
 import { markdownToHtml } from "./format";
-import { addToPhonebook, onPhonebookChange } from "./names";
+import { addToPhonebook, onPhonebookChange, ownContacts } from "./names";
 import type { Gif } from "./gifs";
 
 export interface Session { baseUrl: string; token: string; userId: string; deviceId: string }
@@ -192,6 +192,11 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}), ...(r.userStickers ? { userStickers: r.userStickers } : {}) });
       if (r.userStickers) lsSet("pager.userStickers", r.userStickers);
       handleSettingsSync(r.accountData?.[settingsSyncType()], s.userId);
+      for (const [type, c] of Object.entries(r.accountData ?? {})) if (type.startsWith("app.pager.contacts.")) {
+        const rows = Array.isArray(c.rows) ? (c.rows as unknown[]).filter((x): x is [string, string] => Array.isArray(x) && typeof x[0] === "string" && typeof x[1] === "string") : [];
+        addToPhonebook(rows.map(([number, name]) => ({ number, name })), true, true);
+        if (typeof c.chunks === "number") contactChunks = Math.max(contactChunks, c.chunks);
+      }
       const fav = r.accountData?.["app.pager.favorite_gifs"]?.gifs;
       if (Array.isArray(fav)) { set({ favoriteGifs: fav as Gif[] }); lsSet("pager.favoriteGifs", fav); }
       r.invites.forEach((id) => void matrix.join(id).catch(() => {}));
@@ -546,6 +551,16 @@ function applyIdentity(nets: Network[]) {
 export async function refreshBridges() {
   if (!state.session) return;
   try { const nets = await pager.networks(); applyIdentity(nets); set({ bridges: nets }); void loadPhonebook(nets); } catch { /* bridge API may be down */ }
+}
+// Contacts you import sync to your account (Matrix account data, in chunks to stay under its size limit) so every device shows the same names.
+let contactChunks = 0;
+export async function syncContacts() {
+  const u = me(); if (!u) return;
+  const rows = ownContacts(), size = 500, count = Math.max(1, Math.ceil(rows.length / size));
+  for (let i = 0; i < Math.max(count, contactChunks); i++) {
+    try { await matrix.putAccountData(u, `app.pager.contacts.${i}`, { rows: rows.slice(i * size, (i + 1) * size), chunks: count }); } catch { /* try again on the next import */ }
+  }
+  contactChunks = count;
 }
 // Names for bare phone numbers come from your bridges' contact lists (WhatsApp, Signal and Google Messages know your address book).
 onPhonebookChange(() => set({ chats: { ...state.chats } }));

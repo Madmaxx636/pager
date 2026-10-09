@@ -250,6 +250,15 @@ class Store(private val context: Context) {
                 _chats.value = r.chats
                 r.muted?.let { _muted.value = it }
                 handleSettingsSync(r.accountData[settingsType], s.userId)
+                for ((type, c) in r.accountData) if (type.startsWith("app.pager.contacts.")) {
+                    val rows = ((c["rows"] as? JsonArray) ?: JsonArray(emptyList())).mapNotNull { row ->
+                        val a = row as? JsonArray
+                        val n = (a?.getOrNull(0) as? JsonPrimitive)?.takeIf { p -> p.isString }?.content; val nm = (a?.getOrNull(1) as? JsonPrimitive)?.takeIf { p -> p.isString }?.content
+                        if (n != null && nm != null) n to nm else null
+                    }
+                    Names.add(rows, override = true, mine = true)
+                    (c["chunks"] as? JsonPrimitive)?.content?.toIntOrNull()?.let { contactChunks = maxOf(contactChunks, it) }
+                }
                 r.accountData["app.pager.favorite_gifs"]?.let { c ->
                     runCatching { json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), c["gifs"] ?: JsonArray(emptyList())) }
                         .onSuccess { _favoriteGifs.value = it; writeJson("favoriteGifs", kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), it) }
@@ -893,8 +902,25 @@ class Store(private val context: Context) {
 
     // Names for bare phone numbers come from your phone's contacts and your bridges' contact lists (WhatsApp, Signal and Google Messages know your address book).
     private var bookAt = 0L
+    private var contactChunks = 0
+
+    /** Contacts you bring (your phone's) sync to your account in chunks, so web and desktop show the same names. */
+    suspend fun syncContacts() {
+        val me = _session.value?.userId ?: return
+        val rows = Names.ownContacts(); val size = 500
+        val count = maxOf(1, (rows.size + size - 1) / size)
+        for (i in 0 until maxOf(count, contactChunks)) {
+            runCatching {
+                matrix.putAccountData(me, "app.pager.contacts.$i", buildJsonObject {
+                    put("rows", JsonArray(rows.drop(i * size).take(size).map { (n, nm) -> JsonArray(listOf(JsonPrimitive(n), JsonPrimitive(nm))) }))
+                    put("chunks", count)
+                })
+            }
+        }
+        contactChunks = count
+    }
     private suspend fun loadPhonebook(nets: List<Network>) {
-        Names.loadDevice(context)
+        if (Names.loadDevice(context)) syncContacts()
         if (System.currentTimeMillis() - bookAt < 30 * 60_000L) return
         bookAt = System.currentTimeMillis()
         for (n in nets) for (l in n.logins) runCatching { pager.contacts(n.id, l.id) }.onSuccess { cs -> Names.add(cs.mapNotNull { c -> c.detail?.let { it to c.name } }) }
