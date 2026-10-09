@@ -2,6 +2,7 @@
 
 package app.pager.android
 
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -68,6 +69,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var members by remember { mutableStateOf<Map<String, String>?>(null) }
     var confirmLeave by remember { mutableStateOf(false) }
+    var notifSheet by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
     var muteSheet by remember { mutableStateOf(false) }
     var remindSheet by remember { mutableStateOf(false) }
@@ -146,10 +148,24 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 }
                 if (members == null) Text("Loading members…", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            SettingsGroup { NavRow("Notifications", notifSummary(LocalRawSettings.current.notifChat[roomId]), Icons.Rounded.Notifications) { notifSheet = true } }
             SettingsGroup { ButtonRow("Delete chat", danger = true) { confirmLeave = true } }
         }
     }
 
+    if (notifSheet) {
+        val raw = LocalRawSettings.current
+        val p = raw.notifChat[roomId] ?: ChatNotifPrefs()
+        fun upd(n: ChatNotifPrefs) = store.settings.update { copy(notifChat = if (n.isDefault) notifChat - roomId else notifChat + (roomId to n)) }
+        Sheet({ notifSheet = false }) {
+            SheetTitle("Notifications for $name")
+            ChoiceRow("Notify me about", listOf("default" to "Use my general settings", "all" to "Every message", "mentions" to "Mentions and replies only", "none" to "Nothing"), p.mode) { upd(p.copy(mode = it)) }
+            ChoiceRow("Sound", listOf("default" to "Use my general settings", "off" to "Silent"), p.sound) { upd(p.copy(sound = it)) }
+            ChoiceRow("Vibration", listOf("default" to "Use my general settings", "off" to "No vibration"), p.vibrate) { upd(p.copy(vibrate = it)) }
+            ChoiceRow("Message previews", listOf("default" to "Use my general settings", "show" to "Show message", "hide" to "Hide message"), p.preview) { upd(p.copy(preview = it)) }
+            Text("Mute and Low priority still apply: muted chats only notify for mentions, replies and your keywords.", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
     if (confirmLeave) AlertDialog(
         onDismissRequest = { confirmLeave = false }, title = { Text("Delete this chat?") },
         text = { Text("It will be removed from Pager. The conversation on ${networkMeta(c.network).label} isn't deleted, and it comes back if someone writes again.") },

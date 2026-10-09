@@ -241,16 +241,23 @@ class Store(private val context: Context) {
                 val muted = _muted.value
                 val st = settings.value
                 // Beeper-style: muted and low-priority chats stay quiet except for @mentions and replies to you.
-                r.incoming.filter { m ->
+                val cal = java.util.Calendar.getInstance()
+                val nowMin = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+                val day = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
+                for (m in r.incoming) {
                     val c = r.chats[m.roomId]
-                    val quiet = m.roomId in muted || c?.lowPriority == true
-                    val direct = m.mentioned || m.replyToMe
-                    (!quiet || direct) && when (st.notifScope) {
-                        "dm_mentions" -> !m.isGroup || direct
-                        "favorites" -> c?.pinned == true || direct
-                        else -> true
-                    }
-                }.forEach { _incoming.tryEmit(it) }
+                    val d = NotifyPolicy.decide(m, quiet = m.roomId in muted || c?.lowPriority == true, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st)
+                    if (!d.show) continue
+                    val out = m.copy(silent = d.silent, preview = d.preview)
+                    if (st.notifDelaySec > 0) {
+                        // Wait, and drop the alert if you read the chat somewhere else in the meantime.
+                        scope.launch {
+                            delay(st.notifDelaySec * 1000L)
+                            val cc = _chats.value[m.roomId]
+                            if (cc != null && (cc.unread > 0 || cc.markedUnread)) _incoming.tryEmit(out)
+                        }
+                    } else _incoming.tryEmit(out)
+                }
                 if (settings.value.unarchiveOnMessage) {
                     r.incoming.map { it.roomId }.distinct().filter { it !in muted && r.chats[it]?.archived == true }.forEach { setTag(it, "u.archived", false) }
                 }

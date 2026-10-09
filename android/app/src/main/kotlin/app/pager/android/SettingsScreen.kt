@@ -2,6 +2,8 @@
 
 package app.pager.android
 
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.foundation.layout.FlowRow
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -211,7 +213,11 @@ val SETTINGS_INDEX = listOf(
     SettingEntry("notifications", "Notification content", "Notifications", "preview hide sender"),
     SettingEntry("notifications", "Notify me about", "Notifications", "scope all dms mentions favorites"),
     SettingEntry("notifications", "Quiet hours", "Notifications", "do not disturb night silent"),
-    SettingEntry("notifications", "Sound", "Notifications", "tone"),
+    SettingEntry("notifications", "Keywords", "Notifications", "words names always notify"),
+    SettingEntry("notifications", "Wait before alerting", "Notifications", "delay read elsewhere"),
+    SettingEntry("notifications", "On the lock screen", "Notifications", "private hide content visibility"),
+    SettingEntry("notifications", "Test notification", "Notifications", "try check"),
+    SettingEntry("notifications", "Sound", "Notifications", "tone ringtone"),
     SettingEntry("notifications", "Vibrate", "Notifications", "haptic"),
     SettingEntry("notifications", "Reply and Mark read buttons", "Notifications", "actions"),
     SettingEntry("notifications", "Per-network notifications", "Notifications", "whatsapp signal telegram"),
@@ -438,6 +444,7 @@ private fun AppearancePage() {
     editing?.let { idx -> EmojiPickerDialog(s.recentEmoji, onPick = { e -> set { copy(quickReactions = quickReactions.toMutableList().also { it[idx] = e }) }; editing = null }, onDismiss = { editing = null }) }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun NotificationSettings(navigate: (String) -> Unit) {
     val store = LocalStore.current
@@ -445,32 +452,83 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
     val set = store.settings::update
     val context = LocalContext.current
     var picking by remember { mutableStateOf<String?>(null) }
+    var addingWord by remember { mutableStateOf(false) }
+    val off = !s.notifEnabled
+    val networks by store.bridges.collectAsState()
+    val known = (listOf("whatsapp", "signal", "gmessages", "messenger", "telegram", "discord", "instagram") + networks.map { it.id }).distinct()
+    val dayNames = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
     SettingsPage("Notifications", { navigate("") }) {
         SettingsGroup {
-            SwitchRow("Notifications", "Master switch for message alerts", s.notifEnabled) { v -> set { copy(notifEnabled = v) } }
+            SwitchRow("Notifications", "Master switch for message alerts", s.notifEnabled) { v -> set { copy(notifEnabled = v) } }; GroupDivider()
+            ButtonRow("Send a test notification") { Notifier.test(context, store) }
         }
-        SettingsGroup("What to notify", footer = "Muted and Low priority chats stay quiet except for @mentions and replies to your messages, like Beeper.") {
+        SettingsGroup("What to notify", footer = "Muted and Low priority chats stay quiet except for @mentions, replies to your messages and your keywords.") {
             ChoiceRow("Notify me about", listOf("all" to "Every message", "dm_mentions" to "Direct messages and mentions", "favorites" to "Pinned chats and mentions"), s.notifScope, s.notifEnabled) { v -> set { copy(notifScope = v) } }; GroupDivider()
             SwitchRow("Groups: only when mentioned", "Group chats stay quiet unless someone @mentions you", s.notifGroupMentionsOnly, s.notifEnabled) { v -> set { copy(notifGroupMentionsOnly = v) } }
         }
+        SettingsGroup("Keywords", footer = "A message with one of these words always notifies you, even in a muted chat. Whole words only.") {
+            if (s.notifKeywords.isNotEmpty()) FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                s.notifKeywords.forEach { k ->
+                    Row(Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable { set { copy(notifKeywords = notifKeywords - k) } }.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(k, style = MaterialTheme.typography.labelLarge); Spacer(Modifier.width(4.dp)); Icon(Icons.Rounded.Close, "Remove $k", Modifier.size(16.dp))
+                    }
+                }
+            }
+            if (s.notifKeywords.isNotEmpty()) GroupDivider()
+            ButtonRow("Add a keyword") { addingWord = true }
+        }
         SettingsGroup("Appearance") {
             ChoiceRow("Show", listOf("full" to "Name and message", "sender" to "Name only", "hidden" to "Hide content"), s.notifPreview, s.notifEnabled) { v -> set { copy(notifPreview = v) } }; GroupDivider()
-            SwitchRow("Reply & Mark read buttons", "Act on a message right from the notification", s.notifActions, s.notifEnabled) { v -> set { copy(notifActions = v) } }; GroupDivider()
+            ChoiceRow("On the lock screen", listOf("show" to "Show content", "hide_content" to "Hide content", "hide" to "Don't show"), s.notifLockScreen, s.notifEnabled) { v -> set { copy(notifLockScreen = v) } }; GroupDivider()
+            SwitchRow("Reply & Mark read buttons", "Act on a message right from the notification", s.notifActions, s.notifEnabled) { v -> set { copy(notifActions = v) } }
+        }
+        SettingsGroup("Sound & vibration", footer = "For a custom ringtone, vibration pattern or light, open the system settings for Pager's messages.") {
             SwitchRow("Sound", checked = s.notifSound, enabled = s.notifEnabled) { v -> set { copy(notifSound = v) } }; GroupDivider()
-            SwitchRow("Vibrate", checked = s.notifVibrate, enabled = s.notifEnabled) { v -> set { copy(notifVibrate = v) } }
+            SwitchRow("Vibrate", checked = s.notifVibrate, enabled = s.notifEnabled) { v -> set { copy(notifVibrate = v) } }; GroupDivider()
+            SwitchRow("Alert once per burst", "Only the first message of several makes a sound", s.notifAlertOnce, s.notifEnabled) { v -> set { copy(notifAlertOnce = v) } }; GroupDivider()
+            ButtonRow("Choose ringtone and vibration…") {
+                context.startActivity(Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName).putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Notifier.CH_ALL).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+        SettingsGroup("Delay", footer = "Waits, then skips the alert if you already read the chat on another device or app.") {
+            ChoiceRow("Wait before alerting", listOf(0 to "Don't wait", 5 to "5 seconds", 15 to "15 seconds", 30 to "30 seconds", 60 to "1 minute").map { it.first.toString() to it.second }, s.notifDelaySec.toString(), s.notifEnabled) { v -> set { copy(notifDelaySec = v.toInt()) } }
         }
         SettingsGroup("Quiet hours", footer = "Messages still arrive, silently.") {
             SwitchRow("Quiet hours", checked = s.quietHoursEnabled, enabled = s.notifEnabled) { v -> set { copy(quietHoursEnabled = v) } }
             if (s.quietHoursEnabled) {
                 GroupDivider(); TimeRow("From", s.quietStartMin) { picking = "start" }
                 GroupDivider(); TimeRow("Until", s.quietEndMin) { picking = "end" }
+                GroupDivider()
+                FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    dayNames.forEachIndexed { d, name ->
+                        androidx.compose.material3.FilterChip(selected = d in s.notifQuietDays, onClick = { set { copy(notifQuietDays = if (d in notifQuietDays) notifQuietDays - d else notifQuietDays + d) } }, label = { Text(name) })
+                    }
+                }
+                GroupDivider()
+                SwitchRow("Let important ones through", "Pinned chats, mentions, replies and keywords still make a sound", s.notifQuietBreakThrough) { v -> set { copy(notifQuietBreakThrough = v) } }
             }
         }
-        SettingsGroup("Per network") {
-            val known = listOf("whatsapp", "signal", "telegram", "discord", "instagram", "messenger", "gmessages")
+        SettingsGroup("Per network", footer = "Pick how each app notifies you. A chat's own setting (in its info page) wins.") {
             known.forEachIndexed { i, id ->
                 if (i > 0) GroupDivider()
-                SwitchRow(networkMeta(id).label, null, id !in s.notifMutedNetworks, s.notifEnabled) { on -> set { copy(notifMutedNetworks = if (on) notifMutedNetworks - id else notifMutedNetworks + id) } }
+                ChoiceRow(
+                    networkMeta(id).label, listOf("all" to "Every message", "mentions" to "Mentions only", "none" to "Nothing"),
+                    s.notifNetworkMode[id] ?: if (id in s.notifMutedNetworks) "none" else "all", s.notifEnabled,
+                ) { v -> set { copy(notifNetworkMode = notifNetworkMode + (id to v), notifMutedNetworks = notifMutedNetworks - id) } }
+            }
+        }
+        val custom = s.notifChat.filterValues { !it.isDefault }
+        if (custom.isNotEmpty()) SettingsGroup("Chats with their own settings") {
+            val chats by store.chats.collectAsState()
+            custom.entries.forEachIndexed { i, (room, p) ->
+                if (i > 0) GroupDivider()
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(chats[room]?.let { SyncReducer.displayName(it, store.me) } ?: room.take(12) + "…")
+                        Text(notifSummary(p), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = { set { copy(notifChat = notifChat - room) } }) { Text("Reset") }
+                }
             }
         }
         SettingsGroup("System") {
@@ -478,6 +536,15 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
                 context.startActivity(Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
         }
+    }
+    if (addingWord) {
+        var w by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { addingWord = false }, title = { Text("Add a keyword") },
+            text = { androidx.compose.material3.OutlinedTextField(w, { w = it }, singleLine = true, placeholder = { Text("Your name, a nickname…") }) },
+            confirmButton = { TextButton(enabled = w.isNotBlank(), onClick = { val k = w.trim(); set { if (notifKeywords.any { it.equals(k, true) }) this else copy(notifKeywords = notifKeywords + k) }; addingWord = false }) { Text("Add") } },
+            dismissButton = { TextButton(onClick = { addingWord = false }) { Text("Cancel") } },
+        )
     }
     picking?.let { which ->
         val initial = if (which == "start") s.quietStartMin else s.quietEndMin
@@ -489,6 +556,16 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
             text = { TimePicker(state) },
         )
     }
+}
+
+/** One line describing a chat's notification overrides. */
+fun notifSummary(p: ChatNotifPrefs?): String {
+    if (p == null || p.isDefault) return "Default"
+    return listOfNotNull(
+        when (p.mode) { "all" -> "Every message"; "mentions" -> "Mentions only"; "none" -> "Off"; else -> null },
+        if (p.sound == "off") "Silent" else null, if (p.vibrate == "off") "No vibration" else null,
+        when (p.preview) { "hide" -> "Hidden previews"; "show" -> "Shown previews"; else -> null },
+    ).joinToString(" · ")
 }
 
 @Composable

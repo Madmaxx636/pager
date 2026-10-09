@@ -40,25 +40,32 @@ object Notifier {
         nm.createNotificationChannel(ch(CH_SYNC, "Background sync", NotificationManager.IMPORTANCE_MIN, false, false))
     }
 
-    private fun channelFor(s: AppSettings, quiet: Boolean) = when {
-        quiet -> CH_SILENT
-        s.notifSound && s.notifVibrate -> CH_ALL
-        s.notifSound -> CH_SOUND
-        s.notifVibrate -> CH_VIBRATE
-        else -> CH_SILENT
+    private fun channelFor(s: AppSettings, quiet: Boolean, roomId: String): String {
+        val vibrate = s.notifVibrate && s.notifChat[roomId]?.vibrate != "off"
+        return when {
+            quiet -> CH_SILENT
+            s.notifSound && vibrate -> CH_ALL
+            s.notifSound -> CH_SOUND
+            vibrate -> CH_VIBRATE
+            else -> CH_SILENT
+        }
+    }
+
+    /** Shows a sample notification so you can check sound, vibration and what it looks like. */
+    fun test(context: Context, store: Store) {
+        show(context, store, Incoming("!pager-test", "Pager test", "Pager", "This is how a message will look.", "matrix", false, false, System.currentTimeMillis(), false, !store.settings.value.notifSound, store.settings.value.notifPreview))
     }
 
     fun show(context: Context, store: Store, m: Incoming) {
         val s = store.settings.value
-        if (!s.notifEnabled || m.network in s.notifMutedNetworks) return
-        if (m.isGroup && s.notifGroupMentionsOnly && !m.mentioned) return
-        val cal = Calendar.getInstance()
-        val quiet = inQuietHours(s, cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE))
+        // Whether to show it at all was decided by NotifyPolicy; here is only how it looks and sounds.
+        val quiet = m.silent
+        val preview = m.preview
 
         val id = m.roomId.hashCode()
         val lines = history.getOrPut(m.roomId) { mutableListOf() }
-        val shown = when (s.notifPreview) { "hidden" -> "New message"; else -> m.text }
-        lines.add(Line(if (s.notifPreview == "hidden") m.chat else m.sender, shown, m.ts.takeIf { it > 0 } ?: System.currentTimeMillis()))
+        val shown = when (preview) { "hidden" -> "New message"; else -> m.text }
+        lines.add(Line(if (preview == "hidden") m.chat else m.sender, shown, m.ts.takeIf { it > 0 } ?: System.currentTimeMillis()))
         while (lines.size > 6) lines.removeAt(0)
 
         val me = Person.Builder().setName("You").build()
@@ -68,15 +75,16 @@ object Notifier {
         val open = PendingIntent.getActivity(
             context, id, Intent(context, MainActivity::class.java).putExtra("roomId", m.roomId), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val b = NotificationCompat.Builder(context, channelFor(s, quiet))
+        val b = NotificationCompat.Builder(context, channelFor(s, quiet, m.roomId))
             .setSmallIcon(R.drawable.ic_notif).setContentTitle(m.chat)
             .setContentText(if (m.isGroup) "${lines.last().sender}: ${lines.last().text}" else lines.last().text)
             .setStyle(style).setContentIntent(open).setAutoCancel(true).setGroup(GROUP)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE).setOnlyAlertOnce(false)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE).setOnlyAlertOnce(s.notifAlertOnce && lines.size > 1)
+            .setVisibility(when (s.notifLockScreen) { "hide" -> NotificationCompat.VISIBILITY_SECRET; "hide_content" -> NotificationCompat.VISIBILITY_PRIVATE; else -> NotificationCompat.VISIBILITY_PUBLIC })
             .setColor(networkMeta(m.network).color.toArgb())
         if (quiet) b.setSilent(true)
 
-        if (s.notifActions && s.notifPreview != "hidden") {
+        if (s.notifActions && preview != "hidden") {
             val reply = NotificationCompat.Action.Builder(
                 R.drawable.ic_notif, "Reply",
                 PendingIntent.getBroadcast(

@@ -161,4 +161,8 @@ data class Incoming(
     val ts: Long = 0L,
     /** The message is a reply to something you wrote. */
     val replyToMe: Boolean = false,
+    /** Set by the notification policy: show it without sound or vibration. */
+    val silent: Boolean = false,
+    /** Set by the notification policy: full | sender | hidden. */
+    val preview: String = "full",
 )
