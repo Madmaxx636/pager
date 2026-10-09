@@ -196,8 +196,22 @@ object SyncReducer {
         val target = content["m.relates_to"].obj()["event_id"].str() ?: return
         val i = msgs.indexOfFirst { it.id == target }
         if (i < 0 || msgs[i].sender != e["sender"].str()) return
-        val body = content["m.new_content"].obj()["body"].str() ?: content["body"].str()?.removePrefix("* ") ?: return
-        msgs[i] = msgs[i].copy(body = body, edited = true)
+        val nc = content["m.new_content"].obj()
+        val body = nc["body"].str() ?: content["body"].str()?.removePrefix("* ") ?: return
+        val prev = msgs[i]
+        var next = prev.copy(body = body, edited = true)
+        // Some bridges (Google Messages, WhatsApp) send a picture or file as an edit of an earlier message: take its media too.
+        val url = nc["url"].str()
+        if (url != null) {
+            val info = nc["info"].obj()
+            next = next.copy(
+                type = nc["msgtype"].str() ?: prev.type, mxc = url, mime = info["mimetype"].str(),
+                size = (info["size"] as? JsonPrimitive)?.longOrNull, w = (info["w"] as? JsonPrimitive)?.intOrNull, h = (info["h"] as? JsonPrimitive)?.intOrNull,
+                edited = prev.edited, // adding the media isn't an edit the reader should see
+            )
+        } else if (nc["msgtype"].str() != null && nc["msgtype"].str() != prev.type && prev.mxc == null) next = next.copy(type = nc["msgtype"].str()!!)
+        if (nc["format"].str() == "org.matrix.html") next = next.copy(html = nc["formatted_body"].str())
+        msgs[i] = next
     }
 
     private fun applyState(chat: ChatState, e: JsonObject): ChatState {

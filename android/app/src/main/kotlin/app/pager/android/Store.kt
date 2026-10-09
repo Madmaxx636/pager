@@ -206,6 +206,8 @@ class Store(private val context: Context) {
 
     private fun loadCache(userId: String) {
         runCatching {
+            // Bump when the way messages are read changes (e.g. pictures that arrive as edits), so old saved chats are read again.
+            if (prefs.getInt("cacheV", 0) != 2) { cacheFile.delete(); prefs.edit().putInt("cacheV", 2).apply(); return }
             if (!cacheFile.exists()) return
             val c = json.decodeFromString(cacheSerializer, cacheFile.readText())
             if (c.userId != userId) return
