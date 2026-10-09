@@ -49,7 +49,21 @@ export function parseCookies(text: string): Record<string, string> {
   return out;
 }
 
+export interface AdminUser { id: string; displayname: string; admin: boolean; deactivated: boolean; created?: number; you: boolean }
+
 export const pager = {
+  me: () => call<{ user_id: string; admin: boolean }>("GET", "/api/me"),
+  admin: {
+    users: () => call<{ users: AdminUser[] }>("GET", "/api/admin/users").then((r) => r.users),
+    logins: (id: string) => call<{ networks: Network[] }>("GET", `/api/admin/users/${enc(id)}/logins`).then((r) => r.networks),
+    logout: (id: string, net: string, login: string) => call("POST", `/api/admin/users/${enc(id)}/logout/${enc(net)}/${enc(login)}`, {}),
+    setAdmin: (id: string, admin: boolean) => call("POST", `/api/admin/users/${enc(id)}/admin`, { admin }),
+    resetPassword: (id: string, password: string) => call("POST", `/api/admin/users/${enc(id)}/password`, { password }),
+    remove: (id: string) => call("POST", `/api/admin/users/${enc(id)}/delete`, {}),
+    server: () => call<{ domain: string; signup: "invite" | "open" | "closed"; inviteCode: string }>("GET", "/api/admin/server"),
+    setServer: (body: { signup?: string; regenerateInvite?: boolean }) => call<{ domain: string; signup: "invite" | "open" | "closed"; inviteCode: string }>("POST", "/api/admin/server", body),
+    bridges: () => call<{ bridges: { id: string; name: string; up: boolean }[] }>("GET", "/api/admin/bridges").then((r) => r.bridges),
+  },
   config: () => call<ServerConfig>("GET", "/api/config"),
   signup: (username: string, password: string, invite: string) => call("POST", "/api/signup", { username, password, invite }),
   networks: () => call<{ networks: Network[] }>("GET", "/api/bridges").then((r) => r.networks),
