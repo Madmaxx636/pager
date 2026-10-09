@@ -22,4 +22,12 @@ class E2eeBodiesTest {
         assertEquals("""{"messages":$inner}""", E2eeBodies.toDevice(parse("""{"messages":$inner}""")).toString())
         assertTrue(E2eeBodies.toDevice(parse("""{"messages":{"@a:x":{"D":null}}}""")).toString().contains("\"D\"").not())
     }
+
+    @Test fun aBackupBecomesAListOfKeysThatNameTheirRoomAndSession() {
+        val backup = parse("""{"!r1:x":{"S1":{"session_key":"a","algorithm":"m.megolm.v1.aes-sha2"},"S2":{"session_key":"b"}},"!r2:x":{"S3":{"session_key":"c"}}}""") as JsonObject
+        val out = E2eeBodies.backupToExport(backup)
+        assertEquals(3, out.size)
+        assertEquals("""{"session_key":"a","algorithm":"m.megolm.v1.aes-sha2","room_id":"!r1:x","session_id":"S1"}""", out[0].toString())
+        assertEquals("""{"session_key":"c","room_id":"!r2:x","session_id":"S3"}""", out[2].toString())
+    }
 }
