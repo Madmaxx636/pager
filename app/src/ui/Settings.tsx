@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus } from "lucide-react";
-import { RowAction, ACCENTS, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useSettings } from "../core/settings";
+import { RowAction, ACCENTS, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
 import { addStickers, cancelReminder, cancelScheduled, deleteLabel, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
@@ -39,6 +39,9 @@ export const SETTINGS_INDEX: { page: string; title: string; where: string; keywo
   { page: "appearance", title: "Avatar shape", where: "Appearance", keywords: "circle squircle" },
   { page: "appearance", title: "Large emoji", where: "Appearance", keywords: "big emoji only" },
   { page: "appearance", title: "Quick reactions", where: "Appearance", keywords: "emoji reactions favorites" },
+  { page: "appearance", title: "E-ink mode", where: "Appearance", keywords: "eink e-ink epaper boox high contrast black white" },
+  { page: "appearance", title: "Display size", where: "Appearance", keywords: "scale zoom interface bigger smaller screen" },
+  { page: "appearance", title: "Small screen layout", where: "Appearance", keywords: "compact tiny phone watch" },
   { page: "appearance", title: "Reduce motion", where: "Appearance", keywords: "animations accessibility" },
   { page: "layout", title: "Inbox style", where: "Inbox & layout", keywords: "minimal pro compact titles only" },
   { page: "layout", title: "Density", where: "Inbox & layout", keywords: "compact comfortable spacing" },
@@ -101,7 +104,7 @@ function Home({ nav }: { nav: Nav }) {
 }
 
 function Page({ page, nav }: { page: string; nav: Nav }) {
-  const s = useSettings();
+  const s = useRawSettings();
   const u = updateSettings;
   switch (page) {
     case "appearance": return <Appearance />;
@@ -196,10 +199,15 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
 }
 
 function Appearance() {
-  const s = useSettings();
+  const s = useRawSettings();
   const [editing, setEditing] = useState<number>();
   return (
     <>
+      <Group title="Display">
+        <SwitchRow title="E-ink mode" hint="Black and white, no animation or shadows, thicker lines. Made for e-ink screens" checked={s.eink} onChange={(v) => updateSettings({ eink: v })} />
+        <Row title="Display size" hint={`${Math.round(s.uiScale * 100)}%: scales the whole interface`}><input type="range" min="0.7" max="1.6" step="0.05" value={s.uiScale} onChange={(e) => updateSettings({ uiScale: Number(e.target.value) })} /></Row>
+        <Select title="Small screen layout" hint="Tighter spacing and smaller avatars. Auto turns on for small windows" value={s.smallScreen} options={[["auto", "Automatic"], ["on", "Always"], ["off", "Never"]]} onChange={(v) => updateSettings({ smallScreen: v })} />
+      </Group>
       <Group title="Theme">
         <Select title="Mode" value={s.themeMode} options={[["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black (AMOLED)"]]} onChange={(v) => updateSettings({ themeMode: v })} />
         <Row title="Accent color"><div className="swatches">{Object.entries(ACCENTS).map(([name, c]) => <button key={name} className={s.accent === name ? "on" : ""} style={{ background: c.dark }} onClick={() => updateSettings({ accent: name })} aria-label={name}>{s.accent === name ? <Check size={16} color={c.onDark} /> : null}</button>)}</div></Row>
@@ -233,7 +241,7 @@ const fmtMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${
 const parseMin = (v: string) => { const [h, m] = v.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
 
 function Notifications() {
-  const s = useSettings();
+  const s = useRawSettings();
   const [perm, setPerm] = useState(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
   const known = ["whatsapp", "signal", "telegram", "discord", "instagram", "messenger", "gmessages"];
   return (
@@ -283,7 +291,7 @@ function Labels() {
 }
 
 function Media() {
-  const s = useSettings();
+  const s = useRawSettings();
   const pack = useStore((x) => x.userStickers);
   const input = useState<HTMLInputElement | null>(null);
   return (
@@ -302,7 +310,7 @@ function Media() {
 }
 
 function Shortcuts() {
-  const s = useSettings();
+  const s = useRawSettings();
   const [capturing, setCapturing] = useState<string>();
   useEffect(() => {
     if (!capturing) return;
@@ -363,7 +371,7 @@ function Scheduled() {
 }
 
 function Desktop() {
-  const s = useSettings();
+  const s = useRawSettings();
   const [auto, setAuto] = useState(false);
   useEffect(() => { void window.pagerDesktop?.getAutostart().then(setAuto); }, []);
   return (
@@ -380,7 +388,7 @@ function Desktop() {
 
 function Backup() {
   const [msg, setMsg] = useState("");
-  const s = useSettings();
+  const s = useRawSettings();
   return (
     <>
       <Group title="Back up settings" footer="Copies every setting as text, so you can paste it on another device.">

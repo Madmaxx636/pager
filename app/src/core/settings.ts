@@ -32,6 +32,12 @@ export interface AppSettings {
   avatarShape: "circle" | "squircle";
   showLabelsInFilterBar: boolean;
   reduceMotion: boolean;
+  /** E-ink mode: black on white, no color, no animation, thick lines. */
+  eink: boolean;
+  /** Scales the whole interface (display size). */
+  uiScale: number;
+  /** Tighter layout for small screens; auto turns on below ~480×560. */
+  smallScreen: "auto" | "on" | "off";
   sidebarWidth: number;
   /** Quick actions that appear when hovering a chat row (desktop's version of swipe actions). */
   rowAction1: RowAction;
@@ -85,7 +91,7 @@ export const DEFAULTS: AppSettings = {
   themeMode: "system", accent: "teal", fontScale: 1, bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
-  avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, rowAction1: "read", rowAction2: "archive",
+  avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, eink: false, uiScale: 1, smallScreen: "auto", sidebarWidth: 360, rowAction1: "read", rowAction2: "archive",
   enterToSend: true, sendReadReceipts: true, sendTyping: true, linkPreviews: true, autoDownload: "always", unarchiveOnMessage: true,
   confirmDelete: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtFirstUnread: true, gifProvider: "giphy", gifKey: "", doubleTapReact: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
   notifEnabled: true, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [],
@@ -114,7 +120,16 @@ export const SHORTCUTS: { id: string; label: string; keys: string }[] = [
 ];
 
 const KEY = "pager.settings";
-let state: AppSettings = load();
+let raw: AppSettings = load();
+/** What the app actually uses: your settings, with E-ink mode's overrides on top. */
+export function effective(s: AppSettings): AppSettings {
+  if (!s.eink) return s;
+  return {
+    ...s, themeMode: "light", reduceMotion: true, screenEffects: false, messageAnimation: "none", bubbleFill: "solid", bubbleDepth: "flat",
+    bubbleStyle: s.bubbleStyle === "plain" ? "plain" : "outline", wallpaper: "none", autoPlayGifs: false, colorSenderNames: false, showNetworkBadges: s.showNetworkBadges,
+  };
+}
+let state: AppSettings = effective(raw);
 const listeners = new Set<() => void>();
 
 function load(): AppSettings {
@@ -122,14 +137,21 @@ function load(): AppSettings {
 }
 
 export const getSettings = () => state;
+/** Your own choices, without E-ink's overrides (this is what gets saved and shown on the settings page). */
+export const getRawSettings = () => raw;
 export function updateSettings(patch: Partial<AppSettings>) {
-  state = { ...state, ...patch };
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* storage may be unavailable */ }
+  raw = { ...raw, ...patch };
+  state = effective(raw);
+  try { localStorage.setItem(KEY, JSON.stringify(raw)); } catch { /* storage may be unavailable */ }
   listeners.forEach((l) => l());
 }
 export const resetSettings = () => updateSettings({ ...DEFAULTS });
 export function useSettings(): AppSettings {
   return useSyncExternalStore((cb) => { listeners.add(cb); return () => listeners.delete(cb); }, () => state);
+}
+/** For the settings page: shows your real choices, not E-ink's overrides. */
+export function useRawSettings(): AppSettings {
+  return useSyncExternalStore((cb) => { listeners.add(cb); return () => listeners.delete(cb); }, () => raw);
 }
 
 /** Is [minuteOfDay] inside a quiet-hours window that may wrap midnight? */
@@ -157,9 +179,13 @@ export function applyTheme(s: AppSettings) {
   const a = ACCENTS[s.accent] ?? ACCENTS.teal;
   const r = document.documentElement;
   r.dataset.theme = dark ? (s.themeMode === "black" ? "black" : "dark") : "light";
-  r.style.setProperty("--accent", dark ? a.dark : a.light);
-  r.style.setProperty("--accent-ink", dark ? a.onDark : a.onLight);
+  r.style.setProperty("--accent", s.eink ? "#000000" : dark ? a.dark : a.light);
+  r.style.setProperty("--accent-ink", s.eink ? "#ffffff" : dark ? a.onDark : a.onLight);
   r.style.setProperty("--font-scale", String(s.fontScale));
+  r.dataset.eink = s.eink ? "1" : "0";
+  r.style.setProperty("zoom", String(s.uiScale));
+  const small = s.smallScreen === "on" || (s.smallScreen === "auto" && (window.innerWidth < 480 || window.innerHeight < 560));
+  r.dataset.compact = small ? "1" : "0";
   r.dataset.bubble = s.bubbleStyle;
   r.dataset.fill = s.bubbleFill;
   r.dataset.depth = s.bubbleDepth;
