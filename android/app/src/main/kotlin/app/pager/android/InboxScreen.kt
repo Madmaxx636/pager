@@ -260,12 +260,15 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
                     }
                 }
                 items(shown, key = { it.id }) { c ->
+                    // Rows glide to their new place when a chat moves, archives or a new message bumps it.
+                    Box(if (s.reduceMotion) Modifier else Modifier.animateItem()) {
                     ChatRow(
                         c, selected = c.id in selected, selecting = selecting,
                         onClick = { if (selecting) toggleSelect(c.id) else onOpen(c.id) },
                         onLong = { if (selecting) toggleSelect(c.id) else { menuFor = c; if (s.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress) } },
                         onSwipe = { act(it, c) },
                     )
+                    }
                 }
             }
         }
