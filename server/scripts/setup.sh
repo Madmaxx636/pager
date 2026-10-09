@@ -124,6 +124,9 @@ YML
   enabled+=("$name")
 done
 
+# Bridges act as your real user (sent-from-phone messages show as yours, reading on your phone clears unread in Pager).
+./scripts/double-puppet.sh --no-restart >/dev/null
+
 echo
 echo "Bridges enabled: ${enabled[*]}"
 echo "Done. Next:  docker compose up -d --build"

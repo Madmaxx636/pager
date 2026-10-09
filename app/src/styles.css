@@ -289,3 +289,5 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 :root[data-eink="1"] .effects-canvas { display: none; }
 :root[data-eink="1"] .pill-search input, :root[data-eink="1"] .composer-input input, :root[data-eink="1"] .composer textarea { border: 0 !important; }
 :root[data-eink="1"] .pill-search { border: 2px solid #000; background: #fff; }
+
+.steps { margin: 4px 0 8px 18px; padding: 0; display: grid; gap: 6px; font-size: .92rem; } .steps li { padding-left: 4px; }

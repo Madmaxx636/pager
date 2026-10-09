@@ -36,24 +36,43 @@ function CookieStep({ step, busy, onValues, onError }: { step: LoginStep; busy: 
       if (v) onValues(v);
     } catch (e) { onError((e as Error).message); }
   }
+  const [blocked, setBlocked] = useState(false);
   const missing = (step.cookies?.fields ?? []).filter((f) => f.required).map((f) => f.id).filter((id) => !parseCookies(paste)[id]);
   return (
     <div className="stack">
       {desktop?.cookieLogin ? (
         <>
-          <p className="instructions">Sign in to your account in a separate window. Pager only reads the sign-in cookies it needs, and closes the window when it has them.</p>
-          <button className="primary" disabled={busy} onClick={viaWindow}>{busy ? "Connecting…" : "Open sign-in window"}</button>
-          <details><summary className="muted">Or paste cookies instead</summary>{pasteBox()}</details>
+          {!blocked && <>
+            <p className="instructions">Sign in to your account in a separate window. Pager only reads the sign-in cookies it needs, and closes the window when it has them.</p>
+            <button className="primary" disabled={busy} onClick={viaWindow}>{busy ? "Connecting…" : "Open sign-in window"}</button>
+            <button className="link" onClick={() => setBlocked(true)}>Google says "this browser is not secure"?</button>
+          </>}
+          {blocked && <>
+            <p className="instructions">Google doesn't allow sign-in inside other apps, so use your normal browser instead:</p>
+            {browserSteps()}
+          </>}
         </>
       ) : (
         <>
-          <p className="instructions">This network needs a browser sign-in. Easiest: use the Pager desktop app. Otherwise, sign in at the address below, then copy your cookies (browser developer tools → Network → any request → Copy as cURL) and paste them here.</p>
-          <a className="link" href={step.cookies?.url} target="_blank" rel="noreferrer">Open sign-in page</a>
-          {pasteBox()}
+          <p className="instructions">This network needs you to sign in with your normal browser, then copy your sign-in details here:</p>
+          {browserSteps()}
         </>
       )}
     </div>
   );
+  function browserSteps() {
+    return (
+      <>
+        <ol className="steps">
+          <li><a className="link" href={step.cookies?.url} target="_blank" rel="noreferrer">Open the Google sign-in page</a> in Chrome or Firefox and sign in until you see Google Messages.</li>
+          <li>Press <b>F12</b>, open the <b>Network</b> tab, then press <b>F5</b> to reload.</li>
+          <li>Right-click the first request in the list (named <b>config</b> or <b>web</b>) → <b>Copy</b> → <b>Copy as cURL</b>.</li>
+          <li>Paste it below.</li>
+        </ol>
+        {pasteBox()}
+      </>
+    );
+  }
   function pasteBox() {
     return (
       <>
