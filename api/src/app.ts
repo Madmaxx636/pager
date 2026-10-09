@@ -1,6 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Config } from "./config.ts";
-import { HttpError, registerUser, synapseAdmin, whoami } from "./synapse.ts";
+import { HttpError, asUser, registerUser, synapseAdmin, verifyPassword, whoami } from "./synapse.ts";
+
+/** Wrong admin passwords on the recover screen, per admin, so the screen cannot be used to guess a password. */
+const recoverTries = new Map<string, number[]>();
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { bridgeRequest } from "./bridges.ts";
@@ -157,6 +160,32 @@ export function createApp(cfg: Config) {
         const { password } = await readJson(req);
         if (typeof password !== "string" || password.length < 8) throw new HttpError(400, "Password must be at least 8 characters");
         return send(res, 200, await synapseAdmin(cfg, token, "POST", `/_synapse/admin/v1/reset_password/${enc(target)}`, { new_password: password, logout_devices: true }));
+      }
+      // Recover an account whose owner lost both their password and their recovery key. Needs the ADMIN's own password again.
+      // What it can do: set a new password and sign every device out, and remove the encryption backup so the person can start a new one.
+      // What it cannot do, by design: read or restore their old encrypted messages. Only the recovery key or a key file can.
+      if (parts[1] === "users" && target && parts[3] === "recover" && method === "POST") {
+        const { adminPassword, newPassword } = await readJson(req);
+        if (target === me) throw new HttpError(400, "Use Settings to change your own password");
+        if (newPassword != null && (typeof newPassword !== "string" || newPassword.length < 8)) throw new HttpError(400, "Password must be at least 8 characters");
+        const tries = (recoverTries.get(me) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
+        if (tries.length >= 5) throw new HttpError(429, "Too many wrong passwords. Wait ten minutes");
+        try { await verifyPassword(cfg, me, adminPassword); } catch (e) { if ((e as HttpError).status === 403) recoverTries.set(me, [...tries, Date.now()]); throw e; }
+        recoverTries.delete(me);
+        const password = (newPassword as string | undefined) ?? randomBytes(15).toString("base64url");
+        // Remove their encryption backup (as them), so they can make a new recovery key. Then the password reset signs out everything.
+        let backupRemoved = false;
+        try {
+          backupRemoved = await asUser(cfg, token, target, async (ut) => {
+            const h = { authorization: `Bearer ${ut}` };
+            const v = await fetch(`${cfg.synapseUrl}/_matrix/client/v3/room_keys/version`, { headers: h }).then((r) => (r.ok ? r.json() : undefined)).catch(() => undefined) as { version?: string } | undefined;
+            if (!v?.version) return false;
+            return fetch(`${cfg.synapseUrl}/_matrix/client/v3/room_keys/version/${enc(v.version)}`, { method: "DELETE", headers: h }).then((r) => r.ok).catch(() => false);
+          });
+        } catch { /* a deactivated account has nothing to remove */ }
+        await synapseAdmin(cfg, token, "POST", `/_synapse/admin/v1/reset_password/${enc(target)}`, { new_password: password, logout_devices: true });
+        console.log(`[admin] ${me} recovered ${target} (backup removed: ${backupRemoved})`);
+        return send(res, 200, { ok: true, backupRemoved, ...(newPassword == null ? { temporaryPassword: password } : {}) });
       }
       if (parts[1] === "users" && target && parts[3] === "delete" && method === "POST") {
         if (target === me) throw new HttpError(400, "Delete your own profile from Settings → About");

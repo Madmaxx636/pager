@@ -53,3 +53,25 @@ export async function synapseAdmin(cfg: Config, token: string, method: string, p
   if (!res.ok) throw new HttpError(res.status === 401 ? 401 : res.status === 403 ? 403 : res.status, data.error ?? "Homeserver error", data);
   return data;
 }
+
+/** Checks someone's password the way Synapse does, without leaving a signed-in device behind. Throws 403 if it is wrong. */
+export async function verifyPassword(cfg: Config, userId: string, password: string): Promise<void> {
+  if (typeof password !== "string" || !password) throw new HttpError(400, "Enter your password to continue");
+  const res = await fetch(`${cfg.synapseUrl}/_matrix/client/v3/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ type: "m.login.password", identifier: { type: "m.id.user", user: userId }, password, initial_device_display_name: "Pager password check" }),
+  }).catch(() => { throw new HttpError(502, "Homeserver unavailable"); });
+  const data = (await res.json().catch(() => ({}))) as { access_token?: string; error?: string };
+  if (res.status === 429) throw new HttpError(429, "Too many tries. Wait a minute and try again");
+  if (!res.ok || !data.access_token) throw new HttpError(403, "That isn't your password");
+  // The check made a device: remove it again.
+  await fetch(`${cfg.synapseUrl}/_matrix/client/v3/logout`, { method: "POST", headers: { authorization: `Bearer ${data.access_token}` } }).catch(() => {});
+}
+
+/** Acts as another user for one call (an admin power in Synapse), then forgets the token. */
+export async function asUser<T>(cfg: Config, adminToken: string, userId: string, fn: (userToken: string) => Promise<T>): Promise<T> {
+  const r = await synapseAdmin(cfg, adminToken, "POST", `/_synapse/admin/v1/users/${encodeURIComponent(userId)}/login`, {});
+  try { return await fn(r.access_token as string); }
+  finally { await fetch(`${cfg.synapseUrl}/_matrix/client/v3/logout`, { method: "POST", headers: { authorization: `Bearer ${r.access_token}` } }).catch(() => {}); }
+}

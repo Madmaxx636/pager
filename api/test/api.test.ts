@@ -38,6 +38,16 @@ before(async () => {
       return req.headers.authorization === "Bearer goodtoken" ? json(res, 200, { user_id: "@alice:test.local" })
         : req.headers.authorization === "Bearer admintoken" ? json(res, 200, { user_id: "@root:test.local" })
         : json(res, 401, { errcode: "M_UNKNOWN_TOKEN" });
+    // Password check used by "recover account": only rootpass works for @root.
+    if (req.url === "/_matrix/client/v3/login" && req.method === "POST") {
+      const b = await readBody(req);
+      return b.password === "rootpass" && b.identifier?.user === "@root:test.local" ? json(res, 200, { access_token: "checktoken" }) : json(res, 403, { errcode: "M_FORBIDDEN" });
+    }
+    if (req.url === "/_matrix/client/v3/logout") { adminCalls.push({ method: "POST", url: `logout:${req.headers.authorization}`, body: {} }); return json(res, 200, {}); }
+    if (req.url!.startsWith("/_matrix/client/v3/room_keys/version")) {
+      adminCalls.push({ method: req.method!, url: `${req.url}:${req.headers.authorization}`, body: {} });
+      return req.method === "GET" ? json(res, 200, { version: "7", algorithm: "x", auth_data: {} }) : json(res, 200, {});
+    }
     // Synapse's admin API: only admintoken may use it.
     req.url = decodeURIComponent(req.url!);
     if (req.method === "GET" && req.url! === "/_synapse/admin/v2/users/@root:test.local") return json(res, 200, { name: "@root:test.local", admin: true });
@@ -49,6 +59,7 @@ before(async () => {
         { name: "@whatsapp_12345:test.local", admin: false }, { name: "@whatsapp_lid-99:test.local", admin: false } ] });
       if (req.url!.endsWith("/devices") && req.method === "GET") return json(res, 200, { devices: [{ device_id: "D1", display_name: "Pager Android", last_seen_ts: 5, last_seen_ip: "1.2.3.4" }, { device_id: "D2" }] });
       adminCalls.push({ method: req.method!, url: req.url!, body: await readBody(req) });
+      if (req.url!.endsWith("/login")) return json(res, 200, { access_token: "alicetoken" });
       return json(res, 200, {});
     }
     json(res, 404, {});
@@ -226,4 +237,42 @@ test("bridge control says so when it isn't turned on", async () => {
   const c: any = await (await fetch(base + "/api/admin/control", { headers: h })).json();
   assert.equal(c.docker, false);
   assert.equal((await fetch(base + "/api/admin/bridges/whatsapp/restart", { method: "POST", headers: h, body: "{}" })).status, 409);
+});
+
+test("recover account: needs the admin's own password, removes the encryption backup, resets the password and signs everything out", async () => {
+  adminCalls.length = 0;
+  const call = (body: unknown) => fetch(`${base}/api/admin/users/${encodeURIComponent("@alice:test.local")}/recover`, { method: "POST", headers: { authorization: "Bearer admintoken", "content-type": "application/json" }, body: JSON.stringify(body) });
+  // Wrong password: refused, nothing touched.
+  const bad = await call({ adminPassword: "nope" });
+  assert.equal(bad.status, 403);
+  assert.equal(adminCalls.length, 0);
+  // Right password, no new password given: a temporary one comes back once.
+  const ok = await call({ adminPassword: "rootpass" });
+  assert.equal(ok.status, 200);
+  const r = await ok.json() as any;
+  assert.equal(r.backupRemoved, true);
+  assert.ok(typeof r.temporaryPassword === "string" && r.temporaryPassword.length >= 16);
+  const urls = adminCalls.map((c) => `${c.method} ${c.url}`);
+  const iLogin = urls.findIndex((u) => u.endsWith("/users/@alice:test.local/login"));
+  const iDelete = urls.findIndex((u) => u.startsWith("DELETE /_matrix/client/v3/room_keys/version/7:Bearer alicetoken"));
+  const iReset = urls.findIndex((u) => u.includes("/reset_password/@alice:test.local"));
+  assert.ok(iLogin >= 0 && iDelete > iLogin && iReset > iDelete, urls.join("\n"));
+  assert.equal(adminCalls[iReset].body.logout_devices, true);
+  assert.equal(adminCalls[iReset].body.new_password, r.temporaryPassword);
+  assert.ok(urls.includes("POST logout:Bearer alicetoken") && urls.includes("POST logout:Bearer checktoken"), "temporary tokens are removed");
+  // A chosen password is used and not echoed back; you can't recover yourself; non-admins can't use it.
+  adminCalls.length = 0;
+  const chosen = await (await call({ adminPassword: "rootpass", newPassword: "a-new-password-1" })).json() as any;
+  assert.equal(chosen.temporaryPassword, undefined);
+  assert.equal(adminCalls.find((c) => c.url.includes("/reset_password/"))!.body.new_password, "a-new-password-1");
+  const self = await fetch(`${base}/api/admin/users/${encodeURIComponent("@root:test.local")}/recover`, { method: "POST", headers: { authorization: "Bearer admintoken", "content-type": "application/json" }, body: JSON.stringify({ adminPassword: "rootpass" }) });
+  assert.equal(self.status, 400);
+  const user = await fetch(`${base}/api/admin/users/${encodeURIComponent("@alice:test.local")}/recover`, { method: "POST", headers: { authorization: "Bearer goodtoken", "content-type": "application/json" }, body: JSON.stringify({ adminPassword: "rootpass" }) });
+  assert.equal(user.status, 403);
+});
+
+test("recover account: five wrong passwords lock the screen for a while", async () => {
+  const call = (pw: string) => fetch(`${base}/api/admin/users/${encodeURIComponent("@alice:test.local")}/recover`, { method: "POST", headers: { authorization: "Bearer admintoken", "content-type": "application/json" }, body: JSON.stringify({ adminPassword: pw }) });
+  for (let i = 0; i < 5; i++) assert.equal((await call("wrong")).status, 403);
+  assert.equal((await call("rootpass")).status, 429);
 });

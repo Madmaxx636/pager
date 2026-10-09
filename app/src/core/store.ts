@@ -269,6 +269,33 @@ export async function restoreWithRecoveryKey(key: string): Promise<number> {
   const n = await e2ee.restoreBackup(key); await refreshEncryptionStatus(); return n;
 }
 
+/**
+ * Turns on end-to-end encryption for a page. From then on its messages are encrypted. Older messages stay as they were on the server,
+ * and encryption can't be turned off again. Refuses when the page's app (bridge) can't read encrypted messages, which would break the page.
+ */
+export async function enableEncryption(roomId: string): Promise<void> {
+  if (!e2ee) throw new Error("Encryption is not ready yet. Try again in a moment.");
+  const chat = state.chats[roomId];
+  if (chat?.encrypted) return;
+  const ids = Object.keys(await matrix.joinedMembers(roomId));
+  const bots = ids.filter((u) => /^@[a-z]*bot:/.test(u));
+  if (!(await e2ee.botsCanEncrypt(bots))) throw new Error("This page's app isn't set up for encryption on your server yet (the server admin turns it on)");
+  try { await matrix.setState(roomId, "m.room.encryption", { algorithm: "m.megolm.v1.aes-sha2", rotation_period_ms: 604_800_000, rotation_period_msgs: 100 }); }
+  catch (e) { throw new Error(e instanceof ApiError && e.status === 403 ? "Your account isn't allowed to change this page's settings" : (e as Error).message); }
+  patchChat(roomId, (c) => ({ ...c, encrypted: true }));
+}
+
+/** Turns encryption on for every page that can take it. Returns how many were turned on and the names of those that could not. */
+export async function enableEncryptionForAll(onProgress?: (done: number, total: number) => void): Promise<{ done: number; failed: { name: string; why: string }[] }> {
+  const todo = Object.values(state.chats).filter((c) => !c.encrypted && !isBotRoom(c, me()) && !isStoriesRoom(c));
+  let done = 0; const failed: { name: string; why: string }[] = [];
+  for (const [i, c] of todo.entries()) {
+    try { await enableEncryption(c.id); done++; } catch (e) { failed.push({ name: displayName(c, me()), why: (e as Error).message }); }
+    onProgress?.(i + 1, todo.length);
+  }
+  return { done, failed };
+}
+
 /** Every message key on this device, scrambled with a passphrase, as text for a file. */
 export async function exportKeyFile(passphrase: string): Promise<string> {
   if (!e2ee) throw new Error("Encryption is not ready yet");

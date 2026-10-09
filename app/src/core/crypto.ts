@@ -175,6 +175,13 @@ export class Crypto {
     return total;
   }
 
+  /** True when every bridge bot among [bots] has encryption keys on the server, so it can read and write encrypted messages. */
+  async botsCanEncrypt(bots: string[]): Promise<boolean> {
+    if (!bots.length) return true;
+    const r = await this.tx("POST", "/_matrix/client/v3/keys/query", { timeout: 10000, device_keys: Object.fromEntries(bots.map((b) => [b, []])) });
+    return bots.every((b) => Object.keys(r.device_keys?.[b] ?? {}).length > 0);
+  }
+
   // ---- Key file (a second way back in) ----------------------------------------------------------------------------------
   // Every message key this device has, scrambled with a passphrase you choose, as text you can store anywhere. If the recovery key is
   // ever lost, this file and its passphrase read your history; and it works without the server.

@@ -2,6 +2,7 @@
 
 package app.pager.android
 
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -70,6 +71,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
     var members by remember { mutableStateOf<Map<String, String>?>(null) }
     var confirmLeave by remember { mutableStateOf(false) }
     var notifSheet by remember { mutableStateOf(false) }
+    var encDialog by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
     var muteSheet by remember { mutableStateOf(false) }
     var remindSheet by remember { mutableStateOf(false) }
@@ -148,11 +150,31 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 }
                 if (members == null) Text("Loading members…", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            SettingsGroup {
+                if (c.encrypted) NavRow("Encrypted", "End-to-end encrypted. This can't be turned off", Icons.Rounded.Lock) {}
+                else NavRow("Turn on encryption", "Messages from now on are end-to-end encrypted", Icons.Rounded.Lock) { encDialog = true }
+            }
             SettingsGroup { NavRow("Notifications", notifSummary(LocalRawSettings.current.notifChat[roomId]), Icons.Rounded.Notifications) { notifSheet = true } }
             SettingsGroup { ButtonRow("Delete page", danger = true) { confirmLeave = true } }
         }
     }
 
+    if (encDialog) {
+        var busy by remember { mutableStateOf(false) }
+        var err by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { if (!busy) encDialog = false }, title = { Text("Turn on encryption for this page?") },
+            text = {
+                Column {
+                    Text("From now on, messages in this page are end-to-end encrypted.")
+                    Text("Messages sent before stay readable on your server, as they were. Encryption can't be turned off again for this page. Make sure you've set up your recovery key first (Settings → Privacy → Encryption).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                    if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = { TextButton(enabled = !busy, onClick = { busy = true; err = ""; scope.launch { runCatching { store.enableEncryption(roomId) }.onSuccess { encDialog = false }.onFailure { err = it.message ?: "Couldn't turn on encryption" }; busy = false } }) { Text(if (busy) "Turning on…" else "Turn on encryption") } },
+            dismissButton = { TextButton(enabled = !busy, onClick = { encDialog = false }) { Text("Cancel") } },
+        )
+    }
     if (notifSheet) {
         val raw = LocalRawSettings.current
         val p = raw.notifChat[roomId] ?: ChatNotifPrefs()

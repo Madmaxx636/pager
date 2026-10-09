@@ -7,7 +7,7 @@ import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, is
 import { networkMeta } from "../core/emoji";
 import { getSettings, useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
-  edit, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
+  edit, enableEncryption, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState,
 } from "../core/store";
 import { SOUNDS, playSound } from "../core/sounds";
@@ -423,6 +423,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
   const [list, setList] = useState<Record<string, string>>();
   const [muteDlg, setMuteDlg] = useState(false);
   const [when, setWhen] = useState<"remind" | "snooze">();
+  const [encDlg, setEncDlg] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [notifDlg, setNotifDlg] = useState(false);
   const st = useSettings();
@@ -453,6 +454,8 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
           {muted && left && left > 0 && <small className="pad">Muted for {Math.ceil(left / 3.6e6)} more hour(s)</small>}
         </div>
         <SheetItem icon={Tag} label="Labels" hint={labels.length ? labels.join(", ") : "None"} onClick={() => nav(`settings/labels`)} />
+        {!chat.encrypted && <SheetItem icon={Lock} label="Turn on encryption" hint="Messages from now on are end-to-end encrypted" onClick={() => setEncDlg(true)} />}
+        {chat.encrypted && <SheetItem icon={Lock} label="Encrypted" hint="End-to-end encrypted. This can't be turned off" onClick={() => {}} />}
         <SheetItem icon={Bell} label="Notifications" hint={notifSummary(st.notifChat[chat.id])} onClick={() => setNotifDlg(true)} />
         <SheetItem icon={Hourglass} label="Snooze…" hint="Hide this page and bring it back later" onClick={() => setWhen("snooze")} />
         <div className="tabs flat">{(["photos", "links", "files"] as const).map((t) => <button key={t} className={"tab" + (tab === t ? " on" : "")} onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)} {t === "photos" ? photos.length : t === "links" ? links.length : files.length}</button>)}</div>
@@ -484,6 +487,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
           </div>
         </Modal>
       )}
+      {encDlg && <EnableEncryptionDialog roomId={chat.id} onClose={() => setEncDlg(false)} />}
       {confirmLeave && <Modal title="Delete this page?" onClose={() => setConfirmLeave(false)}><p className="muted">It will be removed from Pager. The conversation on {networkMeta(chat.network).label} isn't deleted, and it comes back if someone writes again.</p><div className="row-end"><button className="link" onClick={() => setConfirmLeave(false)}>Cancel</button><button className="primary danger" onClick={() => { leave(chat.id); nav("home"); }}>Delete</button></div></Modal>}
     </aside>
   );
@@ -491,3 +495,17 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
 function Thumb({ mxc, onClick }: { mxc: string; onClick: () => void }) { const s = useMxc(mxc, 200); return <button className="thumb" onClick={onClick}>{s && <img src={s} alt="" />}</button>; }
 
 export { ImageIcon, Archive, ArrowDownToLine, MailOpen, _forward };
+
+function EnableEncryptionDialog({ roomId, onClose }: { roomId: string; onClose: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  return (
+    <Modal title="Turn on encryption for this page?" onClose={onClose}>
+      <p>From now on, messages in this page are end-to-end encrypted.</p>
+      <p className="muted">Messages sent before stay readable on your server, as they were. Encryption can't be turned off again for this page. Make sure you've set up your recovery key first (Settings → Privacy → Encryption).</p>
+      {err && <p className="error">{err}</p>}
+      <div className="row-end"><button className="link" onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={busy} onClick={() => { setBusy(true); setErr(""); enableEncryption(roomId).then(onClose).catch((e) => { setErr(e.message); setBusy(false); }); }}>{busy ? "Turning on…" : "Turn on encryption"}</button></div>
+    </Modal>
+  );
+}

@@ -77,6 +77,8 @@ export const pager = {
     logins: (id: string) => call<{ networks: Network[] }>("GET", `/api/admin/users/${enc(id)}/logins`).then((r) => r.networks),
     logout: (id: string, net: string, login: string) => call("POST", `/api/admin/users/${enc(id)}/logout/${enc(net)}/${enc(login)}`, {}),
     setAdmin: (id: string, admin: boolean) => call("POST", `/api/admin/users/${enc(id)}/admin`, { admin }),
+    /** Recover an account: needs the admin's own password. Without a new password, a temporary one comes back. */
+    recover: (id: string, adminPassword: string, newPassword?: string) => call<{ ok: boolean; backupRemoved: boolean; temporaryPassword?: string }>("POST", `/api/admin/users/${enc(id)}/recover`, { adminPassword, ...(newPassword ? { newPassword } : {}) }),
     resetPassword: (id: string, password: string) => call("POST", `/api/admin/users/${enc(id)}/password`, { password }),
     remove: (id: string) => call("POST", `/api/admin/users/${enc(id)}/delete`, {}),
     server: () => call<{ domain: string; signup: "invite" | "open" | "closed"; inviteCode: string }>("GET", "/api/admin/server"),
@@ -151,6 +153,7 @@ export const matrix = {
     const p = `/_matrix/client/v3/pushrules/global/override/${enc(roomId)}`;
     return muted ? call("PUT", p, { actions: [], conditions: [{ kind: "event_match", key: "room_id", pattern: roomId }] }) : call("DELETE", p);
   },
+  setState: (roomId: string, type: string, content: unknown, key = "") => call("PUT", `/_matrix/client/v3/rooms/${enc(roomId)}/state/${enc(type)}/${enc(key)}`, content),
   rename: (roomId: string, name: string) => call("PUT", `/_matrix/client/v3/rooms/${enc(roomId)}/state/m.room.name`, { name }),
   joinedMembers: async (roomId: string): Promise<Record<string, string>> => {
     const r = await call("GET", `/_matrix/client/v3/rooms/${enc(roomId)}/joined_members`);
