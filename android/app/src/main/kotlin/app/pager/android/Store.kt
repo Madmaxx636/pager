@@ -58,6 +58,9 @@ class Store(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val http = Http(prefs.getString("baseUrl", "") ?: "")
     val pager = PagerApi(http)
+    private val _isAdmin = MutableStateFlow(false)
+    /** This account is an administrator of the server. */
+    val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
     val matrix = MatrixApi(http)
     val media = MediaLoader(context, http)
     val audio = AudioController(media)
@@ -85,6 +88,9 @@ class Store(private val context: Context) {
     val stars: StateFlow<List<Star>> = _stars.asStateFlow()
     private val _scheduled = MutableStateFlow(readJson("scheduled", ListSerializer(Scheduled.serializer()), emptyList()))
     val scheduled: StateFlow<List<Scheduled>> = _scheduled.asStateFlow()
+    private val _favoriteGifs = MutableStateFlow(readJson("favoriteGifs", kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), emptyList()))
+    /** GIFs you starred, saved in your account so every device has them. */
+    val favoriteGifs: StateFlow<List<Gif>> = _favoriteGifs.asStateFlow()
     private val _userStickers = MutableStateFlow(readJson("userStickers", StickerPack.serializer().nullable, null))
     val userStickers: StateFlow<StickerPack?> = _userStickers.asStateFlow()
     val gifs = GifClient(http.client)
@@ -164,6 +170,7 @@ class Store(private val context: Context) {
         syncJob?.cancel()
         syncJob = scope.launch { syncLoop(s) }
         scope.launch { refreshBridges() }
+        scope.launch { runCatching { pager.isAdmin() }.onSuccess { _isAdmin.value = it } }
     }
 
     // --- Settings that follow your account ---------------------------------------------
@@ -239,6 +246,10 @@ class Store(private val context: Context) {
                 _chats.value = r.chats
                 r.muted?.let { _muted.value = it }
                 handleSettingsSync(r.accountData[settingsType], s.userId)
+                r.accountData["app.pager.favorite_gifs"]?.let { c ->
+                    runCatching { json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), c["gifs"] ?: JsonArray(emptyList())) }
+                        .onSuccess { _favoriteGifs.value = it; writeJson("favoriteGifs", kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), it) }
+                }
                 r.userStickers?.let { _userStickers.value = it; writeJson("userStickers", StickerPack.serializer().nullable, it) }
                 r.invites.forEach { id -> scope.launch { runCatching { matrix.join(id) } } }
                 val muted = _muted.value
@@ -793,6 +804,44 @@ class Store(private val context: Context) {
         }
     }
 
+    /** Stars or un-stars a GIF; the list lives in your Matrix account. */
+    fun toggleFavoriteGif(g: Gif) {
+        val me = _session.value?.userId ?: return
+        val have = _favoriteGifs.value.any { it.url == g.url }
+        val next = if (have) _favoriteGifs.value.filter { it.url != g.url } else (listOf(g) + _favoriteGifs.value).take(200)
+        _favoriteGifs.value = next
+        writeJson("favoriteGifs", kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), next)
+        scope.launch { runCatching { matrix.putAccountData(me, "app.pager.favorite_gifs", buildJsonObject { put("gifs", json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), next)) }) } }
+    }
+
+    /** Adds a picture from a chat to your own stickers: no re-upload, it just points at the same file. */
+    fun saveAsSticker(m: Msg) {
+        val me = _session.value?.userId ?: return
+        val mxc = m.mxc ?: return
+        val existing = _userStickers.value?.stickers.orEmpty()
+        if (existing.any { it.url == mxc }) return
+        val base = m.body.substringBeforeLast('.').take(40).ifEmpty { "sticker" }
+        val added = Sticker(base.replace(Regex("[^A-Za-z0-9_-]"), "_") + "_" + (System.currentTimeMillis() % 100000), mxc, base, m.w, m.h, m.mime)
+        val all = existing + added
+        _userStickers.value = StickerPack("user", "My stickers", all)
+        writeJson("userStickers", StickerPack.serializer().nullable, _userStickers.value)
+        scope.launch {
+            runCatching {
+                matrix.putAccountData(me, "im.ponies.user_emotes", buildJsonObject {
+                    putJsonObject("pack") { put("display_name", "My stickers") }
+                    putJsonObject("images") {
+                        all.forEach { st ->
+                            putJsonObject(st.shortcode) {
+                                put("url", st.url); put("body", st.body); put("usage", JsonArray(listOf(JsonPrimitive("sticker"))))
+                                putJsonObject("info") { st.mime?.let { put("mimetype", it) }; st.w?.let { put("w", it) }; st.h?.let { put("h", it) } }
+                            }
+                        }
+                    }
+                })
+            }
+        }
+    }
+
     fun openUrl(uri: android.net.Uri) {
         context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
     }
@@ -904,6 +953,7 @@ class Store(private val context: Context) {
         _chats.value = emptyMap()
         _muted.value = emptySet()
         _bridges.value = emptyList()
+        _isAdmin.value = false
         _synced.value = false
         _session.value = null
     }
