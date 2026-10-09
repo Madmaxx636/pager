@@ -27,6 +27,18 @@ describe("your own accounts on other networks", () => {
     expect(next.messages.map((m) => m.sender)).toEqual([me, other]);
   });
 
+  it("counts your own account's read receipts as yours, not as someone reading your message", () => {
+    setOwnIdentity(["Lane McDonald"], []);
+    const sync = { rooms: { join: { "!r:x": {
+      state: { events: [member(ghost, "Lane McDonald (WA)"), member(other, "Amy")] },
+      timeline: { events: [text("$1", me, 1)] },
+      ephemeral: { events: [{ type: "m.receipt", content: { $1: { "m.read": { [ghost]: { ts: 5 } } } } }] },
+    } } } };
+    const chat = applySync({}, sync, me, true).chats["!r:x"];
+    expect(chat.receipts[me]).toBe("$1");
+    expect(chat.receipts[ghost]).toBeUndefined();
+  });
+
   it("leaves everyone alone when you have no accounts", () => {
     const sync = { rooms: { join: { "!r:x": { state: { events: [member(ghost, "Lane McDonald")] }, timeline: { events: [text("$1", ghost, "hi", 1)] } } } } };
     expect(applySync({}, sync, me, true).chats["!r:x"].messages[0].sender).toBe(ghost);

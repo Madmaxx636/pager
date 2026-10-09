@@ -229,8 +229,10 @@ object SyncReducer {
             "m.receipt" -> {
                 val receipts = chat.receipts.toMutableMap()
                 val times = chat.receiptTs.toMutableMap()
+                val mineGhosts = ownGhosts(chat, me)
                 for ((eventId, kinds) in content) {
-                    for ((user, info) in kinds.obj()["m.read"].obj()) {
+                    for ((rawUser, info) in kinds.obj()["m.read"].obj()) {
+                        val user = if (rawUser in mineGhosts) me else rawUser // your own account on that network reading = you reading
                         receipts[user] = eventId
                         (info.obj()["ts"] as? JsonPrimitive)?.longOrNull?.let { times[user] = it }
                     }

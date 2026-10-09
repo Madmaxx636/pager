@@ -228,8 +228,11 @@ function applyEphemeral(chat: ChatState, e: J, me: string): ChatState {
   if (e.type === "m.receipt") {
     const receipts = { ...chat.receipts };
     const receiptTs = { ...chat.receiptTs };
+    const mine = ownGhosts(chat, me);
     for (const [eventId, kinds] of Object.entries(content)) {
-      for (const [user, info] of Object.entries(obj(obj(kinds)["m.read"]))) { receipts[user] = eventId; const ts = num(obj(info).ts); if (ts) receiptTs[user] = ts; }
+      for (const [rawUser, info] of Object.entries(obj(obj(kinds)["m.read"]))) {
+        const user = mine.has(rawUser) ? me : rawUser; // your own account on that network reading = you reading
+        receipts[user] = eventId; const ts = num(obj(info).ts); if (ts) receiptTs[user] = ts; }
     }
     return { ...chat, receipts, receiptTs };
   }
