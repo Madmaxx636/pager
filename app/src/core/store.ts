@@ -1,6 +1,8 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
-import { http, matrix, pager, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
-import { applyHistory, applySync, setOwnIdentity } from "./reducer";
+import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
+import { applyHistory, applySync, replaceDecrypted, setOwnIdentity } from "./reducer";
+import { Crypto, isEncryptedType } from "./crypto";
+import { decryptAttachment, encryptAttachment, encryptedInfo } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
 import { playSound } from "./sounds";
 import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
@@ -157,7 +159,8 @@ function begin(s: Session, cache?: { userId: string; since?: string; chats: Reco
   set({ session: s, chats, synced });
   syncAbort?.abort();
   syncAbort = new AbortController();
-  void syncLoop(s, syncAbort.signal);
+  const signal = syncAbort.signal;
+  void startCrypto(s).finally(() => { if (!signal.aborted) void syncLoop(s, signal); });
   void refreshBridges();
   void pager.me().then((m) => set({ isAdmin: m.admin })).catch(() => {});
   armReminders();
@@ -182,11 +185,105 @@ function handleSettingsSync(remote: unknown, userId: string) {
 }
 onLocalSettingsChange(() => { const s = state.session; if (s) pushSettings(s.userId); });
 
+// ---- End-to-end encryption --------------------------------------------------------------------------------------------
+let e2ee: Crypto | undefined;
+/** Messages we could not read yet (their key has not arrived), by event id. */
+const waiting = new Map<string, { roomId: string; event: any }>();
+const memberCache = new Map<string, { at: number; ids: string[] }>();
+
+async function startCrypto(s: Session) {
+  e2ee?.close(); e2ee = undefined; waiting.clear();
+  try {
+    const c = await Crypto.create((method, path, body) => matrixCall(method, path, body), s.userId, s.deviceId, `pager-e2ee-${s.userId}-${s.deviceId}`);
+    c.onKeys = (rooms) => void retryWaiting(rooms);
+    e2ee = c;
+    await c.pump(); // upload this device's keys
+    void refreshEncryptionStatus();
+  } catch (e) { console.warn("encryption could not start", e); }
+}
+
+const unreadable = (e: any) => ({ ...e, type: "m.room.message", content: { msgtype: "m.text", body: "🔒 Waiting for the key to read this message…", pagerWaiting: true } });
+
+/** Replaces m.room.encrypted events with what they say. Unreadable ones become a placeholder and are tried again when keys arrive. */
+async function decryptEvents(roomId: string, events: any[]): Promise<any[]> {
+  if (!e2ee || !events.some((e) => isEncryptedType(e?.type))) return events;
+  const out: any[] = [];
+  for (const e of events) {
+    if (!isEncryptedType(e?.type)) { out.push(e); continue; }
+    const clear = await e2ee.decrypt(roomId, e);
+    if (clear) out.push(clear);
+    else { if (e.event_id) waiting.set(e.event_id, { roomId, event: e }); out.push(unreadable(e)); }
+  }
+  return out;
+}
+
+async function decryptSync(res: any) {
+  if (!e2ee) return;
+  await e2ee.receiveSync(res);
+  for (const [roomId, room] of Object.entries<any>(res.rooms?.join ?? {})) {
+    const ev = room.timeline?.events;
+    if (Array.isArray(ev)) room.timeline.events = await decryptEvents(roomId, ev);
+  }
+}
+
+async function retryWaiting(rooms: string[]) {
+  if (!e2ee) return;
+  for (const [id, w] of [...waiting]) {
+    if (!rooms.includes(w.roomId)) continue;
+    const clear = await e2ee.decrypt(w.roomId, w.event);
+    if (!clear) continue;
+    waiting.delete(id);
+    patchChat(w.roomId, (c) => replaceDecrypted(c, clear));
+  }
+}
+
+async function roomMembers(roomId: string): Promise<string[]> {
+  const hit = memberCache.get(roomId);
+  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.ids;
+  const ids = Object.keys(await matrix.joinedMembers(roomId));
+  memberCache.set(roomId, { at: Date.now(), ids });
+  return ids;
+}
+
+// What the settings screen shows about encryption on this device.
+export interface EncryptionStatus { ready: boolean; backupHere: boolean; backupOnServer: boolean; deviceId: string; fingerprint: string }
+let encStatus: EncryptionStatus = { ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "" };
+const encListeners = new Set<() => void>();
+function setEncStatus(s: EncryptionStatus) { encStatus = s; encListeners.forEach((l) => l()); }
+export async function refreshEncryptionStatus() {
+  if (!e2ee) { setEncStatus({ ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "" }); return; }
+  const [backupHere, ver] = await Promise.all([e2ee.backupOn(), e2ee.backupVersion()]);
+  setEncStatus({ ready: true, backupHere, backupOnServer: !!ver, deviceId: e2ee.deviceId, fingerprint: e2ee.machine.identityKeys.ed25519.toBase64() });
+}
+export function useEncryption(): EncryptionStatus {
+  return useSyncExternalStore((l) => { encListeners.add(l); void refreshEncryptionStatus(); return () => { encListeners.delete(l); }; }, () => encStatus);
+}
+/** Starts the recovery backup and returns the recovery key to show once. */
+export async function createRecoveryKey(): Promise<string> {
+  if (!e2ee) throw new Error("Encryption is not ready yet");
+  const key = await e2ee.createBackup(); await refreshEncryptionStatus(); return key;
+}
+/** Reads the backup with a recovery key; returns how many message keys were restored. */
+export async function restoreWithRecoveryKey(key: string): Promise<number> {
+  if (!e2ee) throw new Error("Encryption is not ready yet");
+  const n = await e2ee.restoreBackup(key); await refreshEncryptionStatus(); return n;
+}
+
+sendHook.fn = async (roomId, type, content) => {
+  const chat = state.chats[roomId];
+  if (!chat?.encrypted) return { type, content };
+  if (!e2ee) throw new Error("Encryption is not ready yet. Try again in a moment.");
+  const encrypted = await e2ee.encrypt(roomId, type, content, await roomMembers(roomId));
+  // Relations (edits, replies, reactions) stay visible outside the encryption so the server can group them.
+  return { type: "m.room.encrypted", content: content?.["m.relates_to"] ? { ...encrypted, "m.relates_to": content["m.relates_to"] } : encrypted };
+};
+
 async function syncLoop(s: Session, signal: AbortSignal) {
   let backoff = 1000;
   while (!signal.aborted) {
     try {
       const res = await matrix.sync(since, signal);
+      await decryptSync(res);
       const initial = since === undefined;
       const r = applySync(state.chats, res, s.userId, initial);
       set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}), ...(r.userStickers ? { userStickers: r.userStickers } : {}) });
@@ -243,6 +340,7 @@ export async function signOut() {
 }
 async function signOutLocal() {
   syncAbort?.abort();
+  e2ee?.close(); e2ee = undefined; waiting.clear(); memberCache.clear();
   localStorage.removeItem(SESSION_KEY);
   try { localStorage.removeItem("pager.identity2"); } catch { /* ignore */ }
   await dbDel("cache");
@@ -348,7 +446,12 @@ export function react(roomId: string, eventId: string, key: string) {
   }
 }
 
-export function forward(m: Msg, toRoom: string) {
+export async function forward(m: Msg, toRoom: string) {
+  if (m.enc && m.mxc) { // an encrypted attachment: read it, and send it again as the destination page wants it (encrypted or not)
+    const u = await mediaUrl(m.mxc); if (!u) return;
+    sendFile(toRoom, await (await fetch(u)).blob(), m.body, { w: m.w, h: m.h, durationMs: m.durationMs, voice: m.voice });
+    return;
+  }
   const txn = uuid(), localId = `local-${txn}`;
   addLocal(toRoom, { ...m, id: localId, sender: me(), ts: Date.now(), txn, status: STATUS_SENDING, replyTo: undefined, edited: false });
   matrix.send(toRoom, "m.room.message", txn, {
@@ -387,10 +490,12 @@ export function sendFile(roomId: string, file: File | Blob, name = (file as File
     try {
       let w = extra.w, h = extra.h;
       if (type === "m.image" && !w) { const d = await imageSize(file); w = d?.w; h = d?.h; }
-      const mxc = await matrix.upload(file, name);
+      // In an encrypted room the file is scrambled first; the key goes inside the (encrypted) message.
+      const sealed = state.chats[roomId]?.encrypted ? await encryptAttachment(file) : undefined;
+      const mxc = await matrix.upload(sealed ? sealed.data : file, sealed ? "encrypted" : name);
       const info: Record<string, unknown> = { mimetype: mime, size: file.size, ...(w ? { w, h } : {}), ...(extra.durationMs ? { duration: extra.durationMs } : {}) };
       const id = await matrix.send(roomId, "m.room.message", txn, {
-        msgtype: type, body: name, url: mxc, info,
+        msgtype: type, body: name, ...(sealed ? { file: { url: mxc, ...sealed.file } } : { url: mxc }), info,
         ...(extra.voice ? { "org.matrix.msc3245.voice": {}, "org.matrix.msc1767.audio": { duration: extra.durationMs ?? 0 } } : {}),
       });
       setStatus(roomId, localId, STATUS_SENT, id);
@@ -480,7 +585,7 @@ export function loadOlder(roomId: string) {
   if (!c || c.reachedStart || loading.has(roomId)) return;
   const token = c.prevBatch ?? since; if (!token) return;
   loading.add(roomId);
-  matrix.messages(roomId, token).then(({ chunk, end, state: st }) => patchChat(roomId, (x) => applyHistory(x, chunk, end, st ?? [], state.session?.userId ?? ""))).catch(() => {}).finally(() => loading.delete(roomId));
+  matrix.messages(roomId, token).then(async ({ chunk, end, state: st }) => { const clear = await decryptEvents(roomId, chunk); patchChat(roomId, (x) => applyHistory(x, clear, end, st ?? [], state.session?.userId ?? "")); }).catch(() => {}).finally(() => loading.delete(roomId));
 }
 export function setTag(roomId: string, tag: string, on: boolean, order?: number) {
   patchChat(roomId, (c) => ({
@@ -595,9 +700,14 @@ export function mediaUrl(mxc: string, thumb = 0): Promise<string | undefined> {
   if (inflight.has(key)) return inflight.get(key)!;
   const m = /^mxc:\/\/([^/]+)\/(.+)$/.exec(mxc);
   if (!m) return Promise.resolve(undefined);
-  const path = thumb ? `thumbnail/${m[1]}/${m[2]}?width=${thumb}&height=${thumb}&method=scale` : `download/${m[1]}/${m[2]}`;
+  const secret = encryptedInfo(mxc); // end-to-end encrypted attachment: the server holds only scrambled bytes, so no thumbnails
+  const path = thumb && !secret ? `thumbnail/${m[1]}/${m[2]}?width=${thumb}&height=${thumb}&method=scale` : `download/${m[1]}/${m[2]}`;
   const p = fetch(url(`/_matrix/client/v1/media/${path}`), { headers: { authorization: `Bearer ${http.token}` } })
-    .then(async (r) => { if (!r.ok) return undefined; const u = URL.createObjectURL(await r.blob()); blobCache.set(key, u); return u; })
+    .then(async (r) => {
+      if (!r.ok) return undefined;
+      const blob = secret ? new Blob([await decryptAttachment(await r.arrayBuffer(), secret)], { type: secret.mime ?? "application/octet-stream" }) : await r.blob();
+      const u = URL.createObjectURL(blob); blobCache.set(key, u); return u;
+    })
     .catch(() => undefined).finally(() => inflight.delete(key));
   inflight.set(key, p);
   return p;
@@ -615,6 +725,8 @@ declare global {
       cookieLogin(spec: unknown): Promise<Record<string, string> | null>;
       platform: string;
       hostname?: string;
+      /** The encryption library's WebAssembly file, read by the desktop shell (the app is loaded from disk, where the browser can't fetch it). */
+      readCryptoWasm?(): Promise<Uint8Array>;
       getSystemTheme(): Promise<SystemTheme>;
       onSystemTheme(cb: (t: SystemTheme) => void): void;
       getSpell(): Promise<{ enabled: boolean; languages: string[]; available: string[] }>;

@@ -1,4 +1,5 @@
 // Folds Matrix /sync and /messages responses into chat state. A direct port of the Android SyncReducer so both clients behave alike.
+import { registerEncrypted, type EncFile } from "./mediacrypt";
 import { ChatState, Incoming, Msg, PollAnswer, STATUS_SENT, StickerPack, displayName, emptyChat, isGroup, nameOf, previewOf } from "./types";
 
 type J = Record<string, any>;
@@ -216,6 +217,7 @@ function applyState(chat: ChatState, e: J): ChatState {
   const key = str(e.state_key) ?? "";
   switch (e.type) {
     case "m.room.name": return { ...chat, name: str(content.name) ?? "" };
+    case "m.room.encryption": return { ...chat, encrypted: true };
     case "m.room.avatar": return { ...chat, avatarMxc: str(content.url) };
     case "im.ponies.room_emotes": {
       const pack = parseStickerPack(key || "room", str(obj(content.pack).display_name) ?? "Room stickers", content);
@@ -321,12 +323,15 @@ export function toMsg(e: J): Msg | undefined {
   const id = str(e.event_id), sender = str(e.sender);
   if (!id || !sender) return undefined;
   const info = obj(content.info);
+  const file = obj(content.file); // an encrypted attachment: the address and how to unscramble it
+  const enc = str(file.url) && file.key ? (file as unknown as EncFile) : undefined;
+  if (enc) registerEncrypted(enc, str(info.mimetype));
   const reply = str(obj(obj(content["m.relates_to"])["m.in_reply_to"]).event_id);
   let body = str(content.body) ?? "";
   if (reply) body = stripReplyFallback(body);
   return {
     id, sender, ts: num(e.origin_server_ts) ?? 0, type, body,
-    mxc: str(content.url), mime: str(info.mimetype), size: num(info.size), w: num(info.w), h: num(info.h),
+    mxc: enc ? enc.url : str(content.url), enc, mime: str(info.mimetype), size: num(info.size), w: num(info.w), h: num(info.h),
     durationMs: num(info.duration) ?? num(obj(content["org.matrix.msc1767.audio"]).duration),
     replyTo: reply, txn: str(obj(e.unsigned).transaction_id), geo: str(content.geo_uri),
     voice: content["org.matrix.msc3245.voice"] != null || obj(content["org.matrix.msc1767.audio"]).waveform != null,
@@ -334,6 +339,13 @@ export function toMsg(e: J): Msg | undefined {
     status: STATUS_SENT,
     html: content.format === "org.matrix.html" ? str(content.formatted_body) : undefined,
   };
+}
+
+/** Puts a message that could not be read before (it was waiting for its key) in place of its placeholder. */
+export function replaceDecrypted(chat: ChatState, clear: J): ChatState {
+  const msg = toMsg(clear);
+  if (!msg || !chat.messages.some((m) => m.id === msg.id)) return chat;
+  return { ...chat, messages: chat.messages.map((m) => (m.id === msg.id ? { ...msg, status: m.status } : m)) };
 }
 
 /** Older clients prefix replies with a quoted copy of the parent ("> <@user> text\n\nreply"). */

@@ -12,6 +12,10 @@ export const http = {
 export const url = (path: string) => http.base.replace(/\/$/, "") + path;
 const enc = encodeURIComponent;
 
+/** Lets the encryption layer change an event just before it is sent (it becomes m.room.encrypted in encrypted rooms). */
+export const sendHook: { fn?: (roomId: string, type: string, content: any) => Promise<{ type: string; content: any }> } = {};
+export const matrixCall = (method: string, path: string, body?: unknown) => call(method, path, body);
+
 async function call<T = any>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url(path), {
     method, signal,
@@ -123,8 +127,10 @@ export const matrix = {
     call("GET", `/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=40&from=${enc(from)}&filter=${enc('{"lazy_load_members":true}')}`),
   join: (roomId: string) => call("POST", `/_matrix/client/v3/join/${enc(roomId)}`, {}),
   leave: async (roomId: string) => { await call("POST", `/_matrix/client/v3/rooms/${enc(roomId)}/leave`, {}); await call("POST", `/_matrix/client/v3/rooms/${enc(roomId)}/forget`, {}).catch(() => {}); },
-  send: (roomId: string, type: string, txn: string, content: unknown) =>
-    call<{ event_id: string }>("PUT", `/_matrix/client/v3/rooms/${enc(roomId)}/send/${type}/${enc(txn)}`, content).then((r) => r.event_id),
+  send: async (roomId: string, type: string, txn: string, content: unknown) => {
+    const out = (await sendHook.fn?.(roomId, type, content)) ?? { type, content };
+    return call<{ event_id: string }>("PUT", `/_matrix/client/v3/rooms/${enc(roomId)}/send/${out.type}/${enc(txn)}`, out.content).then((r) => r.event_id);
+  },
   sendDelayed: (roomId: string, txn: string, content: unknown, delayMs: number) =>
     call<{ delay_id: string }>("PUT", `/_matrix/client/v3/rooms/${enc(roomId)}/send/m.room.message/${enc(txn)}?org.matrix.msc4140.delay=${delayMs}`, content).then((r) => r.delay_id),
   cancelDelayed: (id: string) => call("POST", `/_matrix/client/unstable/org.matrix.msc4140/delayed_events/${enc(id)}`, { action: "cancel" }),

@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("pagerDesktop", {
   getSpell: () => ipcRenderer.invoke("spell:get"),
   setSpell: (o) => ipcRenderer.send("spell:set", o),
   cookieLogin: (spec) => ipcRenderer.invoke("cookie-login", spec),
+  readCryptoWasm: () => ipcRenderer.invoke("crypto-wasm"),
   setZoom: (z) => ipcRenderer.send("zoom", z),
   onOpenRoom: (cb) => ipcRenderer.on("open-room", (_e, id) => cb(id)),
 });

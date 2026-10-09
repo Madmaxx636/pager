@@ -1,4 +1,5 @@
 import { prettyName } from "./names";
+import type { EncFile } from "./mediacrypt";
 export const STATUS_SENT = 0;
 export const STATUS_SENDING = 1;
 export const STATUS_FAILED = 2;
@@ -9,6 +10,8 @@ export interface Sticker { shortcode: string; url: string; body: string; w?: num
 export interface StickerPack { key: string; name: string; stickers: Sticker[] }
 
 export interface Msg {
+  /** Set when the attachment is end-to-end encrypted: how to unscramble it. */
+  enc?: EncFile;
   id: string;
   sender: string;
   ts: number;
@@ -58,6 +61,8 @@ export interface ChatState {
   markedUnread: boolean;
   memberCount: number;
   roomType?: string;
+  /** The room uses end-to-end encryption (m.room.encryption). */
+  encrypted?: boolean;
   typing: string[];
   /** Order among pinned chats (the m.favourite tag's order). */
   pinOrder?: number;

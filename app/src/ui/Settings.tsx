@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { RowAction, ACCENTS, accentTones, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
-import { addStickers, cancelReminder, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
+import { addStickers, cancelReminder, createRecoveryKey, restoreWithRecoveryKey, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
@@ -175,6 +175,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
           <SwitchRow title="Send read receipts" checked={s.sendReadReceipts} onChange={(v) => u({ sendReadReceipts: v })} />
           <SwitchRow title="Send typing indicators" checked={s.sendTyping} onChange={(v) => u({ sendTyping: v })} />
         </Group>
+        <EncryptionGroup />
         <Group title="Content" footer="Link previews are fetched by your own server, so the sites you link to never see your device.">
           <SwitchRow title="Link previews" checked={s.linkPreviews} onChange={(v) => u({ linkPreviews: v })} />
           <Select title="Notification content" value={s.notifPreview} options={[["full", "Name and message"], ["sender", "Name only"], ["hidden", "Hide content"]]} onChange={(v) => u({ notifPreview: v })} />
@@ -493,6 +494,67 @@ function ColorDialog({ value, onClose, onPick }: { value: string; onClose: () =>
         <div className="color-preview" style={{ background: ok ? hex : "transparent" }} />
       </div>
       <div className="row-end"><button className="link" onClick={onClose}>Cancel</button><button className="primary" disabled={!ok} onClick={() => onPick(hex.toLowerCase())}>Use this colour</button></div>
+    </Modal>
+  );
+}
+
+/** End-to-end encryption on this device: the recovery key that brings your history back on a new device. */
+function EncryptionGroup() {
+  const e = useEncryption();
+  const [dlg, setDlg] = useState<"create" | "restore">();
+  return (
+    <Group title="Encryption" footer="Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.">
+      <Row title="Encryption on this device" hint={e.ready ? `Ready · device ${e.deviceId}` : "Starting…"} />
+      {e.ready && <Row title="Device fingerprint" hint={e.fingerprint.match(/.{1,4}/g)?.join(" ")} />}
+      <Row title="Recovery key" hint={e.backupHere ? "On: your message keys are backed up" : e.backupOnServer ? "A backup exists. Enter the recovery key to read your history here" : "Not set up yet"}
+        onClick={e.ready ? () => setDlg(e.backupOnServer && !e.backupHere ? "restore" : "create") : undefined}>
+        <span className="accent">{e.backupHere ? "Replace" : e.backupOnServer ? "Enter key" : "Set up"}</span>
+      </Row>
+      {e.backupOnServer && e.backupHere === false && <Row title="Make a new recovery key instead" onClick={() => setDlg("create")}><span className="accent">New key</span></Row>}
+      {dlg === "create" && <RecoveryKeyDialog onClose={() => setDlg(undefined)} />}
+      {dlg === "restore" && <RestoreDialog onClose={() => setDlg(undefined)} />}
+    </Group>
+  );
+}
+
+function RecoveryKeyDialog({ onClose }: { onClose: () => void }) {
+  const [key, setKey] = useState<string>();
+  const [err, setErr] = useState("");
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { createRecoveryKey().then(setKey).catch((e) => setErr(e.message)); }, []);
+  return (
+    <Modal title="Your recovery key" onClose={() => { if (!key || saved) onClose(); }}>
+      {err ? <p className="error">{err}</p> : !key ? <p className="muted">Making your key…</p> : (
+        <>
+          <p className="muted">Save this somewhere safe, like a password manager. Anyone with it can read your history, and without it lost devices mean lost history.</p>
+          <pre className="recovery-key">{key}</pre>
+          <div className="row-end"><button className="link" onClick={() => void navigator.clipboard.writeText(key)}>Copy</button>
+            <button className="link" onClick={() => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([`Pager recovery key\n\n${key}\n`], { type: "text/plain" })); a.download = "pager-recovery-key.txt"; a.click(); }}>Download</button></div>
+          <label className="check-row"><input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} /> I saved my recovery key</label>
+        </>
+      )}
+      <div className="row-end"><button className="primary" disabled={!!key && !saved} onClick={onClose}>{key ? "Done" : "Close"}</button></div>
+    </Modal>
+  );
+}
+
+function RestoreDialog({ onClose }: { onClose: () => void }) {
+  const [text, setText] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<number>();
+  return (
+    <Modal title="Enter your recovery key" onClose={onClose}>
+      {done != null ? <p>Restored {done} message keys. Older messages in your encrypted pages can be read now.</p> : (
+        <>
+          <textarea rows={3} autoFocus placeholder="EsTc 4xYz …" value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
+          {err && <p className="error">{err}</p>}
+        </>
+      )}
+      <div className="row-end">
+        <button className="link" onClick={onClose}>{done != null ? "Close" : "Cancel"}</button>
+        {done == null && <button className="primary" disabled={busy || !text.trim()} onClick={() => { setBusy(true); setErr(""); restoreWithRecoveryKey(text).then(setDone).catch((e) => setErr(e.message)).finally(() => setBusy(false)); }}>{busy ? "Restoring…" : "Restore"}</button>}
+      </div>
     </Modal>
   );
 }
