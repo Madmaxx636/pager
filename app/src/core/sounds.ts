@@ -1,8 +1,9 @@
 /** Alert sounds made with Web Audio, so there are no files to ship and they work the same on every system. */
-export const SOUNDS: [string, string][] = [["chime", "Chime"], ["pop", "Pop"], ["ding", "Ding"], ["knock", "Knock"], ["bubble", "Bubble"], ["soft", "Soft"], ["none", "None"]];
+export const SOUNDS: [string, string][] = [["swoosh", "Swoosh"], ["chime", "Chime"], ["pop", "Pop"], ["ding", "Ding"], ["knock", "Knock"], ["bubble", "Bubble"], ["soft", "Soft"], ["none", "None"]];
 
 type Note = { f: number; t: number; d: number; type?: OscillatorType; g?: number; slideTo?: number };
 const RECIPES: Record<string, Note[]> = {
+  swoosh: [{ f: 380, t: 0, d: 0.16, type: "sine", slideTo: 1100, g: 0.7 }],
   chime: [{ f: 880, t: 0, d: 0.18 }, { f: 1318.5, t: 0.12, d: 0.35 }],
   pop: [{ f: 520, t: 0, d: 0.09, type: "triangle", slideTo: 220, g: 0.9 }],
   ding: [{ f: 1568, t: 0, d: 0.6, g: 0.6 }],

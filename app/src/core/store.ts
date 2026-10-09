@@ -204,6 +204,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       const when = new Date();
       for (const m of r.incoming) {
         const c = r.chats[m.roomId];
+        if (st.convoSounds && looking(m.roomId) && document.hasFocus()) { playSound(st.receiveSound, st.convoSoundVolume); continue; }
         const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text,
           quiet: muted.includes(m.roomId) || (c ? isLowPriority(c) : false), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
         if (!d.show) continue;
@@ -279,7 +280,15 @@ function patchChat(roomId: string, f: (c: ChatState) => ChatState) {
   const c = state.chats[roomId]; if (!c) return;
   set({ chats: { ...state.chats, [roomId]: f(c) } });
 }
-const addLocal = (roomId: string, m: Msg) => patchChat(roomId, (c) => ({ ...c, messages: [...c.messages, m] }));
+// The page you are looking at: sending and receiving make a little sound there (and only there).
+let openRoom: string | null = null;
+export const setOpenRoom = (id: string | null) => { openRoom = id; };
+const looking = (roomId: string) => roomId === openRoom && document.visibilityState === "visible";
+const addLocal = (roomId: string, m: Msg) => {
+  const st = getSettings();
+  if (st.convoSounds && looking(roomId)) playSound(st.sendSound, st.convoSoundVolume);
+  patchChat(roomId, (c) => ({ ...c, messages: [...c.messages, m] }));
+};
 const setStatus = (roomId: string, id: string, status: number, newId?: string) =>
   patchChat(roomId, (c) => ({ ...c, messages: c.messages.map((m) => (m.id === id ? { ...m, status, id: newId ?? m.id } : m)) }));
 const uuid = () => crypto.randomUUID();

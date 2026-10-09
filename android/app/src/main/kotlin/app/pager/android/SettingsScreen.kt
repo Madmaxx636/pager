@@ -485,6 +485,12 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
             ButtonRow("Send a test notification") { Notifier.test(context, store) }; GroupDivider()
             ButtonRow("Check priority & bubbles") { diagnosis = Notifier.diagnose(context) }
         }
+        SettingsGroup("Inside a page", footer = "A little sound when you send or get a message in the page you have open. Pages you are not looking at use your notification settings.") {
+            SwitchRow("Sounds inside a page", null, s.convoSounds) { v -> set { copy(convoSounds = v) } }; GroupDivider()
+            ChoiceRow("Send sound", ChatSounds.choices, s.sendSound, s.convoSounds) { v -> set { copy(sendSound = v) }; ChatSounds.play(v, s.convoSoundVolume) }; GroupDivider()
+            ChoiceRow("Receive sound", ChatSounds.choices, s.receiveSound, s.convoSounds) { v -> set { copy(receiveSound = v) }; ChatSounds.play(v, s.convoSoundVolume) }; GroupDivider()
+            SliderRow("Volume", s.convoSoundVolume, 0f..1f, "${(s.convoSoundVolume * 100).toInt()}%") { v -> set { copy(convoSoundVolume = (Math.round(v * 20) / 20f)) } }
+        }
         SettingsGroup("What to notify", footer = "Muted and Low priority pages stay quiet except for @mentions, replies to your messages and your keywords.") {
             ChoiceRow("Notify me about", listOf("all" to "Every message", "dm_mentions" to "Direct messages and mentions", "favorites" to "Pinned pages and mentions"), s.notifScope, s.notifEnabled) { v -> set { copy(notifScope = v) } }; GroupDivider()
             ChoiceRow("Direct messages", listOf("all" to "Every message", "mentions" to "Mentions and replies only", "none" to "Nothing"), s.notifDirectMode, s.notifEnabled) { v -> set { copy(notifDirectMode = v) } }; GroupDivider()

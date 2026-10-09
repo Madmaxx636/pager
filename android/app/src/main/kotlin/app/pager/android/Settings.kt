@@ -97,6 +97,11 @@ data class AppSettings(
     val notifEnabled: Boolean = true,
     val notifPreview: String = "full",         // full | sender | hidden
     val notifSound: Boolean = true,
+    /** Sounds for sending and receiving, only while you are inside that page. */
+    val convoSounds: Boolean = true,
+    val sendSound: String = "swoosh",
+    val receiveSound: String = "pop",
+    val convoSoundVolume: Float = 0.5f,
     val notifVibrate: Boolean = true,
     val notifActions: Boolean = true,          // Reply / Mark read buttons
     val notifGroupMentionsOnly: Boolean = false,

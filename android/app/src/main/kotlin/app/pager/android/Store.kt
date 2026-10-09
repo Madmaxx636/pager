@@ -100,6 +100,8 @@ class Store(private val context: Context) {
     val bridges: StateFlow<List<Network>> = _bridges.asStateFlow()
 
     @Volatile var appInForeground = false
+    /** The page you are looking at: sending and receiving make a little sound there (and only there). */
+    @Volatile var openRoom: String? = null
     private var syncJob: Job? = null
     private var since: String? = null
     private val loadingOlder = HashSet<String>()
@@ -273,6 +275,8 @@ class Store(private val context: Context) {
                 val day = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
                 for (m in r.incoming) {
                     val c = r.chats[m.roomId]
+                    // Inside that page you get a small sound instead of a notification.
+                    if (st.convoSounds && appInForeground && m.roomId == openRoom) { ChatSounds.play(st.receiveSound, st.convoSoundVolume); continue }
                     val d = NotifyPolicy.decide(m, quiet = m.roomId in muted || c?.lowPriority == true, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st)
                     if (!d.show) continue
                     val out = m.copy(silent = d.silent, preview = d.preview)
@@ -309,7 +313,11 @@ class Store(private val context: Context) {
         _chats.update { m -> m[roomId]?.let { m + (roomId to f(it)) } ?: m }
     }
 
-    private fun addLocal(roomId: String, m: Msg) = update(roomId) { it.copy(messages = it.messages + m) }
+    private fun addLocal(roomId: String, m: Msg) {
+        val s = settings.value
+        if (s.convoSounds && appInForeground && roomId == openRoom) ChatSounds.play(s.sendSound, s.convoSoundVolume)
+        update(roomId) { it.copy(messages = it.messages + m) }
+    }
     private fun setStatus(roomId: String, id: String, status: Int, newId: String? = null) = update(roomId) { c ->
         // If sync already delivered the real event it replaced the local echo, and this finds nothing.
         c.copy(messages = c.messages.map { if (it.id == id) it.copy(status = status, id = newId ?: it.id) else it })

@@ -376,3 +376,4 @@ code.copy { display: block; padding: 8px 12px; border-radius: 10px; background: 
 .color-dialog input[type="color"] { width: 200px; height: 140px; padding: 0; border: 0; border-radius: 16px; background: none; cursor: pointer; }
 .color-dialog label { display: grid; gap: 4px; font-size: .8rem; color: var(--muted); width: 200px; } .color-dialog input.bad { border-color: var(--danger); }
 .color-preview { width: 200px; height: 18px; border-radius: 9px; border: 1px solid var(--line); }
+.swatch-system { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, #5a6472, #2d333b); border: 2px solid transparent; } .swatch-system.on { border-color: var(--text); }

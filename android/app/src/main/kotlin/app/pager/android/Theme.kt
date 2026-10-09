@@ -87,8 +87,21 @@ fun parseHex(s: String): Color? = runCatching {
 
 fun Color.toHex(): String = "#%02X%02X%02X".format((red * 255 + 0.5f).toInt(), (green * 255 + 0.5f).toInt(), (blue * 255 + 0.5f).toInt())
 
-private fun hsl(c: Color): FloatArray = FloatArray(3).also { androidx.core.graphics.ColorUtils.colorToHSL(c.toArgb(), it) }
-private fun fromHsl(h: Float, s: Float, l: Float) = Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(((h % 360f) + 360f) % 360f, s.coerceIn(0f, 1f), l.coerceIn(0f, 1f))))
+private fun hsl(c: Color): FloatArray {
+    val r = c.red; val g = c.green; val b = c.blue
+    val max = maxOf(r, g, b); val min = minOf(r, g, b); val l = (max + min) / 2f; val d = max - min
+    if (d == 0f) return floatArrayOf(0f, 0f, l)
+    val s = d / (1f - kotlin.math.abs(2f * l - 1f))
+    val h = when (max) { r -> ((g - b) / d) % 6f; g -> (b - r) / d + 2f; else -> (r - g) / d + 4f } * 60f
+    return floatArrayOf((h + 360f) % 360f, s, l)
+}
+private fun fromHsl(h: Float, s: Float, l: Float): Color {
+    val hh = ((h % 360f) + 360f) % 360f; val ss = s.coerceIn(0f, 1f); val ll = l.coerceIn(0f, 1f)
+    val c = (1f - kotlin.math.abs(2f * ll - 1f)) * ss
+    val x = c * (1f - kotlin.math.abs((hh / 60f) % 2f - 1f)); val m = ll - c / 2f
+    val (r, g, b) = when { hh < 60f -> Triple(c, x, 0f); hh < 120f -> Triple(x, c, 0f); hh < 180f -> Triple(0f, c, x); hh < 240f -> Triple(0f, x, c); hh < 300f -> Triple(x, 0f, c); else -> Triple(c, 0f, x) }
+    return Color(r + m, g + m, b + m)
+}
 private fun onColor(c: Color) = if (c.luminance() > 0.45f) Color(0xFF101418) else Color.White
 
 /** The four tones of an accent: (dark theme, light theme, text on it in dark, text on it in light). A custom colour is adjusted so it stays readable in both. */
