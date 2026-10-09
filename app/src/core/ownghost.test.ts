@@ -31,7 +31,7 @@ describe("your own accounts on other networks", () => {
     setOwnIdentity(["Lane McDonald"], []);
     const sync = { rooms: { join: { "!r:x": {
       state: { events: [member(ghost, "Lane McDonald (WA)"), member(other, "Amy")] },
-      timeline: { events: [text("$1", me, 1)] },
+      timeline: { events: [text("$1", me, "yo", 1)] },
       ephemeral: { events: [{ type: "m.receipt", content: { $1: { "m.read": { [ghost]: { ts: 5 } } } } }] },
     } } } };
     const chat = applySync({}, sync, me, true).chats["!r:x"];
