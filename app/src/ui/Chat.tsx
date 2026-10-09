@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  AlarmClock, Archive, ArrowDownToLine, ArrowLeft, BellOff, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
+  AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
   Reply, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon,
 } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf } from "../core/types";
 import { networkMeta } from "../core/emoji";
-import { getSettings, useSettings, AppSettings } from "../core/settings";
+import { getSettings, useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
   edit, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, toggleStar, typing, useStore, votePoll, getState,
 } from "../core/store";
-import { Avatar, EmojiPicker, IconButton, Modal, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
+import { Avatar, EmojiPicker, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
 import { MessageRow } from "./Message";
 import { Effects } from "./Effects";
 import { AttachKind, AttachMenu, ContactModal, GifModal, PollModal, StickerModal } from "./Attach";
@@ -37,6 +37,8 @@ function buildItems(messages: Msg[], unreadBefore: string | undefined, gapMs: nu
   return out;
 }
 
+const notifSummary = (p?: ChatNotifPrefs) => !p || ((!p.mode || p.mode === "default") && (!p.sound || p.sound === "default") && (!p.preview || p.preview === "default")) ? "Default"
+  : [p.mode && p.mode !== "default" ? { all: "Every message", mentions: "Mentions only", none: "Off" }[p.mode] : "", p.sound === "off" ? "Silent" : "", p.preview === "hide" ? "Hidden previews" : p.preview === "show" ? "Shown previews" : ""].filter(Boolean).join(" · ");
 const fullTime = (ts: number) => new Date(ts).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
 
 export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBack: () => void; nav: Nav; onForward: (m: Msg) => void }) {
@@ -379,6 +381,8 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
   const [muteDlg, setMuteDlg] = useState(false);
   const [when, setWhen] = useState<"remind" | "snooze">();
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [notifDlg, setNotifDlg] = useState(false);
+  const st = useSettings();
   const [tab, setTab] = useState<"photos" | "links" | "files">("photos");
   useEffect(() => { void members(chat.id).then(setList); }, [chat.id]);
   const name = displayName(chat, user);
@@ -406,6 +410,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
           {muted && left && left > 0 && <small className="pad">Muted for {Math.ceil(left / 3.6e6)} more hour(s)</small>}
         </div>
         <SheetItem icon={Tag} label="Labels" hint={labels.length ? labels.join(", ") : "None"} onClick={() => nav(`settings/labels`)} />
+        <SheetItem icon={Bell} label="Notifications" hint={notifSummary(st.notifChat[chat.id])} onClick={() => setNotifDlg(true)} />
         <SheetItem icon={Hourglass} label="Snooze…" hint="Hide this chat and bring it back later" onClick={() => setWhen("snooze")} />
         <div className="tabs flat">{(["photos", "links", "files"] as const).map((t) => <button key={t} className={"tab" + (tab === t ? " on" : "")} onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)} {t === "photos" ? photos.length : t === "links" ? links.length : files.length}</button>)}</div>
         {tab === "photos" && (photos.length ? <div className="photo-grid">{photos.slice(0, 60).map((m) => <Thumb key={m.id} mxc={m.mxc!} onClick={() => onViewImage(m.id)} />)}</div> : <p className="muted pad">No photos loaded yet. Scroll up in the chat to load more.</p>)}
@@ -417,6 +422,23 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
       </div>
       {muteDlg && <Modal title={`Mute ${name}`} onClose={() => setMuteDlg(false)}><div className="stack">{([["For 1 hour", 3.6e6], ["For 8 hours", 8 * 3.6e6], ["For 1 week", 7 * 864e5], ["Until I turn it back on", undefined]] as [string, number | undefined][]).map(([l, ms]) => <button key={l} className="row-btn" onClick={() => { setMuted(chat.id, true, ms); setMuteDlg(false); }}><b>{l}</b></button>)}</div></Modal>}
       {when && <WhenModal title={when === "snooze" ? "Snooze until" : `Remind me about ${name}`} onPick={(at) => { if (when === "snooze") snooze(chat.id, at); else remind(chat.id, at); setWhen(undefined); }} onClose={() => setWhen(undefined)} />}
+      {notifDlg && (
+        <Modal title={`Notifications for ${name}`} onClose={() => setNotifDlg(false)}>
+          <div className="stack">
+            {(() => {
+              const p = st.notifChat[chat.id] ?? {};
+              const set = (patch: Partial<ChatNotifPrefs>) => updateSettings({ notifChat: { ...st.notifChat, [chat.id]: { ...p, ...patch } } });
+              return <>
+                <Select title="Notify me about" value={p.mode ?? "default"} options={[["default", "Use my general settings"], ["all", "Every message"], ["mentions", "Mentions and replies only"], ["none", "Nothing"]]} onChange={(v) => set({ mode: v })} />
+                <Select title="Sound" value={p.sound ?? "default"} options={[["default", "Use my general settings"], ["off", "Silent"]]} onChange={(v) => set({ sound: v })} />
+                <Select title="Message previews" value={p.preview ?? "default"} options={[["default", "Use my general settings"], ["show", "Show message"], ["hide", "Hide message"]]} onChange={(v) => set({ preview: v })} />
+                <p className="muted">Mute and Low priority still apply: muted chats only notify for mentions, replies and your keywords.</p>
+                <div className="row-end"><button className="link" onClick={() => { const { [chat.id]: _x, ...rest } = st.notifChat; updateSettings({ notifChat: rest }); }}>Reset</button><button className="primary" onClick={() => setNotifDlg(false)}>Done</button></div>
+              </>;
+            })()}
+          </div>
+        </Modal>
+      )}
       {confirmLeave && <Modal title="Delete this chat?" onClose={() => setConfirmLeave(false)}><p className="muted">It will be removed from Pager. The conversation on {networkMeta(chat.network).label} isn't deleted, and it comes back if someone writes again.</p><div className="row-end"><button className="link" onClick={() => setConfirmLeave(false)}>Cancel</button><button className="primary danger" onClick={() => { leave(chat.id); nav("home"); }}>Delete</button></div></Modal>}
     </aside>
   );

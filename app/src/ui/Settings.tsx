@@ -243,30 +243,60 @@ const parseMin = (v: string) => { const [h, m] = v.split(":").map(Number); retur
 function Notifications() {
   const s = useRawSettings();
   const [perm, setPerm] = useState(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
+  const [word, setWord] = useState("");
   const known = ["whatsapp", "signal", "telegram", "discord", "instagram", "messenger", "gmessages"];
+  const off = !s.notifEnabled;
+  const chats = Object.entries(s.notifChat).filter(([, p]) => p && ((p.mode && p.mode !== "default") || (p.preview && p.preview !== "default") || (p.sound && p.sound !== "default")));
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const addWord = () => { const w = word.trim(); if (w && !s.notifKeywords.some((k) => k.toLowerCase() === w.toLowerCase())) updateSettings({ notifKeywords: [...s.notifKeywords, w] }); setWord(""); };
+  function test() {
+    const body = "This is how a message will look.";
+    if (window.pagerDesktop) window.pagerDesktop.notify({ title: "Pager test", body, silent: !s.notifSound });
+    else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification("Pager test", { body, silent: !s.notifSound });
+  }
   return (
     <>
       <Group><SwitchRow title="Notifications" hint="Master switch for message alerts" checked={s.notifEnabled} onChange={(v) => updateSettings({ notifEnabled: v })} />
         {perm === "default" && <Row title="Allow browser notifications"><button className="pill" onClick={async () => setPerm(await Notification.requestPermission())}>Allow</button></Row>}
-        {perm === "denied" && <Row title="Notifications are blocked in your browser settings." />}</Group>
-      <Group title="What to notify" footer="Muted and Low priority chats stay quiet except for @mentions and replies to your messages, like Beeper.">
-        <Select title="Notify me about" value={s.notifScope} disabled={!s.notifEnabled} options={[["all", "Every message"], ["dm_mentions", "Direct messages and mentions"], ["favorites", "Pinned chats and mentions"]]} onChange={(v) => updateSettings({ notifScope: v })} />
-        <SwitchRow title="Groups: only when mentioned" hint="Group chats stay quiet unless someone @mentions you" checked={s.notifGroupMentionsOnly} disabled={!s.notifEnabled} onChange={(v) => updateSettings({ notifGroupMentionsOnly: v })} />
+        {perm === "denied" && <Row title="Notifications are blocked in your browser settings." />}
+        <Row title="Send a test notification" hint="Check sound and how it looks" onClick={off ? undefined : test}><span className="accent">Test</span></Row></Group>
+      <Group title="What to notify" footer="Muted and Low priority chats stay quiet except for @mentions, replies to your messages and your keywords.">
+        <Select title="Notify me about" value={s.notifScope} disabled={off} options={[["all", "Every message"], ["dm_mentions", "Direct messages and mentions"], ["favorites", "Pinned chats and mentions"]]} onChange={(v) => updateSettings({ notifScope: v })} />
+        <SwitchRow title="Groups: only when mentioned" hint="Group chats stay quiet unless someone @mentions you" checked={s.notifGroupMentionsOnly} disabled={off} onChange={(v) => updateSettings({ notifGroupMentionsOnly: v })} />
+      </Group>
+      <Group title="Keywords" footer="A message with one of these words always notifies you, even in a muted chat. Whole words only.">
+        <div className="chips pad">{s.notifKeywords.map((k) => <span key={k} className="chip">{k}<button aria-label={`Remove ${k}`} onClick={() => updateSettings({ notifKeywords: s.notifKeywords.filter((x) => x !== k) })}>×</button></span>)}</div>
+        <Row title="Add a keyword"><form onSubmit={(e) => { e.preventDefault(); addWord(); }} style={{ display: "flex", gap: 8 }}><input value={word} disabled={off} placeholder="Your name, a nickname…" onChange={(e) => setWord(e.target.value)} /><button className="pill" disabled={off || !word.trim()}>Add</button></form></Row>
       </Group>
       <Group title="Appearance">
-        <Select title="Show" value={s.notifPreview} disabled={!s.notifEnabled} options={[["full", "Name and message"], ["sender", "Name only"], ["hidden", "Hide content"]]} onChange={(v) => updateSettings({ notifPreview: v })} />
-        <SwitchRow title="Sound" checked={s.notifSound} disabled={!s.notifEnabled} onChange={(v) => updateSettings({ notifSound: v })} />
+        <Select title="Show" value={s.notifPreview} disabled={off} options={[["full", "Name and message"], ["sender", "Name only"], ["hidden", "Hide content"]]} onChange={(v) => updateSettings({ notifPreview: v })} />
+        <SwitchRow title="Sound" checked={s.notifSound} disabled={off} onChange={(v) => updateSettings({ notifSound: v })} />
+        <Select title="Unread badge counts" hint="The number on the app icon" value={s.notifBadge} options={[["unmuted", "Chats that can notify me"], ["all", "Every unread chat"], ["off", "Nothing"]]} onChange={(v) => updateSettings({ notifBadge: v })} />
+      </Group>
+      <Group title="Delay" footer="Waits, then skips the alert if you already read the chat on another device or app.">
+        <Select title="Wait before alerting" value={String(s.notifDelaySec)} disabled={off} options={[["0", "Don't wait"], ["5", "5 seconds"], ["15", "15 seconds"], ["30", "30 seconds"], ["60", "1 minute"]]} onChange={(v) => updateSettings({ notifDelaySec: Number(v) })} />
       </Group>
       <Group title="Quiet hours" footer="Messages still arrive, silently.">
-        <SwitchRow title="Quiet hours" checked={s.quietHoursEnabled} disabled={!s.notifEnabled} onChange={(v) => updateSettings({ quietHoursEnabled: v })} />
+        <SwitchRow title="Quiet hours" checked={s.quietHoursEnabled} disabled={off} onChange={(v) => updateSettings({ quietHoursEnabled: v })} />
         {s.quietHoursEnabled && <>
           <Row title="From"><input type="time" value={fmtMin(s.quietStartMin)} onChange={(e) => updateSettings({ quietStartMin: parseMin(e.target.value) })} /></Row>
           <Row title="Until"><input type="time" value={fmtMin(s.quietEndMin)} onChange={(e) => updateSettings({ quietEndMin: parseMin(e.target.value) })} /></Row>
+          <Row title="On these days"><div className="chips">{days.map((d, i) => <button key={d} className={"chip" + (s.notifQuietDays.includes(i) ? " on" : "")} onClick={() => updateSettings({ notifQuietDays: s.notifQuietDays.includes(i) ? s.notifQuietDays.filter((x) => x !== i) : [...s.notifQuietDays, i].sort() })}>{d}</button>)}</div></Row>
+          <SwitchRow title="Let important ones through" hint="Pinned chats, mentions, replies and keywords still make a sound" checked={s.notifQuietBreakThrough} onChange={(v) => updateSettings({ notifQuietBreakThrough: v })} />
         </>}
       </Group>
-      <Group title="Per network">
-        {known.map((id) => <SwitchRow key={id} title={networkMeta(id).label} checked={!s.notifMutedNetworks.includes(id)} disabled={!s.notifEnabled} onChange={(on) => updateSettings({ notifMutedNetworks: on ? s.notifMutedNetworks.filter((x) => x !== id) : [...s.notifMutedNetworks, id] })} />)}
+      <Group title="Per network" footer="Pick how each app notifies you. A chat's own setting (in its info page) wins.">
+        {known.map((id) => (
+          <Select key={id} title={networkMeta(id).label} value={s.notifNetworkMode[id] ?? (s.notifMutedNetworks.includes(id) ? "none" : "all")} disabled={off}
+            options={[["all", "Every message"], ["mentions", "Mentions only"], ["none", "Nothing"]]}
+            onChange={(v) => updateSettings({ notifNetworkMode: { ...s.notifNetworkMode, [id]: v }, notifMutedNetworks: s.notifMutedNetworks.filter((x) => x !== id) })} />
+        ))}
       </Group>
+      {chats.length > 0 && (
+        <Group title="Chats with their own settings">
+          {chats.map(([id, p]) => <Row key={id} title={id.slice(0, 12) + "…"} hint={`${p.mode && p.mode !== "default" ? p.mode : "default alerts"}${p.sound === "off" ? " · silent" : ""}${p.preview && p.preview !== "default" ? ` · ${p.preview} previews` : ""}`}><button className="link" onClick={() => { const { [id]: _x, ...rest } = s.notifChat; updateSettings({ notifChat: rest }); }}>Reset</button></Row>)}
+        </Group>
+      )}
     </>
   );
 }
