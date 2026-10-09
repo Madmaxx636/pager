@@ -257,17 +257,15 @@ fun ChatPicker(title: String, onBack: () -> Unit, onPick: (String) -> Unit) {
 fun AdminScreen(onBack: () -> Unit) {
     val store = LocalStore.current
     val scope = rememberCoroutineScope()
-    var users by remember { mutableStateOf<List<AdminUser>?>(null) }
+    var people by remember { mutableStateOf<List<AdminPerson>?>(null) }
     var bridges by remember { mutableStateOf<List<Triple<String, String, Boolean>>?>(null) }
     var server by remember { mutableStateOf<ServerSettings?>(null) }
-    var open by remember { mutableStateOf<String?>(null) }
-    var logins by remember { mutableStateOf<List<Network>?>(null) }
     var resetFor by remember { mutableStateOf<AdminUser?>(null) }
     var deleteFor by remember { mutableStateOf<AdminUser?>(null) }
     var err by remember { mutableStateOf("") }
     fun load() = scope.launch {
         err = ""
-        runCatching { store.pager.adminUsers() }.onSuccess { users = it }.onFailure { err = it.message ?: "Couldn't load" }
+        runCatching { store.pager.adminOverview() }.onSuccess { people = it }.onFailure { err = it.message ?: "Couldn't load" }
         runCatching { store.pager.adminBridges() }.onSuccess { bridges = it }
         runCatching { store.pager.adminServer() }.onSuccess { server = it }
     }
@@ -293,31 +291,46 @@ fun AdminScreen(onBack: () -> Unit) {
                 }
             } ?: Text("Checking…", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        SettingsGroup("Profiles${users?.let { " (${it.size})" } ?: ""}") {
-            users?.forEachIndexed { i, u ->
-                if (i > 0) GroupDivider()
-                Row(Modifier.fillMaxWidth().clickable {
-                    if (open == u.id) open = null else { open = u.id; logins = null; scope.launch { logins = runCatching { store.pager.adminLogins(u.id) }.getOrDefault(emptyList()) } }
-                }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(u.id + if (u.you) " (you)" else "")
-                        Text(listOfNotNull(if (u.admin) "Admin" else null, if (u.deactivated) "Deleted" else null).joinToString(" · ").ifEmpty { "Member" }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Profiles" + (people?.let { " (${it.size})" } ?: ""), Modifier.padding(start = 20.dp, top = 8.dp, bottom = 4.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        if (people == null) Text("Loading everyone…", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        people?.forEach { p ->
+            val u = p.user
+            val name = p.displayname.ifEmpty { u.id.removePrefix("@").substringBefore(':') }
+            SettingsGroup {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(name, null, 44.dp)
+                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        Text(name, style = MaterialTheme.typography.titleMedium)
+                        Text(u.id, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
-                    ChevronEnd()
+                    if (u.admin) Text("Admin", Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary).padding(horizontal = 10.dp, vertical = 3.dp), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelMedium)
+                    if (u.you) Text("You", Modifier.padding(start = 6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 10.dp, vertical = 3.dp), style = MaterialTheme.typography.labelMedium)
+                    if (u.deactivated) Text("Deleted", Modifier.padding(start = 6.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                 }
-                if (open == u.id) Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text("Connected apps", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    when {
-                        logins == null -> Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        logins!!.isEmpty() -> Text("Nothing connected.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        else -> logins!!.forEach { n -> n.logins.forEach { l ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("${n.name}: ${l.name}", Modifier.weight(1f))
-                                TextButton(onClick = { act { store.pager.adminLogout(u.id, n.id, l.id); logins = store.pager.adminLogins(u.id) } }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
+                val any = p.networks.any { it.logins.isNotEmpty() }
+                if (!any) { GroupDivider(); Text(if (u.deactivated) "Account deleted." else "Nothing connected yet.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                p.networks.forEach { n ->
+                    n.logins.forEach { l ->
+                        GroupDivider()
+                        val (label, color) = loginStateLabel(l.state)
+                        val meta = networkMeta(n.id)
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(meta.color), contentAlignment = Alignment.Center) {
+                                val icon = networkIcon(n.id)
+                                if (icon != null) Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp)) else Text(meta.glyph, color = Color.White)
                             }
-                        } }
+                            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                                Text(n.name); Text(l.name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            }
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(color)); Text(" $label", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            TextButton(onClick = { act { store.pager.adminLogout(u.id, n.id, l.id) } }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
+                        }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (n.unavailable && n.logins.isEmpty()) { GroupDivider(); Text("${n.name}: couldn't check", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) }
+                }
+                if (!u.deactivated) {
+                    GroupDivider()
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (!u.you) TextButton(onClick = { act { store.pager.adminSetAdmin(u.id, !u.admin) } }) { Text(if (u.admin) "Remove admin" else "Make admin") }
                         TextButton(onClick = { resetFor = u }) { Text("Reset password") }
                         if (!u.you) TextButton(onClick = { deleteFor = u }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
@@ -339,7 +352,7 @@ fun AdminScreen(onBack: () -> Unit) {
         AlertDialog(
             onDismissRequest = { deleteFor = null }, title = { Text("Delete ${u.id}?") },
             text = { Text("This removes their account, disconnects their apps and can't be undone.") },
-            confirmButton = { TextButton(onClick = { act { store.pager.adminRemove(u.id) }; deleteFor = null; open = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+            confirmButton = { TextButton(onClick = { act { store.pager.adminRemove(u.id) }; deleteFor = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("Cancel") } },
         )
     }
