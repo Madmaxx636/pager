@@ -283,6 +283,33 @@ class Store(private val context: Context) {
         return e.restoreBackup(key).also { refreshEncryptionStatus() }
     }
 
+    /**
+     * Turns on end-to-end encryption for a page. From then on its messages are encrypted. Older messages stay as they were on the server,
+     * and encryption can't be turned off again. Refuses when the page's app (bridge) can't read encrypted messages, which would break the page.
+     */
+    suspend fun enableEncryption(roomId: String) {
+        val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet. Try again in a moment.")
+        if (_chats.value[roomId]?.encrypted == true) return
+        val bots = matrix.joinedMembers(roomId).keys.filter { Regex("^@[a-z]*bot:").containsMatchIn(it) }
+        if (!e.botsCanEncrypt(bots)) throw java.io.IOException("This page's app isn't set up for encryption on your server yet (the server admin turns it on)")
+        try {
+            matrix.setState(roomId, "m.room.encryption", buildJsonObject { put("algorithm", "m.megolm.v1.aes-sha2"); put("rotation_period_ms", 604_800_000L); put("rotation_period_msgs", 100) })
+        } catch (x: ApiException) { throw java.io.IOException(if (x.status == 403) "Your account isn't allowed to change this page's settings" else (x.message ?: "Couldn't turn on encryption")) }
+        update(roomId) { it.copy(encrypted = true) }
+    }
+
+    /** Turns encryption on for every page that can take it. Returns how many were turned on and the pages that could not (name to reason). */
+    suspend fun enableEncryptionForAll(onProgress: (Int, Int) -> Unit = { _, _ -> }): Pair<Int, List<Pair<String, String>>> {
+        val me = _session.value?.userId ?: return 0 to emptyList()
+        val todo = _chats.value.values.filter { !it.encrypted && !it.isBotRoom(me) && !it.isStories }
+        var done = 0; val failed = mutableListOf<Pair<String, String>>()
+        todo.forEachIndexed { i, c ->
+            try { enableEncryption(c.id); done++ } catch (x: Exception) { failed.add(SyncReducer.displayName(c, me) to (x.message ?: "Failed")) }
+            onProgress(i + 1, todo.size)
+        }
+        return done to failed
+    }
+
     /** Every message key on this device, scrambled with a passphrase, as text for a file. */
     suspend fun exportKeyFile(passphrase: String): String = (e2ee ?: throw java.io.IOException("Encryption is not ready yet")).exportKeys(passphrase)
 

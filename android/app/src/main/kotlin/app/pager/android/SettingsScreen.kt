@@ -784,9 +784,44 @@ private fun EncryptionGroup() {
         if (e.ready) {
             GroupDivider()
             NavRow("Lost your recovery key?", if (e.backupHere) "This phone still has your keys: choose Recovery key above and replace it" else "Use a key file below, or make a new key. Without either, older encrypted messages can't be read here", Icons.Rounded.Help) {}
+            GroupDivider(); NavRow("Encrypt all my pages", "Turns on encryption for every page that can take it. Older messages stay readable on your server", Icons.Rounded.Lock) { dialog = "all" }
             GroupDivider(); NavRow("Save my keys to a file", "A second way back in: a file only your passphrase opens", Icons.Rounded.Save) { dialog = "export" }
             GroupDivider(); NavRow("Restore keys from a file", null, Icons.Rounded.FileOpen) { dialog = "import" }
         }
+    }
+    if (dialog == "all") {
+        var stage by remember { mutableStateOf("ask") }
+        var progress by remember { mutableStateOf(0 to 0) }
+        var result by remember { mutableStateOf<Pair<Int, List<Pair<String, String>>>?>(null) }
+        AlertDialog(
+            onDismissRequest = { if (stage != "run") dialog = null }, title = { Text("Encrypt all my pages?") },
+            text = {
+                Column {
+                    when (stage) {
+                        "ask" -> {
+                            Text("Every page that can take encryption will be switched on. Messages from now on are end-to-end encrypted.")
+                            Text("Older messages stay readable on your server. Encryption can't be turned off again. Pages whose app isn't ready are skipped and listed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                            if (!e.backupHere) Text("You haven't set up a recovery key on this device. Do that first, so a new device can read your history.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                        }
+                        "run" -> Text("Turning on encryption… ${progress.first} of ${progress.second}")
+                        else -> result?.let { (done, failed) ->
+                            Text("$done page${if (done == 1) "" else "s"} encrypted.")
+                            if (failed.isNotEmpty()) {
+                                Text("Skipped ${failed.size}:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                                failed.take(20).forEach { (n, why) -> Text("$n: $why", style = MaterialTheme.typography.bodySmall) }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                when (stage) {
+                    "ask" -> TextButton(onClick = { stage = "run"; scope.launch { result = store.enableEncryptionForAll { a, b -> progress = a to b }; stage = "done" } }) { Text("Encrypt all") }
+                    "done" -> TextButton(onClick = { dialog = null }) { Text("Done") }
+                }
+            },
+            dismissButton = { if (stage == "ask") TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+        )
     }
     if (dialog == "export") {
         var pass by remember { mutableStateOf("") }

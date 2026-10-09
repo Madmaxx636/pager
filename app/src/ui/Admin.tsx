@@ -64,7 +64,7 @@ function Accounts({ people, reload, setErr }: { people?: AdminPerson[]; reload: 
 
 function AccountDetails({ person: u, reload, setErr }: { person: AdminPerson; reload: () => void; setErr: (m: string) => void }) {
   const [info, setInfo] = useState<AdminInfo>();
-  const [modal, setModal] = useState<"password" | "rename">();
+  const [modal, setModal] = useState<"password" | "rename" | "recover">();
   const load = useCallback(() => { pager.admin.info(u.id).then(setInfo).catch(() => {}); }, [u.id]);
   useEffect(load, [load]);
   const act = (fn: () => Promise<unknown>) => async () => { try { await fn(); load(); reload(); } catch (e) { setErr((e as Error).message); } };
@@ -101,6 +101,7 @@ function AccountDetails({ person: u, reload, setErr }: { person: AdminPerson; re
       {!u.deactivated && (
         <div className="admin-actions">
           <button className="pill" onClick={() => setModal("password")}>Reset password</button>
+          {!u.you && <button className="pill" onClick={() => setModal("recover")}>Recover account…</button>}
           {!u.you && <button className="pill" onClick={act(() => pager.admin.setAdmin(u.id, !u.admin))}>{u.admin ? "Remove admin" : "Make admin"}</button>}
           {!u.you && <button className="pill" onClick={act(() => pager.admin.lock(u.id, !info?.locked))}>{info?.locked ? "Unlock" : "Lock account"}</button>}
           <button className="pill" onClick={act(async () => { if (confirm(`Sign ${nameOf(u)} out of every device?`)) { const r = await pager.admin.logoutAll(u.id); setErr(`Signed out of ${r.signedOut} device(s).`); } })}>Sign out everywhere</button>
@@ -108,6 +109,7 @@ function AccountDetails({ person: u, reload, setErr }: { person: AdminPerson; re
         </div>
       )}
       {modal === "password" && <Modal title={`New password for ${nameOf(u)}`} onClose={() => setModal(undefined)}><TextForm label="New password (8+ characters)" type="password" min={8} cta="Set password" note="They will be signed out everywhere and must use this password next time." onDone={() => setModal(undefined)} onSubmit={(v) => pager.admin.resetPassword(u.id, v)} /></Modal>}
+      {modal === "recover" && <RecoverDialog person={u} onClose={() => { setModal(undefined); load(); reload(); }} />}
       {modal === "rename" && <Modal title="Change name" onClose={() => setModal(undefined)}><TextForm label="Name" initial={nameOf(u)} cta="Save" onDone={() => { setModal(undefined); load(); reload(); }} onSubmit={(v) => pager.admin.rename(u.id, v)} /></Modal>}
     </div>
   );
@@ -247,5 +249,36 @@ function ServerTab({ setErr }: { setErr: (m: string) => void }) {
         </Row>
       </>}
     </Group>
+  );
+}
+
+/** For someone who lost both their password and their recovery key. The admin must type their own password to continue. */
+function RecoverDialog({ person: u, onClose }: { person: AdminPerson; onClose: () => void }) {
+  const [adminPw, setAdminPw] = useState("");
+  const [custom, setCustom] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<{ backupRemoved: boolean; temporaryPassword?: string }>();
+  const name = nameOf(u);
+  return (
+    <Modal title={`Recover ${name}'s account`} onClose={onClose}>
+      {done ? (
+        <>
+          <p>{name} is signed out everywhere{done.backupRemoved ? " and their old encryption backup is removed" : ""}.</p>
+          {done.temporaryPassword && <><p className="muted">Give them this temporary password. It won't be shown again, and they should change it after signing in.</p><pre className="recovery-key">{done.temporaryPassword}</pre><button className="link" onClick={() => void navigator.clipboard.writeText(done.temporaryPassword!)}>Copy</button></>}
+          <p className="muted">When they sign in, Settings → Privacy → Encryption lets them make a new recovery key.</p>
+          <div className="row-end"><button className="primary" onClick={onClose}>Done</button></div>
+        </>
+      ) : (
+        <form className="stack" onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(""); try { setDone(await pager.admin.recover(u.id, adminPw, custom || undefined)); } catch (x) { setErr((x as Error).message); } setBusy(false); }}>
+          <p className="muted">Use this when {name} has lost both their password and their recovery key. It sets a new password, signs them out of every device, and removes their encryption backup so they can start a new one.</p>
+          <p className="warn">It cannot bring back their old encrypted messages: only their recovery key, a key file, or a device that is still signed in can. Messages sent from now on are fine.</p>
+          <label>New password for {name} (leave empty to get a temporary one)<input type="password" value={custom} onChange={(e) => setCustom(e.target.value)} minLength={8} autoComplete="new-password" /></label>
+          <label>Your own password, to confirm<input type="password" value={adminPw} onChange={(e) => setAdminPw(e.target.value)} autoFocus required autoComplete="current-password" /></label>
+          {err && <div className="error">{err}</div>}
+          <div className="row-end"><button type="button" className="link" onClick={onClose}>Cancel</button><button className="primary danger" disabled={busy || !adminPw || (custom.length > 0 && custom.length < 8)}>{busy ? "Recovering…" : "Recover account"}</button></div>
+        </form>
+      )}
+    </Modal>
   );
 }

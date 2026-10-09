@@ -202,6 +202,14 @@ class E2ee private constructor(
         return total
     }
 
+    /** True when every bridge bot among [bots] has encryption keys on the server, so it can read and write encrypted messages. */
+    suspend fun botsCanEncrypt(bots: List<String>): Boolean {
+        if (bots.isEmpty()) return true
+        val r = tx("POST", "/_matrix/client/v3/keys/query", buildJsonObject { put("timeout", 10000); putJsonObject("device_keys") { bots.forEach { put(it, JsonArray(emptyList())) } } })
+        val keys = r["device_keys"] as? JsonObject
+        return bots.all { ((keys?.get(it) as? JsonObject)?.size ?: 0) > 0 }
+    }
+
     // ---- Key file (a second way back in) ------------------------------------------------------------------------
     // Every message key this device has, scrambled with a passphrase you choose, as text you can store anywhere. If the recovery key is
     // ever lost, this file and its passphrase read your history; and it works without the server.

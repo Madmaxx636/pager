@@ -270,6 +270,7 @@ fun AdminScreen(onBack: () -> Unit) {
     var open by remember { mutableStateOf<String?>(null) }
     var info by remember { mutableStateOf<AdminInfo?>(null) }
     var resetFor by remember { mutableStateOf<AdminUser?>(null) }
+    var recoverFor by remember { mutableStateOf<AdminUser?>(null) }
     var renameFor by remember { mutableStateOf<AdminUser?>(null) }
     var deleteFor by remember { mutableStateOf<AdminUser?>(null) }
     var logFor by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -337,6 +338,7 @@ fun AdminScreen(onBack: () -> Unit) {
                             FlowRow(Modifier.padding(horizontal = 8.dp)) {
                                 TextButton(onClick = { renameFor = u }) { Text("Change name") }
                                 TextButton(onClick = { resetFor = u }) { Text("Reset password") }
+                                if (!u.you) TextButton(onClick = { recoverFor = u }) { Text("Recover account…") }
                                 if (!u.you) TextButton(onClick = { act { store.pager.adminSetAdmin(u.id, !u.admin) } }) { Text(if (u.admin) "Remove admin" else "Make admin") }
                                 if (!u.you) TextButton(onClick = { act { store.pager.adminLock(u.id, info?.locked != true) } }) { Text(if (info?.locked == true) "Unlock" else "Lock account") }
                                 TextButton(onClick = { act { store.pager.adminLogoutAll(u.id) } }) { Text("Sign out everywhere") }
@@ -401,6 +403,46 @@ fun AdminScreen(onBack: () -> Unit) {
             text = { androidx.compose.material3.OutlinedTextField(pw, { pw = it }, singleLine = true, label = { Text("New password (8+ characters)") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()) },
             confirmButton = { TextButton(enabled = pw.length >= 8, onClick = { act { store.pager.adminResetPassword(u.id, pw) }; resetFor = null }) { Text("Set password") } },
             dismissButton = { TextButton(onClick = { resetFor = null }) { Text("Cancel") } },
+        )
+    }
+    recoverFor?.let { u ->
+        // For someone who lost both their password and their recovery key. The admin must type their own password to continue.
+        var adminPw by remember { mutableStateOf("") }
+        var custom by remember { mutableStateOf("") }
+        var err by remember { mutableStateOf("") }
+        var busy by remember { mutableStateOf(false) }
+        var done by remember { mutableStateOf<Pair<Boolean, String?>?>(null) }
+        val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+        AlertDialog(
+            onDismissRequest = { recoverFor = null; load() }, title = { Text("Recover ${u.id}") },
+            text = {
+                Column {
+                    val d = done
+                    if (d != null) {
+                        Text("Signed out everywhere${if (d.first) " and their old encryption backup is removed" else ""}.")
+                        d.second?.let { tmp ->
+                            Text("Give them this temporary password. It won't be shown again, and they should change it after signing in.", modifier = Modifier.padding(top = 8.dp))
+                            androidx.compose.foundation.text.selection.SelectionContainer { Text(tmp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, modifier = Modifier.padding(vertical = 8.dp)) }
+                            TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(tmp)) }) { Text("Copy") }
+                        }
+                        Text("When they sign in, Settings → Privacy → Encryption lets them make a new recovery key.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        Text("Use this when they lost both their password and their recovery key. It sets a new password, signs them out of every device, and removes their encryption backup so they can start a new one.")
+                        Text("It cannot bring back their old encrypted messages: only their recovery key, a key file, or a device that is still signed in can.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp))
+                        androidx.compose.material3.OutlinedTextField(custom, { custom = it }, singleLine = true, label = { Text("New password (empty = temporary one)") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                        androidx.compose.material3.OutlinedTextField(adminPw, { adminPw = it }, singleLine = true, label = { Text("Your own password, to confirm") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                        if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                if (done != null) TextButton(onClick = { recoverFor = null; load() }) { Text("Done") }
+                else TextButton(enabled = !busy && adminPw.isNotEmpty() && (custom.isEmpty() || custom.length >= 8), onClick = {
+                    busy = true; err = ""
+                    scope.launch { runCatching { store.pager.adminRecover(u.id, adminPw, custom) }.onSuccess { done = it }.onFailure { err = it.message ?: "That didn't work" }; busy = false }
+                }) { Text(if (busy) "Recovering…" else "Recover account", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { if (done == null) TextButton(onClick = { recoverFor = null }) { Text("Cancel") } },
         )
     }
     deleteFor?.let { u ->

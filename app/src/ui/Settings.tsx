@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { RowAction, ACCENTS, accentTones, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
-import { addStickers, cancelReminder, createRecoveryKey, exportKeyFile, importKeyFile, restoreWithRecoveryKey, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
+import { addStickers, cancelReminder, createRecoveryKey, enableEncryptionForAll, exportKeyFile, importKeyFile, restoreWithRecoveryKey, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
@@ -501,7 +501,7 @@ function ColorDialog({ value, onClose, onPick }: { value: string; onClose: () =>
 /** End-to-end encryption on this device: the recovery key that brings your history back on a new device. */
 function EncryptionGroup() {
   const e = useEncryption();
-  const [dlg, setDlg] = useState<"create" | "restore" | "export" | "import">();
+  const [dlg, setDlg] = useState<"create" | "restore" | "export" | "import" | "all">();
   return (
     <Group title="Encryption" footer="Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.">
       <Row title="Encryption on this device" hint={e.ready ? `Ready · device ${e.deviceId}` : "Starting…"} />
@@ -511,11 +511,13 @@ function EncryptionGroup() {
         <span className="accent">{e.backupHere ? "Replace" : e.backupOnServer ? "Enter key" : "Set up"}</span>
       </Row>
       {e.backupOnServer && e.backupHere === false && <Row title="Make a new recovery key instead" onClick={() => setDlg("create")}><span className="accent">New key</span></Row>}
+      {e.ready && <Row title="Encrypt all my pages" hint="Turns on encryption for every page that can take it. Older messages stay readable on your server" onClick={() => setDlg("all")}><span className="accent">Encrypt</span></Row>}
       {e.ready && <Row title="Lost your recovery key?" hint={e.backupHere ? "This device still has your keys: choose Replace above and it makes a new one" : "Use a key file below, or make a new key. Without either, older encrypted messages can't be read on this device"} />}
       {e.ready && <Row title="Save my keys to a file" hint="A second way back in: a file only your passphrase opens" onClick={() => setDlg("export")}><span className="accent">Save</span></Row>}
       {e.ready && <Row title="Restore keys from a file" onClick={() => setDlg("import")}><span className="accent">Open</span></Row>}
       {dlg === "create" && <RecoveryKeyDialog onClose={() => setDlg(undefined)} />}
       {dlg === "restore" && <RestoreDialog onClose={() => setDlg(undefined)} onLost={() => setDlg("create")} />}
+      {dlg === "all" && <EncryptAllDialog onClose={() => setDlg(undefined)} hasKey={e.backupHere} />}
       {dlg === "export" && <ExportKeysDialog onClose={() => setDlg(undefined)} />}
       {dlg === "import" && <ImportKeysDialog onClose={() => setDlg(undefined)} />}
     </Group>
@@ -598,6 +600,32 @@ function ImportKeysDialog({ onClose }: { onClose: () => void }) {
       )}
       <div className="row-end"><button className="link" onClick={onClose}>{done != null ? "Close" : "Cancel"}</button>
         {done == null && <button className="primary" disabled={busy || !text || !pass} onClick={() => { setBusy(true); setErr(""); importKeyFile(text, pass).then(setDone).catch((e) => setErr(e.message)).finally(() => setBusy(false)); }}>{busy ? "Restoring…" : name ? `Restore ${name}` : "Restore"}</button>}</div>
+    </Modal>
+  );
+}
+
+function EncryptAllDialog({ onClose, hasKey }: { onClose: () => void; hasKey: boolean }) {
+  const [state, setState] = useState<"ask" | "run" | "done">("ask");
+  const [progress, setProgress] = useState<[number, number]>([0, 0]);
+  const [result, setResult] = useState<{ done: number; failed: { name: string; why: string }[] }>();
+  return (
+    <Modal title="Encrypt all my pages?" onClose={() => state !== "run" && onClose()}>
+      {state === "ask" && (
+        <>
+          <p>Every page that can take encryption will be switched on. Messages from now on are end-to-end encrypted.</p>
+          <p className="muted">Older messages stay readable on your server. Encryption can't be turned off again. Pages whose app isn't ready are skipped and listed.</p>
+          {!hasKey && <p className="warn">You haven't set up a recovery key on this device. Do that first, so a new device can read your history.</p>}
+          <div className="row-end"><button className="link" onClick={onClose}>Cancel</button><button className="primary" onClick={() => { setState("run"); enableEncryptionForAll((a, b) => setProgress([a, b])).then((r) => { setResult(r); setState("done"); }); }}>Encrypt all</button></div>
+        </>
+      )}
+      {state === "run" && <p>Turning on encryption… {progress[0]} of {progress[1]}</p>}
+      {state === "done" && result && (
+        <>
+          <p>{result.done} page{result.done === 1 ? "" : "s"} encrypted.</p>
+          {result.failed.length > 0 && <><p className="muted">Skipped {result.failed.length}:</p><ul className="plain small">{result.failed.slice(0, 20).map((f, i) => <li key={i}><b>{f.name}</b><br /><small className="muted">{f.why}</small></li>)}</ul></>}
+          <div className="row-end"><button className="primary" onClick={onClose}>Done</button></div>
+        </>
+      )}
     </Modal>
   );
 }

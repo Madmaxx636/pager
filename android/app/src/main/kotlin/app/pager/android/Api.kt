@@ -84,6 +84,11 @@ class PagerApi(private val http: Http) {
     }
     suspend fun adminLogout(id: String, net: String, login: String) { http.request("POST", "/api/admin/users/${enc(id)}/logout/${enc(net)}/${enc(login)}", JsonObject(emptyMap())) }
     suspend fun adminSetAdmin(id: String, admin: Boolean) { http.request("POST", "/api/admin/users/${enc(id)}/admin", buildJsonObject { put("admin", admin) }) }
+    /** Recover an account: needs the admin's own password. Without a new password, a temporary one comes back (otherwise null). */
+    suspend fun adminRecover(id: String, adminPassword: String, newPassword: String?): Pair<Boolean, String?> {
+        val r = http.request("POST", "/api/admin/users/${enc(id)}/recover", buildJsonObject { put("adminPassword", adminPassword); if (!newPassword.isNullOrEmpty()) put("newPassword", newPassword) })
+        return ((r["backupRemoved"] as? JsonPrimitive)?.booleanOrNull == true) to r["temporaryPassword"].str()
+    }
     suspend fun adminResetPassword(id: String, password: String) { http.request("POST", "/api/admin/users/${enc(id)}/password", buildJsonObject { put("password", password) }) }
     suspend fun adminRemove(id: String) { http.request("POST", "/api/admin/users/${enc(id)}/delete", JsonObject(emptyMap())) }
     private fun serverFrom(o: JsonObject) = ServerSettings(o["domain"].str().orEmpty(), o["signup"].str().orEmpty(), o["inviteCode"].str().orEmpty())
@@ -276,6 +281,10 @@ class MatrixApi(private val http: Http) {
         http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/typing/${enc(me)}", buildJsonObject {
             put("typing", typing); if (typing) put("timeout", 6000)
         })
+    }
+
+    suspend fun setState(roomId: String, type: String, content: JsonObject) {
+        http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/state/${enc(type)}/", content)
     }
 
     suspend fun rename(roomId: String, name: String) {
