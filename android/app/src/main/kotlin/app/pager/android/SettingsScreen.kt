@@ -171,6 +171,9 @@ data class SettingEntry(val page: String, val title: String, val where: String, 
 val SETTINGS_INDEX = listOf(
     SettingEntry("appearance", "Theme mode", "Appearance", "dark light amoled black system"),
     SettingEntry("appearance", "Accent color", "Appearance", "colour material you dynamic"),
+    SettingEntry("appearance", "E-ink mode", "Appearance", "eink e-ink epaper boox high contrast black white"),
+    SettingEntry("appearance", "Display size", "Appearance", "scale zoom interface bigger smaller screen"),
+    SettingEntry("appearance", "Small screen layout", "Appearance", "compact tiny watch"),
     SettingEntry("appearance", "Text size", "Appearance", "font zoom bigger smaller accessibility"),
     SettingEntry("appearance", "Bubble style", "Appearance", "rounded square"),
     SettingEntry("appearance", "Chat wallpaper", "Appearance", "background"),
@@ -236,7 +239,7 @@ val SETTINGS_INDEX = listOf(
 @Composable
 fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit) {
     val store = LocalStore.current
-    val s = LocalSettings.current
+    val s = LocalRawSettings.current
     val set = store.settings::update
     val home = { navigate("") }
     when (page) {
@@ -382,9 +385,14 @@ fun SearchPill(value: String, onChange: (String) -> Unit, placeholder: String, m
 @Composable
 private fun AppearancePage() {
     val store = LocalStore.current
-    val s = LocalSettings.current
+    val s = LocalRawSettings.current
     val set = store.settings::update
     var editing by remember { mutableStateOf<Int?>(null) }
+    SettingsGroup("Display") {
+        SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }; GroupDivider()
+        SliderRow("Display size", s.uiScale, 0.7f..1.6f, "${(s.uiScale * 100).toInt()}%") { v -> set { copy(uiScale = (v * 20).toInt() / 20f) } }; GroupDivider()
+        ChoiceRow("Small screen layout", listOf("auto" to "Automatic", "on" to "Always", "off" to "Never"), s.smallScreen) { v -> set { copy(smallScreen = v) } }
+    }
     SettingsGroup("Theme") {
         ChoiceRow("Mode", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark", "black" to "Black (AMOLED)"), s.themeMode) { v -> set { copy(themeMode = v) } }
         GroupDivider()
@@ -433,7 +441,7 @@ private fun AppearancePage() {
 @Composable
 private fun NotificationSettings(navigate: (String) -> Unit) {
     val store = LocalStore.current
-    val s = LocalSettings.current
+    val s = LocalRawSettings.current
     val set = store.settings::update
     val context = LocalContext.current
     var picking by remember { mutableStateOf<String?>(null) }
@@ -495,7 +503,7 @@ private fun TimeRow(label: String, minutes: Int, onClick: () -> Unit) {
 @Composable
 private fun StickersAndGifsPage(onBack: () -> Unit) {
     val store = LocalStore.current
-    val s = LocalSettings.current
+    val s = LocalRawSettings.current
     val pack by store.userStickers.collectAsState()
     val scope = rememberCoroutineScope()
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> -> if (uris.isNotEmpty()) scope.launch { store.addStickers(uris) } }
@@ -576,7 +584,7 @@ private fun StorageSettings(navigate: (String) -> Unit) {
 @Composable
 private fun AdvancedSettings(navigate: (String) -> Unit) {
     val store = LocalStore.current
-    val s = LocalSettings.current
+    val s = LocalRawSettings.current
     val context = LocalContext.current
     SettingsPage("Advanced", { navigate("") }) {
         SettingsGroup("Sync") {

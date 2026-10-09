@@ -20,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -50,15 +52,21 @@ fun Avatar(name: String, network: String?, size: Dp = 46.dp, mxc: String? = null
         val img = rememberMxcImage(mxc, (size.value * 3).toInt())
         val shape = if (LocalSettings.current.avatarShape == "squircle") RoundedCornerShape(size * 0.32f) else CircleShape
         val h = hueOf(name)
-        Box(Modifier.size(size).clip(shape).background(Brush.linearGradient(listOf(Color.hsv(h, 0.55f, 0.78f), Color.hsv((h + 28f) % 360f, 0.65f, 0.58f)))), contentAlignment = Alignment.Center) {
-            if (img != null) Image(img, null, Modifier.size(size), contentScale = ContentScale.Crop)
+        val eink = LocalSettings.current.eink
+        Box(
+            Modifier.size(size).clip(shape)
+                .background(if (eink) Brush.linearGradient(listOf(Color.White, Color.White)) else Brush.linearGradient(listOf(Color.hsv(h, 0.55f, 0.78f), Color.hsv((h + 28f) % 360f, 0.65f, 0.58f))))
+                .let { if (eink) it.border(2.dp, Color.Black, shape) else it },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (img != null) Image(img, null, Modifier.size(size), contentScale = ContentScale.Crop, colorFilter = if (eink) androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) }) else null)
             else {
                 // Unnamed contacts show up as phone numbers: a person glyph beats a meaningless digit.
                 val unnamed = name.isNotEmpty() && name.all { it.isDigit() || it in "+ -()" }
-                if (unnamed) Icon(Icons.Rounded.Person, null, Modifier.size(size * 0.55f), tint = Color.White.copy(alpha = 0.9f))
+                if (unnamed) Icon(Icons.Rounded.Person, null, Modifier.size(size * 0.55f), tint = if (eink) Color.Black else Color.White.copy(alpha = 0.9f))
                 else {
                     val initial = name.dropWhile { !it.isLetterOrDigit() }.firstOrNull()?.uppercase() ?: "?"
-                    Text(initial, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
+                    Text(initial, color = if (eink) Color.Black else Color.White, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
                 }
             }
         }
@@ -68,7 +76,7 @@ fun Avatar(name: String, network: String?, size: Dp = 46.dp, mxc: String? = null
                 Modifier.size(size * 0.42f).align(Alignment.BottomEnd).clip(CircleShape).background(MaterialTheme.colorScheme.background),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.size(size * 0.33f).clip(CircleShape).background(meta.color), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(size * 0.33f).clip(CircleShape).background(if (eink) Color.Black else meta.color), contentAlignment = Alignment.Center) {
                     val icon = networkIcon(network)
                     if (icon != null) Icon(icon, null, Modifier.size(size * 0.2f), tint = Color.White)
                     else Text(meta.glyph, color = Color.White, fontSize = (size.value * 0.19f).sp, fontWeight = FontWeight.Bold)
