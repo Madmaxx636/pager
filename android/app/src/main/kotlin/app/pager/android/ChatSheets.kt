@@ -34,6 +34,10 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContactPage
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EmojiEmotions
@@ -243,6 +247,7 @@ fun PollSheet(onCreate: (String, List<String>, Int, Boolean) -> Unit, onDismiss:
 fun ActionsSheet(
     msg: Msg, mine: Boolean, starred: Boolean, quick: List<String>, developer: Boolean, onDismiss: () -> Unit, onReact: (String) -> Unit, onMore: () -> Unit,
     onReply: () -> Unit, onForward: () -> Unit, onCopy: () -> Unit, onStar: () -> Unit, onEdit: (() -> Unit)?, onDelete: (() -> Unit)?, onInfo: () -> Unit, onSaveSticker: (() -> Unit)? = null,
+    onSave: (() -> Unit)? = null, onOpen: (() -> Unit)? = null, onShare: (() -> Unit)? = null, onSelectText: (() -> Unit)? = null,
 ) {
     Sheet(onDismiss) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -252,7 +257,14 @@ fun ActionsSheet(
         SheetItem(Icons.AutoMirrored.Rounded.Reply, "Reply", onReply)
         SheetItem(Icons.AutoMirrored.Rounded.Forward, "Forward", onForward)
         if (msg.type == "m.image" && msg.mxc != null) onSaveSticker?.let { SheetItem(Icons.Rounded.EmojiEmotions, "Save as sticker", it) }
-        if (msg.type == "m.text" || msg.type == "m.notice" || msg.type == "m.emote") SheetItem(Icons.Rounded.ContentCopy, "Copy text", onCopy)
+        val isText = msg.type == "m.text" || msg.type == "m.notice" || msg.type == "m.emote"
+        if (isText) SheetItem(Icons.Rounded.ContentCopy, "Copy text", onCopy)
+        if (isText) onSelectText?.let { SheetItem(Icons.Rounded.TextFields, "Select text", it) }
+        if (msg.mxc != null && !isText) {
+            onSave?.let { SheetItem(Icons.Rounded.Download, if (msg.type == "m.image") "Save to gallery" else "Save to Downloads", it) }
+            onOpen?.let { SheetItem(Icons.Rounded.OpenInNew, "Open", it) }
+        }
+        onShare?.let { SheetItem(Icons.Rounded.Share, if (isText) "Share text" else "Share", it) }
         SheetItem(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (starred) "Remove star" else "Star", onStar)
         onEdit?.let { SheetItem(Icons.Rounded.Edit, "Edit", it) }
         SheetItem(Icons.Rounded.Info, "Details", onInfo)

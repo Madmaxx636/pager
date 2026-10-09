@@ -101,6 +101,23 @@ class MediaLoader(private val context: Context, private val http: Http) {
         }
     }
 
+    /** Saves any file into the phone's Downloads folder (Android 10+, no permission needed). */
+    suspend fun saveToDownloads(mxc: String, name: String, mime: String?): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 29) return false
+        val src = fetch(mxc) ?: return false
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name.replace(Regex("[\\\\/:*?\"<>|]"), "_").ifEmpty { "pager-${System.currentTimeMillis()}" })
+                    put(android.provider.MediaStore.Downloads.MIME_TYPE, mime ?: "application/octet-stream")
+                    put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                }
+                val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)!!
+                context.contentResolver.openOutputStream(uri)!!.use { out -> src.inputStream().use { it.copyTo(out) } }
+            }.isSuccess
+        }
+    }
+
     fun clear() { bitmaps.evictAll(); dir.deleteRecursively(); dir.mkdirs() }
 }
 

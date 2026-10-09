@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
-  Reply, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon,
+  Reply, ExternalLink, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon,
 } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot } from "../core/types";
 import { networkMeta } from "../core/emoji";
@@ -222,6 +222,24 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   );
 }
 
+async function openInTab(m: Msg) {
+  if (!m.mxc) return;
+  const u = await mediaUrl(m.mxc); if (u) window.open(u, "_blank", "noopener");
+}
+
+async function copyImage(m: Msg) {
+  if (!m.mxc) return;
+  try {
+    const u = await mediaUrl(m.mxc); if (!u) return;
+    const blob = await (await fetch(u)).blob();
+    // The clipboard only takes PNG, so convert other formats through a canvas.
+    const png = blob.type === "image/png" ? blob : await new Promise<Blob>((res, rej) => {
+      const img = new Image(); img.onload = () => { const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext("2d")!.drawImage(img, 0, 0); c.toBlob((b) => (b ? res(b) : rej(new Error("no image"))), "image/png"); }; img.onerror = rej; img.src = u;
+    });
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+  } catch { /* the browser refused; nothing to copy */ }
+}
+
 async function download(m: Msg) {
   if (!m.mxc) return;
   const u = await mediaUrl(m.mxc); if (!u) return;
@@ -237,6 +255,10 @@ function MenuItems({ roomId, m, mine, starred, dev, close, onReply, onEdit, onFo
       <Item icon={Forward} label="Forward" f={onForward} />
       {["m.text", "m.notice", "m.emote"].includes(m.type) && <Item icon={Copy} label="Copy text" f={() => void navigator.clipboard.writeText(m.body)} />}
       <Item icon={Star} label={starred ? "Remove star" : "Star"} f={() => toggleStar(roomId, m)} />
+      {m.mxc && !["m.text", "m.notice", "m.emote"].includes(m.type) && <Item icon={Download} label="Save" f={() => void download(m)} />}
+      {m.mxc && m.type !== "m.file" && <Item icon={ExternalLink} label="Open in new tab" f={() => void openInTab(m)} />}
+      {m.type === "m.image" && m.mxc && <Item icon={Copy} label="Copy image" f={() => void copyImage(m)} />}
+      {typeof navigator.share === "function" && ["m.text", "m.notice", "m.emote"].includes(m.type) && <Item icon={Share2} label="Share text" f={() => void navigator.share({ text: m.body }).catch(() => {})} />}
       {m.type === "m.image" && m.mxc && <Item icon={Smile} label="Save as sticker" f={() => void saveAsSticker(m)} />}
       {mine && m.type === "m.text" && m.status === STATUS_SENT && <Item icon={Pencil} label="Edit" f={onEdit} />}
       <Item icon={Info} label="Details" f={onDetails} />
