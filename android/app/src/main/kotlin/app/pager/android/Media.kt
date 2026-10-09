@@ -41,6 +41,18 @@ class MediaLoader(private val context: Context, private val http: Http) {
 
     /** Downloads (or reuses) the file on disk. */
     suspend fun fetch(mxc: String, thumb: Int = 0): File? {
+        // End-to-end encrypted attachment: the server holds only scrambled bytes (so no server thumbnails); download, then unscramble.
+        MediaCrypt.infoFor(mxc)?.let { enc ->
+            val name = "dec_" + mxc.replace(Regex("[^A-Za-z0-9._-]"), "_")
+            val out = File(dir, name)
+            if (out.exists() && out.length() > 0) return out
+            val raw = fetchRaw(mxc, 0) ?: return null
+            return withContext(Dispatchers.IO) { runCatching { MediaCrypt.decrypt(raw, out, enc); out }.getOrNull() }
+        }
+        return fetchRaw(mxc, thumb)
+    }
+
+    private suspend fun fetchRaw(mxc: String, thumb: Int): File? {
         val (server, id) = mxcParts(mxc) ?: return null
         val name = "${server}_$id${if (thumb > 0) "_t$thumb" else ""}".replace(Regex("[^A-Za-z0-9._-]"), "_")
         val file = File(dir, name)

@@ -14,6 +14,8 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+        // The encryption library ships a native file for each kind of phone; keep the two that real phones use.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     buildFeatures { compose = true }
@@ -49,6 +51,9 @@ dependencies {
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation("androidx.fragment:fragment-ktx:1.8.4")
     implementation("androidx.biometric:biometric:1.1.0")
+    // End-to-end encryption (Olm/Megolm), the same Rust library the web app uses.
+    implementation("org.matrix.rustcomponents:crypto-android:26.05.12")
+    implementation("net.java.dev.jna:jna:5.14.0@aar")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

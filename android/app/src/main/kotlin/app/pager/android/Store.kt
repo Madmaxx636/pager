@@ -32,6 +32,8 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -172,7 +174,7 @@ class Store(private val context: Context) {
         loadCache(s.userId)
         _session.value = s
         syncJob?.cancel()
-        syncJob = scope.launch { syncLoop(s) }
+        syncJob = scope.launch { startE2ee(s); syncLoop(s) }
         scope.launch { refreshBridges() }
         scope.launch { runCatching { pager.isAdmin() }.onSuccess { _isAdmin.value = it } }
     }
@@ -240,13 +242,129 @@ class Store(private val context: Context) {
         }
     }
 
+    // --- End-to-end encryption -----------------------------------------------------
+
+    data class EncryptionStatus(val ready: Boolean = false, val backupHere: Boolean = false, val backupOnServer: Boolean = false, val deviceId: String = "", val fingerprint: String = "")
+    private val _encryption = MutableStateFlow(EncryptionStatus())
+    val encryption: StateFlow<EncryptionStatus> = _encryption.asStateFlow()
+    private var e2ee: E2ee? = null
+    /** Messages we could not read yet (their key has not arrived), by event id. */
+    private val waiting = java.util.concurrent.ConcurrentHashMap<String, Pair<String, JsonObject>>()
+    private val memberCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<String>>>()
+
+    private suspend fun startE2ee(s: Session) {
+        e2ee?.close(); e2ee = null; waiting.clear()
+        try {
+            val device = prefs.getString("deviceId", null)?.takeIf { it.isNotEmpty() }
+                ?: (http.request("GET", "/_matrix/client/v3/account/whoami")["device_id"] as? JsonPrimitive)?.contentOrNull?.also { prefs.edit().putString("deviceId", it).apply() }
+                ?: return
+            val c = E2ee.create(context, { m, p, b -> http.request(m, p, b) }, s.userId, device)
+            c.onKeys = { rooms -> scope.launch { retryWaiting(rooms) } }
+            e2ee = c
+            c.pump() // upload this device's keys
+            refreshEncryptionStatus()
+        } catch (e: Throwable) { android.util.Log.w("Pager", "encryption could not start", e) }
+    }
+
+    suspend fun refreshEncryptionStatus() {
+        val e = e2ee ?: run { _encryption.value = EncryptionStatus(); return }
+        _encryption.value = EncryptionStatus(true, e.backupOn(), e.backupVersion() != null, e.deviceId, e.fingerprint())
+    }
+
+    /** Starts the recovery backup and returns the recovery key to show once. */
+    suspend fun createRecoveryKey(): String {
+        val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
+        return e.createBackup().also { refreshEncryptionStatus() }
+    }
+
+    /** Reads the backup with a recovery key; returns how many message keys were restored. */
+    suspend fun restoreWithRecoveryKey(key: String): Int {
+        val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
+        return e.restoreBackup(key).also { refreshEncryptionStatus() }
+    }
+
+    private fun unreadable(e: JsonObject) = JsonObject(e + mapOf(
+        "type" to JsonPrimitive("m.room.message"),
+        "content" to buildJsonObject { put("msgtype", "m.text"); put("body", "\uD83D\uDD12 Waiting for the key to read this message…"); put("pagerWaiting", true) },
+    ))
+
+    /** Replaces m.room.encrypted events with what they say. Unreadable ones become a placeholder and are tried again when keys arrive. */
+    private suspend fun decryptEvents(roomId: String, events: List<JsonObject>): List<JsonObject> {
+        val e = e2ee ?: return events
+        if (events.none { (it["type"] as? JsonPrimitive)?.contentOrNull == "m.room.encrypted" }) return events
+        return events.map { ev ->
+            if ((ev["type"] as? JsonPrimitive)?.contentOrNull != "m.room.encrypted") ev
+            else e.decrypt(roomId, ev) ?: run { (ev["event_id"] as? JsonPrimitive)?.contentOrNull?.let { waiting[it] = roomId to ev }; unreadable(ev) }
+        }
+    }
+
+    private suspend fun decryptSync(res: JsonObject): JsonObject {
+        val e = e2ee ?: return res
+        e.receiveSync(res)
+        val rooms = res["rooms"] as? JsonObject ?: return res
+        val join = rooms["join"] as? JsonObject ?: return res
+        val newJoin = JsonObject(join.mapValues { (roomId, room) ->
+            val r = room as? JsonObject ?: return@mapValues room
+            val tl = r["timeline"] as? JsonObject ?: return@mapValues room
+            val events = (tl["events"] as? JsonArray)?.mapNotNull { it as? JsonObject } ?: return@mapValues room
+            JsonObject(r + ("timeline" to JsonObject(tl + ("events" to JsonArray(decryptEvents(roomId, events))))))
+        })
+        return JsonObject(res + ("rooms" to JsonObject(rooms + ("join" to newJoin))))
+    }
+
+    private suspend fun retryWaiting(rooms: List<String>) {
+        val e = e2ee ?: return
+        for ((id, w) in waiting.entries.toList()) {
+            if (w.first !in rooms) continue
+            val clear = e.decrypt(w.first, w.second) ?: continue
+            waiting.remove(id)
+            update(w.first) { SyncReducer.replaceDecrypted(it, clear) }
+        }
+    }
+
+    private suspend fun roomMembers(roomId: String): List<String> {
+        memberCache[roomId]?.takeIf { System.currentTimeMillis() - it.first < 5 * 60_000L }?.let { return it.second }
+        val ids = matrix.joinedMembers(roomId).keys.toList()
+        memberCache[roomId] = System.currentTimeMillis() to ids
+        return ids
+    }
+
+    init {
+        matrix.sendHook = { roomId, type, content ->
+            if (_chats.value[roomId]?.encrypted != true) type to content
+            else {
+                val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet. Try again in a moment.")
+                val encrypted = e.encrypt(roomId, type, content, roomMembers(roomId))
+                // Relations (edits, replies, reactions) stay visible outside the encryption so the server can group them.
+                "m.room.encrypted" to (content["m.relates_to"]?.let { JsonObject(encrypted + ("m.relates_to" to it)) } ?: encrypted)
+            }
+        }
+    }
+
+    /** Uploads a file for a page: scrambled first when the page is encrypted. Returns the address and, if scrambled, the key material. */
+    private suspend fun uploadFor(roomId: String, name: String, mime: String, size: Long, open: () -> java.io.InputStream): Pair<String, EncFile?> {
+        if (_chats.value[roomId]?.encrypted != true) return http.upload(name, mime, size, open) to null
+        val (scrambled, ef) = MediaCrypt.encrypt(open().use { it.readBytes() })
+        val mxc = http.upload("encrypted", "application/octet-stream", scrambled.size.toLong()) { java.io.ByteArrayInputStream(scrambled) }
+        return mxc to ef.copy(url = mxc)
+    }
+
+    private fun JsonObjectBuilder.putMedia(mxc: String, enc: EncFile?) {
+        if (enc == null) { put("url", mxc); return }
+        putJsonObject("file") {
+            put("url", mxc)
+            putJsonObject("key") { put("kty", "oct"); put("key_ops", JsonArray(listOf(JsonPrimitive("encrypt"), JsonPrimitive("decrypt")))); put("alg", "A256CTR"); put("k", enc.k); put("ext", true) }
+            put("iv", enc.iv); putJsonObject("hashes") { put("sha256", enc.sha256) }; put("v", "v2")
+        }
+    }
+
     // --- Sync --------------------------------------------------------------------
 
     private suspend fun syncLoop(s: Session) {
         var backoff = 1000L
         while (scope.isActive) {
             try {
-                val res = matrix.sync(since)
+                val res = decryptSync(matrix.sync(since))
                 val initial = since == null
                 val r = SyncReducer.apply(_chats.value, res, s.userId, initial)
                 _chats.value = r.chats
@@ -404,6 +522,13 @@ class Store(private val context: Context) {
     private fun rememberEmoji(e: String) = settings.update { copy(recentEmoji = (listOf(e) + recentEmoji.filter { it != e }).take(24)) }
 
     fun forward(msg: Msg, toRoom: String) {
+        if (msg.enc != null && msg.mxc != null) { // an encrypted attachment: read it, and send it again as the destination page wants it (encrypted or not)
+            scope.launch {
+                val file = media.fetch(msg.mxc) ?: return@launch
+                sendBytes(toRoom, withContext(Dispatchers.IO) { file.readBytes() }, msg.body, msg.mime ?: "application/octet-stream", msg.type, msg.w, msg.h)
+            }
+            return
+        }
         val me = _session.value?.userId ?: return
         val txn = UUID.randomUUID().toString()
         val localId = "local-$txn"
@@ -510,9 +635,9 @@ class Store(private val context: Context) {
         addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), type, p.name, mxc = null, mime = p.mime, size = p.size, w = p.w, h = p.h, txn = txn, status = STATUS_SENDING))
         scope.launch {
             runCatching {
-                val mxc = http.upload(p.name, p.mime, p.size) { context.contentResolver.openInputStream(uri)!! }
+                val (mxc, enc) = uploadFor(roomId, p.name, p.mime, p.size) { context.contentResolver.openInputStream(uri)!! }
                 matrix.send(roomId, "m.room.message", txn, buildJsonObject {
-                    put("msgtype", type); put("body", p.name); put("url", mxc)
+                    put("msgtype", type); put("body", p.name); putMedia(mxc, enc)
                     putJsonObject("info") {
                         put("mimetype", p.mime); put("size", p.size)
                         p.w?.let { put("w", it) }; p.h?.let { put("h", it) }
@@ -530,9 +655,9 @@ class Store(private val context: Context) {
         addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), "m.audio", "Voice message", mime = mime, size = file.length(), durationMs = durationMs, voice = true, txn = txn, status = STATUS_SENDING))
         scope.launch {
             runCatching {
-                val mxc = http.upload("voice-message.${file.extension}", mime, file.length()) { file.inputStream() }
+                val (mxc, enc) = uploadFor(roomId, "voice-message.${file.extension}", mime, file.length()) { file.inputStream() }
                 matrix.send(roomId, "m.room.message", txn, buildJsonObject {
-                    put("msgtype", "m.audio"); put("body", "Voice message"); put("url", mxc)
+                    put("msgtype", "m.audio"); put("body", "Voice message"); putMedia(mxc, enc)
                     putJsonObject("info") { put("mimetype", mime); put("size", file.length()); put("duration", durationMs) }
                     putJsonObject("org.matrix.msc1767.audio") { put("duration", durationMs) }
                     putJsonObject("org.matrix.msc3245.voice") {}
@@ -644,7 +769,8 @@ class Store(private val context: Context) {
         if (!synchronized(loadingOlder) { loadingOlder.add(roomId) }) return
         scope.launch {
             try {
-                val (events, end, state) = matrix.messages(roomId, token)
+                val (rawEvents, end, state) = matrix.messages(roomId, token)
+                val events = decryptEvents(roomId, rawEvents)
                 update(roomId) { SyncReducer.applyHistory(it, events, end, state, me) }
             } catch (_: Exception) {
             } finally {
@@ -757,9 +883,9 @@ class Store(private val context: Context) {
         addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), type, name, mime = mime, size = bytes.size.toLong(), w = w, h = h, txn = txn, status = STATUS_SENDING))
         scope.launch {
             runCatching {
-                val mxc = http.upload(name, mime, bytes.size.toLong()) { java.io.ByteArrayInputStream(bytes) }
+                val (mxc, enc) = uploadFor(roomId, name, mime, bytes.size.toLong()) { java.io.ByteArrayInputStream(bytes) }
                 matrix.send(roomId, "m.room.message", txn, buildJsonObject {
-                    put("msgtype", type); put("body", name); put("url", mxc)
+                    put("msgtype", type); put("body", name); putMedia(mxc, enc)
                     putJsonObject("info") { put("mimetype", mime); put("size", bytes.size.toLong()); w?.let { put("w", it) }; h?.let { put("h", it) } }
                 })
             }.onSuccess { setStatus(roomId, localId, STATUS_SENT, it) }.onFailure { setStatus(roomId, localId, STATUS_FAILED) }
@@ -965,7 +1091,7 @@ class Store(private val context: Context) {
         val s = _session.value ?: return
         syncJob?.cancel()
         since = null; _chats.value = emptyMap(); _synced.value = false; cacheFile.delete()
-        syncJob = scope.launch { syncLoop(s) }
+        syncJob = scope.launch { startE2ee(s); syncLoop(s) }
     }
 
     private suspend fun bridgeLoop() {
@@ -991,7 +1117,10 @@ class Store(private val context: Context) {
 
     private fun signOutLocal() {
         syncJob?.cancel()
-        prefs.edit().remove("token").remove("userId").remove("identity.key").remove("identity.names").remove("identity.ids").apply()
+        e2ee?.close(); e2ee = null; waiting.clear(); memberCache.clear()
+        runCatching { File(context.filesDir, "e2ee").deleteRecursively() }
+        _encryption.value = EncryptionStatus()
+        prefs.edit().remove("token").remove("userId").remove("deviceId").remove("identity.key").remove("identity.names").remove("identity.ids").apply()
         SyncReducer.setOwnIdentity(emptyList(), emptyList())
         http.token = null
         since = null
