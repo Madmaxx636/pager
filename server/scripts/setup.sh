@@ -113,6 +113,11 @@ for row in "${BRIDGE_TABLE[@]}"; do
   fi
 
   cp "$dir/registration.yaml" "data/synapse/appservice-$id.yaml"
+  # An existing install's database was created before this bridge existed.
+  if docker compose ps --status running postgres 2>/dev/null | grep -q postgres; then
+    docker compose exec -T postgres psql -U pager -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$id'" | grep -q 1 \
+      || docker compose exec -T postgres psql -U pager -d postgres -c "CREATE DATABASE $id ENCODING 'UTF8' LC_COLLATE='C' LC_CTYPE='C' TEMPLATE=template0 OWNER pager" >/dev/null
+  fi
   yq -i ".app_service_config_files += [\"/data/appservice-$id.yaml\"]" synapse/homeserver.yaml
   yq -i ". += [{\"id\":\"$id\",\"name\":\"$name\",\"url\":\"http://$id:29318\"}]" bridges.json -o=json
   cat >> data/bridges.compose.yml <<YML
