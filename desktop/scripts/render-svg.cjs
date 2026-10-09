@@ -7,7 +7,7 @@ const size = Number(sizeArg || 512);
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const svg = fs.readFileSync(input, "utf8");
-  const win = new BrowserWindow({ width: size, height: size, show: false, transparent: true, frame: false, webPreferences: { offscreen: false } });
+  const win = new BrowserWindow({ width: size, height: size, show: true, transparent: true, frame: false, webPreferences: { offscreen: false } });
   const html = `<!doctype html><meta charset=utf-8><style>html,body{margin:0;background:transparent}svg{display:block;width:${size}px;height:${size}px}</style>${svg}`;
   await win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
   await new Promise((r) => setTimeout(r, 400));
