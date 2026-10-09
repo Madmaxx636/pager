@@ -160,9 +160,9 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
             {pins.map((c, i) => (
               <button key={c.id} className={"pin-chip" + (c.id === selected ? " sel" : "") + (dragId === c.id ? " dragging" : "")} draggable
                 onDragStart={() => setDragId(c.id)} onDragEnd={() => setDragId(undefined)}
-                onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragId && dragId !== c.id) movePin(dragId, i); setDragId(undefined); }}
+                onDragOver={(e) => { e.preventDefault(); }} onDrop={() => { if (dragId && dragId !== c.id) movePin(dragId, i); setDragId(undefined); }}
                 onClick={() => open(c.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }} title={c.name}>
-                <span className="pin-av"><Avatar name={c.name} mxc={c.avatarMxc} size={54} network={st.showNetworkBadges ? c.network : undefined} />{(c.unread > 0 || c.markedUnread) && <i className={"pin-dot" + (c.muted ? " muted" : "")} />}</span>
+                <span className="pin-av"><Avatar name={c.name} mxc={c.avatarMxc} size={76} network={st.showNetworkBadges ? c.network : undefined} />{(c.unread > 0 || c.markedUnread) && <i className={"pin-dot" + (c.muted ? " muted" : "")} />}{c.typing && <span className="typing-badge"><TypingDots /></span>}</span>
                 <span className="pin-name">{c.name}</span>
               </button>
             ))}

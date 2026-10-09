@@ -43,7 +43,6 @@ BRIDGE_TABLE=(
   "twitter;X (Twitter) DMs;twitter;mautrix-twitter;;"
   "bluesky;Bluesky;bluesky;mautrix-bluesky;;"
   "linkedin;LinkedIn;linkedin;mautrix-linkedin;;"
-  "googlechat;Google Chat;googlechat;mautrix-googlechat;;"
   "instagram;Instagram (experimental: no published bridge image at last check);instagram;mautrix-instagram;;ENABLE_INSTAGRAM"
   "messenger;Messenger;meta;mautrix-meta;;"
   "telegram;Telegram;telegram;mautrix-telegram;.network.api_id = ${TELEGRAM_API_ID:-0} | .network.api_hash = \"${TELEGRAM_API_HASH:-}\";TELEGRAM_API_HASH"
