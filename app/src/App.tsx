@@ -37,7 +37,8 @@ export function App() {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const f = () => applyTheme(st);
     mq.addEventListener("change", f);
-    return () => mq.removeEventListener("change", f);
+    window.addEventListener("resize", f);
+    return () => { mq.removeEventListener("change", f); window.removeEventListener("resize", f); };
   }, [st]);
   useEffect(() => {
     const open = (e: Event) => nav(`chat:${(e as CustomEvent<string>).detail}`);
