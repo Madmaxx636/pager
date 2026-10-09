@@ -47,6 +47,8 @@ data class Msg(
     val poll: PollInfo? = null,
     /** Set when the attachment is end-to-end encrypted: how to unscramble it. */
     val enc: EncFile? = null,
+    /** A message we could not read yet: the encrypted original (JSON), kept so it can be opened when its key arrives, even after a restart. */
+    val sealed: String? = null,
 )
 
 @Serializable

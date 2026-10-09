@@ -93,6 +93,12 @@ describe("applySync", () => {
     const m = out.messages.find((x) => x.id === "$real")!;
     expect(m.mxc).toBe("mxc://x/pic"); expect(out.messages.filter((x) => x.id === "$real").length).toBe(1);
   });
+  it("a message waiting for its key keeps its encrypted original, so it can be opened later", () => {
+    const raw = { type: "m.room.encrypted", event_id: "$w", sender: mom, origin_server_ts: 7000, content: { algorithm: "m.megolm.v1.aes-sha2", ciphertext: "x" } };
+    const placeholder = { ...raw, type: "m.room.message", content: { msgtype: "m.text", body: "Waiting", pagerWaiting: true, pagerRaw: raw } };
+    const m = applySync(base(), join([placeholder]), me, false).chats["!a:x"].messages.find((x) => x.id === "$w")!;
+    expect(m.sealed).toEqual(raw);
+  });
   it("notifies only for others' new messages and dedupes", () => {
     const r = applySync(base(), join([text("$2", me, 2000, "Yes!"), text("$3", mom, 3000, "Great")]), me, false);
     expect(r.chats["!a:x"].messages).toHaveLength(3);
