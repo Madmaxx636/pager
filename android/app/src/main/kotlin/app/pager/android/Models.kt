@@ -89,9 +89,10 @@ data class ChatState(
     /** Bridged rooms always hold the bridge bot and your own puppet, so raw member counts overstate. */
     /** Who has read a message, and when: anyone whose read receipt is at or after it. The time is when they read up to that point. */
     fun readersOf(msgId: String, sender: String): List<Pair<String, Long?>> {
+        // (bridge bots only mean "delivered")
         val idx = messages.indexOfFirst { it.id == msgId }
         if (idx < 0) return emptyList()
-        return receipts.filter { (user, ev) -> user != sender && messages.indexOfFirst { it.id == ev } >= idx }.map { (user, _) -> user to receiptTs[user] }
+        return receipts.filter { (user, ev) -> user != sender && !isBridgeBot(user) && messages.indexOfFirst { it.id == ev } >= idx }.map { (user, _) -> user to receiptTs[user] }
     }
     val isGroup get() = roomType?.takeIf { it.isNotEmpty() }?.let { it != "dm" } ?: (memberCount > 2)
     val peopleCount get() = if (!roomType.isNullOrEmpty()) (memberCount - 2).coerceAtLeast(2) else memberCount
@@ -166,3 +167,6 @@ data class Incoming(
     /** Set by the notification policy: full | sender | hidden. */
     val preview: String = "full",
 )
+
+/** The bridge's own bot account (e.g. @signalbot:server). It sends a receipt when a message reaches the other network: that means "delivered", not "read". */
+fun isBridgeBot(userId: String) = Regex("^@(whatsapp|signal|gmessages|messenger|instagram|slack|twitter|bluesky|linkedin|telegram|discord|googlechat|imessage)bot:").containsMatchIn(userId)

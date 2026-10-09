@@ -220,3 +220,13 @@ class NotifyPriorityTest {
         assertTrue(decide(msg(), AppSettings(notifGroupMode = "none")).show)
     }
 }
+
+class BridgeBotTest {
+    @Test fun botsMeanDeliveredNotRead() {
+        assertTrue(isBridgeBot("@signalbot:x")); assertFalse(isBridgeBot("@whatsapp_123:x")); assertFalse(isBridgeBot("@abbot:x"))
+        val me = "@me:x"
+        val sync = json.parseToJsonElement("""{"rooms":{"join":{"!r:x":{"timeline":{"events":[{"type":"m.room.message","event_id":"${'$'}1","sender":"$me","origin_server_ts":1,"content":{"msgtype":"m.text","body":"hi"}}]},"ephemeral":{"events":[{"type":"m.receipt","content":{"${'$'}1":{"m.read":{"@signalbot:x":{"ts":5}}}}}]}}}}}""").jsonObject
+        val chat = SyncReducer.apply(emptyMap(), sync, me, true).chats["!r:x"]!!
+        assertTrue(chat.readersOf("${'$'}1", me).isEmpty())
+    }
+}

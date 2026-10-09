@@ -194,7 +194,7 @@ fun Modifier.swipeToReply(enabled: Boolean, onReply: () -> Unit, onThreshold: ()
 
 @Composable
 fun MessageRow(
-    chat: ChatState?, msg: Msg, me: String, group: Boolean, first: Boolean, last: Boolean, dark: Boolean, reply: Msg?, read: Boolean, starred: Boolean,
+    chat: ChatState?, msg: Msg, me: String, group: Boolean, first: Boolean, last: Boolean, dark: Boolean, reply: Msg?, read: Boolean, delivered: Boolean, starred: Boolean,
     onLong: () -> Unit, onReact: (String) -> Unit, onWho: (String) -> Unit, onDouble: () -> Unit, onTriple: () -> Unit, onOpen: (Msg) -> Unit, onReply: () -> Unit, onVote: (List<String>) -> Unit, onEndPoll: () -> Unit,
 ) {
     val store = LocalStore.current
@@ -341,6 +341,7 @@ fun MessageRow(
                                     msg.status == STATUS_SENDING -> Icons.Rounded.AccessTime to fg.dim(0.6f)
                                     msg.status == STATUS_FAILED -> Icons.Rounded.Error to scheme.error
                                     read -> Icons.Rounded.DoneAll to fg
+                                    delivered -> Icons.Rounded.DoneAll to fg.dim(0.6f)
                                     else -> Icons.Rounded.Done to fg.dim(0.6f)
                                 }
                                 Icon(icon, null, tint = tint, modifier = Modifier.size(14.dp))

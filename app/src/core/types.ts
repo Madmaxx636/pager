@@ -151,9 +151,12 @@ export function readersOf(chat: ChatState, msgId: string, sender: string): { use
   if (idx < 0) return [];
   const out: { user: string; ts?: number }[] = [];
   for (const [user, ev] of Object.entries(chat.receipts)) {
-    if (user === sender) continue;
+    if (user === sender || isBridgeBot(user)) continue;
     const at = chat.messages.findIndex((m) => m.id === ev);
     if (at >= idx) out.push({ user, ts: chat.receiptTs?.[user] });
   }
   return out;
 }
+
+/** The bridge's own bot account (e.g. @signalbot:server). It sends a receipt when a message reaches the other network: that means "delivered", not "read". */
+export const isBridgeBot = (userId: string) => /^@(whatsapp|signal|gmessages|messenger|instagram|slack|twitter|bluesky|linkedin|telegram|discord|googlechat|imessage)bot:/.test(userId);
