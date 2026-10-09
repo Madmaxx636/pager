@@ -2,7 +2,7 @@ import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Mascot } from "./ui/Mascot";
 import { applyTheme, getSettings, setSystemTheme, useSettings, type SystemTheme } from "./core/settings";
-import { forward, getState, requestNotifications, restoreSession, useStore } from "./core/store";
+import { forward, getState, requestNotifications, restoreSession, setOpenRoom, useStore } from "./core/store";
 import { Auth } from "./ui/Auth";
 import { Sidebar } from "./ui/Sidebar";
 import { Chat } from "./ui/Chat";
@@ -100,6 +100,7 @@ export function App() {
   const arg = rest.join(":");
   const roomId = kind === "chat" ? arg : null;
   const home = () => nav("home");
+  setOpenRoom(roomId);
 
   let main: React.ReactElement;
   if (kind === "chat") main = <Chat key={arg} roomId={arg} onBack={home} nav={nav} onForward={(m) => nav(`forward:${arg}|${m.id}`)} />;

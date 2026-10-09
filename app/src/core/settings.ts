@@ -8,7 +8,7 @@ export type ChatNotifPrefs = { level?: "default" | "priority" | "silent"; soundI
 export interface AppSettings {
   // Appearance
   themeMode: "system" | "light" | "dark" | "black";
-  accent: string; // teal | blue | purple | pink | orange | green | red | custom
+  accent: string; // teal | blue | purple | pink | orange | green | red | custom | system (desktop: the operating system's accent)
   /** The colour used when accent is "custom" (#rrggbb). */
   accentCustom: string;
   fontScale: number;
@@ -91,6 +91,11 @@ export interface AppSettings {
   /** App-wide alert sound, and how loud (0 to 1). Per network and per chat sounds win over this. */
   notifSoundId: string;
   notifSoundVolume: number;
+  /** Sounds for sending and receiving, only while you are inside that page. */
+  convoSounds: boolean;
+  sendSound: string;
+  receiveSound: string;
+  convoSoundVolume: number;
   notifNetworkSound: Record<string, string>;
   /** Do not disturb: no alerts until this time (ms since 1970). 0 = off. */
   dndUntil: number;
@@ -120,7 +125,7 @@ export const DEFAULTS: AppSettings = {
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
   enterToSend: true, sendReadReceipts: true, sendTyping: true, linkPreviews: true, autoDownload: "always", unarchiveOnMessage: true,
   confirmDelete: true, greetings: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtFirstUnread: true, gifProvider: "giphy", gifKey: "", doubleTapReact: true, swipeToReply: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
-  notifEnabled: true, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [], notifNetworkMode: {}, notifChat: {}, notifKeywords: [], notifQuietDays: [0, 1, 2, 3, 4, 5, 6], notifQuietBreakThrough: false, notifDelaySec: 0, notifBadge: "unmuted", notifDirectMode: "all", notifGroupMode: "all", notifSoundId: "chime", notifSoundVolume: 0.7, notifNetworkSound: {}, dndUntil: 0,
+  notifEnabled: true, convoSounds: true, sendSound: "swoosh", receiveSound: "pop", convoSoundVolume: 0.5, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [], notifNetworkMode: {}, notifChat: {}, notifKeywords: [], notifQuietDays: [0, 1, 2, 3, 4, 5, 6], notifQuietBreakThrough: false, notifDelaySec: 0, notifBadge: "unmuted", notifDirectMode: "all", notifGroupMode: "all", notifSoundId: "chime", notifSoundVolume: 0.7, notifNetworkSound: {}, dndUntil: 0,
   quietHoursEnabled: false, quietStartMin: 22 * 60, quietEndMin: 7 * 60,
   hiddenNetworks: [],
   developerMode: false, shortcuts: {},
@@ -238,7 +243,7 @@ export const ACCENTS: Record<string, { dark: string; light: string; onDark: stri
 const HEX = /^#[0-9a-f]{6}$/i;
 /** The accent's four tones. A custom colour is nudged so it stays readable on light and dark backgrounds. */
 export function accentTones(accent: string, custom: string) {
-  if (accent !== "custom") return ACCENTS[accent] ?? ACCENTS.teal;
+  if (accent !== "custom") return ACCENTS[accent] ?? ACCENTS.teal; // "system" starts from teal until the desktop's own accent is applied
   const base = HEX.test(custom) ? custom : "#0d9488";
   const [h, sat, l] = rgbToHsl(base);
   const dark = hslToHex(h, sat, Math.max(l, 0.68)), light = hslToHex(h, sat, Math.min(l, 0.42));
@@ -287,17 +292,20 @@ export function applyTheme(s: AppSettings) {
   if (sys?.bg && sys.fg && sys.panel) {
     const isDark = lum(sys.bg) < 0.4;
     r.dataset.theme = isDark ? "dark" : "light";
-    r.style.setProperty("--bg", sys.bg); r.style.setProperty("--panel", sys.panel); r.style.setProperty("--text", sys.fg);
-    r.style.setProperty("--theirs", sys.panel);
-    r.style.setProperty("--panel-2", `color-mix(in srgb, ${sys.panel} 90%, ${sys.fg})`);
-    r.style.setProperty("--line", `color-mix(in srgb, ${sys.bg} 85%, ${sys.fg})`);
+    // The system's colours, with a touch of the accent you chose mixed in so changing it is visible everywhere.
+    const mix = (c: string, pct: number) => `color-mix(in srgb, ${c}, var(--accent) ${pct}%)`;
+    r.style.setProperty("--bg", mix(sys.bg, 6)); r.style.setProperty("--panel", mix(sys.panel, 4)); r.style.setProperty("--text", sys.fg);
+    r.style.setProperty("--theirs", mix(sys.panel, 5));
+    r.style.setProperty("--panel-2", mix(`color-mix(in srgb, ${sys.panel} 90%, ${sys.fg})`, 12));
+    r.style.setProperty("--line", mix(`color-mix(in srgb, ${sys.bg} 85%, ${sys.fg})`, 12));
     r.style.setProperty("--muted", `color-mix(in srgb, ${sys.fg} 62%, ${sys.bg})`);
   } else {
     const base = BASES[r.dataset.theme ?? "light"] ?? BASES.light;
     for (const p of Object.keys(TINT)) r.style.setProperty(p, `color-mix(in srgb, ${base[p]}, var(--accent) ${TINT[p]}%)`);
     ["--text", "--muted"].forEach((p) => r.style.removeProperty(p));
   }
-  if (sys?.accent) {
+  // Your accent choice wins; the system's accent is used only when you pick "System".
+  if (sys?.accent && s.accent === "system") {
     r.style.setProperty("--accent", sys.accent);
     r.style.setProperty("--accent-ink", sys.accentInk ?? (lum(sys.accent) > 0.45 ? "#111418" : "#ffffff"));
   }

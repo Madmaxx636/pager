@@ -26,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -133,6 +134,8 @@ class MainActivity : FragmentActivity() {
             if (session != null && Build.VERSION.SDK_INT >= 33) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         LaunchedEffect(openRoom) { openRoom?.let { screen = "chat:$it"; openRoom = null } }
+        // Tell the store which page is open, so the in-page sounds know where they belong.
+        SideEffect { store.openRoom = if (screen.startsWith("chat:")) screen.removePrefix("chat:") else null }
         LaunchedEffect(shared, session != null) { if (shared != null && session != null) screen = "share" }
 
         if (session == null) { AuthScreen(store); return }

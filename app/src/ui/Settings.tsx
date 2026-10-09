@@ -226,7 +226,7 @@ function Appearance() {
     <>
       <Group title="Theme">
         <Select title="Mode" value={s.themeMode} options={[["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black (AMOLED)"]]} onChange={(v) => updateSettings({ themeMode: v })} />
-        <Row title="Accent color"><div className="swatches">{Object.entries(ACCENTS).map(([name, c]) => <button key={name} className={s.accent === name ? "on" : ""} style={{ background: c.dark }} onClick={() => updateSettings({ accent: name })} aria-label={name}>{s.accent === name ? <Check size={16} color={c.onDark} /> : null}</button>)}<button className={"swatch-custom" + (s.accent === "custom" ? " on" : "")} style={s.accent === "custom" ? { background: s.accentCustom } : undefined} onClick={() => setPicker(true)} aria-label="Make your own">{s.accent === "custom" ? <Check size={16} color={accentTones("custom", s.accentCustom).onDark} /> : <Palette size={15} color="#fff" />}</button></div></Row>
+        <Row title="Accent color"><div className="swatches">{Object.entries(ACCENTS).map(([name, c]) => <button key={name} className={s.accent === name ? "on" : ""} style={{ background: c.dark }} onClick={() => updateSettings({ accent: name })} aria-label={name}>{s.accent === name ? <Check size={16} color={c.onDark} /> : null}</button>)}{window.pagerDesktop && <button className={"swatch-system" + (s.accent === "system" ? " on" : "")} onClick={() => updateSettings({ accent: "system" })} aria-label="Match my system accent" title="Match my system accent"><Monitor size={14} color="#fff" /></button>}<button className={"swatch-custom" + (s.accent === "custom" ? " on" : "")} style={s.accent === "custom" ? { background: s.accentCustom } : undefined} onClick={() => setPicker(true)} aria-label="Make your own">{s.accent === "custom" ? <Check size={16} color={accentTones("custom", s.accentCustom).onDark} /> : <Palette size={15} color="#fff" />}</button></div></Row>
         {picker && <ColorDialog value={s.accent === "custom" ? s.accentCustom : accentTones(s.accent, s.accentCustom).light} onClose={() => setPicker(false)} onPick={(c) => { updateSettings({ accent: "custom", accentCustom: c }); setPicker(false); }} />}
       </Group>
       <Group title="Text & messages">
@@ -295,6 +295,10 @@ function Notifications() {
         <Select title="Unread badge counts" hint="The number on the app icon" value={s.notifBadge} options={[["unmuted", "Pages that can notify me"], ["all", "Every unread page"], ["off", "Nothing"]]} onChange={(v) => updateSettings({ notifBadge: v })} />
       </Group>
       <Group title="Sounds" footer="Each app and each page can have its own sound. Muted and quiet-hours messages stay silent.">
+        <SwitchRow title="Sounds inside a page" hint="A little sound when you send or get a message in the page you have open" checked={s.convoSounds} onChange={(v) => updateSettings({ convoSounds: v })} />
+        <Select title="Send sound" value={s.sendSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ sendSound: v }); playSound(v, s.convoSoundVolume); }} />
+        <Select title="Receive sound" value={s.receiveSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ receiveSound: v }); playSound(v, s.convoSoundVolume); }} />
+        <Row title="Page sound volume" hint={`${Math.round(s.convoSoundVolume * 100)}%`}><input type="range" min="0" max="1" step="0.05" value={s.convoSoundVolume} disabled={!s.convoSounds} onChange={(e) => updateSettings({ convoSoundVolume: Number(e.target.value) })} /></Row>
         <Select title="Alert sound" value={s.notifSoundId} disabled={off} options={SOUNDS} onChange={(v) => { updateSettings({ notifSoundId: v }); playSound(v, s.notifSoundVolume); }} />
         <Row title="Volume" hint={`${Math.round(s.notifSoundVolume * 100)}%`}><input type="range" min="0" max="1" step="0.05" value={s.notifSoundVolume} disabled={off} onChange={(e) => updateSettings({ notifSoundVolume: Number(e.target.value) })} onMouseUp={() => playSound(s.notifSoundId, s.notifSoundVolume)} /></Row>
         {known.map((id) => <Select key={"snd" + id} title={`${networkMeta(id).label} sound`} value={s.notifNetworkSound[id] ?? ""} disabled={off}
@@ -448,7 +452,7 @@ function Desktop() {
         <SwitchRow title="Start minimized to tray" checked={s.startMinimized} onChange={(v) => { updateSettings({ startMinimized: v }); window.pagerDesktop?.setPrefs({ startMinimized: v }); }} />
       </Group>
       <Group title="Look" footer="Takes your colors from KDE Plasma, GNOME, Windows or macOS and follows them when you change them.">
-        <SwitchRow title="Match my system theme" hint="Colors, light or dark, and accent" checked={s.themeFollowSystem} onChange={(v) => updateSettings({ themeFollowSystem: v })} />
+        <SwitchRow title="Match my system theme" hint="Window colors and light or dark. Pick System in Accent color to use its accent too" checked={s.themeFollowSystem} onChange={(v) => updateSettings({ themeFollowSystem: v })} />
       </Group>
       {spell && (
         <Group title="Spell check" footer="Right-click a misspelled word for suggestions or to add it to your dictionary.">
