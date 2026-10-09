@@ -516,8 +516,8 @@ function EncryptionGroup() {
       {e.backupOnServer && e.backupHere === false && <Row title="Make a new recovery key instead" onClick={() => setDlg("create")}><span className="accent">New key</span></Row>}
       {e.ready && <Row title="Encrypt all my pages" hint="Turns on encryption for every page that can take it. Older messages stay readable on your server" onClick={() => setDlg("all")}><span className="accent">Encrypt</span></Row>}
       {e.ready && <Row title="Lost your recovery key?" hint={e.backupHere ? "This device still has your keys: choose Replace above and it makes a new one" : "Use a key file below, or make a new key. Without either, older encrypted messages can't be read on this device"} />}
-      {e.ready && <Row title="Save my keys to a file" hint="A second way back in: a file only your passphrase opens" onClick={() => setDlg("export")}><span className="accent">Save</span></Row>}
-      {e.ready && <Row title="Restore keys from a file" onClick={() => setDlg("import")}><span className="accent">Open</span></Row>}
+      {e.ready && <Row title="Advanced: save keys to a file" hint="Not your recovery key. A separate file you protect with a passphrase you choose" onClick={() => setDlg("export")}><span className="accent">Save</span></Row>}
+      {e.ready && <Row title="Advanced: restore keys from a file" hint="Only for a file made with the row above. Asks for that file's passphrase" onClick={() => setDlg("import")}><span className="accent">Open</span></Row>}
       {dlg === "create" && <RecoveryKeyDialog onClose={() => setDlg(undefined)} />}
       {dlg === "restore" && <RestoreDialog onClose={() => setDlg(undefined)} onLost={() => setDlg("create")} />}
       {dlg === "all" && <EncryptAllDialog onClose={() => setDlg(undefined)} hasKey={e.backupHere} />}
@@ -576,7 +576,7 @@ function ExportKeysDialog({ onClose }: { onClose: () => void }) {
   const [err, setErr] = useState("");
   return (
     <Modal title="Save my keys to a file" onClose={onClose}>
-      <p className="muted">Choose a passphrase. The file can only be opened with it, so keep both safe, but separately.</p>
+      <p className="muted">This is a separate, optional backup file: it is <b>not</b> your recovery key. Choose a passphrase for it (you will need it to open the file), and keep both safe, separately.</p>
       <input type="password" autoFocus placeholder="Passphrase (at least 8 characters)" value={pass} onChange={(e) => setPass(e.target.value)} />
       {err && <p className="error">{err}</p>}
       <div className="row-end"><button className="link" onClick={onClose}>Cancel</button>
@@ -596,6 +596,7 @@ function ImportKeysDialog({ onClose }: { onClose: () => void }) {
     <Modal title="Restore keys from a file" onClose={onClose}>
       {done != null ? <p>Done: {done} new message keys. Older messages in your encrypted pages can be read now.</p> : (
         <>
+          <p className="muted">This is only for a key <b>file</b> you saved earlier with a passphrase. If you have a recovery key (a code), close this and use <b>Recovery key</b> instead.</p>
           <input type="file" accept=".txt,text/plain" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { setName(f.name); setText(await f.text()); } }} />
           <input type="password" placeholder="Passphrase" value={pass} onChange={(e) => setPass(e.target.value)} />
           {err && <p className="error">{err}</p>}

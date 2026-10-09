@@ -794,8 +794,8 @@ private fun EncryptionGroup() {
             GroupDivider()
             NavRow("Lost your recovery key?", if (e.backupHere) "This phone still has your keys: choose Recovery key above and replace it" else "Use a key file below, or make a new key. Without either, older encrypted messages can't be read here", Icons.Rounded.Help) {}
             GroupDivider(); NavRow("Encrypt all my pages", "Turns on encryption for every page that can take it. Older messages stay readable on your server", Icons.Rounded.Lock) { dialog = "all" }
-            GroupDivider(); NavRow("Save my keys to a file", "A second way back in: a file only your passphrase opens", Icons.Rounded.Save) { dialog = "export" }
-            GroupDivider(); NavRow("Restore keys from a file", null, Icons.Rounded.FileOpen) { dialog = "import" }
+            GroupDivider(); NavRow("Advanced: save keys to a file", "Not your recovery key. A separate file you protect with a passphrase you choose", Icons.Rounded.Save) { dialog = "export" }
+            GroupDivider(); NavRow("Advanced: restore keys from a file", "Only for a file made with the row above. Asks for that file's passphrase", Icons.Rounded.FileOpen) { dialog = "import" }
         }
     }
     if (dialog == "all") {
@@ -847,7 +847,7 @@ private fun EncryptionGroup() {
             onDismissRequest = { dialog = null }, title = { Text("Save my keys to a file") },
             text = {
                 Column {
-                    Text("Choose a passphrase. The file can only be opened with it, so keep both safe, but separately.")
+                    Text("This is a separate, optional backup file: it is not your recovery key. Choose a passphrase for it (you will need it to open the file), and keep both safe, separately.")
                     androidx.compose.material3.OutlinedTextField(pass, { pass = it }, label = { Text("Passphrase (at least 8 characters)") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                     if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
                 }
@@ -878,6 +878,7 @@ private fun EncryptionGroup() {
                 Column {
                     if (done != null) Text("Done: $done new message keys. Older messages in your encrypted pages can be read now.")
                     else {
+                        Text("This is only for a key file you saved earlier with a passphrase. If you have a recovery key (a code), close this and use Recovery key instead.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = { pick.launch(arrayOf("text/plain", "*/*")) }) { Text(if (name.isEmpty()) "Choose the file" else name) }
                         androidx.compose.material3.OutlinedTextField(pass, { pass = it }, label = { Text("Passphrase") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                         if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
