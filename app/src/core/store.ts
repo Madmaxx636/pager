@@ -211,6 +211,13 @@ async function syncLoop(s: Session, signal: AbortSignal) {
 }
 
 /** Signs out right away; telling the server (so the token stops working) is best effort and never blocks you. */
+/** Disconnects every connected app, deletes the account and clears this device. Throws if the password is wrong. */
+export async function deleteProfile(password: string) {
+  const s = state.session; if (!s) return;
+  await matrix.deactivate(s.userId, password);
+  await signOutLocal();
+}
+
 export async function signOut() {
   const logout = matrix.logout().catch(() => { /* token may already be invalid, or the server is unreachable */ });
   await Promise.race([logout, new Promise((r) => setTimeout(r, 2500))]);

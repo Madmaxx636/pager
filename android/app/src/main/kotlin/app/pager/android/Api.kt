@@ -251,5 +251,13 @@ class MatrixApi(private val http: Http) {
         http.request("POST", "/_matrix/client/unstable/org.matrix.msc4140/delayed_events/${enc(delayId)}", buildJsonObject { put("action", "cancel") })
     }
 
+    /** Deletes your account for good (Synapse asks for your password again). */
+    suspend fun deactivate(userId: String, password: String) {
+        http.request("POST", "/_matrix/client/v3/account/deactivate", buildJsonObject {
+            put("auth", buildJsonObject { put("type", "m.login.password"); put("identifier", buildJsonObject { put("type", "m.id.user"); put("user", userId) }); put("password", password) })
+            put("erase", true)
+        })
+    }
+
     suspend fun logout() { http.request("POST", "/_matrix/client/v3/logout", JsonObject(emptyMap())) }
 }

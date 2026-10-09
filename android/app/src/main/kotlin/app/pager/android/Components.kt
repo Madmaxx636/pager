@@ -1,5 +1,10 @@
 package app.pager.android
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -82,6 +87,28 @@ fun Avatar(name: String, network: String?, size: Dp = 46.dp, mxc: String? = null
                     else Text(meta.glyph, color = Color.White, fontSize = (size.value * 0.19f).sp, fontWeight = FontWeight.Bold)
                 }
             }
+        }
+    }
+}
+
+
+/** Three dots that bounce in turn, like iMessage and Google Messages. Still in reduced-motion and E-ink modes. */
+@androidx.compose.runtime.Composable
+fun TypingDots(color: Color = MaterialTheme.colorScheme.onSurfaceVariant, dot: androidx.compose.ui.unit.Dp = 7.dp) {
+    val still = LocalSettings.current.reduceMotion
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "typing")
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(dot * 2.4f)) {
+        repeat(3) { i ->
+            val phase by transition.animateFloat(
+                0f, 1f,
+                androidx.compose.animation.core.infiniteRepeatable(
+                    androidx.compose.animation.core.keyframes { durationMillis = 1200; 0f at 0 + i * 150; 1f at 360 + i * 150; 0f at 720 + i * 150; 0f at 1200 },
+                    androidx.compose.animation.core.RepeatMode.Restart,
+                ),
+                label = "dot$i",
+            )
+            val p = if (still) 0.5f else phase
+            Box(Modifier.size(dot).graphicsLayer { translationY = -p * dot.toPx() * 0.8f; alpha = 0.35f + 0.65f * p }.clip(CircleShape).background(color))
         }
     }
 }

@@ -2,6 +2,13 @@
 
 package app.pager.android
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
@@ -188,7 +195,7 @@ fun Modifier.swipeToReply(enabled: Boolean, onReply: () -> Unit, onThreshold: ()
 @Composable
 fun MessageRow(
     chat: ChatState?, msg: Msg, me: String, group: Boolean, first: Boolean, last: Boolean, dark: Boolean, reply: Msg?, read: Boolean, starred: Boolean,
-    onLong: () -> Unit, onReact: (String) -> Unit, onWho: (String) -> Unit, onDouble: () -> Unit, onOpen: (Msg) -> Unit, onReply: () -> Unit, onVote: (List<String>) -> Unit, onEndPoll: () -> Unit,
+    onLong: () -> Unit, onReact: (String) -> Unit, onWho: (String) -> Unit, onDouble: () -> Unit, onTriple: () -> Unit, onOpen: (Msg) -> Unit, onReply: () -> Unit, onVote: (List<String>) -> Unit, onEndPoll: () -> Unit,
 ) {
     val store = LocalStore.current
     val s = LocalSettings.current
@@ -231,6 +238,13 @@ fun MessageRow(
     LaunchedEffect(msg.id) { if (fresh) enter.animateTo(1f, androidx.compose.animation.core.tween(if (s.messageAnimation == "pop") 280 else 260, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
     val vGap = if (first) 8.dp else if (s.density == "compact") 1.dp else 2.dp
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    // Taps: one opens, two (and optionally three) react. We count them ourselves, waiting only when a multi-tap is switched on.
+    val tapScope = rememberCoroutineScope()
+    var tapCount by remember { mutableIntStateOf(0) }
+    var tapJob by remember { mutableStateOf<Job?>(null) }
+    var burst by remember { mutableStateOf<String?>(null) }
+    val doubleEmoji = s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }
+    LaunchedEffect(burst) { if (burst != null) { delay(700); burst = null } }
 
     Column(Modifier.fillMaxWidth().padding(top = vGap), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
         if (group && !mine && first) {
@@ -268,11 +282,28 @@ fun MessageRow(
                             else -> it
                         }
                     }
-                    .combinedClickable(
-                        onClick = { if (msg.status == STATUS_FAILED) chat?.id?.let { store.retry(it, msg) } else onOpen(msg) },
-                        onLongClick = onLong, onDoubleClick = onDouble,
-                    ),
+                    .pointerInput(msg.id, s.doubleTapReact, s.tripleTapReact, doubleEmoji, s.tripleTapEmoji) {
+                        val click = { if (msg.status == STATUS_FAILED) chat?.id?.let { store.retry(it, msg) } else onOpen(msg) }
+                        detectTapGestures(
+                            onLongPress = { onLong() },
+                            onTap = {
+                                tapCount++
+                                tapJob?.cancel()
+                                tapJob = tapScope.launch {
+                                    delay(if (s.tripleTapReact) 300L else if (s.doubleTapReact) 260L else 0L)
+                                    val n = tapCount; tapCount = 0
+                                    when {
+                                        n >= 3 && s.tripleTapReact && s.tripleTapEmoji.isNotEmpty() -> { burst = s.tripleTapEmoji; onTriple() }
+                                        n == 2 && s.doubleTapReact && doubleEmoji.isNotEmpty() -> { burst = doubleEmoji; onDouble() }
+                                        else -> click()
+                                    }
+                                }
+                            },
+                        )
+                    }
+                    .semantics { onClick(label = "Open") { if (msg.status == STATUS_FAILED) chat?.id?.let { store.retry(it, msg) } else onOpen(msg); true } },
             ) {
+                burst?.let { e -> Text(e, fontSize = 42.sp, modifier = Modifier.align(Alignment.Center).zIndex(2f).graphicsLayer { val t = 1f; scaleX = 1.2f * t; scaleY = 1.2f * t }) }
                 Column(Modifier.padding(horizontal = if (bare || msg.type == "m.image") (if (bare) 0.dp else 4.dp) else 12.dp, vertical = if (bare) 0.dp else if (msg.type == "m.image") 4.dp else 8.dp)) {
                     if (msg.replyTo != null) {
                         Row(Modifier.padding(bottom = 6.dp, start = if (msg.type == "m.image") 8.dp else 0.dp, top = if (msg.type == "m.image") 4.dp else 0.dp).height(IntrinsicSize.Min)) {

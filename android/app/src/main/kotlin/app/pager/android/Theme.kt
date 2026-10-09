@@ -107,8 +107,8 @@ fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int): 
         themeMode = "light", reduceMotion = true, screenEffects = false, messageAnimation = "none", bubbleFill = "solid", bubbleDepth = "flat",
         bubbleStyle = if (s.bubbleStyle == "plain") "plain" else "outline", wallpaper = "none", autoPlayGifs = false, colorSenderNames = false, accent = "teal",
     )
-    val small = s.smallScreen == "on" || (s.smallScreen == "auto" && (screenWidthDp < 340 || screenHeightDp < 560))
-    if (small) e = e.copy(density = "compact")
+    // Small screens get tighter rows.
+    if (screenWidthDp < 340 || screenHeightDp < 560) e = e.copy(density = "compact")
     return e
 }
 
@@ -117,6 +117,16 @@ object Ink { @Volatile var on = false }
 
 /** Like Color.copy(alpha) for text, icons and lines, but never faint in E-ink mode: faded gray disappears on a fast-refresh screen. */
 fun Color.dim(alpha: Float): Color = if (Ink.on && alpha >= 0.4f) copy(alpha = 1f) else copy(alpha = alpha)
+
+/**
+ * How much to scale the whole interface. Automatic reads the screen: Android already normalizes density, so what differs is how many
+ * dp fit across the screen's short side (a 3-inch handset has fewer than a 10-inch tablet); we scale so the layout always looks like
+ * a ~411dp phone. E-ink mode always uses automatic. Manual uses your slider.
+ */
+fun uiScaleFor(s: AppSettings, config: android.content.res.Configuration): Float {
+    if (s.eink || s.scaleMode == "auto") return (config.smallestScreenWidthDp / 411f).coerceIn(0.8f, 1.6f)
+    return s.uiScale.coerceIn(0.6f, 1.8f)
+}
 
 /** Pure black on white with light-gray fills: reads well on e-ink and needs no color. */
 private fun einkScheme(): ColorScheme = lightColorScheme(
@@ -204,7 +214,7 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
     CompositionLocalProvider(
         LocalSettings provides settings,
         LocalRawSettings provides rawSettings,
-        LocalDensity provides Density(base.density * rawSettings.uiScale, base.fontScale * settings.fontScale),
+        LocalDensity provides Density(base.density * uiScaleFor(rawSettings, config), base.fontScale * settings.fontScale),
         androidx.compose.material3.LocalRippleConfiguration provides (if (settings.eink) null else androidx.compose.material3.LocalRippleConfiguration.current),
     ) { MaterialTheme(colorScheme = if (settings.eink) einkScheme() else colors, typography = if (settings.eink) EinkTypography else PagerTypography, shapes = PagerShapes, content = content) }
 }

@@ -85,7 +85,9 @@ fun BridgesScreen(onBack: () -> Unit) {
         Text("Each app you connect is bridged through your own server. Pager shows if a connection needs attention.", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (note.isNotEmpty()) Text(note, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodyMedium)
         if (networks.isEmpty()) Text("Loading…", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        networks.forEach { n ->
+        else if (networks.none { it.logins.isNotEmpty() }) Text("Nothing connected yet.", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SettingsGroup { ButtonRow("Add account") { adding = true } }
+        networks.filter { it.logins.isNotEmpty() }.forEach { n ->
             val meta = networkMeta(n.id)
             SettingsGroup(n.name, footer = if (n.unavailable) "This bridge isn't responding right now." else null) {
                 n.logins.forEach { l ->
@@ -107,8 +109,7 @@ fun BridgesScreen(onBack: () -> Unit) {
                     }
                     GroupDivider()
                 }
-                if (n.logins.isEmpty()) { Text("Not connected", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant); GroupDivider() }
-                ButtonRow(if (n.logins.isEmpty()) "Connect ${meta.label}" else "Add another ${meta.label} account") { relogin = n }
+                ButtonRow("Add another ${meta.label} account") { relogin = n }
                 GroupDivider()
                 SwitchRow("Show ${meta.label} chats in inbox", null, n.id !in s.hiddenNetworks) { on -> store.settings.update { copy(hiddenNetworks = if (on) hiddenNetworks - n.id else hiddenNetworks + n.id) } }
             }

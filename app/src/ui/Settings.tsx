@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus } from "lucide-react";
 import { RowAction, ACCENTS, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
-import { addStickers, cancelReminder, cancelScheduled, deleteLabel, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
+import { addStickers, cancelReminder, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
@@ -103,6 +103,7 @@ function Home({ nav }: { nav: Nav }) {
 function Page({ page, nav }: { page: string; nav: Nav }) {
   const s = useRawSettings();
   const u = updateSettings;
+  const [deleting, setDeleting] = useState(false);
   switch (page) {
     case "appearance": return <Appearance />;
     case "layout": return (
@@ -188,11 +189,28 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
     case "about": return (
       <>
         <Group title="Pager"><Row title={`Version ${import.meta.env.VITE_APP_VERSION ?? "0.3.0"}`} hint={window.pagerDesktop ? `Desktop app (${window.pagerDesktop.platform})` : "Web app"} /><Row title="An open-source, self-hosted unified messenger." /></Group>
-        <Group title="Account"><Row title={me()} hint={http.base || window.location.origin} /><Row title="Sign out" onClick={() => signOut()}><span className="danger">Sign out</span></Row></Group>
+        <Group title="Account"><Row title={me()} hint={http.base || window.location.origin} /><Row title="Sign out" onClick={() => signOut()}><span className="danger">Sign out</span></Row><Row title="Delete my profile" hint="Removes your account and everything on this server. This can't be undone" onClick={() => setDeleting(true)}><span className="danger">Delete</span></Row></Group>
+        {deleting && <DeleteProfile onClose={() => setDeleting(false)} />}
       </>
     );
     default: return null;
   }
+}
+
+function DeleteProfile({ onClose }: { onClose: () => void }) {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal title="Delete your profile?" onClose={onClose}>
+      <form className="stack" onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(""); try { await deleteProfile(pw); } catch (x) { setErr((x as Error).message || "Wrong password"); setBusy(false); } }}>
+        <p className="muted">This deletes your account on this server, disconnects all your apps and removes your messages here. Your chats on WhatsApp, Signal and the others are not touched. This can't be undone.</p>
+        <label>Your password<input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus required /></label>
+        {err && <div className="error">{err}</div>}
+        <div className="row-end"><button type="button" className="link" onClick={onClose}>Cancel</button><button className="primary danger" disabled={busy || !pw}>{busy ? "Deleting…" : "Delete my profile"}</button></div>
+      </form>
+    </Modal>
+  );
 }
 
 function Appearance() {

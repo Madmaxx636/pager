@@ -58,10 +58,14 @@ data class AppSettings(
     /** E-ink mode: black on white, no color, no animation, thick lines. */
     val eink: Boolean = false,
     /** Scales the whole interface (display size). */
-    val uiScale: Float = 1f,
-    val smallScreen: String = "auto",          // auto | on | off
+    val scaleMode: String = "auto",            // auto: from the screen's size and density | manual: your slider
+    val uiScale: Float = 1f,                   // manual scale, in small steps
     val haptics: Boolean = true,
     val doubleTapReact: Boolean = true,
+    /** Reaction added by a double tap; empty = your first quick reaction. */
+    val doubleTapEmoji: String = "",
+    val tripleTapReact: Boolean = false,
+    val tripleTapEmoji: String = "😂",
 
     // --- Chats ---
     val enterSends: Boolean = true,            // Enter sends (Shift+Enter adds a line); on by default
