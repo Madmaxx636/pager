@@ -3,7 +3,7 @@ import {
   AlarmClock, Archive, ArrowDownToLine, ArrowLeft, BellOff, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
   Reply, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon,
 } from "lucide-react";
-import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf } from "../core/types";
+import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import { getSettings, useSettings, AppSettings } from "../core/settings";
 import {
@@ -36,6 +36,8 @@ function buildItems(messages: Msg[], unreadBefore: string | undefined, gapMs: nu
   });
   return out;
 }
+
+const fullTime = (ts: number) => new Date(ts).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
 
 export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBack: () => void; nav: Nav; onForward: (m: Msg) => void }) {
   const chat = useStore((s) => s.chats[roomId]);
@@ -174,8 +176,15 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
       {details && (
         <Modal title="Message details" onClose={() => setDetails(undefined)}>
           <dl className="details">
-            <dt>From</dt><dd>{nameOf(chat, details.sender)}</dd><dt>Sent</dt><dd>{new Date(details.ts).toLocaleString()}</dd><dt>Type</dt><dd>{details.type}</dd>
+            <dt>From</dt><dd>{nameOf(chat, details.sender)}</dd><dt>Sent</dt><dd>{fullTime(details.ts)}</dd>{details.edited ? <><dt>Edited</dt><dd>Yes</dd></> : null}<dt>Type</dt><dd>{details.type}</dd>
             <dt>Status</dt><dd>{details.status === STATUS_SENT ? "Sent" : details.status === STATUS_FAILED ? "Failed" : "Sending"}</dd>{details.size ? <><dt>Size</dt><dd>{humanSize(details.size)}</dd></> : null}
+            {details.sender === user && details.status === STATUS_SENT && (() => {
+              const readers = readersOf(chat, details.id, user);
+              return readers.length
+                ? <><dt>Read</dt><dd>{readers.map((r) => <div key={r.user}>{nameOf(chat, r.user)}{r.ts ? ` · ${fullTime(r.ts)}` : ""}</div>)}</dd></>
+                : <><dt>Read</dt><dd>Not yet</dd></>;
+            })()}
+            {details.sender === user && chat.network !== "matrix" && <><dt>Delivery</dt><dd className="muted">{networkMeta(chat.network).label} doesn't report delivery through the bridge. Pager shows when someone has read it.</dd></>}
             {st.developerMode && <><dt>Event ID</dt><dd className="mono">{details.id}</dd></>}
           </dl>
         </Modal>

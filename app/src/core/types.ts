@@ -51,6 +51,8 @@ export interface ChatState {
   reactionRefs: Record<string, ReactionRef>;
   /** user id -> latest event they have read */
   receipts: Record<string, string>;
+  /** When each user's read receipt was sent (ms). */
+  receiptTs?: Record<string, number>;
   tags: string[];
   markedUnread: boolean;
   memberCount: number;
@@ -142,3 +144,16 @@ export function displayName(c: ChatState, me: string): string {
 
 export function lastTs(c: ChatState) { return c.messages.length ? c.messages[c.messages.length - 1].ts : 0; }
 export const lastPreview = (c: ChatState) => (c.messages.length ? previewOf(c.messages[c.messages.length - 1]) : "");
+
+/** Who has read a message, and when: anyone whose read receipt is at or after it. The time is when they read up to that point. */
+export function readersOf(chat: ChatState, msgId: string, sender: string): { user: string; ts?: number }[] {
+  const idx = chat.messages.findIndex((m) => m.id === msgId);
+  if (idx < 0) return [];
+  const out: { user: string; ts?: number }[] = [];
+  for (const [user, ev] of Object.entries(chat.receipts)) {
+    if (user === sender) continue;
+    const at = chat.messages.findIndex((m) => m.id === ev);
+    if (at >= idx) out.push({ user, ts: chat.receiptTs?.[user] });
+  }
+  return out;
+}
