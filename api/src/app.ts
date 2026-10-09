@@ -114,7 +114,8 @@ export function createApp(cfg: Config) {
       const token = tokenOf(req);
       await whoami(cfg, token);
       const roomId = decodeURIComponent(parts[1]);
-      if (!/^![^\s/]+:[^\s/]+$/.test(roomId)) throw new HttpError(400, "Bad page id");
+      // Newer rooms have ids with no server name after a colon, so only the shape is checked.
+      if (!/^![A-Za-z0-9._~:+=\-]{3,200}$/.test(roomId)) throw new HttpError(400, "Bad page id");
       const api = (path: string, init: RequestInit = {}) => fetch(`${cfg.synapseUrl}/_matrix/client/v3${path}`, init).catch(() => { throw new HttpError(502, "Homeserver unavailable"); });
       const members = await api(`/rooms/${encodeURIComponent(roomId)}/joined_members`, { headers: { authorization: `Bearer ${token}` } });
       if (!members.ok) throw new HttpError(403, "You are not in that page");

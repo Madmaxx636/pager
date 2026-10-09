@@ -45,6 +45,7 @@ before(async () => {
     // Rooms: alice is in !room:test.local with the WhatsApp bot; nobody else is.
     if (decodeURIComponent(req.url!).includes("/rooms/!room:test.local/joined_members")) return req.headers.authorization === "Bearer goodtoken" ? json(res, 200, { joined: { "@alice:test.local": {}, "@whatsappbot:test.local": {} } }) : json(res, 403, { errcode: "M_FORBIDDEN" });
     if (decodeURIComponent(req.url!).includes("/rooms/!plain:test.local/joined_members")) return json(res, 200, { joined: { "@alice:test.local": {}, "@bob:test.local": {} } });
+    if (decodeURIComponent(req.url!).includes("/rooms/!newstyleroomidwithoutserver/")) { if (req.url!.includes("joined_members")) return json(res, 200, { joined: { "@alice:test.local": {}, "@whatsappbot:test.local": {} } }); }
     if (req.url!.includes("/state/m.room.encryption")) {
       if (req.method === "GET") return json(res, 404, { errcode: "M_NOT_FOUND" });
       stateCalls.push({ url: req.url!, auth: req.headers.authorization, body: await readBody(req) });
@@ -306,4 +307,12 @@ test("turning on encryption this way needs you to be in the page, and the page t
   assert.equal((await post("/api/rooms/" + encodeURIComponent("!plain:test.local") + "/encrypt", {}, "goodtoken")).status, 400); // no bridge bot in it
   assert.equal((await post("/api/rooms/" + encodeURIComponent("!room:test.local") + "/encrypt", {})).status, 401);
   assert.equal(stateCalls.length, 0);
+});
+
+test("room ids with no server name (newer rooms) are accepted; odd ones are not", async () => {
+  stateCalls.length = 0;
+  assert.equal((await post("/api/rooms/" + encodeURIComponent("!newstyleroomidwithoutserver") + "/encrypt", {}, "goodtoken")).status, 200);
+  assert.equal(stateCalls.length, 1);
+  assert.equal((await post("/api/rooms/" + encodeURIComponent("not a room") + "/encrypt", {}, "goodtoken")).status, 400);
+  assert.equal((await post("/api/rooms/" + encodeURIComponent("!bad id/with space") + "/encrypt", {}, "goodtoken")).status, 400);
 });
