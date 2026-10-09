@@ -92,7 +92,7 @@ before(async () => {
     provisioningSecret: "provsecret",
     signup: { mode: "invite", inviteCode: "family", adminInviteCode: "boss" },
     bridges: [{ id: "whatsapp", name: "WhatsApp", url: `http://127.0.0.1:${bp}` }],
-    bridgesDir: (() => { const d = mkdtempSync(join(tmpdir(), "pager-reg-")); mkdirSync(join(d, "whatsapp")); writeFileSync(join(d, "whatsapp", "registration.yaml"), "id: whatsapp\nas_token: asbridge\nhs_token: x\nsender_localpart: whatsappbot\n"); return d; })(),
+    bridgesDir: (() => { const d = mkdtempSync(join(tmpdir(), "pager-reg-")); mkdirSync(join(d, "whatsapp")); writeFileSync(join(d, "whatsapp", "registration.yaml"), "id: whatsapp\nas_token: asbridge\nhs_token: x\nsender_localpart: LL4spezRandomSender\n"); return d; })(),
   };
   api = createApp(cfg);
   base = `http://127.0.0.1:${await listen(api)}`;
