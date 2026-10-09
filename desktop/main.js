@@ -161,6 +161,12 @@ if (!app.requestSingleInstanceLock()) {
     w.loadURL(spec.url).catch((e) => { if (!done) { done = true; clearInterval(timer); if (!w.isDestroyed()) w.destroy(); reject(e); } });
   }));
   ipcMain.handle("system-theme", () => readSystemTheme());
+  // The encryption library is a WebAssembly file inside the bundled web app; the page cannot fetch it from disk, so we read it for it.
+  ipcMain.handle("crypto-wasm", () => {
+    const dir = path.join(__dirname, "app-dist", "assets");
+    const file = fs.readdirSync(dir).find((f) => /^matrix_sdk_crypto_wasm_bg.*\.wasm$/.test(f));
+    return file ? fs.readFileSync(path.join(dir, file)) : null;
+  });
   ipcMain.handle("spell:get", () => {
     const ses = session.defaultSession;
     return { enabled: ses.isSpellCheckerEnabled(), languages: ses.getSpellCheckerLanguages(), available: ses.availableSpellCheckerLanguages };

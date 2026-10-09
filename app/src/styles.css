@@ -377,3 +377,8 @@ code.copy { display: block; padding: 8px 12px; border-radius: 10px; background: 
 .color-dialog label { display: grid; gap: 4px; font-size: .8rem; color: var(--muted); width: 200px; } .color-dialog input.bad { border-color: var(--danger); }
 .color-preview { width: 200px; height: 18px; border-radius: 9px; border: 1px solid var(--line); }
 .swatch-system { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, #5a6472, #2d333b); border: 2px solid transparent; } .swatch-system.on { border-color: var(--text); }
+
+/* Encryption */
+.recovery-key { font: 600 1.05rem ui-monospace, monospace; letter-spacing: .04em; line-height: 1.7; background: var(--panel-2); border-radius: 12px; padding: 14px; margin: 10px 0; white-space: pre-wrap; word-break: break-word; user-select: all; }
+.check-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: .93rem; }
+.enc-badge { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); }
