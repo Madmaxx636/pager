@@ -394,10 +394,11 @@ private fun AppearancePage() {
     val s = LocalRawSettings.current
     val set = store.settings::update
     var editing by remember { mutableStateOf<Int?>(null) }
+    var tapPicking by remember { mutableStateOf<String?>(null) }
     SettingsGroup("Display") {
         SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }; GroupDivider()
-        SliderRow("Display size", s.uiScale, 0.7f..1.6f, "${(s.uiScale * 100).toInt()}%") { v -> set { copy(uiScale = (v * 20).toInt() / 20f) } }; GroupDivider()
-        ChoiceRow("Small screen layout", listOf("auto" to "Automatic", "on" to "Always", "off" to "Never"), s.smallScreen) { v -> set { copy(smallScreen = v) } }
+        ChoiceRow("Display size", listOf("auto" to "Automatic (from this screen)", "manual" to "Manual"), s.scaleMode, !s.eink) { v -> set { copy(scaleMode = v) } }
+        if (s.scaleMode == "manual" && !s.eink) { GroupDivider(); SliderRow("Size", s.uiScale, 0.6f..1.8f, "${(s.uiScale * 100).toInt()}%") { v -> set { copy(uiScale = Math.round(v * 40) / 40f) } } }
     }
     SettingsGroup("Theme") {
         ChoiceRow("Mode", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark", "black" to "Black (AMOLED)"), s.themeMode) { v -> set { copy(themeMode = v) } }
@@ -432,7 +433,10 @@ private fun AppearancePage() {
         SwitchRow("Reduce motion", "Fewer animations", s.reduceMotion) { v -> set { copy(reduceMotion = v) } }
     }
     SettingsGroup("Reactions", footer = "These show first when you long-press a message. Tap one to change it.") {
-        SwitchRow("Double-tap to react", "Double-tap a message to add your first quick reaction", s.doubleTapReact) { v -> set { copy(doubleTapReact = v) } }; GroupDivider()
+        SwitchRow("Double-tap to react", "Double-tap a message to add ${s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }}", s.doubleTapReact) { v -> set { copy(doubleTapReact = v) } }; GroupDivider()
+        NavRow("Double-tap reaction", s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() } + (if (s.doubleTapEmoji.isEmpty()) "  (your first quick reaction)" else "")) { tapPicking = "double" }; GroupDivider()
+        SwitchRow("Triple-tap to react", "Triple-tap a message to add ${s.tripleTapEmoji}. Makes a single tap wait a moment", s.tripleTapReact) { v -> set { copy(tripleTapReact = v) } }; GroupDivider()
+        NavRow("Triple-tap reaction", s.tripleTapEmoji) { tapPicking = "triple" }; GroupDivider()
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             s.quickReactions.forEachIndexed { i, e ->
                 Box(Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable { editing = i }, contentAlignment = Alignment.Center) { Text(e, fontSize = 24.sp) }
@@ -441,6 +445,7 @@ private fun AppearancePage() {
         GroupDivider()
         ButtonRow("Reset quick reactions") { set { copy(quickReactions = DEFAULT_QUICK_REACTIONS) } }
     }
+    tapPicking?.let { which -> EmojiPickerDialog(s.recentEmoji, onPick = { e -> set { if (which == "double") copy(doubleTapEmoji = e) else copy(tripleTapEmoji = e) }; tapPicking = null }, onDismiss = { tapPicking = null }) }
     editing?.let { idx -> EmojiPickerDialog(s.recentEmoji, onPick = { e -> set { copy(quickReactions = quickReactions.toMutableList().also { it[idx] = e }) }; editing = null }, onDismiss = { editing = null }) }
 }
 
@@ -678,6 +683,7 @@ private fun AdvancedSettings(navigate: (String) -> Unit) {
 private fun AboutSettings(navigate: (String) -> Unit) {
     val store = LocalStore.current
     val session = store.session.collectAsState().value
+    var deleting by remember { mutableStateOf(false) }
     SettingsPage("About", { navigate("") }) {
         SettingsGroup("Pager") {
             Text("Version ${BuildConfigVersion.NAME}", Modifier.padding(16.dp)); GroupDivider()
@@ -686,9 +692,38 @@ private fun AboutSettings(navigate: (String) -> Unit) {
         SettingsGroup("Account") {
             Text(session?.userId ?: "", Modifier.padding(16.dp)); GroupDivider()
             Text(session?.baseUrl ?: "", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant); GroupDivider()
-            ButtonRow("Sign out", danger = true) { store.signOut() }
+            ButtonRow("Sign out", danger = true) { store.signOut() }; GroupDivider()
+            ButtonRow("Delete my profile", danger = true) { deleting = true }
         }
     }
+    if (deleting) DeleteProfileDialog { deleting = false }
+}
+
+/** Asks for your password, then deletes your account on the server and clears this phone. */
+@Composable
+fun DeleteProfileDialog(onDismiss: () -> Unit) {
+    val store = LocalStore.current
+    val scope = rememberCoroutineScope()
+    var pw by remember { mutableStateOf("") }
+    var err by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Delete your profile?") },
+        text = {
+            Column {
+                Text("This deletes your account on this server, disconnects all your apps and removes your messages here. Your chats on WhatsApp, Signal and the others are not touched. This can't be undone.")
+                androidx.compose.material3.OutlinedTextField(pw, { pw = it }, Modifier.padding(top = 12.dp), singleLine = true, label = { Text("Your password") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !busy && pw.isNotEmpty(), onClick = {
+                busy = true; err = ""
+                scope.launch { store.deleteProfile(pw).onFailure { err = it.message ?: "Wrong password"; busy = false } }
+            }) { Text(if (busy) "Deleting…" else "Delete", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 object BuildConfigVersion { const val NAME = "0.3.0" }

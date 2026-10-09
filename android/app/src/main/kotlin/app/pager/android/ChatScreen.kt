@@ -247,10 +247,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                     if (s.showAvatars) Avatar(name, if (s.showNetworkBadges) chat?.network else null, 40.dp, chat?.avatarMxc)
                     Column(Modifier.padding(start = 12.dp)) {
                         Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val typing = chat?.typing.orEmpty()
-                        if (typing.isNotEmpty()) {
-                            Text(if (typing.size == 1) "${chat!!.nameOf(typing.first())} is typing…" else "Several people are typing…", style = MaterialTheme.typography.labelMedium, color = scheme.primary)
-                        } else chat?.let {
+                        chat?.let {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(7.dp).clip(CircleShape).background(networkMeta(it.network).color))
                                 Text(" ${networkMeta(it.network).label}${if (it.isGroup) " · ${it.peopleCount} members" else ""}", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
@@ -264,6 +261,13 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
 
             Box(Modifier.weight(1f).fillMaxWidth().let { if (wallpaper != null) it.background(wallpaper) else it }) {
                 LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)) {
+                    // reverseLayout: the first item sits at the bottom, under the newest message.
+                    if (chat?.typing.orEmpty().isNotEmpty()) item("typing") {
+                        Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                            if (group) Text(chat!!.typing.joinToString(", ") { chat!!.nameOf(it) }, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant, modifier = Modifier.padding(start = 14.dp, bottom = 2.dp))
+                            Box(Modifier.clip(RoundedCornerShape(18.dp)).background(scheme.surface).padding(horizontal = 16.dp, vertical = 12.dp)) { TypingDots() }
+                        }
+                    }
                     items(items, key = { it.key }) { item ->
                         when (item) {
                             is Item.Day -> Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
@@ -280,7 +284,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                                 onLong = { actions = item.msg },
                                 onReact = { store.react(roomId, item.msg.id, it) },
                                 onWho = { key -> whoFor = item.msg to key },
-                                onDouble = { if (s.doubleTapReact) s.quickReactions.firstOrNull()?.let { store.react(roomId, item.msg.id, it) } },
+                                onDouble = { if (s.doubleTapReact) s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }.takeIf { it.isNotEmpty() }?.let { store.react(roomId, item.msg.id, it) } },
+                                onTriple = { if (s.tripleTapReact) s.tripleTapEmoji.takeIf { it.isNotEmpty() }?.let { store.react(roomId, item.msg.id, it) } },
                                 onReply = { replyTo = item.msg; editing = null },
                                 onVote = { ids -> store.votePoll(roomId, item.msg.id, ids) },
                                 onEndPoll = { store.endPoll(roomId, item.msg.id) },
@@ -337,7 +342,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                         IconBtn(Icons.Rounded.Add, "Attach", { attach = true }, modifier = Modifier.padding(bottom = 4.dp), tint = scheme.primary, size = 44)
                         Row(Modifier.weight(1f).heightMin().clip(RoundedCornerShape(24.dp)).background(scheme.surfaceVariant).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.Bottom) {
                             Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
-                                if (text.isEmpty()) Text("Message", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+                                if (text.isEmpty()) Text(chat?.let { "Message ${SyncReducer.displayName(it, me).substringBefore(' ')} · ${networkMeta(it.network).label}" } ?: "Message", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 BasicTextField(
                                     text, { text = it }, maxLines = 6, textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface), cursorBrush = SolidColor(scheme.primary),
                                     keyboardOptions = KeyboardOptions(imeAction = if (s.enterSends) ImeAction.Send else ImeAction.Default), keyboardActions = KeyboardActions(onSend = { send() }),

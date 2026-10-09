@@ -167,6 +167,9 @@ class Store(private val context: Context) {
     }
 
     // --- Settings that follow your account ---------------------------------------------
+    /** Settings belong to one device, found by its name: two phones never share them. */
+    private val settingsType: String = "app.pager.settings.android." +
+        (android.os.Build.MANUFACTURER + "-" + android.os.Build.MODEL).lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').take(40).ifEmpty { "device" }
     private var settingsPush: Job? = null
     private var settingsChecked = false
 
@@ -177,7 +180,7 @@ class Store(private val context: Context) {
         settingsPush?.cancel()
         settingsPush = scope.launch {
             kotlinx.coroutines.delay(1500)
-            runCatching { matrix.putAccountData(me, "app.pager.settings.android", settings.payload()) }
+            runCatching { matrix.putAccountData(me, settingsType, settings.payload()) }
         }
     }
 
@@ -235,7 +238,7 @@ class Store(private val context: Context) {
                 val r = SyncReducer.apply(_chats.value, res, s.userId, initial)
                 _chats.value = r.chats
                 r.muted?.let { _muted.value = it }
-                handleSettingsSync(r.accountData["app.pager.settings.android"], s.userId)
+                handleSettingsSync(r.accountData[settingsType], s.userId)
                 r.userStickers?.let { _userStickers.value = it; writeJson("userStickers", StickerPack.serializer().nullable, it) }
                 r.invites.forEach { id -> scope.launch { runCatching { matrix.join(id) } } }
                 val muted = _muted.value
@@ -878,6 +881,13 @@ class Store(private val context: Context) {
     }
 
     // --- Session -----------------------------------------------------------------
+
+    /** Deletes the account (needs the password) and clears this phone. */
+    suspend fun deleteProfile(password: String): Result<Unit> = runCatching {
+        val me = _session.value?.userId ?: error("Not signed in")
+        matrix.deactivate(me, password)
+        signOutLocal()
+    }
 
     fun signOut() {
         scope.launch { kotlinx.coroutines.withTimeoutOrNull(2500) { runCatching { matrix.logout() } }; signOutLocal() }

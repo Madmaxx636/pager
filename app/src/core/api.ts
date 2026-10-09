@@ -106,6 +106,10 @@ export const matrix = {
     const p = `/_matrix/client/v3/user/${enc(me)}/rooms/${enc(roomId)}/tags/${enc(tag)}`;
     return on ? call("PUT", p, order !== undefined ? { order } : {}) : call("DELETE", p);
   },
+  /** Deletes your account for good (Synapse asks for your password again). */
+  deactivate: (userId: string, password: string) => call("POST", "/_matrix/client/v3/account/deactivate", {
+    auth: { type: "m.login.password", identifier: { type: "m.id.user", user: userId }, password }, erase: true,
+  }),
   putAccountData: (me: string, type: string, content: unknown) => call("PUT", `/_matrix/client/v3/user/${enc(me)}/account_data/${enc(type)}`, content),
   setMarkedUnread: (me: string, roomId: string, unread: boolean) => call("PUT", `/_matrix/client/v3/user/${enc(me)}/rooms/${enc(roomId)}/account_data/m.marked_unread`, { unread }),
   setMuted: (roomId: string, muted: boolean) => {

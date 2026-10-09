@@ -449,7 +449,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
                 if (!minimal) Row(verticalAlignment = Alignment.CenterVertically) {
                     val muted = MaterialTheme.colorScheme.onSurfaceVariant
                     when {
-                        c.typing -> Text("typing…", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        c.typing -> Box(Modifier.weight(1f)) { TypingDots(MaterialTheme.colorScheme.primary, 6.dp) }
                         c.draft != null -> Text(buildAnnotatedString {
                             pushStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)); append("Draft: "); pop(); append(c.draft.replace('\n', ' '))
                         }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
