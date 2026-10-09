@@ -39,9 +39,6 @@ export const SETTINGS_INDEX: { page: string; title: string; where: string; keywo
   { page: "appearance", title: "Avatar shape", where: "Appearance", keywords: "circle squircle" },
   { page: "appearance", title: "Large emoji", where: "Appearance", keywords: "big emoji only" },
   { page: "appearance", title: "Quick reactions", where: "Appearance", keywords: "emoji reactions favorites" },
-  { page: "appearance", title: "E-ink mode", where: "Appearance", keywords: "eink e-ink epaper boox high contrast black white" },
-  { page: "appearance", title: "Display size", where: "Appearance", keywords: "scale zoom interface bigger smaller screen" },
-  { page: "appearance", title: "Small screen layout", where: "Appearance", keywords: "compact tiny phone watch" },
   { page: "appearance", title: "Reduce motion", where: "Appearance", keywords: "animations accessibility" },
   { page: "layout", title: "Inbox style", where: "Inbox & layout", keywords: "minimal pro compact titles only" },
   { page: "layout", title: "Density", where: "Inbox & layout", keywords: "compact comfortable spacing" },
@@ -203,11 +200,6 @@ function Appearance() {
   const [editing, setEditing] = useState<number>();
   return (
     <>
-      <Group title="Display">
-        <SwitchRow title="E-ink mode" hint="Black and white, no animation or shadows, thicker lines. Made for e-ink screens" checked={s.eink} onChange={(v) => updateSettings({ eink: v })} />
-        <Row title="Display size" hint={`${Math.round(s.uiScale * 100)}%: scales the whole interface`}><input type="range" min="0.7" max="1.6" step="0.05" value={s.uiScale} onChange={(e) => updateSettings({ uiScale: Number(e.target.value) })} /></Row>
-        <Select title="Small screen layout" hint="Tighter spacing and smaller avatars. Auto turns on for small windows" value={s.smallScreen} options={[["auto", "Automatic"], ["on", "Always"], ["off", "Never"]]} onChange={(v) => updateSettings({ smallScreen: v })} />
-      </Group>
       <Group title="Theme">
         <Select title="Mode" value={s.themeMode} options={[["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black (AMOLED)"]]} onChange={(v) => updateSettings({ themeMode: v })} />
         <Row title="Accent color"><div className="swatches">{Object.entries(ACCENTS).map(([name, c]) => <button key={name} className={s.accent === name ? "on" : ""} style={{ background: c.dark }} onClick={() => updateSettings({ accent: name })} aria-label={name}>{s.accent === name ? <Check size={16} color={c.onDark} /> : null}</button>)}</div></Row>
@@ -411,7 +403,6 @@ function Desktop() {
         <SwitchRow title="Launch at login" checked={auto} onChange={(v) => { setAuto(v); window.pagerDesktop?.setAutostart(v); }} />
         <SwitchRow title="Start minimized to tray" checked={s.startMinimized} onChange={(v) => { updateSettings({ startMinimized: v }); window.pagerDesktop?.setPrefs({ startMinimized: v }); }} />
       </Group>
-      <Group title="Display"><Row title="Interface zoom" hint={`${Math.round(s.uiZoom * 100)}%`}><input type="range" min="0.8" max="1.6" step="0.1" value={s.uiZoom} onChange={(e) => { const z = Number(e.target.value); updateSettings({ uiZoom: z }); window.pagerDesktop?.setZoom(z); }} /></Row></Group>
     </>
   );
 }

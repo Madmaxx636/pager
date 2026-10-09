@@ -135,6 +135,7 @@ if (!app.requestSingleInstanceLock()) {
     w.webContents.setWindowOpenHandler(({ url }) => { try { if (new URL(url).protocol === "https:") w.loadURL(url); } catch { /* ignore */ } return { action: "deny" }; });
     w.loadURL(spec.url).catch((e) => { if (!done) { done = true; clearInterval(timer); if (!w.isDestroyed()) w.destroy(); reject(e); } });
   }));
+  ipcMain.on("hostname", (e) => { e.returnValue = os.hostname(); });
   ipcMain.handle("autostart:get", getAutostart);
   ipcMain.on("autostart:set", (_e, on) => setAutostart(!!on));
   ipcMain.on("prefs", (_e, p) => { prefs = { ...prefs, ...p }; savePrefs(); });

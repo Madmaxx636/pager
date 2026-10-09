@@ -9,7 +9,7 @@ import {
   addLabel, markAllRead, markRead, markUnread, me, movePin, pin, remind, removeLabel, setLowPriority, setMuted, setTag, snooze, leave, useInbox, useLabels, useStore, useChatsRaw,
 } from "../core/store";
 import { RowAction, useSettings } from "../core/settings";
-import { Avatar, IconButton, Modal, SheetItem, WhenModal, EmptyState } from "./common";
+import { Avatar, IconButton, Modal, SheetItem, TypingDots, WhenModal, EmptyState } from "./common";
 import { needsAttention } from "./Accounts";
 
 function timeLabel(ts: number) {
@@ -187,7 +187,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
                     {st.showNetworkNameInRows && <div className="chat-net" style={{ color: networkMeta(c.network).color }}>{networkMeta(c.network).label}</div>}
                     {st.inboxStyle !== "minimal" && (
                       <div className="chat-bottom">
-                        {c.typing ? <span className="chat-preview accent">typing…</span>
+                        {c.typing ? <span className="chat-preview"><TypingDots /></span>
                           : c.draft ? <span className="chat-preview"><b className="accent">Draft:</b> {c.draft.replace(/\n/g, " ")}</span>
                           : st.showPreviews ? <span className={"chat-preview" + (c.preview ? "" : " no-msgs")}>{c.preview ? (c.lastFromMe ? "You: " : "") + c.preview : "No messages yet"}</span> : <span className="chat-preview" />}
                         {unread && <span className={"unread" + (c.muted || c.lowPriority ? " muted-badge" : "")}>{c.unread > 99 ? "99+" : c.unread || ""}</span>}

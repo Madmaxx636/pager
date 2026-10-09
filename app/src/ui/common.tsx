@@ -36,6 +36,11 @@ export function Avatar({ name, mxc, size = 44, network }: { name: string; mxc?: 
   );
 }
 
+/** Three dots that bounce in turn, like iMessage and Google Messages. */
+export function TypingDots() {
+  return <span className="typing-dots" aria-hidden><i /><i /><i /></span>;
+}
+
 export function IconButton({ icon: Icon, label, onClick, active, size = 20, className = "" }: { icon: React.ComponentType<{ size?: number }>; label: string; onClick?: (e: React.MouseEvent) => void; active?: boolean; size?: number; className?: string }) {
   return <button className={"icon" + (active ? " active" : "") + (className ? " " + className : "")} onClick={onClick} title={label} aria-label={label}><Icon size={size} /></button>;
 }
