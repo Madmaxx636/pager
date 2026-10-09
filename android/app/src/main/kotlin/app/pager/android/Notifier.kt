@@ -10,7 +10,15 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
-import java.util.Calendar
+import androidx.core.content.LocusIdCompat
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Turns incoming messages into Android notifications, honouring every notification setting. */
 object Notifier {
@@ -23,6 +31,8 @@ object Notifier {
     private const val KEY_REPLY = "reply"
     const val ACTION_REPLY = "app.pager.android.REPLY"
     const val ACTION_READ = "app.pager.android.MARK_READ"
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private class Line(val sender: String, val text: String, val ts: Long)
     private val history = HashMap<String, MutableList<Line>>()
@@ -56,7 +66,52 @@ object Notifier {
         show(context, store, Incoming("!pager-test", "Pager test", "Pager", "This is how a message will look.", "matrix", false, false, System.currentTimeMillis(), false, !store.settings.value.notifSound, store.settings.value.notifPreview))
     }
 
+    /**
+     * Every page becomes an Android *conversation*: a long-lived shortcut with the page's picture, plus a notification that names it.
+     * That puts it in the "Conversations" section of the shade and adds the system's own Priority, Bubble and Silent options
+     * to each page (long-press the notification, or Settings → Notifications → Conversations).
+     */
     fun show(context: Context, store: Store, m: Incoming) {
+        scope.launch {
+            val avatar = store.inbox.value.firstOrNull { it.id == m.roomId }?.avatarMxc
+            val bitmap = avatar?.let { withTimeoutOrNull(2500) { runCatching { store.media.bitmap(it, 128) }.getOrNull() } } ?: letterAvatar(m.chat, networkMeta(m.network).color.toArgb())
+            post(context, store, m, IconCompat.createWithBitmap(circle(bitmap)))
+        }
+    }
+
+    private fun letterAvatar(name: String, color: Int): android.graphics.Bitmap {
+        val bmp = android.graphics.Bitmap.createBitmap(128, 128, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(bmp)
+        c.drawColor(color)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = android.graphics.Color.WHITE; textSize = 64f; textAlign = android.graphics.Paint.Align.CENTER; isFakeBoldText = true }
+        c.drawText(name.trim().take(1).uppercase().ifEmpty { "?" }, 64f, 64f - (paint.descent() + paint.ascent()) / 2, paint)
+        return bmp
+    }
+
+    private fun circle(src: android.graphics.Bitmap): android.graphics.Bitmap {
+        val size = minOf(src.width, src.height)
+        val out = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(out)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        c.drawCircle(size / 2f, size / 2f, size / 2f, paint)
+        paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+        c.drawBitmap(src, (size - src.width) / 2f, (size - src.height) / 2f, paint)
+        return out
+    }
+
+    /** Opens Android's own settings for one conversation (Priority, Bubble, sound), where the system offers them. */
+    fun openSystemSettings(context: Context, roomId: String) {
+        val intent = Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+            .putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, CH_ALL)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (android.os.Build.VERSION.SDK_INT >= 30) intent.putExtra(android.provider.Settings.EXTRA_CONVERSATION_ID, roomId)
+        runCatching { context.startActivity(intent) }.onFailure {
+            runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+    }
+
+    private fun post(context: Context, store: Store, m: Incoming, icon: IconCompat) {
         val s = store.settings.value
         // Whether to show it at all was decided by NotifyPolicy; here is only how it looks and sounds.
         val quiet = m.silent
@@ -69,14 +124,24 @@ object Notifier {
         while (lines.size > 6) lines.removeAt(0)
 
         val me = Person.Builder().setName("You").build()
+        val chatPerson = Person.Builder().setName(m.chat).setKey(m.roomId).setIcon(icon).setImportant(s.notifChat[m.roomId]?.level == "priority").build()
+        val openIntent = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra("roomId", m.roomId)
+        runCatching {
+            ShortcutManagerCompat.pushDynamicShortcut(
+                context,
+                ShortcutInfoCompat.Builder(context, m.roomId).setShortLabel(m.chat).setLongLived(true).setIsConversation().setPerson(chatPerson).setIcon(icon).setIntent(openIntent).build(),
+            )
+        }
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(if (m.isGroup) m.chat else null).setGroupConversation(m.isGroup)
         val prio = s.notifChat[m.roomId]?.level == "priority"
-        lines.forEach { style.addMessage(it.text, it.ts, Person.Builder().setName(it.sender).setImportant(prio).build()) }
+        lines.forEach { style.addMessage(it.text, it.ts, if (m.isGroup) Person.Builder().setName(it.sender).setKey(it.sender).build() else chatPerson) }
 
         val open = PendingIntent.getActivity(
             context, id, Intent(context, MainActivity::class.java).putExtra("roomId", m.roomId), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val b = NotificationCompat.Builder(context, channelFor(s, quiet, m.roomId))
+        val parent = channelFor(s, quiet, m.roomId)
+        val b = NotificationCompat.Builder(context, parent)
+            .setShortcutId(m.roomId).setLocusId(LocusIdCompat(m.roomId)).setLargeIcon(icon.let { runCatching { it.loadDrawable(context)?.let { d -> (d as? android.graphics.drawable.BitmapDrawable)?.bitmap } }.getOrNull() })
             .setSmallIcon(R.drawable.ic_notif).setContentTitle(m.chat)
             .setContentText(if (m.isGroup) "${lines.last().sender}: ${lines.last().text}" else lines.last().text)
             .setStyle(style).setContentIntent(open).setAutoCancel(true).setGroup(GROUP)
@@ -85,6 +150,11 @@ object Notifier {
             .setVisibility(when (s.notifLockScreen) { "hide" -> NotificationCompat.VISIBILITY_SECRET; "hide_content" -> NotificationCompat.VISIBILITY_PRIVATE; else -> NotificationCompat.VISIBILITY_PUBLIC })
             .setColor(networkMeta(m.network).color.toArgb())
         if (quiet) b.setSilent(true)
+        if (android.os.Build.VERSION.SDK_INT >= 30) b.setBubbleMetadata(
+            NotificationCompat.BubbleMetadata.Builder(
+                PendingIntent.getActivity(context, id + 1, openIntent, PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT), icon,
+            ).setDesiredHeight(600).setSuppressNotification(false).build(),
+        )
 
         if (s.notifActions && preview != "hidden") {
             val reply = NotificationCompat.Action.Builder(
