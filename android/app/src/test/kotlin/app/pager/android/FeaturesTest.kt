@@ -230,3 +230,27 @@ class BridgeBotTest {
         assertTrue(chat.readersOf("${'$'}1", me).isEmpty())
     }
 }
+
+class MediaEditTest {
+    private val me = "@me:x"
+    private fun sync(vararg events: String) = json.parseToJsonElement("""{"rooms":{"join":{"!r:x":{"timeline":{"events":[${events.joinToString(",")}]}}}}}""").jsonObject
+    private fun ev(id: String, content: String, ts: Long = 1) = """{"type":"m.room.message","event_id":"$id","sender":"@amy:x","origin_server_ts":$ts,"content":$content}"""
+
+    @Test fun anEditCanBringThePicture() {
+        val m = SyncReducer.apply(emptyMap(), sync(
+            ev("${'$'}1", """{"msgtype":"m.text","body":"Photo"}"""),
+            ev("${'$'}2", """{"msgtype":"m.image","body":"* pic.jpg","m.new_content":{"msgtype":"m.image","body":"pic.jpg","url":"mxc://s/abc","info":{"mimetype":"image/jpeg","w":640,"h":480,"size":1000}},"m.relates_to":{"rel_type":"m.replace","event_id":"${'$'}1"}}""", 2),
+        ), me, true).chats["!r:x"]!!.messages
+        assertEquals(1, m.size)
+        assertEquals("m.image", m[0].type); assertEquals("mxc://s/abc", m[0].mxc); assertEquals(640, m[0].w); assertEquals("pic.jpg", m[0].body)
+        assertFalse(m[0].edited)
+    }
+
+    @Test fun aTextEditStaysAnEdit() {
+        val m = SyncReducer.apply(emptyMap(), sync(
+            ev("${'$'}1", """{"msgtype":"m.text","body":"hi"}"""),
+            ev("${'$'}2", """{"msgtype":"m.text","body":"* hello","m.new_content":{"msgtype":"m.text","body":"hello"},"m.relates_to":{"rel_type":"m.replace","event_id":"${'$'}1"}}"""),
+        ), me, true).chats["!r:x"]!!.messages
+        assertEquals("hello", m[0].body); assertTrue(m[0].edited)
+    }
+}

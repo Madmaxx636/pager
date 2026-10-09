@@ -192,9 +192,22 @@ function applyEdit(msgs: Msg[], e: J): Msg[] {
   const target = str(obj(content["m.relates_to"]).event_id);
   const i = msgs.findIndex((m) => m.id === target);
   if (i < 0 || msgs[i].sender !== e.sender) return msgs;
-  const body = str(obj(content["m.new_content"]).body) ?? str(content.body)?.replace(/^\* /, "");
+  const nc = obj(content["m.new_content"]);
+  const body = str(nc.body) ?? str(content.body)?.replace(/^\* /, "");
   if (body == null) return msgs;
-  const copy = [...msgs]; copy[i] = { ...copy[i], body, edited: true };
+  const prev = msgs[i];
+  const next: Msg = { ...prev, body, edited: true };
+  // Some bridges (Google Messages, WhatsApp) send a picture or file as an edit of an earlier message: take its media too.
+  const url = str(nc.url);
+  if (url) {
+    const info = obj(nc.info);
+    Object.assign(next, {
+      type: str(nc.msgtype) ?? prev.type, mxc: url, mime: str(info.mimetype), size: num(info.size), w: num(info.w), h: num(info.h),
+      durationMs: num(info.duration) ?? prev.durationMs, edited: prev.edited, // adding the media isn't an edit the reader should see
+    });
+  } else if (str(nc.msgtype) && str(nc.msgtype) !== prev.type && !prev.mxc) next.type = str(nc.msgtype)!;
+  if (nc.format === "org.matrix.html") next.html = str(nc.formatted_body);
+  const copy = [...msgs]; copy[i] = next;
   return copy;
 }
 
