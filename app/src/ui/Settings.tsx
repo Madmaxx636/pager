@@ -243,6 +243,7 @@ function Appearance() {
       </Group>
       <Group title="Reactions" footer="These show first when you right-click a message. Click one to change it.">
         <SwitchRow title="Double-click to react" hint="Double-click a message to add your first quick reaction" checked={s.doubleTapReact} onChange={(v) => updateSettings({ doubleTapReact: v })} />
+        <SwitchRow title="Swipe to reply" hint="Swipe a message to the right (touch screens, or two fingers on a trackpad)" checked={s.swipeToReply} onChange={(v) => updateSettings({ swipeToReply: v })} />
         <Row title="Quick reactions"><div className="quick-edit">{s.quickReactions.map((e, i) => <button key={i} onClick={() => setEditing(i)}>{e}</button>)}</div></Row>
         <Row title="Reset quick reactions" onClick={() => updateSettings({ quickReactions: DEFAULT_QUICK_REACTIONS })}><span className="accent">Reset</span></Row>
       </Group>

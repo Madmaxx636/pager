@@ -2,6 +2,7 @@
 
 package app.pager.android
 
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.foundation.gestures.detectTapGestures
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
@@ -177,7 +178,20 @@ fun Modifier.swipeToReply(enabled: Boolean, onReply: () -> Unit, onThreshold: ()
     val scope = rememberCoroutineScope()
     val limit = with(LocalDensity.current) { 72.dp.toPx() }
     var fired by remember { mutableStateOf(false) }
-    this.offset { androidx.compose.ui.unit.IntOffset(offset.value.roundToInt(), 0) }.pointerInput(Unit) {
+    val cue = MaterialTheme.colorScheme.primary
+    val cueInk = MaterialTheme.colorScheme.onPrimary
+    this.drawBehind {
+        // A round reply button grows in behind the message as you drag it.
+        val p = (offset.value / limit).coerceIn(0f, 1f)
+        if (p > 0.02f) {
+            val c = Offset(18.dp.toPx(), size.height / 2)
+            drawCircle(cue.copy(alpha = p), 15.dp.toPx() * (0.6f + 0.4f * p), c)
+            val a = 6.dp.toPx() * p
+            drawLine(cueInk.copy(alpha = p), Offset(c.x + a, c.y - a * 0.9f), Offset(c.x - a, c.y), 2.2.dp.toPx(), StrokeCap.Round)
+            drawLine(cueInk.copy(alpha = p), Offset(c.x - a, c.y), Offset(c.x + a, c.y + a * 0.9f), 2.2.dp.toPx(), StrokeCap.Round)
+            drawLine(cueInk.copy(alpha = p), Offset(c.x - a, c.y), Offset(c.x + a * 1.1f, c.y), 2.2.dp.toPx(), StrokeCap.Round)
+        }
+    }.offset { androidx.compose.ui.unit.IntOffset(offset.value.roundToInt(), 0) }.pointerInput(Unit) {
         detectHorizontalDragGestures(
             onDragStart = { fired = false },
             onDragEnd = { if (fired) onReply(); scope.launch { offset.animateTo(0f, spring()) } },

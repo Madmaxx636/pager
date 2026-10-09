@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6ff0dc"/><stop offset="1" stop-color="#0f9d90"/></linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#c9f4ec"/></linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14706a"/><stop offset="1" stop-color="#0a3a37"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <!-- sparkles -->
+  <g fill="#ffffff">
+    <path d="M96 92l6 16 16 6-16 6-6 16-6-16-16-6 16-6z" opacity=".95"/>
+    <path d="M424 120l4.5 12 12 4.5-12 4.5-4.5 12-4.5-12-12-4.5 12-4.5z" opacity=".85"/>
+    <path d="M78 392l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" opacity=".8"/>
+    <path d="M440 396l5 13 13 5-13 5-5 13-5-13-13-5 13-5z" opacity=".9"/>
+  </g>
+  <!-- it is going off: sound waves -->
+  <g fill="none" stroke="#d5fbf4" stroke-width="14" stroke-linecap="round">
+    <path d="M92 198q-30 58 0 116"/><path d="M62 172q-44 84 0 168" opacity=".65"/>
+    <path d="M420 198q30 58 0 116"/><path d="M450 172q44 84 0 168" opacity=".65"/>
+  </g>
+  <!-- the pager -->
+  <g id="pager" stroke="#0e6b63" stroke-linejoin="round" stroke-linecap="round">
+    <ellipse cx="256" cy="436" rx="96" ry="12" fill="#0b4f49" opacity=".28" stroke="none"/>
+    <!-- feet -->
+    <ellipse cx="210" cy="408" rx="28" ry="15" fill="#ffffff" stroke-width="8"/>
+    <ellipse cx="302" cy="408" rx="28" ry="15" fill="#ffffff" stroke-width="8"/>
+    <!-- arms up, cheering -->
+    <path d="M150 262q-26-6-30-34" fill="none" stroke-width="22" stroke="#0e6b63"/>
+    <path d="M150 262q-26-6-30-34" fill="none" stroke-width="10" stroke="#ffffff"/>
+    <path d="M362 262q26-6 30-34" fill="none" stroke-width="22" stroke="#0e6b63"/>
+    <path d="M362 262q26-6 30-34" fill="none" stroke-width="10" stroke="#ffffff"/>
+    <circle cx="118" cy="222" r="19" fill="#ffffff" stroke-width="8"/>
+    <circle cx="394" cy="222" r="19" fill="#ffffff" stroke-width="8"/>
+    <!-- antenna -->
+    <path d="M256 120V86" fill="none" stroke-width="10"/>
+    <circle cx="256" cy="72" r="16" fill="#ff6f8e" stroke-width="8"/>
+    <circle cx="251" cy="67" r="4.5" fill="#ffffff" stroke="none" opacity=".9"/>
+    <!-- body -->
+    <rect x="146" y="116" width="220" height="284" rx="64" fill="url(#body)" stroke-width="10"/>
+    <!-- screen with the face -->
+    <rect x="174" y="148" width="164" height="136" rx="36" fill="url(#screen)" stroke-width="8"/>
+    <path d="M196 170q20-10 44-8" fill="none" stroke="#7ff5e3" stroke-width="7" opacity=".35"/>
+    <g fill="none" stroke="#8ff7e6" stroke-width="12">
+      <path d="M204 216q17-28 34 0"/><path d="M274 216q17-28 34 0"/>
+    </g>
+    <ellipse cx="196" cy="240" rx="15" ry="9" fill="#ff7b9c" opacity=".75" stroke="none"/>
+    <ellipse cx="316" cy="240" rx="15" ry="9" fill="#ff7b9c" opacity=".75" stroke="none"/>
+    <path d="M236 236q20 38 40 0z" fill="#8a1236" stroke="#8a1236" stroke-width="5"/>
+    <ellipse cx="256" cy="253" rx="9" ry="5.5" fill="#ff9db3" stroke="none"/>
+    <!-- buttons -->
+    <circle cx="208" cy="338" r="15" fill="#ff6f8e" stroke-width="7"/>
+    <circle cx="256" cy="338" r="15" fill="#ffc83d" stroke-width="7"/>
+    <circle cx="304" cy="338" r="15" fill="#2dd4bf" stroke-width="7"/>
+    <path d="M180 372h152" fill="none" stroke-width="7" opacity=".35"/>
+  </g>
+  <!-- ring marks -->
+  <g fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" opacity=".95">
+    <path d="M300 60l16-16"/><path d="M322 80l22-6"/><path d="M212 60l-16-16"/><path d="M190 80l-22-6"/>
+  </g>
+</svg>

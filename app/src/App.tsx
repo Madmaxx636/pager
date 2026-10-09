@@ -1,5 +1,6 @@
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Mascot } from "./ui/Mascot";
 import { applyTheme, getSettings, setSystemTheme, useSettings, type SystemTheme } from "./core/settings";
 import { forward, getState, requestNotifications, restoreSession, useStore } from "./core/store";
 import { Auth } from "./ui/Auth";
@@ -92,7 +93,7 @@ export function App() {
     return () => window.removeEventListener("keydown", handler);
   }, [session, st.shortcuts, nav]);
 
-  if (booting) return <div className="splash"><span className="logo-mark big" /></div>;
+  if (booting) return <div className="splash"><Mascot size={140} mood="ring" /></div>;
   if (!session) return <Auth />;
 
   const [kind, ...rest] = route.split(":");
@@ -108,7 +109,7 @@ export function App() {
   else if (kind === "forward") {
     const [from, id] = arg.split("|");
     main = <ChatPicker title="Forward to…" onBack={() => nav(`chat:${from}`)} onPick={(target) => { const m = getState().chats[from]?.messages.find((x) => x.id === id); if (m) forward(m, target); nav(`chat:${target}`); }} />;
-  } else main = <div className="blank"><span className="logo-mark big" /><p>{synced ? "Pick a chat to start." : "Syncing…"}</p></div>;
+  } else main = <div className="blank"><Mascot size={170} mood={synced ? "idle" : "ring"} /><p>{synced ? "Pick a chat to start." : "Syncing…"}</p></div>;
 
   return (
     <div className={"shell" + (route !== "home" ? " pane-open" : "")} style={{ ["--sidebar-w" as string]: `${st.sidebarWidth}px` }}>
