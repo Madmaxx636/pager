@@ -33,7 +33,7 @@
         "deb"
       ],
       "category": "Network;InstantMessaging;Chat",
-      "icon": "build/icon.png",
+      "icon": "build/icons",
       "synopsis": "Unified messenger",
       "maintainer": "Pager contributors <pager@localhost>",
       "syncDesktopName": true,

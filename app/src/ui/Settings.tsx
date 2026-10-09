@@ -239,6 +239,7 @@ function Appearance() {
         <Select title="Time format" value={s.timeFormat} options={[["system", "Follow system"], ["12", "12-hour"], ["24", "24-hour"]]} onChange={(v) => updateSettings({ timeFormat: v })} />
         <SwitchRow title="Color sender names in groups" checked={s.colorSenderNames} onChange={(v) => updateSettings({ colorSenderNames: v })} />
         <SwitchRow title="Large emoji" hint="Emoji-only messages are shown big" checked={s.largeEmoji} onChange={(v) => updateSettings({ largeEmoji: v })} />
+        <SwitchRow title="Silly hello" hint="The pager says something goofy when you open the app" checked={s.greetings} onChange={(v) => updateSettings({ greetings: v })} />
         <SwitchRow title="Reduce motion" hint="Fewer animations" checked={s.reduceMotion} onChange={(v) => updateSettings({ reduceMotion: v })} />
       </Group>
       <Group title="Reactions" footer="These show first when you right-click a message. Click one to change it.">

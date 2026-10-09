@@ -83,6 +83,7 @@ data class AppSettings(
     val autoPlayGifs: Boolean = true,
     val imageQuality: String = "original",     // original | high
     val swipeToReply: Boolean = true,
+    val greetings: Boolean = true,            // a silly pager message when the app opens
     val groupGapMin: Int = 5,
     val markReadMode: String = "scrolled",     // open | scrolled | manual
     val openAtFirstUnread: Boolean = true,

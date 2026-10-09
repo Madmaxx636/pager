@@ -60,6 +60,7 @@ class MainActivity : FragmentActivity() {
                     Box(Modifier.safeDrawingPadding()) {
                         CompositionLocalProvider(LocalStore provides store) {
                             if (locked && settings.appLock) LockScreen(onUnlock = { unlock() }) else Root()
+                            GreetingOverlay()
                         }
                     }
                 }

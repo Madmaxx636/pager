@@ -399,6 +399,7 @@ private fun AppearancePage() {
     var editing by remember { mutableStateOf<Int?>(null) }
     var tapPicking by remember { mutableStateOf<String?>(null) }
     SettingsGroup("Display") {
+        SwitchRow("Silly hello", "The pager says something goofy when you open the app", s.greetings) { v -> set { copy(greetings = v) } }; GroupDivider()
         SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }; GroupDivider()
         ChoiceRow("Display size", listOf("auto" to "Automatic (from this screen)", "manual" to "Manual"), s.scaleMode) { v -> set { copy(scaleMode = v) } }
         if (s.scaleMode == "manual") { GroupDivider(); SliderRow("Size", s.uiScale, 0.6f..1.8f, "${(s.uiScale * 100).toInt()}%") { v -> set { copy(uiScale = Math.round(v * 40) / 40f) } } }

@@ -361,3 +361,11 @@ code.copy { display: block; padding: 8px 12px; border-radius: 10px; background: 
 .way-chips { display: flex; gap: 4px; margin-left: auto; } .way-chips i { font-style: normal; font-size: .62rem; font-weight: 700; color: #fff; border-radius: 6px; padding: 2px 5px; }
 .way-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; margin: 0 6px; }
 .modal.sheet { max-width: 360px; padding: 18px; } .modal.sheet h3 { margin: 0 0 2px; }
+.m-led { animation: m-flash 1.2s ease-in-out infinite; } .mascot.sleep .m-led { animation: none; opacity: .5; }
+
+/* The pager's hello when the app opens */
+.greeting { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); animation: greet-in .28s ease-out; transition: opacity .35s; }
+.greeting.gone { opacity: 0; pointer-events: none; }
+.greeting-lcd { max-width: min(80vw, 420px); padding: 14px 20px; border-radius: 14px; text-align: center; font: 700 1.35rem ui-monospace, "SF Mono", Menlo, monospace; color: #0b4a22; background: linear-gradient(#8ceb99, #5fc774); box-shadow: 0 0 0 4px #14161a, 0 10px 30px rgba(0,0,0,.4); }
+@keyframes greet-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+:root[data-motion="reduced"] .greeting { animation: none; }
