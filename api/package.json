@@ -16,5 +16,8 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
-  "license": "AGPL-3.0-only"
+  "license": "AGPL-3.0-only",
+  "dependencies": {
+    "yaml": "^2.9.1"
+  }
 }

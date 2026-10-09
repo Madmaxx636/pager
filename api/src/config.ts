@@ -14,6 +14,8 @@ export interface Config {
   signup: { mode: "invite" | "open" | "closed"; inviteCode: string; adminInviteCode: string };
   /** Where changes made from the admin page are kept so they survive a restart. */
   stateFile?: string;
+  /** Where the bridges' config files are mounted (admin bridge settings); empty when not enabled. */
+  bridgesDir?: string;
   bridges: BridgeConfig[];
 }
 
@@ -39,6 +41,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     provisioningSecret: need("PROVISIONING_SECRET"),
     signup: { mode, inviteCode: env.INVITE_CODE ?? "", adminInviteCode: env.ADMIN_INVITE_CODE ?? "" },
     stateFile: env.STATE_FILE,
+    bridgesDir: env.BRIDGES_DIR,
     bridges: env.BRIDGES_FILE ? JSON.parse(readFileSync(env.BRIDGES_FILE, "utf8")) : DEFAULT_BRIDGES,
   };
 }
