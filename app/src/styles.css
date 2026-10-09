@@ -252,16 +252,6 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 .typing-row { margin-top: 6px; }
 .chat-row .typing-dots { color: var(--accent); }
 
-/* Layout adapts to the window: smaller windows get tighter rows and smaller avatars */
-@media (max-width: 520px), (max-height: 560px) {
-  :root { --row-pad: 5px; --radius: 14px; }
-  .chat-row { gap: 10px; padding-left: 6px; padding-right: 6px; }
-  .chat-row .avatar { width: 38px !important; height: 38px !important; font-size: 15px !important; }
-  .side-head { padding-top: 8px; padding-bottom: 4px; }
-  .chat-head { padding: 6px 8px; }
-  .bubble { padding: 6px 10px; }
-}
-
 /* Pinned chats: a grid of big profile pictures, like iMessage and Google Messages. Drag one to rearrange. */
 .pins { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 4px; padding: 8px 8px 12px; overflow: visible; }
 .pin-chip { width: auto; min-width: 0; padding: 8px 2px 6px; }

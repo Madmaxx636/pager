@@ -59,6 +59,7 @@ data class AppSettings(
     /** E-ink mode: black on white, no color, no animation, thick lines. */
     val eink: Boolean = false,
     /** Scales the whole interface (display size). */
+    val smallScreen: String = "auto",          // tighter rows: auto (small screens only) | on | off
     val scaleMode: String = "auto",            // auto: from the screen's size and density | manual: your slider
     val uiScale: Float = 1f,                   // manual scale, in small steps
     val haptics: Boolean = true,

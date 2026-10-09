@@ -402,6 +402,7 @@ private fun AppearancePage() {
         SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }; GroupDivider()
         ChoiceRow("Display size", listOf("auto" to "Automatic (from this screen)", "manual" to "Manual"), s.scaleMode, !s.eink) { v -> set { copy(scaleMode = v) } }
         if (s.scaleMode == "manual" && !s.eink) { GroupDivider(); SliderRow("Size", s.uiScale, 0.6f..1.8f, "${(s.uiScale * 100).toInt()}%") { v -> set { copy(uiScale = Math.round(v * 40) / 40f) } } }
+        GroupDivider(); ChoiceRow("Small screen layout", listOf("auto" to "Automatic", "on" to "Always", "off" to "Never"), s.smallScreen) { v -> set { copy(smallScreen = v) } }
     }
     SettingsGroup("Theme") {
         ChoiceRow("Mode", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark", "black" to "Black (AMOLED)"), s.themeMode) { v -> set { copy(themeMode = v) } }
