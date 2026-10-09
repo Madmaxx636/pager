@@ -237,6 +237,9 @@ val SETTINGS_INDEX = listOf(
     SettingEntry("media", "GIF search key", "Stickers & GIFs", "giphy tenor api"),
     SettingEntry("media", "My stickers", "Stickers & GIFs", "add import packs"),
     SettingEntry("labels", "Labels", "Labels", "folders organize tags"),
+    SettingEntry("privacy", "Encryption", "Privacy & security", "recovery key backup encrypt end-to-end e2ee key file lock"),
+    SettingEntry("privacy", "Recovery key", "Privacy & security", "lost forgot backup history new device restore"),
+    SettingEntry("privacy", "Encrypt all my pages", "Privacy & security", "turn on encryption convert"),
     SettingEntry("privacy", "App lock", "Privacy & security", "biometric fingerprint pin"),
     SettingEntry("privacy", "Hide in recent apps", "Privacy & security", "screenshots secure"),
     SettingEntry("storage", "Clear media cache", "Storage", "free space"),
@@ -371,7 +374,7 @@ private fun SettingsHome(navigate: (String) -> Unit, onBack: () -> Unit) {
                 NavRow("Stickers & GIFs", "Your stickers, GIF search", Icons.Rounded.EmojiEmotions, Color(0xFFEC4899)) { navigate("media") }
             }
             SettingsGroup {
-                NavRow("Privacy & security", "App lock, screen, receipts", Icons.Rounded.Lock, Color(0xFF64748B)) { navigate("privacy") }; GroupDivider()
+                NavRow("Privacy & security", "Encryption and recovery key, app lock, receipts", Icons.Rounded.Lock, Color(0xFF64748B)) { navigate("privacy") }; GroupDivider()
                 if (LocalStore.current.isAdmin.collectAsState().value) { NavRow("Admin", "Profiles, bridges, signups", Icons.Rounded.AdminPanelSettings, Color(0xFFDC2626)) { navigate("admin") }; GroupDivider() }
                 NavRow("Storage", "Cache, backup, reset", Icons.Rounded.Storage, Color(0xFF14B8A6)) { navigate("storage") }; GroupDivider()
                 NavRow("Advanced", "Background sync, developer tools", Icons.Rounded.Code, Color(0xFF475569)) { navigate("advanced") }
