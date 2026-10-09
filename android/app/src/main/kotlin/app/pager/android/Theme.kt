@@ -108,7 +108,8 @@ fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int): 
         bubbleStyle = if (s.bubbleStyle == "plain") "plain" else "outline", wallpaper = "none", autoPlayGifs = false, colorSenderNames = false, accent = "teal",
     )
     // Small screens get tighter rows.
-    if (screenWidthDp < 340 || screenHeightDp < 560) e = e.copy(density = "compact")
+    val small = screenWidthDp < 340 || screenHeightDp < 560
+    if (s.smallScreen == "on" || (s.smallScreen == "auto" && small)) e = e.copy(density = "compact")
     return e
 }
 
