@@ -118,12 +118,14 @@ fun AttachSheet(onPick: (Attach) -> Unit, onDismiss: () -> Unit) {
 fun GifSheet(onPick: (Gif) -> Unit, onSettings: () -> Unit, onDismiss: () -> Unit) {
     val store = LocalStore.current
     val s = LocalSettings.current
+    val favorites by store.favoriteGifs.collectAsState()
+    var tab by remember { mutableStateOf(if (favorites.isNotEmpty() || s.gifKey.isBlank()) "favorites" else "search") }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Gif>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    LaunchedEffect(query, s.gifKey, s.gifProvider) {
-        if (s.gifKey.isBlank()) return@LaunchedEffect
+    LaunchedEffect(query, s.gifKey, s.gifProvider, tab) {
+        if (s.gifKey.isBlank() || tab != "search") return@LaunchedEffect
         delay(if (query.isEmpty()) 0 else 350)
         busy = true; error = null
         runCatching { store.gifs.search(s.gifProvider, s.gifKey, query.trim()) }.onSuccess { results = it }.onFailure { error = it.message; results = emptyList() }
@@ -131,15 +133,24 @@ fun GifSheet(onPick: (Gif) -> Unit, onSettings: () -> Unit, onDismiss: () -> Uni
     }
     Sheet(onDismiss) {
         Column(Modifier.heightIn(min = 420.dp, max = 560.dp).padding(horizontal = 16.dp)) {
-            if (s.gifKey.isBlank()) {
-                EmptyState(Icons.Rounded.Gif, "Set up GIF search", "Add a free Giphy or Tenor API key in Settings → Stickers & GIFs. Pager doesn't ship a shared key.") { Button(onClick = onSettings) { Text("Open settings") } }
-            } else {
-                SearchPill(query, { query = it }, "Search ${if (s.gifProvider == "tenor") "Tenor" else "GIPHY"}")
-                Spacer(Modifier.height(10.dp))
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp)) }
-                if (busy && results.isEmpty()) Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+            Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.FilterChip(selected = tab == "favorites", onClick = { tab = "favorites" }, label = { Text("Favorites" + if (favorites.isNotEmpty()) " (${favorites.size})" else "") })
+                androidx.compose.material3.FilterChip(selected = tab == "search", onClick = { tab = "search" }, label = { Text("Search") })
+            }
+            val grid: @Composable (List<Gif>) -> Unit = { list ->
                 LazyVerticalGrid(GridCells.Fixed(2), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxSize()) {
-                    items(results, key = { it.id }) { g -> GifTile(g) { onPick(g) } }
+                    items(list, key = { it.id + it.url }) { g -> GifTile(g, starred = favorites.any { it.url == g.url }, onStar = { store.toggleFavoriteGif(g) }) { onPick(g) } }
+                }
+            }
+            when {
+                tab == "favorites" -> if (favorites.isEmpty()) EmptyState(Icons.Rounded.Gif, "No favorite GIFs yet", "Search for a GIF and tap the star to keep it here. Your favorites follow your account to every device.") else grid(favorites)
+                s.gifKey.isBlank() -> EmptyState(Icons.Rounded.Gif, "Set up GIF search", "Add a free Giphy or Tenor API key in Settings → Stickers & GIFs. Pager doesn't ship a shared key.") { Button(onClick = onSettings) { Text("Open settings") } }
+                else -> {
+                    SearchPill(query, { query = it }, "Search ${if (s.gifProvider == "tenor") "Tenor" else "GIPHY"}")
+                    Spacer(Modifier.height(10.dp))
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp)) }
+                    if (busy && results.isEmpty()) Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                    grid(results)
                 }
             }
         }
@@ -147,7 +158,7 @@ fun GifSheet(onPick: (Gif) -> Unit, onSettings: () -> Unit, onDismiss: () -> Uni
 }
 
 @Composable
-private fun GifTile(g: Gif, onClick: () -> Unit) {
+private fun GifTile(g: Gif, starred: Boolean, onStar: () -> Unit, onClick: () -> Unit) {
     val store = LocalStore.current
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, g.previewUrl) {
         value = runCatching { store.gifs.download(g.previewUrl).let { b -> BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() } }.getOrNull()
@@ -155,6 +166,9 @@ private fun GifTile(g: Gif, onClick: () -> Unit) {
     val ratio = if (g.w > 0 && g.h > 0) (g.w.toFloat() / g.h).coerceIn(0.6f, 2f) else 1.4f
     Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable(onClick = onClick)) {
         bmp?.let { Image(it, g.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+        Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(32.dp).clip(CircleShape).background(Color(0x99000000)).clickable(onClick = onStar), contentAlignment = Alignment.Center) {
+            Icon(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (starred) "Remove from favorites" else "Add to favorites", tint = Color(0xFFFFD54A), modifier = Modifier.size(20.dp))
+        }
     }
 }
 
@@ -228,7 +242,7 @@ fun PollSheet(onCreate: (String, List<String>, Int, Boolean) -> Unit, onDismiss:
 @Composable
 fun ActionsSheet(
     msg: Msg, mine: Boolean, starred: Boolean, quick: List<String>, developer: Boolean, onDismiss: () -> Unit, onReact: (String) -> Unit, onMore: () -> Unit,
-    onReply: () -> Unit, onForward: () -> Unit, onCopy: () -> Unit, onStar: () -> Unit, onEdit: (() -> Unit)?, onDelete: (() -> Unit)?, onInfo: () -> Unit,
+    onReply: () -> Unit, onForward: () -> Unit, onCopy: () -> Unit, onStar: () -> Unit, onEdit: (() -> Unit)?, onDelete: (() -> Unit)?, onInfo: () -> Unit, onSaveSticker: (() -> Unit)? = null,
 ) {
     Sheet(onDismiss) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -237,6 +251,7 @@ fun ActionsSheet(
         }
         SheetItem(Icons.AutoMirrored.Rounded.Reply, "Reply", onReply)
         SheetItem(Icons.AutoMirrored.Rounded.Forward, "Forward", onForward)
+        if (msg.type == "m.image" && msg.mxc != null) onSaveSticker?.let { SheetItem(Icons.Rounded.EmojiEmotions, "Save as sticker", it) }
         if (msg.type == "m.text" || msg.type == "m.notice" || msg.type == "m.emote") SheetItem(Icons.Rounded.ContentCopy, "Copy text", onCopy)
         SheetItem(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (starred) "Remove star" else "Star", onStar)
         onEdit?.let { SheetItem(Icons.Rounded.Edit, "Edit", it) }

@@ -55,10 +55,16 @@ docker compose up -d --build
 ```
 Open `https://your-domain/`, sign up with the invite code printed by setup, then connect accounts from the app.
 
-- Bridges on by default: WhatsApp, Signal, Google Messages and Messenger. Opt-in (add to `server/.env`, then re-run `setup.sh`):
-  Telegram (`TELEGRAM_API_ID` + `TELEGRAM_API_HASH` from https://my.telegram.org; untested), Discord (`ENABLE_DISCORD=1`; it is a legacy bridge
-  whose login API doesn't match, so log in through its bot chat) and Instagram (`ENABLE_INSTAGRAM=1`; no published bridge image was
-  available when tested).
+- Bridges on by default: WhatsApp, Signal, Google Messages, Messenger, Slack, X (Twitter) DMs, Bluesky and LinkedIn. Opt-in (add to
+  `server/.env`, then re-run `setup.sh`): Telegram (`TELEGRAM_API_ID` + `TELEGRAM_API_HASH` from https://my.telegram.org) and Discord
+  (`ENABLE_DISCORD=1`; it is a legacy bridge whose login API doesn't match, so log in through its bot chat). iMessage needs a Mac and
+  isn't included.
+- Every bridge gets the same defaults (`scripts/defaults.sh`): up to 2,000 messages of history per new chat, read and delivery state,
+  and typing in both directions, plus double puppeting (`scripts/double-puppet.sh`) so messages you send from your phone show as sent by you.
+- **Admin:** sign up with the *admin* code that `setup.sh` prints to create an administrator, or run `scripts/make-admin.sh yourname`
+  for an existing account. Admins get Settings → Admin: signups and the invite code, bridge health, and every profile (connected apps,
+  admin rights, password reset, delete).
+- Settings belong to one device (found by its name), so two phones or browsers never share them. They are saved in your Matrix account.
 - For a local test with a hostname like `localhost` (or an IP), `setup.sh` serves plain HTTP on port 8080 (set `PAGER_ADDRESS` /
   `HTTP_PORT` to change it). Rootless Podman: `ln -s $(which podman) ~/.local/bin/docker`, `systemctl --user enable --now podman.socket`,
   and `export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock`. To wipe data, use `podman unshare rm -rf server/data`.

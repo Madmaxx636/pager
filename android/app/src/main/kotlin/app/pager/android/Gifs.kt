@@ -12,6 +12,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
 
+@kotlinx.serialization.Serializable
 data class Gif(val id: String, val title: String, val previewUrl: String, val url: String, val w: Int, val h: Int)
 
 private fun JsonElement?.obj() = (this as? JsonObject) ?: JsonObject(emptyMap())

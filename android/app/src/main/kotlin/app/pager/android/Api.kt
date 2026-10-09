@@ -1,5 +1,6 @@
 package app.pager.android
 
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -35,7 +36,35 @@ data class LoginStep(
 )
 
 /** The Pager API (signup + in-app bridge login) on the user's own server. */
+data class AdminUser(val id: String, val admin: Boolean, val deactivated: Boolean, val created: Long, val you: Boolean)
+data class ServerSettings(val domain: String, val signup: String, val inviteCode: String)
+
 class PagerApi(private val http: Http) {
+    // ---- Admin (Synapse checks the caller really is an admin) ----
+    suspend fun isAdmin(): Boolean = http.request("GET", "/api/me")["admin"].let { (it as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true }
+    suspend fun adminUsers(): List<AdminUser> = http.request("GET", "/api/admin/users")["users"].arr().map {
+        val o = it.obj()
+        AdminUser(o["id"].str().orEmpty(), (o["admin"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true, (o["deactivated"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true,
+            (o["created"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: 0L, (o["you"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true)
+    }
+    suspend fun adminLogins(id: String): List<Network> = http.request("GET", "/api/admin/users/${enc(id)}/logins")["networks"].arr().map { n ->
+        val o = n.obj()
+        Network(o["id"].str().orEmpty(), o["name"].str().orEmpty(), o["logins"].arr().map { l -> l.obj().let { Login(it["id"].str().orEmpty(), it["name"].str() ?: it["profile"].obj()["name"].str() ?: it["id"].str().orEmpty(), it["state_event"].str() ?: "") } }, o["error"] != null)
+    }
+    suspend fun adminLogout(id: String, net: String, login: String) { http.request("POST", "/api/admin/users/${enc(id)}/logout/${enc(net)}/${enc(login)}", JsonObject(emptyMap())) }
+    suspend fun adminSetAdmin(id: String, admin: Boolean) { http.request("POST", "/api/admin/users/${enc(id)}/admin", buildJsonObject { put("admin", admin) }) }
+    suspend fun adminResetPassword(id: String, password: String) { http.request("POST", "/api/admin/users/${enc(id)}/password", buildJsonObject { put("password", password) }) }
+    suspend fun adminRemove(id: String) { http.request("POST", "/api/admin/users/${enc(id)}/delete", JsonObject(emptyMap())) }
+    private fun serverFrom(o: JsonObject) = ServerSettings(o["domain"].str().orEmpty(), o["signup"].str().orEmpty(), o["inviteCode"].str().orEmpty())
+    suspend fun adminServer(): ServerSettings = serverFrom(http.request("GET", "/api/admin/server"))
+    suspend fun adminSetServer(signup: String? = null, regenerateInvite: Boolean = false): ServerSettings = serverFrom(http.request("POST", "/api/admin/server", buildJsonObject {
+        if (signup != null) put("signup", signup)
+        if (regenerateInvite) put("regenerateInvite", true)
+    }))
+    suspend fun adminBridges(): List<Triple<String, String, Boolean>> = http.request("GET", "/api/admin/bridges")["bridges"].arr().map { b ->
+        val o = b.obj(); Triple(o["id"].str().orEmpty(), o["name"].str().orEmpty(), (o["up"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true)
+    }
+
     suspend fun config(): ServerConfig {
         val c = http.request("GET", "/api/config")
         return ServerConfig(c["domain"].str() ?: "", (c["inviteRequired"] as? JsonPrimitive)?.booleanOrNull ?: false, c["signup"].str() != "closed")

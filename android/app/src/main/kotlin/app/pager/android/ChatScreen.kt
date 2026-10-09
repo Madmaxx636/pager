@@ -406,6 +406,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
         ActionsSheet(
             msg = m, mine = mine, starred = stars.any { it.eventId == m.id }, quick = s.quickReactions, developer = s.developerMode, onDismiss = { actions = null },
             onReact = { store.react(roomId, m.id, it); actions = null },
+            onSaveSticker = { store.saveAsSticker(m); actions = null },
             onMore = { pickerFor = m; actions = null },
             onReply = { replyTo = m; editing = null; actions = null },
             onForward = { onForward(m); actions = null },

@@ -2,6 +2,7 @@
 
 package app.pager.android
 
+import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.foundation.layout.FlowRow
 import android.content.Intent
@@ -308,6 +309,7 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
         }
         "notifications" -> NotificationSettings(navigate)
         "bridges" -> BridgesScreen(onBack = home)
+        "admin" -> AdminScreen(onBack = home)
         "media" -> StickersAndGifsPage(home)
         "labels" -> LabelsPage(home)
         "privacy" -> SettingsPage("Privacy & security", home) {
@@ -359,6 +361,7 @@ private fun SettingsHome(navigate: (String) -> Unit, onBack: () -> Unit) {
             }
             SettingsGroup {
                 NavRow("Privacy & security", "App lock, screen, receipts", Icons.Rounded.Lock, Color(0xFF64748B)) { navigate("privacy") }; GroupDivider()
+                if (LocalStore.current.isAdmin.collectAsState().value) { NavRow("Admin", "Profiles, bridges, signups", Icons.Rounded.AdminPanelSettings, Color(0xFFDC2626)) { navigate("admin") }; GroupDivider() }
                 NavRow("Storage", "Cache, backup, reset", Icons.Rounded.Storage, Color(0xFF14B8A6)) { navigate("storage") }; GroupDivider()
                 NavRow("Advanced", "Background sync, developer tools", Icons.Rounded.Code, Color(0xFF475569)) { navigate("advanced") }
             }
