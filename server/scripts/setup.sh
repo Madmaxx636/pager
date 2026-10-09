@@ -39,6 +39,11 @@ BRIDGE_TABLE=(
   "signal;Signal;signal;mautrix-signal;;"
   "discord;Discord (experimental: legacy bridge, log in via its bot chat);discord;mautrix-discord;.appservice.database.type = \"postgres\" | .appservice.database.uri = \"postgres://pager:$POSTGRES_PASSWORD@postgres/discord?sslmode=disable\";ENABLE_DISCORD"
   "gmessages;Google Messages (SMS/RCS);gmessages;mautrix-gmessages;;"
+  "slack;Slack;slack;mautrix-slack;;"
+  "twitter;X (Twitter) DMs;twitter;mautrix-twitter;;"
+  "bluesky;Bluesky;bluesky;mautrix-bluesky;;"
+  "linkedin;LinkedIn;linkedin;mautrix-linkedin;;"
+  "googlechat;Google Chat;googlechat;mautrix-googlechat;;"
   "instagram;Instagram (experimental: no published bridge image at last check);instagram;mautrix-instagram;;ENABLE_INSTAGRAM"
   "messenger;Messenger;meta;mautrix-meta;;"
   "telegram;Telegram;telegram;mautrix-telegram;.network.api_id = ${TELEGRAM_API_ID:-0} | .network.api_hash = \"${TELEGRAM_API_HASH:-}\";TELEGRAM_API_HASH"
@@ -85,6 +90,7 @@ for row in "${BRIDGE_TABLE[@]}"; do
   if [ ! -f "$dir/config.yaml" ]; then
     # First run copies the example config and exits.
     docker run --rm $USERNS -u "$DOCKER_UID" -v "$PWD/$dir:/data" "$img" || true
+    if [ ! -f "$dir/config.yaml" ]; then echo "Skipping $name (its image could not be started)"; rmdir "$dir" 2>/dev/null || true; continue; fi
     yq -i ".homeserver.address = \"http://synapse:8008\"
       | .homeserver.domain = \"$PAGER_DOMAIN\"
       | .appservice.address = \"http://$id:29318\"
@@ -100,6 +106,7 @@ for row in "${BRIDGE_TABLE[@]}"; do
       | .backfill.enabled = true
       | .encryption.allow = false${patch:+ | $patch}" "bridges/$id/config.yaml"
   fi
+  if [ ! -f "$dir/config.yaml" ]; then echo "Skipping $name (its image could not be started)"; continue; fi
   if [ ! -f "$dir/registration.yaml" ]; then
     docker run --rm $USERNS -u "$DOCKER_UID" -v "$PWD/$dir:/data" --entrypoint "/usr/bin/$bin" \
       "$img" -g -c /data/config.yaml -r /data/registration.yaml
