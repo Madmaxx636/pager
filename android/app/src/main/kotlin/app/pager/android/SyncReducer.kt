@@ -377,8 +377,9 @@ object SyncReducer {
 
     /** Display name for a chat, falling back to the other participant for unnamed DMs. */
     fun displayName(chat: ChatState, me: String): String {
-        if (chat.name.isNotBlank()) return chat.name
+        if (chat.isStories) return "Stories"
+        if (chat.name.isNotBlank()) return Names.pretty(chat.name)
         val other = (chat.heroes + chat.joined).firstOrNull { it != me }
-        return other?.let { chat.members[it] ?: chat.nameOf(it) } ?: "Unnamed chat"
+        return other?.let { chat.nameOf(it) } ?: "Unnamed chat"
     }
 }

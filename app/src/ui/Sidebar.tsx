@@ -11,6 +11,7 @@ import {
 import { RowAction, updateSettings, useSettings } from "../core/settings";
 import { Avatar, IconButton, Modal, SheetItem, TypingDots, WhenModal, EmptyState } from "./common";
 import { needsAttention } from "./Accounts";
+import { Mascot } from "./Mascot";
 
 function timeLabel(ts: number) {
   if (!ts) return "";
@@ -52,7 +53,9 @@ function rowAction(a: RowAction, c: ChatSummary, setUndo: (u?: { label: string; 
 
 export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: string | null; onSelect: (id: string) => void; nav: Nav; onAccounts: () => void }) {
   const st = useSettings();
-  const all = useInbox();
+  const everything = useInbox();
+  const stories = everything.find((c) => c.stories);
+  const all = everything.filter((c) => !c.stories);
   const synced = useStore((s) => s.synced);
   const bridges = useStore((s) => s.bridges);
   const labels = useLabels();
@@ -116,9 +119,9 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
         </header>
       ) : (
         <header className="side-head">
-          <div><h1>Chats</h1>{st.dndUntil > Date.now() ? <small className="accent">Do not disturb</small> : totalUnread > 0 && <small className="accent">{totalUnread} unread</small>}</div>
+          <div><h1 className="pages-title"><Mascot size={30} />Pages</h1>{st.dndUntil > Date.now() ? <small className="accent">Do not disturb</small> : totalUnread > 0 && <small className="accent">{totalUnread} unread</small>}</div>
           <div className="head-actions">
-            <IconButton icon={SquarePen} label="New chat (Ctrl+N)" onClick={() => nav("new")} />
+            <IconButton icon={SquarePen} label="Page someone (Ctrl+N)" onClick={() => nav("new")} />
             <IconButton icon={Search} label="Search all messages (Ctrl+Shift+F)" onClick={() => nav("search")} />
             <div className="menu-wrap">
               <IconButton icon={MoreVertical} label="Menu" onClick={() => setMenu(!menu)} />
@@ -156,6 +159,13 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
       )}
 
       <div className="chat-scroll">
+        {stories && tab === "inbox" && !q && !selecting && (
+          <button className={"stories-row" + (stories.id === selected ? " sel" : "")} onClick={() => open(stories.id)}>
+            <span className={"stories-ring" + (stories.unread > 0 ? " new" : "")}><CircleDot size={22} /></span>
+            <span className="col"><b>Stories</b><small>{stories.preview ? stories.preview : "WhatsApp status updates show up here"}</small></span>
+            {stories.unread > 0 && <span className="unread muted-badge">{stories.unread > 99 ? "99+" : stories.unread}</span>}
+          </button>
+        )}
         {pins.length > 0 && (
           <div className="pins">
             {pins.map((c, i) => (

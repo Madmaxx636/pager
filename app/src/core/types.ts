@@ -1,3 +1,4 @@
+import { prettyName } from "./names";
 export const STATUS_SENT = 0;
 export const STATUS_SENDING = 1;
 export const STATUS_FAILED = 2;
@@ -94,6 +95,8 @@ export interface ChatSummary {
   isGroup: boolean;
   draft?: string;
   lowPriority: boolean;
+  /** The WhatsApp stories room. */
+  stories?: boolean;
   labels: string[];
   pinOrder: number;
   unanswered: boolean;
@@ -115,7 +118,7 @@ export const isArchived = (c: ChatState) => c.tags.includes("u.archived");
 export const isLowPriority = (c: ChatState) => c.tags.includes("m.lowpriority");
 export const LABEL_PREFIX = "u.label.";
 export const labelsOf = (c: ChatState) => c.tags.filter((t) => t.startsWith(LABEL_PREFIX)).map((t) => t.slice(LABEL_PREFIX.length)).sort();
-export const nameOf = (c: ChatState, userId: string) => c.members[userId] ?? userId.replace(/^@/, "").split(":")[0];
+export const nameOf = (c: ChatState, userId: string) => prettyName(c.members[userId] ?? userId.replace(/^@/, "").split(":")[0]);
 
 export function previewOf(m: Msg): string {
   switch (m.type) {
@@ -137,9 +140,10 @@ export function isBotRoom(c: ChatState, me: string): boolean {
 }
 
 export function displayName(c: ChatState, me: string): string {
-  if (c.name.trim()) return c.name;
+  if (isStoriesRoom(c)) return "Stories";
+  if (c.name.trim()) return prettyName(c.name);
   const other = [...c.heroes, ...c.joined].find((u) => u !== me);
-  return other ? c.members[other] ?? nameOf(c, other) : "Unnamed chat";
+  return other ? nameOf(c, other) : "Unnamed chat";
 }
 
 export function lastTs(c: ChatState) { return c.messages.length ? c.messages[c.messages.length - 1].ts : 0; }
@@ -160,3 +164,6 @@ export function readersOf(chat: ChatState, msgId: string, sender: string): { use
 
 /** The bridge's own bot account (e.g. @signalbot:server). It sends a receipt when a message reaches the other network: that means "delivered", not "read". */
 export const isBridgeBot = (userId: string) => /^@(whatsapp|signal|gmessages|messenger|instagram|slack|twitter|bluesky|linkedin|telegram|discord|googlechat|imessage)bot:/.test(userId);
+
+/** WhatsApp stories (status updates) arrive in one bridge room; we show it as "Stories". */
+export const isStoriesRoom = (c: ChatState) => /^whatsapp status broadcast$/i.test(c.name.trim()) || (c.network === "whatsapp" && /status.?broadcast/i.test(c.name));

@@ -5,10 +5,11 @@ import { Decision, decide } from "./notifypolicy";
 import { playSound } from "./sounds";
 import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
 import {
-  ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
+  ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isStoriesRoom, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
   labelsOf, lastPreview, lastTs, nameOf, previewOf,
 } from "./types";
 import { markdownToHtml } from "./format";
+import { addToPhonebook, onPhonebookChange } from "./names";
 import type { Gif } from "./gifs";
 
 export interface Session { baseUrl: string; token: string; userId: string; deviceId: string }
@@ -70,7 +71,7 @@ export function buildInbox(s: State, st: AppSettings): ChatSummary[] {
       return {
         id: c.id, name: displayName(c, user), network: c.network, avatarMxc: c.avatarMxc, preview: lastPreview(c), ts: lastTs(c), unread: c.unread,
         markedUnread: c.markedUnread, pinned: isPinned(c), archived: isArchived(c), muted: s.muted.includes(c.id), isGroup: isGroup(c), draft: s.drafts[c.id]?.trim() || undefined,
-        lowPriority: isLowPriority(c), labels: labelsOf(c), pinOrder: c.pinOrder ?? Number.MAX_VALUE,
+        lowPriority: isLowPriority(c), stories: isStoriesRoom(c) || undefined, labels: labelsOf(c), pinOrder: c.pinOrder ?? Number.MAX_VALUE,
         unanswered: !!last && last.sender !== user, lastFromMe: last?.sender === user, typing: c.typing.length > 0,
       };
     })
@@ -544,7 +545,17 @@ function applyIdentity(nets: Network[]) {
 }
 export async function refreshBridges() {
   if (!state.session) return;
-  try { const nets = await pager.networks(); applyIdentity(nets); set({ bridges: nets }); } catch { /* bridge API may be down */ }
+  try { const nets = await pager.networks(); applyIdentity(nets); set({ bridges: nets }); void loadPhonebook(nets); } catch { /* bridge API may be down */ }
+}
+// Names for bare phone numbers come from your bridges' contact lists (WhatsApp, Signal and Google Messages know your address book).
+onPhonebookChange(() => set({ chats: { ...state.chats } }));
+let bookAt = 0;
+async function loadPhonebook(nets: Network[]) {
+  if (Date.now() - bookAt < 30 * 60_000) return;
+  bookAt = Date.now();
+  for (const n of nets) for (const l of n.logins) {
+    try { addToPhonebook((await pager.contacts(n.id, l.id)).filter((c) => c.detail).map((c) => ({ number: c.detail!, name: c.name }))); } catch { /* this network has no contact list */ }
+  }
 }
 window.setInterval(() => { if (document.visibilityState === "visible") void refreshBridges(); }, 120_000);
 
