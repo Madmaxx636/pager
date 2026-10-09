@@ -17,7 +17,7 @@ private fun JsonElement?.obj() = (this as? JsonObject) ?: JsonObject(emptyMap())
 private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
 data class ServerConfig(val domain: String, val inviteRequired: Boolean, val signupOpen: Boolean)
-data class Login(val id: String, val name: String, val state: String = "")
+data class Login(val id: String, val name: String, val state: String = "", val profileName: String = "")
 data class Network(val id: String, val name: String, val logins: List<Login>, val unavailable: Boolean)
 data class SearchHit(val roomId: String, val eventId: String, val sender: String, val text: String, val ts: Long)
 data class LinkPreview(val url: String, val title: String?, val description: String?, val imageMxc: String?, val site: String?)
@@ -54,7 +54,7 @@ class PagerApi(private val http: Http) {
             o["logins"].arr().map { l ->
                 l.obj().let {
                     val st = it["state_event"].str() ?: it["state"].obj()["state_event"].str() ?: ""
-                    Login(it["id"].str().orEmpty(), it["name"].str() ?: it["profile"].obj()["name"].str() ?: it["id"].str().orEmpty(), st)
+                    Login(it["id"].str().orEmpty(), it["name"].str() ?: it["profile"].obj()["name"].str() ?: it["id"].str().orEmpty(), st, it["profile"].obj()["name"].str().orEmpty())
                 }
             },
             o["error"] != null,
@@ -156,10 +156,10 @@ class MatrixApi(private val http: Http) {
     }
 
     /** One page of older events. Returns (events newest-first, next token or null at the start of the room). */
-    suspend fun messages(roomId: String, from: String): Pair<List<JsonObject>, String?> {
+    suspend fun messages(roomId: String, from: String): Triple<List<JsonObject>, String?, List<JsonObject>> {
         val filter = enc("""{"lazy_load_members":true}""")
         val r = http.request("GET", "/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=40&from=${enc(from)}&filter=$filter")
-        return r["chunk"].arr().map { it.obj() } to r["end"].str()
+        return Triple(r["chunk"].arr().map { it.obj() }, r["end"].str(), r["state"].arr().map { it.obj() })
     }
 
     suspend fun send(roomId: String, type: String, txnId: String, content: JsonObject): String =
