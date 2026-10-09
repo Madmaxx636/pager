@@ -283,6 +283,12 @@ class Store(private val context: Context) {
         return e.restoreBackup(key).also { refreshEncryptionStatus() }
     }
 
+    /** Every message key on this device, scrambled with a passphrase, as text for a file. */
+    suspend fun exportKeyFile(passphrase: String): String = (e2ee ?: throw java.io.IOException("Encryption is not ready yet")).exportKeys(passphrase)
+
+    /** Reads a key file; returns how many keys were new here. */
+    suspend fun importKeyFile(text: String, passphrase: String): Int = (e2ee ?: throw java.io.IOException("Encryption is not ready yet")).importKeys(text, passphrase)
+
     private fun unreadable(e: JsonObject) = JsonObject(e + mapOf(
         "type" to JsonPrimitive("m.room.message"),
         "content" to buildJsonObject { put("msgtype", "m.text"); put("body", "\uD83D\uDD12 Waiting for the key to read this message…"); put("pagerWaiting", true) },

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { RowAction, ACCENTS, accentTones, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
-import { addStickers, cancelReminder, createRecoveryKey, restoreWithRecoveryKey, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
+import { addStickers, cancelReminder, createRecoveryKey, exportKeyFile, importKeyFile, restoreWithRecoveryKey, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
@@ -501,7 +501,7 @@ function ColorDialog({ value, onClose, onPick }: { value: string; onClose: () =>
 /** End-to-end encryption on this device: the recovery key that brings your history back on a new device. */
 function EncryptionGroup() {
   const e = useEncryption();
-  const [dlg, setDlg] = useState<"create" | "restore">();
+  const [dlg, setDlg] = useState<"create" | "restore" | "export" | "import">();
   return (
     <Group title="Encryption" footer="Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.">
       <Row title="Encryption on this device" hint={e.ready ? `Ready · device ${e.deviceId}` : "Starting…"} />
@@ -511,8 +511,13 @@ function EncryptionGroup() {
         <span className="accent">{e.backupHere ? "Replace" : e.backupOnServer ? "Enter key" : "Set up"}</span>
       </Row>
       {e.backupOnServer && e.backupHere === false && <Row title="Make a new recovery key instead" onClick={() => setDlg("create")}><span className="accent">New key</span></Row>}
+      {e.ready && <Row title="Lost your recovery key?" hint={e.backupHere ? "This device still has your keys: choose Replace above and it makes a new one" : "Use a key file below, or make a new key. Without either, older encrypted messages can't be read on this device"} />}
+      {e.ready && <Row title="Save my keys to a file" hint="A second way back in: a file only your passphrase opens" onClick={() => setDlg("export")}><span className="accent">Save</span></Row>}
+      {e.ready && <Row title="Restore keys from a file" onClick={() => setDlg("import")}><span className="accent">Open</span></Row>}
       {dlg === "create" && <RecoveryKeyDialog onClose={() => setDlg(undefined)} />}
-      {dlg === "restore" && <RestoreDialog onClose={() => setDlg(undefined)} />}
+      {dlg === "restore" && <RestoreDialog onClose={() => setDlg(undefined)} onLost={() => setDlg("create")} />}
+      {dlg === "export" && <ExportKeysDialog onClose={() => setDlg(undefined)} />}
+      {dlg === "import" && <ImportKeysDialog onClose={() => setDlg(undefined)} />}
     </Group>
   );
 }
@@ -538,7 +543,7 @@ function RecoveryKeyDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function RestoreDialog({ onClose }: { onClose: () => void }) {
+function RestoreDialog({ onClose, onLost }: { onClose: () => void; onLost: () => void }) {
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -551,10 +556,48 @@ function RestoreDialog({ onClose }: { onClose: () => void }) {
           {err && <p className="error">{err}</p>}
         </>
       )}
+      {done == null && <p className="muted small">Lost it? A key file (Settings → Encryption → Restore keys from a file) or another signed-in device can still get your history back. If you have neither, <button className="link inline" onClick={onLost}>start fresh with a new key</button>: you can read and send new messages, but older encrypted ones stay unreadable.</p>}
       <div className="row-end">
         <button className="link" onClick={onClose}>{done != null ? "Close" : "Cancel"}</button>
         {done == null && <button className="primary" disabled={busy || !text.trim()} onClick={() => { setBusy(true); setErr(""); restoreWithRecoveryKey(text).then(setDone).catch((e) => setErr(e.message)).finally(() => setBusy(false)); }}>{busy ? "Restoring…" : "Restore"}</button>}
       </div>
+    </Modal>
+  );
+}
+
+function ExportKeysDialog({ onClose }: { onClose: () => void }) {
+  const [pass, setPass] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  return (
+    <Modal title="Save my keys to a file" onClose={onClose}>
+      <p className="muted">Choose a passphrase. The file can only be opened with it, so keep both safe, but separately.</p>
+      <input type="password" autoFocus placeholder="Passphrase (at least 8 characters)" value={pass} onChange={(e) => setPass(e.target.value)} />
+      {err && <p className="error">{err}</p>}
+      <div className="row-end"><button className="link" onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={busy || pass.length < 8} onClick={() => { setBusy(true); setErr(""); exportKeyFile(pass).then((text) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" })); a.download = "pager-keys.txt"; a.click(); onClose(); }).catch((e) => setErr(e.message)).finally(() => setBusy(false)); }}>{busy ? "Saving…" : "Save file"}</button></div>
+    </Modal>
+  );
+}
+
+function ImportKeysDialog({ onClose }: { onClose: () => void }) {
+  const [text, setText] = useState("");
+  const [name, setName] = useState("");
+  const [pass, setPass] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [done, setDone] = useState<number>();
+  return (
+    <Modal title="Restore keys from a file" onClose={onClose}>
+      {done != null ? <p>Done: {done} new message keys. Older messages in your encrypted pages can be read now.</p> : (
+        <>
+          <input type="file" accept=".txt,text/plain" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { setName(f.name); setText(await f.text()); } }} />
+          <input type="password" placeholder="Passphrase" value={pass} onChange={(e) => setPass(e.target.value)} />
+          {err && <p className="error">{err}</p>}
+        </>
+      )}
+      <div className="row-end"><button className="link" onClick={onClose}>{done != null ? "Close" : "Cancel"}</button>
+        {done == null && <button className="primary" disabled={busy || !text || !pass} onClick={() => { setBusy(true); setErr(""); importKeyFile(text, pass).then(setDone).catch((e) => setErr(e.message)).finally(() => setBusy(false)); }}>{busy ? "Restoring…" : name ? `Restore ${name}` : "Restore"}</button>}</div>
     </Modal>
   );
 }

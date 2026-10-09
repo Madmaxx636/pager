@@ -139,6 +139,8 @@ export class Crypto {
     const signed = JSON.parse((await this.machine.sign(canonicalJson(authData))).asJSON());
     const created = await this.tx("POST", "/_matrix/client/v3/room_keys/version", { algorithm: "m.megolm_backup.v1.curve25519-aes-sha2", auth_data: { ...authData, signatures: signed } });
     const version = String(created.version);
+    // A new backup starts empty: turn the old one off so every key this device has is saved again under the new key.
+    await this.machine.disableBackup();
     await this.machine.saveBackupDecryptionKey(key, version);
     await this.machine.enableBackupV1(publicKey, version);
     void this.pump().catch(() => {});
@@ -171,6 +173,25 @@ export class Crypto {
     await this.machine.enableBackupV1(info.publicKey, info.version);
     void this.pump().catch(() => {});
     return total;
+  }
+
+  // ---- Key file (a second way back in) ----------------------------------------------------------------------------------
+  // Every message key this device has, scrambled with a passphrase you choose, as text you can store anywhere. If the recovery key is
+  // ever lost, this file and its passphrase read your history; and it works without the server.
+
+  async exportKeys(passphrase: string): Promise<string> {
+    const keys = await this.machine.exportRoomKeys(() => true);
+    return sdk.OlmMachine.encryptExportedRoomKeys(keys, passphrase, 200_000);
+  }
+
+  /** Reads a key file made by exportKeys (or by Element). Returns how many keys were new to this device. */
+  async importKeys(text: string, passphrase: string): Promise<number> {
+    let json: string;
+    try { json = sdk.OlmMachine.decryptExportedRoomKeys(text.trim(), passphrase); }
+    catch { throw new Error("That passphrase doesn't open this file, or the file is damaged"); }
+    const r = await this.machine.importExportedRoomKeys(json, () => {});
+    void this.pump().catch(() => {}); // new keys also go into the backup
+    return Number(r.importedCount);
   }
 
   private closed = false;

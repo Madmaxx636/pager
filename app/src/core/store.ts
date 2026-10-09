@@ -269,6 +269,17 @@ export async function restoreWithRecoveryKey(key: string): Promise<number> {
   const n = await e2ee.restoreBackup(key); await refreshEncryptionStatus(); return n;
 }
 
+/** Every message key on this device, scrambled with a passphrase, as text for a file. */
+export async function exportKeyFile(passphrase: string): Promise<string> {
+  if (!e2ee) throw new Error("Encryption is not ready yet");
+  return e2ee.exportKeys(passphrase);
+}
+/** Reads a key file; returns how many keys were new here. */
+export async function importKeyFile(text: string, passphrase: string): Promise<number> {
+  if (!e2ee) throw new Error("Encryption is not ready yet");
+  const n = await e2ee.importKeys(text, passphrase); void retryWaiting([...new Set([...waiting.values()].map((w) => w.roomId))]); return n;
+}
+
 sendHook.fn = async (roomId, type, content) => {
   const chat = state.chats[roomId];
   if (!chat?.encrypted) return { type, content };

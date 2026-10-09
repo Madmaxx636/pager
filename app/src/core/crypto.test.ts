@@ -40,11 +40,12 @@ class FakeServer {
       return {};
     };
   }
+  versions = 0;
   backup: { version?: string; auth?: any; keys: Record<string, any> } = { keys: {} };
   backupTx(base: Transport): Transport {
     return async (method, path, body: any) => {
       if (path.includes("/room_keys/version")) {
-        if (method === "POST") { this.backup = { version: "1", auth: body.auth_data, keys: {} }; return { version: "1" }; }
+        if (method === "POST") { this.versions += 1; this.backup = { version: String(this.versions), auth: body.auth_data, keys: {} }; return { version: String(this.versions) }; }
         return this.backup.version ? { version: this.backup.version, auth_data: this.backup.auth, algorithm: "m.megolm_backup.v1.curve25519-aes-sha2" } : (() => { throw new Error("none"); })();
       }
       if (path.includes("/room_keys/keys")) {
@@ -104,6 +105,48 @@ describe("end-to-end encryption", () => {
     await expect(bob2.restoreBackup(formatRecoveryKey(new Uint8Array(32)))).rejects.toThrow(/doesn't match/);
     expect(await bob2.restoreBackup(recovery)).toBe(1);
     expect((await bob2.decrypt("!room:x", ev))?.content.body).toBe("from before"); // ...until it has the recovery key
+    alice.close(); bob1.close(); bob2.close();
+  }, 30000);
+
+  it("lost the recovery key: a device that still works makes a new one, and the old one stops working", async () => {
+    const server = new FakeServer();
+    const alice = await Crypto.create(server.tx("@alice:x", "A"), "@alice:x", "A");
+    const bob1 = await Crypto.create(server.backupTx(server.tx("@bob:x", "B1")), "@bob:x", "B1");
+    await alice.receiveSync({}); await bob1.receiveSync({});
+    const sent = await alice.encrypt("!room:x", "m.room.message", { msgtype: "m.text", body: "keep me" }, ["@alice:x", "@bob:x"]);
+    await bob1.receiveSync({ to_device: { events: server.takeInbox("@bob:x", "B1") } });
+    const ev = { type: "m.room.encrypted", event_id: "$1", sender: "@alice:x", origin_server_ts: 1, content: sent };
+    expect((await bob1.decrypt("!room:x", ev))?.content.body).toBe("keep me");
+    const lost = await bob1.createBackup();
+    await bob1.pump(); await bob1.pump();
+    const fresh = await bob1.createBackup(); // "Replace": same device, new key and a new backup
+    await bob1.pump(); await bob1.pump();
+    expect(fresh).not.toBe(lost);
+    expect(Object.keys(server.backup.keys).length).toBe(1); // everything was saved again under the new key
+
+    const bob2 = await Crypto.create(server.backupTx(server.tx("@bob:x", "B2")), "@bob:x", "B2");
+    await expect(bob2.restoreBackup(lost)).rejects.toThrow(/doesn't match/);
+    expect(await bob2.restoreBackup(fresh)).toBe(1);
+    expect((await bob2.decrypt("!room:x", ev))?.content.body).toBe("keep me");
+    alice.close(); bob1.close(); bob2.close();
+  }, 30000);
+
+  it("key file: a passphrase-protected export restores history on another device, even with no backup", async () => {
+    const server = new FakeServer();
+    const alice = await Crypto.create(server.tx("@alice:x", "A"), "@alice:x", "A");
+    const bob1 = await Crypto.create(server.tx("@bob:x", "B1"), "@bob:x", "B1");
+    await alice.receiveSync({}); await bob1.receiveSync({});
+    const sent = await alice.encrypt("!room:x", "m.room.message", { msgtype: "m.text", body: "in the file" }, ["@alice:x", "@bob:x"]);
+    await bob1.receiveSync({ to_device: { events: server.takeInbox("@bob:x", "B1") } });
+    const ev = { type: "m.room.encrypted", event_id: "$1", sender: "@alice:x", origin_server_ts: 1, content: sent };
+    const file = await bob1.exportKeys("correct horse");
+    expect(file).not.toContain("in the file");
+
+    const bob2 = await Crypto.create(server.tx("@bob:x", "B2"), "@bob:x", "B2");
+    expect(await bob2.decrypt("!room:x", ev)).toBeUndefined();
+    await expect(bob2.importKeys(file, "wrong")).rejects.toThrow(/passphrase/);
+    expect(await bob2.importKeys(file, "correct horse")).toBe(1);
+    expect((await bob2.decrypt("!room:x", ev))?.content.body).toBe("in the file");
     alice.close(); bob1.close(); bob2.close();
   }, 30000);
 
