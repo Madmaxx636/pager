@@ -164,7 +164,8 @@ class E2ee private constructor(
             putJsonObject("auth_data") { put("public_key", pub.publicKey); putJsonObject("signatures") { signatures.forEach { (u, m) -> putJsonObject(u) { m.forEach { (id, s) -> put(id, s) } } } } }
         })
         val version = (created["version"] as? JsonPrimitive)?.contentOrNull ?: throw java.io.IOException("The server did not start a backup")
-        withContext(Dispatchers.IO) { machine.saveRecoveryKey(key, version); machine.enableBackupV1(pub, version) }
+        // A new backup starts empty: turn the old one off so every key this device has is saved again under the new key.
+        withContext(Dispatchers.IO) { machine.disableBackup(); machine.saveRecoveryKey(key, version); machine.enableBackupV1(pub, version) }
         pump()
         return spaced(key.toBase58())
     }
@@ -199,6 +200,23 @@ class E2ee private constructor(
         val rooms2 = result.keys.keys.toList()
         if (rooms2.isNotEmpty()) onKeys?.invoke(rooms2)
         return total
+    }
+
+    // ---- Key file (a second way back in) ------------------------------------------------------------------------
+    // Every message key this device has, scrambled with a passphrase you choose, as text you can store anywhere. If the recovery key is
+    // ever lost, this file and its passphrase read your history; and it works without the server.
+
+    suspend fun exportKeys(passphrase: String): String = withContext(Dispatchers.IO) { machine.exportRoomKeys(passphrase, 200_000) }
+
+    /** Reads a key file made by exportKeys (or by Element). Returns how many keys were new to this device. */
+    suspend fun importKeys(text: String, passphrase: String): Int {
+        val listener = object : ProgressListener { override fun onProgress(progress: Int, total: Int) {} }
+        val result = try { withContext(Dispatchers.IO) { machine.importRoomKeys(text.trim(), passphrase, listener) } }
+        catch (_: Exception) { throw java.io.IOException("That passphrase doesn't open this file, or the file is damaged") }
+        pump() // new keys also go into the backup
+        val rooms = result.keys.keys.toList()
+        if (rooms.isNotEmpty()) onKeys?.invoke(rooms)
+        return result.imported.toInt()
     }
 
     private fun spaced(s: String) = if (s.contains(' ')) s else s.chunked(4).joinToString(" ")

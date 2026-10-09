@@ -66,6 +66,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.FileOpen
+import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Help
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -778,6 +781,74 @@ private fun EncryptionGroup() {
             Icons.Rounded.VpnKey, Color(0xFF14B8A6),
         ) { if (e.ready) dialog = if (e.backupOnServer && !e.backupHere) "restore" else "create" }
         if (e.backupOnServer && !e.backupHere) { GroupDivider(); NavRow("Make a new recovery key instead", null, Icons.Rounded.Refresh) { dialog = "create" } }
+        if (e.ready) {
+            GroupDivider()
+            NavRow("Lost your recovery key?", if (e.backupHere) "This phone still has your keys: choose Recovery key above and replace it" else "Use a key file below, or make a new key. Without either, older encrypted messages can't be read here", Icons.Rounded.Help) {}
+            GroupDivider(); NavRow("Save my keys to a file", "A second way back in: a file only your passphrase opens", Icons.Rounded.Save) { dialog = "export" }
+            GroupDivider(); NavRow("Restore keys from a file", null, Icons.Rounded.FileOpen) { dialog = "import" }
+        }
+    }
+    if (dialog == "export") {
+        var pass by remember { mutableStateOf("") }
+        var err by remember { mutableStateOf("") }
+        var busy by remember { mutableStateOf(false) }
+        var pending by remember { mutableStateOf<String?>(null) }
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val save = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            val text = pending
+            if (uri != null && text != null) { runCatching { ctx.contentResolver.openOutputStream(uri)!!.use { it.write(text.toByteArray()) } }.onSuccess { dialog = null }.onFailure { err = "Couldn't save the file" } }
+            pending = null; busy = false
+        }
+        AlertDialog(
+            onDismissRequest = { dialog = null }, title = { Text("Save my keys to a file") },
+            text = {
+                Column {
+                    Text("Choose a passphrase. The file can only be opened with it, so keep both safe, but separately.")
+                    androidx.compose.material3.OutlinedTextField(pass, { pass = it }, label = { Text("Passphrase (at least 8 characters)") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                    if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !busy && pass.length >= 8, onClick = {
+                    busy = true; err = ""
+                    scope.launch { runCatching { store.exportKeyFile(pass) }.onSuccess { pending = it; save.launch("pager-keys.txt") }.onFailure { err = it.message ?: "Couldn't make the file"; busy = false } }
+                }) { Text(if (busy) "Saving…" else "Choose where to save") }
+            },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+        )
+    }
+    if (dialog == "import") {
+        var text by remember { mutableStateOf("") }
+        var name by remember { mutableStateOf("") }
+        var pass by remember { mutableStateOf("") }
+        var err by remember { mutableStateOf("") }
+        var busy by remember { mutableStateOf(false) }
+        var done by remember { mutableStateOf<Int?>(null) }
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) runCatching { text = ctx.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() }; name = uri.lastPathSegment?.substringAfterLast('/') ?: "file" }.onFailure { err = "Couldn't read that file" }
+        }
+        AlertDialog(
+            onDismissRequest = { dialog = null }, title = { Text("Restore keys from a file") },
+            text = {
+                Column {
+                    if (done != null) Text("Done: $done new message keys. Older messages in your encrypted pages can be read now.")
+                    else {
+                        TextButton(onClick = { pick.launch(arrayOf("text/plain", "*/*")) }) { Text(if (name.isEmpty()) "Choose the file" else name) }
+                        androidx.compose.material3.OutlinedTextField(pass, { pass = it }, label = { Text("Passphrase") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                        if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                if (done != null) TextButton(onClick = { dialog = null }) { Text("Close") }
+                else TextButton(enabled = !busy && text.isNotEmpty() && pass.isNotEmpty(), onClick = {
+                    busy = true; err = ""
+                    scope.launch { runCatching { store.importKeyFile(text, pass) }.onSuccess { done = it }.onFailure { err = it.message ?: "That didn't work" }; busy = false }
+                }) { Text(if (busy) "Restoring…" else "Restore") }
+            },
+            dismissButton = { if (done == null) TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+        )
     }
     if (dialog == "create") {
         var key by remember { mutableStateOf<String?>(null) }
@@ -817,6 +888,8 @@ private fun EncryptionGroup() {
                     if (done != null) Text("Restored $done message keys. Older messages in your encrypted pages can be read now.")
                     else {
                         androidx.compose.material3.OutlinedTextField(text, { text = it }, placeholder = { Text("EsTc 4xYz …") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                        Text("Lost it? A key file (Restore keys from a file) or another signed-in device can still get your history back. If you have neither, you can start fresh with a new key: new messages work, but older encrypted ones stay unreadable.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                        TextButton(onClick = { dialog = "create" }) { Text("Start fresh with a new key") }
                         if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
                     }
                 }
