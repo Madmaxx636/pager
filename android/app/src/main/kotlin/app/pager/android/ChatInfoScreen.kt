@@ -165,6 +165,8 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
             ChoiceRow("Vibration", listOf("default" to "Use my general settings", "off" to "No vibration"), p.vibrate) { upd(p.copy(vibrate = it)) }
             ChoiceRow("Message previews", listOf("default" to "Use my general settings", "show" to "Show message", "hide" to "Hide message"), p.preview) { upd(p.copy(preview = it)) }
             val ctx = androidx.compose.ui.platform.LocalContext.current
+            ButtonRow("Send a test notification for this page") { Notifier.testFor(ctx, store, roomId, name, c.network, c.isGroup) }
+            Text("Then long-press it in the shade to set Priority, Bubble or Silent for just this page.", Modifier.padding(horizontal = 24.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             NavRow("Android settings for this page", "Priority conversation, bubble and sound, in the system's own settings", Icons.Rounded.Notifications) { Notifier.openSystemSettings(ctx, roomId) }
             Text("Mute and Low priority still apply: muted pages only notify for mentions, replies and your keywords.", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
