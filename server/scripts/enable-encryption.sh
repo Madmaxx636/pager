@@ -13,7 +13,8 @@ on=true; if [ "${1:-}" = "--off" ]; then on=false; shift; fi
 
 DOCKER_UID="$(id -u):$(id -g)"
 USERNS=""; case "$(readlink -f "$(command -v docker)")" in *podman*) USERNS="--userns=keep-id" ;; esac
-yq() { docker run --rm -i $USERNS -u "$DOCKER_UID" -v "$PWD/data:/work" -w /work docker.io/mikefarah/yq "$@"; }
+# When the bridges live in the encrypted vault, data/bridges is a link to it: the container must see the vault at the same path for the link to work.
+yq() { local v=""; [ -L data/bridges ] && v="$(readlink -f data/bridges)"; docker run --rm -i $USERNS -u "$DOCKER_UID" -v "$PWD/data:/work" ${v:+-v "$v:$v"} -w /work docker.io/mikefarah/yq "$@"; }
 
 ids=("$@")
 if [ ${#ids[@]} -eq 0 ]; then for d in data/bridges/*/; do ids+=("$(basename "$d")"); done; fi

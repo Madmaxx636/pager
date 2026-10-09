@@ -10,15 +10,25 @@ VAULT="${VAULT_DIR:-/srv/pager-vault}"
 
 mountpoint -q "$VAULT" || { echo "The vault is not open at $VAULT. Run: sudo ./scripts/vault-setup.sh" >&2; exit 1; }
 [ -d data/bridges ] || { echo "No data/bridges here. Is this the server folder?" >&2; exit 1; }
-[ ! -L data/bridges ] || { echo "data/bridges already points into the vault: nothing to do." >&2; exit 0; }
+# A run that stopped half way (the bridges are already in the vault but not switched on) carries on from step 4.
+resume=0
+if [ -L data/bridges ]; then
+  if [ -d data/bridges.plain-old ] && compgen -G "data/vault-backup-*" >/dev/null; then resume=1; echo "Carrying on from where the last run stopped."
+  else echo "data/bridges already points into the vault: nothing to do." >&2; exit 0; fi
+fi
 [ -w "$VAULT/bridges" ] || { echo "You can't write to $VAULT/bridges. Run vault-setup with --owner $(id -un)." >&2; exit 1; }
 
+if [ $resume = 0 ]; then
 read -rp "Pager will pause for a minute or two while the bridges move into the vault. Continue? [y/N] " yn
 [ "$yn" = "y" ] || [ "$yn" = "Y" ] || { echo "Cancelled."; exit 0; }
+fi
 
 bridges=(); for d in data/bridges/*/; do bridges+=("$(basename "$d")"); done
 stamp="$(date +%Y%m%d-%H%M%S)"; backup="data/vault-backup-$stamp"
+if [ $resume = 1 ]; then backup="$(ls -d data/vault-backup-* | sort | tail -n1)"; fi
 umask 077; mkdir -p "$backup"
+
+if [ $resume = 0 ]; then
 
 echo "1/7 Saving a copy of each bridge database to $backup (plain, kept until you finish)…"
 docker compose up -d postgres >/dev/null
@@ -34,6 +44,8 @@ echo "3/7 Moving bridge files into the vault…"
 mv data/bridges data/bridges.plain-old
 ln -s "$VAULT/bridges" data/bridges
 cp -a data/bridges.plain-old/. data/bridges/
+
+fi
 
 echo "4/7 Pointing the bridges at their new database…"
 sed -i 's#@postgres/#@bridgedb/#g' data/bridges/*/config.yaml
