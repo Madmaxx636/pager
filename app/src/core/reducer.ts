@@ -227,8 +227,11 @@ function applyEphemeral(chat: ChatState, e: J, me: string): ChatState {
   if (e.type === "m.typing") return { ...chat, typing: arr(content.user_ids).filter((u) => typeof u === "string" && u !== me) };
   if (e.type === "m.receipt") {
     const receipts = { ...chat.receipts };
-    for (const [eventId, kinds] of Object.entries(content)) for (const user of Object.keys(obj(obj(kinds)["m.read"]))) receipts[user] = eventId;
-    return { ...chat, receipts };
+    const receiptTs = { ...chat.receiptTs };
+    for (const [eventId, kinds] of Object.entries(content)) {
+      for (const [user, info] of Object.entries(obj(obj(kinds)["m.read"]))) { receipts[user] = eventId; const ts = num(obj(info).ts); if (ts) receiptTs[user] = ts; }
+    }
+    return { ...chat, receipts, receiptTs };
   }
   return chat;
 }
