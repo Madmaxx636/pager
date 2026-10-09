@@ -185,10 +185,16 @@ async function syncLoop(s: Session, signal: AbortSignal) {
   }
 }
 
-export async function signOut() { try { await matrix.logout(); } catch { /* token may already be invalid */ } await signOutLocal(); }
+/** Signs out right away; telling the server (so the token stops working) is best effort and never blocks you. */
+export async function signOut() {
+  const logout = matrix.logout().catch(() => { /* token may already be invalid, or the server is unreachable */ });
+  await Promise.race([logout, new Promise((r) => setTimeout(r, 2500))]);
+  await signOutLocal();
+}
 async function signOutLocal() {
   syncAbort?.abort();
   localStorage.removeItem(SESSION_KEY);
+  try { localStorage.removeItem("pager.identity2"); } catch { /* ignore */ }
   await dbDel("cache");
   http.token = ""; since = undefined;
   blobCache.forEach((u) => URL.revokeObjectURL(u)); blobCache.clear();
