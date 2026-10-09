@@ -13,6 +13,16 @@ val DEFAULT_QUICK_REACTIONS = listOf("👍", "❤️", "😂", "😮", "😢", "
 
 /** Everything the user can tune. Defaults are the "good out of the box" choices; all of it persists as one JSON blob. */
 @Serializable
+data class ChatNotifPrefs(
+    val mode: String = "default",       // default | all | mentions | none
+    val preview: String = "default",    // default | show | hide
+    val sound: String = "default",      // default | off
+    val vibrate: String = "default",    // default | off
+) {
+    val isDefault get() = mode == "default" && preview == "default" && sound == "default" && vibrate == "default"
+}
+
+@Serializable
 data class AppSettings(
     // --- Appearance ---
     val themeMode: String = "system",          // system | light | dark | black
@@ -84,6 +94,21 @@ data class AppSettings(
     val notifGroupMentionsOnly: Boolean = false,
     val notifScope: String = "all",            // all | dm_mentions | favorites
     val notifMutedNetworks: Set<String> = emptySet(),
+    /** Per network: all | mentions | none. */
+    val notifNetworkMode: Map<String, String> = emptyMap(),
+    /** Per chat overrides, set from the chat's info page. */
+    val notifChat: Map<String, ChatNotifPrefs> = emptyMap(),
+    /** Words that always notify (even in muted chats), like a name or a nickname. */
+    val notifKeywords: List<String> = emptyList(),
+    /** Days of the week quiet hours apply on (0 = Sunday). */
+    val notifQuietDays: Set<Int> = setOf(0, 1, 2, 3, 4, 5, 6),
+    /** Pinned chats and mentions can still make a sound during quiet hours. */
+    val notifQuietBreakThrough: Boolean = false,
+    /** Wait this long before alerting, and skip it if you read the chat somewhere else meanwhile. */
+    val notifDelaySec: Int = 0,
+    val notifLockScreen: String = "show",      // show | hide_content | hide
+    /** Only the first message of a burst makes a sound. */
+    val notifAlertOnce: Boolean = false,
     val quietHoursEnabled: Boolean = false,
     val quietStartMin: Int = 22 * 60,
     val quietEndMin: Int = 7 * 60,

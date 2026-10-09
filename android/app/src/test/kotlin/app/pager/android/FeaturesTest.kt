@@ -156,3 +156,45 @@ class SettingsPayloadTest {
         assertEquals(setOf("app.pager.settings.android"), r.accountData.keys)
     }
 }
+
+class NotifyPolicyTest {
+    private fun msg(text: String = "hi", network: String = "signal", group: Boolean = false, mentioned: Boolean = false, reply: Boolean = false) =
+        Incoming("!a", "Amy", "Amy", text, network, group, mentioned, 0L, reply)
+    private fun decide(m: Incoming, s: AppSettings = AppSettings(), quiet: Boolean = false, pinned: Boolean = false, nowMin: Int = 12 * 60, day: Int = 2) =
+        NotifyPolicy.decide(m, quiet, pinned, nowMin, day, s)
+
+    @Test fun showsByDefault() { val d = decide(msg()); assertTrue(d.show); assertFalse(d.silent) }
+    @Test fun masterSwitchHidesEverything() = assertFalse(decide(msg(mentioned = true), AppSettings(notifEnabled = false)).show)
+    @Test fun mutedChatsOnlyBreakThroughForYou() {
+        assertFalse(decide(msg(), quiet = true).show)
+        assertTrue(decide(msg(mentioned = true), quiet = true).show)
+        assertTrue(decide(msg(reply = true), quiet = true).show)
+    }
+    @Test fun keywordsCountWholeWordsOnly() {
+        assertTrue(NotifyPolicy.keywordHit("hey Lane!", listOf("lane")))
+        assertFalse(NotifyPolicy.keywordHit("plane crash", listOf("lane")))
+        assertTrue(decide(msg("lane, dinner?"), AppSettings(notifKeywords = listOf("Lane")), quiet = true).show)
+    }
+    @Test fun networkModes() {
+        val s = AppSettings(notifNetworkMode = mapOf("signal" to "mentions", "whatsapp" to "none"))
+        assertFalse(decide(msg(), s).show)
+        assertTrue(decide(msg(mentioned = true), s).show)
+        assertFalse(decide(msg(network = "whatsapp", mentioned = true), s).show)
+    }
+    @Test fun chatOverridesWin() {
+        assertTrue(decide(msg(), AppSettings(notifNetworkMode = mapOf("signal" to "none"), notifChat = mapOf("!a" to ChatNotifPrefs(mode = "all")))).show)
+        assertFalse(decide(msg(mentioned = true), AppSettings(notifChat = mapOf("!a" to ChatNotifPrefs(mode = "none")))).show)
+        assertFalse(decide(msg(), AppSettings(notifChat = mapOf("!a" to ChatNotifPrefs(mode = "mentions")))).show)
+    }
+    @Test fun quietHoursSilenceWithDaysAndBreakThrough() {
+        val q = AppSettings(quietHoursEnabled = true, quietStartMin = 22 * 60, quietEndMin = 7 * 60)
+        assertTrue(decide(msg(), q, nowMin = 23 * 60).silent)
+        assertFalse(decide(msg(), q, nowMin = 12 * 60).silent)
+        assertFalse(decide(msg(), q.copy(notifQuietDays = setOf(5, 6)), nowMin = 23 * 60, day = 2).silent)
+        assertFalse(decide(msg(), q.copy(notifQuietBreakThrough = true), pinned = true, nowMin = 23 * 60).silent)
+    }
+    @Test fun chatSoundAndPreviewOverrides() {
+        val d = decide(msg(), AppSettings(notifChat = mapOf("!a" to ChatNotifPrefs(sound = "off", preview = "hide"))))
+        assertTrue(d.show); assertTrue(d.silent); assertEquals("hidden", d.preview)
+    }
+}
