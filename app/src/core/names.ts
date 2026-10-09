@@ -15,17 +15,28 @@ let book: Record<string, string> = (() => { try { return JSON.parse(localStorage
 let listener: (() => void) | undefined;
 export const onPhonebookChange = (fn: () => void) => { listener = fn; };
 
-/** Add names to the phone book. Later entries win only when the number had no name yet, unless `override` (your own contacts file). */
-export function addToPhonebook(entries: { number: string; name: string }[], override = false) {
-  let changed = false;
+/** Contacts you brought yourself (an imported file, or another device of yours). These sync to your account; bridge names don't. */
+let own: Record<string, [string, string]> = (() => { try { return JSON.parse(localStorage.getItem("pager.phonebook.own") ?? "{}"); } catch { return {}; } })();
+export const ownContacts = () => Object.values(own);
+
+/**
+ * Add names to the phone book. Later entries win only when the number had no name yet, unless `override` (your own contacts).
+ * `mine` also remembers the entry as one of your own, so it can be synced. Returns whether your own contacts changed.
+ */
+export function addToPhonebook(entries: { number: string; name: string }[], override = false, mine = false) {
+  let changed = false, ownChanged = false;
   for (const { number, name } of entries) {
     const k = phoneKey(number), nm = stripTag(name ?? "").trim();
     if (!k || !nm || isPhone(nm)) continue;
+    if (mine && own[k]?.[1] !== nm) { own[k] = [number, nm]; ownChanged = true; }
     if (book[k] === nm || (book[k] && !override)) continue;
     book[k] = nm; changed = true;
   }
-  if (changed) { try { localStorage.setItem("pager.phonebook", JSON.stringify(book)); } catch { /* quota */ } listener?.(); }
-  return changed;
+  if (changed || ownChanged) {
+    try { localStorage.setItem("pager.phonebook", JSON.stringify(book)); localStorage.setItem("pager.phonebook.own", JSON.stringify(own)); } catch { /* quota */ }
+    if (changed) listener?.();
+  }
+  return ownChanged;
 }
 export const lookup = (number: string) => book[phoneKey(number)];
 export const phonebookSize = () => Object.keys(book).length;

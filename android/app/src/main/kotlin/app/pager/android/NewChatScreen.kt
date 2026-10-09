@@ -88,7 +88,7 @@ fun NewChatScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         hasPhone = ok
-        if (ok) scope.launch { Names.loadDevice(context) }
+        if (ok) scope.launch { if (Names.loadDevice(context)) store.syncContacts() }
     }
 
     // Everyone, from every account on every network, merged by phone number (or name).
@@ -157,7 +157,7 @@ fun NewChatScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable { askContacts.launch(android.Manifest.permission.READ_CONTACTS) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text("Use my phone contacts", style = MaterialTheme.typography.titleSmall)
-                                Text("Shows names instead of phone numbers everywhere in Pager.", style = MaterialTheme.typography.bodySmall, color = muted)
+                                Text("Shows names instead of phone numbers everywhere in Pager, and syncs them to your account.", style = MaterialTheme.typography.bodySmall, color = muted)
                             }
                             Text("Allow", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                         }

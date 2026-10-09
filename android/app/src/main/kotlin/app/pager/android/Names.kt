@@ -32,17 +32,28 @@ object Names {
     fun init(context: Context) {
         if (prefs != null) return
         prefs = context.getSharedPreferences("pager.phonebook", Context.MODE_PRIVATE)
-        synchronized(book) { prefs!!.all.forEach { (k, v) -> if (v is String) book[k] = v } }
+        synchronized(book) { prefs!!.all.forEach { (k, v) ->
+            if (v !is String) return@forEach
+            if (k.startsWith("own.")) { val (num, nm) = v.split('\t', limit = 2).let { it[0] to it.getOrElse(1) { "" } }; own[k.removePrefix("own.")] = num to nm } else book[k] = v
+        } }
     }
 
-    /** Add names. A later entry only replaces an earlier one when `override` (your phone's own contacts). */
-    fun add(entries: List<Pair<String, String>>, override: Boolean = false): Boolean {
-        var changed = false
+    /** Contacts you brought yourself (your phone's, or another device of yours). These sync to your account; bridge names don't. */
+    private val own = LinkedHashMap<String, Pair<String, String>>()
+    fun ownContacts(): List<Pair<String, String>> = synchronized(book) { own.values.toList() }
+
+    /**
+     * Add names. A later entry only replaces an earlier one when `override` (your own contacts).
+     * `mine` also remembers the entry as one of your own, so it can be synced. Returns whether your own contacts changed.
+     */
+    fun add(entries: List<Pair<String, String>>, override: Boolean = false, mine: Boolean = false): Boolean {
+        var changed = false; var ownChanged = false
         val edit = prefs?.edit()
         synchronized(book) {
             for ((number, raw) in entries) {
                 val k = phoneKey(number); val nm = stripTag(raw)
                 if (k.isEmpty() || nm.isEmpty() || isPhone(nm)) continue
+                if (mine && own[k]?.second != nm) { own[k] = number to nm; edit?.putString("own.$k", "$number\t$nm"); ownChanged = true }
                 val old = book[k]
                 if (old == nm || (old != null && !override)) continue
                 book[k] = nm; edit?.putString(k, nm); changed = true
@@ -50,7 +61,7 @@ object Names {
         }
         edit?.apply()
         if (changed) _version.value++
-        return changed
+        return ownChanged
     }
 
     fun lookup(number: String): String? = synchronized(book) { book[phoneKey(number)] }
@@ -63,9 +74,9 @@ object Names {
 
     fun hasDevicePermission(context: Context) = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
-    /** Read the phone's own contacts into the phone book (needs the contacts permission). */
-    fun loadDevice(context: Context) {
-        if (!hasDevicePermission(context)) return
+    /** Read the phone's own contacts into the phone book (needs the contacts permission). True if there is anything new to sync. */
+    fun loadDevice(context: Context): Boolean {
+        if (!hasDevicePermission(context)) return false
         val out = ArrayList<Pair<String, String>>()
         runCatching {
             context.contentResolver.query(
@@ -73,6 +84,6 @@ object Names {
                 arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME), null, null, null,
             )?.use { c -> while (c.moveToNext()) { val num = c.getString(0) ?: continue; val name = c.getString(1) ?: continue; out.add(num to name) } }
         }
-        add(out, override = true)
+        return add(out, override = true, mine = true)
     }
 }
