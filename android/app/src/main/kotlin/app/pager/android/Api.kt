@@ -38,6 +38,8 @@ data class LoginStep(
 /** The Pager API (signup + in-app bridge login) on the user's own server. */
 data class AdminUser(val id: String, val admin: Boolean, val deactivated: Boolean, val created: Long, val you: Boolean)
 data class AdminPerson(val user: AdminUser, val displayname: String, val networks: List<Network>)
+data class AdminInfo(val displayname: String, val locked: Boolean, val created: Long, val devices: List<Triple<String, String, Long>>)
+data class AdminBridge(val id: String, val name: String, val up: Boolean, val state: String?, val status: String?)
 data class ServerSettings(val domain: String, val signup: String, val inviteCode: String)
 
 class PagerApi(private val http: Http) {
@@ -61,6 +63,21 @@ class PagerApi(private val http: Http) {
             },
         )
     }
+    suspend fun adminInfo(id: String): AdminInfo {
+        val o = http.request("GET", "/api/admin/users/${enc(id)}/info")
+        return AdminInfo(o["displayname"].str().orEmpty(), (o["locked"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true, (o["created"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: 0L,
+            o["devices"].arr().map { d -> d.obj().let { Triple(it["id"].str().orEmpty(), it["name"].str().orEmpty(), (it["lastSeen"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: 0L) } })
+    }
+    suspend fun adminRename(id: String, name: String) { http.request("POST", "/api/admin/users/${enc(id)}/rename", buildJsonObject { put("displayname", name) }) }
+    suspend fun adminLock(id: String, locked: Boolean) { http.request("POST", "/api/admin/users/${enc(id)}/lock", buildJsonObject { put("locked", locked) }) }
+    suspend fun adminLogoutAll(id: String) { http.request("POST", "/api/admin/users/${enc(id)}/logout-all", JsonObject(emptyMap())) }
+    suspend fun adminControl(): Boolean = (http.request("GET", "/api/admin/control")["docker"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true
+    suspend fun adminBridgeList(): List<AdminBridge> = http.request("GET", "/api/admin/bridges")["bridges"].arr().map {
+        val o = it.obj(); val c = o["container"].obj()
+        AdminBridge(o["id"].str().orEmpty(), o["name"].str().orEmpty(), (o["up"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true, c["state"].str(), c["status"].str())
+    }
+    suspend fun adminBridgeAction(id: String, action: String) { http.request("POST", "/api/admin/bridges/${enc(id)}/$action", JsonObject(emptyMap())) }
+    suspend fun adminBridgeLog(id: String): String = http.request("GET", "/api/admin/bridges/${enc(id)}/logs?tail=200")["log"].str().orEmpty()
     suspend fun adminLogins(id: String): List<Network> = http.request("GET", "/api/admin/users/${enc(id)}/logins")["networks"].arr().map { n ->
         val o = n.obj()
         Network(o["id"].str().orEmpty(), o["name"].str().orEmpty(), o["logins"].arr().map { l -> l.obj().let { Login(it["id"].str().orEmpty(), it["name"].str() ?: it["profile"].obj()["name"].str() ?: it["id"].str().orEmpty(), it["state_event"].str() ?: "") } }, o["error"] != null)

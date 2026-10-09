@@ -2,6 +2,10 @@
 
 package app.pager.android
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -252,92 +256,143 @@ fun ChatPicker(title: String, onBack: () -> Unit, onPick: (String) -> Unit) {
 }
 
 
-/** Settings → Admin: signups, bridge health and every profile. Only shown to administrators. */
+/** Settings → Admin: the accounts on this server (with what each has connected), the bridges, and signups. Only shown to administrators. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun AdminScreen(onBack: () -> Unit) {
     val store = LocalStore.current
     val scope = rememberCoroutineScope()
+    var tab by remember { mutableStateOf("accounts") }
     var people by remember { mutableStateOf<List<AdminPerson>?>(null) }
-    var bridges by remember { mutableStateOf<List<Triple<String, String, Boolean>>?>(null) }
+    var bridges by remember { mutableStateOf<List<AdminBridge>?>(null) }
+    var control by remember { mutableStateOf(false) }
     var server by remember { mutableStateOf<ServerSettings?>(null) }
+    var open by remember { mutableStateOf<String?>(null) }
+    var info by remember { mutableStateOf<AdminInfo?>(null) }
     var resetFor by remember { mutableStateOf<AdminUser?>(null) }
+    var renameFor by remember { mutableStateOf<AdminUser?>(null) }
     var deleteFor by remember { mutableStateOf<AdminUser?>(null) }
+    var logFor by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var busy by remember { mutableStateOf("") }
     var err by remember { mutableStateOf("") }
     fun load() = scope.launch {
         err = ""
         runCatching { store.pager.adminOverview() }.onSuccess { people = it }.onFailure { err = it.message ?: "Couldn't load" }
-        runCatching { store.pager.adminBridges() }.onSuccess { bridges = it }
+        runCatching { store.pager.adminBridgeList() }.onSuccess { bridges = it }
+        runCatching { store.pager.adminControl() }.onSuccess { control = it }
         runCatching { store.pager.adminServer() }.onSuccess { server = it }
     }
     LaunchedEffect(Unit) { load() }
     fun act(f: suspend () -> Unit) = scope.launch { runCatching { f() }.onFailure { err = it.message ?: "Failed" }; load() }
+    fun nameOf(p: AdminPerson) = p.displayname.ifEmpty { p.user.id.removePrefix("@").substringBefore(':') }
+    val dateFmt = remember { java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT) }
 
     SettingsPage("Admin", onBack) {
-        if (err.isNotEmpty()) Text(err, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
-        SettingsGroup("Server", footer = "The invite code lets people create an account. Closing signups stops everyone except the admin code.") {
-            server?.let { sv ->
-                Text(sv.domain, Modifier.padding(16.dp)); GroupDivider()
-                ChoiceRow("Who can sign up", listOf("invite" to "Anyone with the invite code", "open" to "Anyone", "closed" to "No one"), sv.signup) { v -> act { server = store.pager.adminSetServer(signup = v) } }; GroupDivider()
-                Column(Modifier.fillMaxWidth().padding(16.dp)) { Text("Invite code", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(sv.inviteCode.ifEmpty { "none" }, style = MaterialTheme.typography.titleMedium) }
-                GroupDivider(); ButtonRow("Make a new invite code") { act { server = store.pager.adminSetServer(regenerateInvite = true) } }
-            } ?: Text("Loading…", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("accounts" to "Accounts", "bridges" to "Bridges", "server" to "Server").forEach { (id, label) ->
+                androidx.compose.material3.FilterChip(selected = tab == id, onClick = { tab = id }, label = { Text(label + if (id == "accounts") people?.let { " (${it.size})" }.orEmpty() else "") })
+            }
         }
-        SettingsGroup("Bridges") {
-            bridges?.forEachIndexed { i, (_, name, up) ->
-                if (i > 0) GroupDivider()
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(10.dp).clip(CircleShape).background(if (up) Color(0xFF22C55E) else Color(0xFFEF4444)))
-                    Text(name, Modifier.weight(1f).padding(start = 12.dp)); Text(if (up) "Running" else "Not responding", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            } ?: Text("Checking…", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Text("Profiles" + (people?.let { " (${it.size})" } ?: ""), Modifier.padding(start = 20.dp, top = 8.dp, bottom = 4.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        if (people == null) Text("Loading everyone…", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        people?.forEach { p ->
-            val u = p.user
-            val name = p.displayname.ifEmpty { u.id.removePrefix("@").substringBefore(':') }
-            SettingsGroup {
-                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(name, null, 44.dp)
-                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                        Text(name, style = MaterialTheme.typography.titleMedium)
-                        Text(u.id, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                    if (u.admin) Text("Admin", Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary).padding(horizontal = 10.dp, vertical = 3.dp), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelMedium)
-                    if (u.you) Text("You", Modifier.padding(start = 6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 10.dp, vertical = 3.dp), style = MaterialTheme.typography.labelMedium)
-                    if (u.deactivated) Text("Deleted", Modifier.padding(start = 6.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
-                }
-                val any = p.networks.any { it.logins.isNotEmpty() }
-                if (!any) { GroupDivider(); Text(if (u.deactivated) "Account deleted." else "Nothing connected yet.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                p.networks.forEach { n ->
-                    n.logins.forEach { l ->
-                        GroupDivider()
-                        val (label, color) = loginStateLabel(l.state)
-                        val meta = networkMeta(n.id)
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(meta.color), contentAlignment = Alignment.Center) {
-                                val icon = networkIcon(n.id)
-                                if (icon != null) Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp)) else Text(meta.glyph, color = Color.White)
-                            }
-                            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                                Text(n.name); Text(l.name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                            }
-                            Box(Modifier.size(8.dp).clip(CircleShape).background(color)); Text(" $label", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            TextButton(onClick = { act { store.pager.adminLogout(u.id, n.id, l.id) } }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
+        if (err.isNotEmpty()) Text(err, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.error)
+
+        if (tab == "accounts") {
+            if (people == null) Text("Loading accounts…", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            people?.forEach { p ->
+                val u = p.user
+                SettingsGroup {
+                    Row(Modifier.fillMaxWidth().clickable { if (open == u.id) open = null else { open = u.id; info = null; scope.launch { info = runCatching { store.pager.adminInfo(u.id) }.getOrNull() } } }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(nameOf(p), null, 44.dp)
+                        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                            Text(nameOf(p), style = MaterialTheme.typography.titleMedium)
+                            Text(u.id, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         }
+                        if (u.admin) Text("Admin", Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary).padding(horizontal = 10.dp, vertical = 3.dp), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelMedium)
+                        if (u.you) Text("You", Modifier.padding(start = 6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 10.dp, vertical = 3.dp), style = MaterialTheme.typography.labelMedium)
                     }
-                    if (n.unavailable && n.logins.isEmpty()) { GroupDivider(); Text("${n.name}: couldn't check", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) }
-                }
-                if (!u.deactivated) {
-                    GroupDivider()
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (!u.you) TextButton(onClick = { act { store.pager.adminSetAdmin(u.id, !u.admin) } }) { Text(if (u.admin) "Remove admin" else "Make admin") }
-                        TextButton(onClick = { resetFor = u }) { Text("Reset password") }
-                        if (!u.you) TextButton(onClick = { deleteFor = u }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    if (open == u.id) {
+                        GroupDivider()
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("INFO", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                            @Composable fun line(k: String, v: String) = Row { Text(k, Modifier.width(110.dp), color = MaterialTheme.colorScheme.onSurfaceVariant); Text(v) }
+                            line("Name", nameOf(p)); line("Username", u.id)
+                            line("Joined", if (u.created > 0) dateFmt.format(java.util.Date(u.created)) else "—")
+                            line("Role", if (u.admin) "Admin" else "Member")
+                            line("Status", if (u.deactivated) "Deleted" else if (info?.locked == true) "Locked (can't sign in)" else "Active")
+                            line("Last active", info?.devices?.maxOfOrNull { it.third }?.takeIf { it > 0 }?.let { dateFmt.format(java.util.Date(it)) } ?: if (info == null) "…" else "never")
+                            line("Signed in on", info?.devices?.joinToString("\n") { it.second.ifEmpty { it.first } }?.ifEmpty { "no devices" } ?: "…")
+                            Spacer(Modifier.height(6.dp))
+                            Text("CONNECTED BRIDGES", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                            if (p.networks.none { it.logins.isNotEmpty() }) Text("Nothing connected.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            p.networks.forEach { n -> n.logins.forEach { l ->
+                                val (label, color) = loginStateLabel(l.state)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) { Text(n.name); Text(l.name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                    Box(Modifier.size(8.dp).clip(CircleShape).background(color)); Text(" $label", style = MaterialTheme.typography.labelMedium)
+                                    TextButton(onClick = { act { store.pager.adminLogout(u.id, n.id, l.id) } }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
+                                }
+                            } }
+                        }
+                        if (!u.deactivated) {
+                            GroupDivider()
+                            FlowRow(Modifier.padding(horizontal = 8.dp)) {
+                                TextButton(onClick = { renameFor = u }) { Text("Change name") }
+                                TextButton(onClick = { resetFor = u }) { Text("Reset password") }
+                                if (!u.you) TextButton(onClick = { act { store.pager.adminSetAdmin(u.id, !u.admin) } }) { Text(if (u.admin) "Remove admin" else "Make admin") }
+                                if (!u.you) TextButton(onClick = { act { store.pager.adminLock(u.id, info?.locked != true) } }) { Text(if (info?.locked == true) "Unlock" else "Lock account") }
+                                TextButton(onClick = { act { store.pager.adminLogoutAll(u.id) } }) { Text("Sign out everywhere") }
+                                if (!u.you) TextButton(onClick = { deleteFor = u }) { Text("Delete account", color = MaterialTheme.colorScheme.error) }
+                            }
+                        }
                     }
                 }
             }
         }
+
+        if (tab == "bridges") {
+            if (!control) Text("Restart, stop and the log are switched off. Run ./scripts/enable-admin-control.sh in the server folder to turn them on.", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (bridges == null) Text("Checking bridges…", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            bridges?.forEach { b ->
+                val running = b.state?.let { it == "running" } ?: b.up
+                val count = people.orEmpty().sumOf { p -> p.networks.firstOrNull { it.id == b.id }?.logins?.size ?: 0 }
+                SettingsGroup {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(if (running && b.up) Color(0xFF22C55E) else if (running) Color(0xFFF59E0B) else Color(0xFFEF4444)))
+                        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                            Text(b.name, style = MaterialTheme.typography.titleMedium)
+                            Text((b.status ?: if (b.up) "Running" else "Not responding") + " · $count account" + if (count == 1) "" else "s", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    GroupDivider()
+                    FlowRow(Modifier.padding(horizontal = 8.dp)) {
+                        TextButton(enabled = control && busy.isEmpty(), onClick = { busy = b.id; scope.launch { runCatching { store.pager.adminBridgeAction(b.id, "restart") }.onFailure { err = it.message ?: "Failed" }; kotlinx.coroutines.delay(2500); busy = ""; load() } }) { Text(if (busy == b.id) "Working…" else "Restart") }
+                        if (running) TextButton(enabled = control && busy.isEmpty(), onClick = { busy = b.id; scope.launch { runCatching { store.pager.adminBridgeAction(b.id, "stop") }.onFailure { err = it.message ?: "Failed" }; kotlinx.coroutines.delay(1500); busy = ""; load() } }) { Text("Stop", color = MaterialTheme.colorScheme.error) }
+                        else TextButton(enabled = control && busy.isEmpty(), onClick = { busy = b.id; scope.launch { runCatching { store.pager.adminBridgeAction(b.id, "start") }.onFailure { err = it.message ?: "Failed" }; kotlinx.coroutines.delay(2500); busy = ""; load() } }) { Text("Start") }
+                        TextButton(enabled = control, onClick = { scope.launch { logFor = b.name to (runCatching { store.pager.adminBridgeLog(b.id) }.getOrElse { it.message ?: "No log" }) } }) { Text("Log") }
+                    }
+                }
+            }
+            Text("To add a bridge (Telegram, Discord…), set it up on the server; the web admin page lists how.", Modifier.padding(20.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        if (tab == "server") {
+            SettingsGroup("Signups", footer = "The invite code lets people create an account. Closing signups stops everyone except the admin code.") {
+                server?.let { sv ->
+                    Text(sv.domain, Modifier.padding(16.dp)); GroupDivider()
+                    ChoiceRow("Who can sign up", listOf("invite" to "Anyone with the invite code", "open" to "Anyone", "closed" to "No one"), sv.signup) { v -> act { server = store.pager.adminSetServer(signup = v) } }; GroupDivider()
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) { Text("Invite code", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(sv.inviteCode.ifEmpty { "none" }, style = MaterialTheme.typography.titleMedium) }
+                    GroupDivider(); ButtonRow("Make a new invite code") { act { server = store.pager.adminSetServer(regenerateInvite = true) } }
+                } ?: Text("Loading…", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+    renameFor?.let { u ->
+        var nm by remember { mutableStateOf(people?.firstOrNull { it.user.id == u.id }?.let { nameOf(it) } ?: "") }
+        AlertDialog(
+            onDismissRequest = { renameFor = null }, title = { Text("Change name") },
+            text = { androidx.compose.material3.OutlinedTextField(nm, { nm = it }, singleLine = true, label = { Text("Name") }) },
+            confirmButton = { TextButton(enabled = nm.isNotBlank(), onClick = { act { store.pager.adminRename(u.id, nm.trim()) }; renameFor = null }) { Text("Save") } },
+            dismissButton = { TextButton(onClick = { renameFor = null }) { Text("Cancel") } },
+        )
     }
     resetFor?.let { u ->
         var pw by remember { mutableStateOf("") }
@@ -351,9 +406,16 @@ fun AdminScreen(onBack: () -> Unit) {
     deleteFor?.let { u ->
         AlertDialog(
             onDismissRequest = { deleteFor = null }, title = { Text("Delete ${u.id}?") },
-            text = { Text("This removes their account, disconnects their apps and can't be undone.") },
-            confirmButton = { TextButton(onClick = { act { store.pager.adminRemove(u.id) }; deleteFor = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+            text = { Text("This removes their account, disconnects their bridges and can't be undone.") },
+            confirmButton = { TextButton(onClick = { act { store.pager.adminRemove(u.id) }; deleteFor = null; open = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("Cancel") } },
+        )
+    }
+    logFor?.let { (name, log) ->
+        AlertDialog(
+            onDismissRequest = { logFor = null }, title = { Text("$name log") },
+            text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) { Text(log, fontSize = 11.sp, lineHeight = 14.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace) } },
+            confirmButton = { TextButton(onClick = { logFor = null }) { Text("Close") } },
         )
     }
 }
