@@ -67,6 +67,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -263,12 +267,12 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                     items(items, key = { it.key }) { item ->
                         when (item) {
                             is Item.Day -> Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                                Text(item.label, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant, modifier = Modifier.clip(CircleShape).background(scheme.surface.copy(alpha = 0.9f)).padding(horizontal = 12.dp, vertical = 5.dp))
+                                Text(item.label, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant, modifier = Modifier.clip(CircleShape).background(scheme.surface.dim(0.9f)).padding(horizontal = 12.dp, vertical = 5.dp))
                             }
                             Item.Unread -> Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.weight(1f).height(1.dp).background(scheme.primary.copy(alpha = 0.4f)))
+                                Box(Modifier.weight(1f).height(1.dp).background(scheme.primary.dim(0.4f)))
                                 Text("  New messages  ", style = MaterialTheme.typography.labelMedium, color = scheme.primary, fontWeight = FontWeight.SemiBold)
-                                Box(Modifier.weight(1f).height(1.dp).background(scheme.primary.copy(alpha = 0.4f)))
+                                Box(Modifier.weight(1f).height(1.dp).background(scheme.primary.dim(0.4f)))
                             }
                             is Item.M -> MessageRow(
                                 chat = chat, msg = item.msg, me = me, group = group, first = item.first, last = item.last, dark = dark,
@@ -336,8 +340,11 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                                 if (text.isEmpty()) Text("Message", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
                                 BasicTextField(
                                     text, { text = it }, maxLines = 6, textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface), cursorBrush = SolidColor(scheme.primary),
-                                    keyboardOptions = KeyboardOptions(imeAction = if (s.enterToSend) ImeAction.Send else ImeAction.Default), keyboardActions = KeyboardActions(onSend = { send() }),
-                                    modifier = Modifier.fillMaxWidth(),
+                                    keyboardOptions = KeyboardOptions(imeAction = if (s.enterSends) ImeAction.Send else ImeAction.Default), keyboardActions = KeyboardActions(onSend = { send() }),
+                                    modifier = Modifier.fillMaxWidth().onPreviewKeyEvent { e ->
+                                        // Hardware keyboards: Enter sends, Shift+Enter adds a new line.
+                                        if (s.enterSends && e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.Enter && !e.isShiftPressed) { if (text.isNotBlank()) send(); true } else false
+                                    },
                                 )
                             }
                             IconBtn(Icons.Rounded.EmojiEmotions, "Emoji", { emojiForText = true }, size = 44)

@@ -15,6 +15,8 @@ export interface SyncResult {
   muted?: string[];
   /** The user's own sticker pack when this sync carried it. */
   userStickers?: StickerPack;
+  /** Pager's own account data (settings saved per kind of device) carried by this sync. */
+  accountData?: Record<string, J>;
 }
 
 // ---- Your own accounts on other networks ------------------------------------------------------
@@ -78,14 +80,16 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
 
   for (const roomId of Object.keys(obj(rooms.leave))) delete chats[roomId];
 
+  const accountData: Record<string, J> = {};
   let muted: string[] | undefined;
   let userStickers: StickerPack | undefined;
   for (const e of arr(obj(sync.account_data).events)) {
     const ev = obj(e);
+    if (typeof ev.type === "string" && ev.type.startsWith("app.pager.settings.")) accountData[ev.type] = obj(ev.content);
     if (ev.type === "m.push_rules") muted = parseMuted(ev);
     else if (ev.type === "im.ponies.user_emotes") userStickers = parseStickerPack("user", "My stickers", obj(ev.content));
   }
-  return { chats, incoming, invites, muted, userStickers };
+  return { chats, incoming, invites, muted, userStickers, accountData };
 }
 
 /** Merges a page of older events (as returned by /messages, newest first). */

@@ -276,10 +276,10 @@ fun MessageRow(
                 Column(Modifier.padding(horizontal = if (bare || msg.type == "m.image") (if (bare) 0.dp else 4.dp) else 12.dp, vertical = if (bare) 0.dp else if (msg.type == "m.image") 4.dp else 8.dp)) {
                     if (msg.replyTo != null) {
                         Row(Modifier.padding(bottom = 6.dp, start = if (msg.type == "m.image") 8.dp else 0.dp, top = if (msg.type == "m.image") 4.dp else 0.dp).height(IntrinsicSize.Min)) {
-                            Box(Modifier.width(3.dp).fillMaxHeight().clip(CircleShape).background(fg.copy(alpha = 0.45f)))
+                            Box(Modifier.width(3.dp).fillMaxHeight().clip(CircleShape).background(fg.dim(0.45f)))
                             Column(Modifier.padding(start = 8.dp)) {
-                                Text(reply?.let { chat?.nameOf(it.sender) } ?: "Earlier message", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = fg.copy(alpha = 0.85f))
-                                Text(reply?.let { previewOf(it) } ?: "…", style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, color = fg.copy(alpha = 0.7f))
+                                Text(reply?.let { chat?.nameOf(it.sender) } ?: "Earlier message", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = fg.dim(0.85f))
+                                Text(reply?.let { previewOf(it) } ?: "…", style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, color = fg.dim(0.7f))
                             }
                         }
                     }
@@ -293,7 +293,7 @@ fun MessageRow(
                         msg.type == "m.location" -> LocationCard(msg, fg)
                         msg.type == "m.emote" -> Text("* ${chat?.nameOf(msg.sender) ?: ""} ${msg.body}", color = fg, fontStyle = FontStyle.Italic)
                         bigEmoji -> Text(msg.body.trim(), fontSize = 44.sp, lineHeight = 52.sp)
-                        msg.type == "m.notice" -> Text(rememberRich(msg, scheme.primary, fg.copy(alpha = 0.12f)), color = fg.copy(alpha = 0.75f), style = MaterialTheme.typography.bodyMedium)
+                        msg.type == "m.notice" -> Text(rememberRich(msg, scheme.primary, fg.copy(alpha = 0.12f)), color = fg.dim(0.75f), style = MaterialTheme.typography.bodyMedium)
                         else -> {
                             Text(rememberRich(msg, if (mine) fg else scheme.primary, fg.copy(alpha = 0.12f)), color = fg, style = MaterialTheme.typography.bodyLarge)
                             if (s.linkPreviews) firstUrl(msg.body)?.let { LinkPreviewCard(it, fg) }
@@ -301,16 +301,16 @@ fun MessageRow(
                     }
                     if (last && !bare && (s.showMessageTimes || (mine && s.showReadTicks) || msg.edited)) {
                         Row(Modifier.align(Alignment.End).padding(top = 2.dp, end = if (msg.type == "m.image") 6.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (starred) Icon(Icons.Rounded.Star, "Starred", tint = fg.copy(alpha = 0.6f), modifier = Modifier.size(11.dp).padding(end = 2.dp))
-                            if (msg.edited) Text("edited  ", fontSize = 10.sp, fontStyle = FontStyle.Italic, color = fg.copy(alpha = 0.6f))
-                            if (s.showMessageTimes) Text(remember(msg.ts, s.timeFormat) { formatClock(msg.ts, s.timeFormat) }, fontSize = 10.sp, color = fg.copy(alpha = 0.6f))
+                            if (starred) Icon(Icons.Rounded.Star, "Starred", tint = fg.dim(0.6f), modifier = Modifier.size(11.dp).padding(end = 2.dp))
+                            if (msg.edited) Text("edited  ", fontSize = 10.sp, fontStyle = FontStyle.Italic, color = fg.dim(0.6f))
+                            if (s.showMessageTimes) Text(remember(msg.ts, s.timeFormat) { formatClock(msg.ts, s.timeFormat) }, fontSize = 10.sp, color = fg.dim(0.6f))
                             if (mine && s.showReadTicks) {
                                 Spacer(Modifier.width(3.dp))
                                 val (icon, tint) = when {
-                                    msg.status == STATUS_SENDING -> Icons.Rounded.AccessTime to fg.copy(alpha = 0.6f)
+                                    msg.status == STATUS_SENDING -> Icons.Rounded.AccessTime to fg.dim(0.6f)
                                     msg.status == STATUS_FAILED -> Icons.Rounded.Error to scheme.error
                                     read -> Icons.Rounded.DoneAll to fg
-                                    else -> Icons.Rounded.Done to fg.copy(alpha = 0.6f)
+                                    else -> Icons.Rounded.Done to fg.dim(0.6f)
                                 }
                                 Icon(icon, null, tint = tint, modifier = Modifier.size(14.dp))
                             }
@@ -326,10 +326,11 @@ fun MessageRow(
                 reactions.forEach { (key, who) ->
                     val minePicked = me in who
                     Row(
-                        Modifier.clip(CircleShape).background(if (minePicked) scheme.primary.copy(alpha = 0.22f) else scheme.surface)
+                        Modifier.clip(CircleShape).background(if (minePicked) scheme.primary.copy(alpha = if (s.eink) 0.18f else 0.22f) else scheme.surface)
+                            .let { if (s.eink) it.border(if (minePicked) 3.dp else 2.dp, Color.Black, CircleShape) else it }
                             .combinedClickable(onClick = { onReact(key) }, onLongClick = { onWho(key) }).padding(horizontal = 9.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                    ) { Text(key, fontSize = 14.sp); if (who.size > 1) Text(" ${who.size}", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant) }
+                    ) { Text(key, fontSize = if (s.eink) 16.sp else 14.sp); if (who.size > 1) Text(" ${who.size}", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant) }
                 }
             }
         }
@@ -393,7 +394,7 @@ private fun FileChip(icon: androidx.compose.ui.graphics.vector.ImageVector, name
         Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(fg.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = fg, modifier = Modifier.size(22.dp)) }
         Column(Modifier.padding(start = 12.dp)) {
             Text(name, color = fg, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            size?.takeIf { it > 0 }?.let { Text(humanSize(it), style = MaterialTheme.typography.labelMedium, color = fg.copy(alpha = 0.6f)) }
+            size?.takeIf { it > 0 }?.let { Text(humanSize(it), style = MaterialTheme.typography.labelMedium, color = fg.dim(0.6f)) }
         }
     }
 }
@@ -407,7 +408,7 @@ private fun AudioContent(msg: Msg, fg: Color) {
         Box(Modifier.size(38.dp).clip(CircleShape).background(fg.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) { Icon(if (on) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (on) "Stop" else "Play", tint = fg) }
         Column(Modifier.padding(start = 12.dp)) {
             Text(if (msg.voice) "Voice message" else msg.body, color = fg, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            msg.durationMs?.let { Text("%d:%02d".format(it / 60000, (it / 1000) % 60), style = MaterialTheme.typography.labelMedium, color = fg.copy(alpha = 0.6f)) }
+            msg.durationMs?.let { Text("%d:%02d".format(it / 60000, (it / 1000) % 60), style = MaterialTheme.typography.labelMedium, color = fg.dim(0.6f)) }
         }
     }
 }
@@ -418,8 +419,8 @@ private fun LocationCard(msg: Msg, fg: Color) {
         Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFEF4444)), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.LocationOn, null, tint = Color.White) }
         Column(Modifier.padding(start = 12.dp)) {
             Text("Shared location", color = fg, fontWeight = FontWeight.SemiBold)
-            Text(msg.geo?.removePrefix("geo:")?.substringBefore(';') ?: "", style = MaterialTheme.typography.labelMedium, color = fg.copy(alpha = 0.7f))
-            Text("Tap to open map", style = MaterialTheme.typography.labelMedium, color = fg.copy(alpha = 0.55f))
+            Text(msg.geo?.removePrefix("geo:")?.substringBefore(';') ?: "", style = MaterialTheme.typography.labelMedium, color = fg.dim(0.7f))
+            Text("Tap to open map", style = MaterialTheme.typography.labelMedium, color = fg.dim(0.55f))
         }
     }
 }
@@ -437,8 +438,8 @@ private fun ContactCard(msg: Msg, fg: Color) {
         Avatar(name, null, 44.dp)
         Column(Modifier.padding(start = 12.dp)) {
             Text(name, color = fg, fontWeight = FontWeight.SemiBold)
-            card?.second?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = fg.copy(alpha = 0.75f)) }
-            Text("Tap to save contact", style = MaterialTheme.typography.labelMedium, color = fg.copy(alpha = 0.55f))
+            card?.second?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = fg.dim(0.75f)) }
+            Text("Tap to save contact", style = MaterialTheme.typography.labelMedium, color = fg.dim(0.55f))
         }
     }
 }
@@ -456,9 +457,9 @@ private fun LinkPreviewCard(url: String, fg: Color) {
     val p by produceState<LinkPreview?>(null, url) { value = store.preview(url) }
     val card = p ?: return
     Column(Modifier.padding(top = 6.dp).clip(RoundedCornerShape(12.dp)).background(fg.copy(alpha = 0.08f)).clickable { runCatching { uri.openUri(url) } }.padding(10.dp)) {
-        card.site?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = fg.copy(alpha = 0.6f)) }
+        card.site?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = fg.dim(0.6f)) }
         card.title?.let { Text(it, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, color = fg) }
-        card.description?.let { Text(it, style = MaterialTheme.typography.labelMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, color = fg.copy(alpha = 0.75f)) }
+        card.description?.let { Text(it, style = MaterialTheme.typography.labelMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, color = fg.dim(0.75f)) }
         val img = rememberMxcImage(card.imageMxc, 480)
         if (img != null) Image(img, null, Modifier.padding(top = 6.dp).fillMaxWidth().height(130.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
     }
@@ -475,7 +476,7 @@ private fun PollCard(msg: Msg, chat: ChatState?, me: String, fg: Color, onVote: 
     val showCounts = poll.disclosed || ended
     Column(Modifier.widthIn(min = 220.dp)) {
         Text(poll.question, color = fg, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
-        Text(if (ended) "Poll ended" else if (poll.maxSelections > 1) "Select up to ${poll.maxSelections}" else "Select one", style = MaterialTheme.typography.labelMedium, color = fg.copy(alpha = 0.65f), modifier = Modifier.padding(bottom = 8.dp))
+        Text(if (ended) "Poll ended" else if (poll.maxSelections > 1) "Select up to ${poll.maxSelections}" else "Select one", style = MaterialTheme.typography.labelMedium, color = fg.dim(0.65f), modifier = Modifier.padding(bottom = 8.dp))
         poll.answers.forEach { a ->
             val count = votes.values.count { a.id in it }
             val selected = a.id in mine
@@ -498,15 +499,15 @@ private fun PollCard(msg: Msg, chat: ChatState?, me: String, fg: Color, onVote: 
                 Row(Modifier.padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         if (poll.maxSelections > 1) (if (selected) Icons.Rounded.CheckBox else Icons.Rounded.CheckBoxOutlineBlank) else (if (selected) Icons.Rounded.RadioButtonChecked else Icons.Rounded.RadioButtonUnchecked),
-                        null, tint = if (selected) MaterialTheme.colorScheme.primary else fg.copy(alpha = 0.6f), modifier = Modifier.size(20.dp),
+                        null, tint = if (selected) MaterialTheme.colorScheme.primary else fg.dim(0.6f), modifier = Modifier.size(20.dp),
                     )
                     Text(a.text, color = fg, modifier = Modifier.weight(1f).padding(horizontal = 10.dp), style = MaterialTheme.typography.bodyMedium)
-                    if (showCounts) Text("$count", color = fg.copy(alpha = 0.75f), style = MaterialTheme.typography.labelLarge)
+                    if (showCounts) Text("$count", color = fg.dim(0.75f), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-            Text(if (showCounts) "$total vote${if (total == 1) "" else "s"}" else "Results hidden until the poll ends", style = MaterialTheme.typography.labelMedium, color = fg.copy(alpha = 0.6f), modifier = Modifier.weight(1f))
+            Text(if (showCounts) "$total vote${if (total == 1) "" else "s"}" else "Results hidden until the poll ends", style = MaterialTheme.typography.labelMedium, color = fg.dim(0.6f), modifier = Modifier.weight(1f))
             if (!ended && msg.sender == me && msg.status == STATUS_SENT) TextButton(onClick = onEnd) { Text("End poll") }
         }
     }

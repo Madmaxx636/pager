@@ -274,7 +274,7 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
         }
         "chats" -> SettingsPage("Chats", home) {
             SettingsGroup("Sending") {
-                SwitchRow("Enter key sends", "Off: Enter adds a new line", s.enterToSend) { v -> set { copy(enterToSend = v) } }; GroupDivider()
+                SwitchRow("Enter key sends", "Off: Enter adds a new line", s.enterSends) { v -> set { copy(enterSends = v) } }; GroupDivider()
                 SwitchRow("Markdown formatting", "**bold**, _italic_, ~~strike~~ and `code` are sent as formatted text", s.markdown) { v -> set { copy(markdown = v) } }; GroupDivider()
                 SwitchRow("Mention suggestions", "Type @ in a group to pick someone", s.mentionSuggestions) { v -> set { copy(mentionSuggestions = v) } }; GroupDivider()
                 SwitchRow("Swipe to reply", "Swipe a message to the right", s.swipeToReply) { v -> set { copy(swipeToReply = v) } }; GroupDivider()

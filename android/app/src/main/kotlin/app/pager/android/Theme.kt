@@ -112,6 +112,12 @@ fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int): 
     return e
 }
 
+/** True while E-ink mode is on. Lets plain helpers (no composition access) make faint things solid. */
+object Ink { @Volatile var on = false }
+
+/** Like Color.copy(alpha) for text, icons and lines, but never faint in E-ink mode: faded gray disappears on a fast-refresh screen. */
+fun Color.dim(alpha: Float): Color = if (Ink.on && alpha >= 0.4f) copy(alpha = 1f) else copy(alpha = alpha)
+
 /** Pure black on white with light-gray fills: reads well on e-ink and needs no color. */
 private fun einkScheme(): ColorScheme = lightColorScheme(
     primary = Color.Black, onPrimary = Color.White, primaryContainer = Color.White, onPrimaryContainer = Color.Black,
@@ -157,6 +163,18 @@ private val PagerTypography = Typography(
     labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium),
 )
 
+/** E-ink typography: every style at least semi-bold, titles and labels bold, so thin strokes don't vanish. */
+private val EinkTypography = PagerTypography.let { t ->
+    fun TextStyle.bold(w: FontWeight) = copy(fontWeight = w)
+    Typography(
+        displayLarge = t.displayLarge.bold(FontWeight.Bold), displayMedium = t.displayMedium.bold(FontWeight.Bold), displaySmall = t.displaySmall.bold(FontWeight.Bold),
+        headlineLarge = t.headlineLarge.bold(FontWeight.ExtraBold), headlineMedium = t.headlineMedium.bold(FontWeight.ExtraBold), headlineSmall = t.headlineSmall.bold(FontWeight.Bold),
+        titleLarge = t.titleLarge.bold(FontWeight.ExtraBold), titleMedium = t.titleMedium.bold(FontWeight.Bold), titleSmall = t.titleSmall.bold(FontWeight.Bold),
+        bodyLarge = t.bodyLarge.bold(FontWeight.SemiBold), bodyMedium = t.bodyMedium.bold(FontWeight.SemiBold), bodySmall = t.bodySmall.bold(FontWeight.SemiBold),
+        labelLarge = t.labelLarge.bold(FontWeight.Bold), labelMedium = t.labelMedium.bold(FontWeight.Bold), labelSmall = t.labelSmall.bold(FontWeight.Bold),
+    )
+}
+
 private val PagerShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp), small = RoundedCornerShape(10.dp), medium = RoundedCornerShape(14.dp),
     large = RoundedCornerShape(20.dp), extraLarge = RoundedCornerShape(28.dp),
@@ -167,6 +185,7 @@ private val PagerShapes = Shapes(
 fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
     val config = androidx.compose.ui.platform.LocalConfiguration.current
     val settings = effectiveSettings(rawSettings, config.screenWidthDp, config.screenHeightDp)
+    Ink.on = settings.eink
     val dark = isDarkTheme(settings)
     val context = LocalContext.current
     // The app has its own light/dark setting, so the system bars must follow it, not the phone's theme
@@ -187,5 +206,5 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
         LocalRawSettings provides rawSettings,
         LocalDensity provides Density(base.density * rawSettings.uiScale, base.fontScale * settings.fontScale),
         androidx.compose.material3.LocalRippleConfiguration provides (if (settings.eink) null else androidx.compose.material3.LocalRippleConfiguration.current),
-    ) { MaterialTheme(colorScheme = if (settings.eink) einkScheme() else colors, typography = PagerTypography, shapes = PagerShapes, content = content) }
+    ) { MaterialTheme(colorScheme = if (settings.eink) einkScheme() else colors, typography = if (settings.eink) EinkTypography else PagerTypography, shapes = PagerShapes, content = content) }
 }

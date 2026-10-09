@@ -195,7 +195,10 @@ class MatrixApi(private val http: Http) {
         return joined.mapValues { it.value.obj()["display_name"].str() ?: it.key.removePrefix("@").substringBefore(':') }
     }
 
-    suspend fun leave(roomId: String) { http.request("POST", "/_matrix/client/v3/rooms/${enc(roomId)}/leave", JsonObject(emptyMap())) }
+    suspend fun leave(roomId: String) {
+        http.request("POST", "/_matrix/client/v3/rooms/${enc(roomId)}/leave", JsonObject(emptyMap()))
+        runCatching { http.request("POST", "/_matrix/client/v3/rooms/${enc(roomId)}/forget", JsonObject(emptyMap())) } // drop its history from your account
+    }
 
     suspend fun join(roomId: String) { http.request("POST", "/_matrix/client/v3/join/${enc(roomId)}", JsonObject(emptyMap())) }
 

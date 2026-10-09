@@ -97,7 +97,7 @@ fun SettingsGroup(title: String? = null, footer: String? = null, content: @Compo
 }
 
 @Composable
-fun GroupDivider() = HorizontalDivider(Modifier.padding(start = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+fun GroupDivider() = HorizontalDivider(Modifier.padding(start = 16.dp), thickness = if (Ink.on) 2.dp else 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.dim(0.6f))
 
 /** The tinted rounded-square icon used on the settings home and in lists. */
 @Composable
@@ -108,7 +108,7 @@ fun IconTile(icon: ImageVector, color: Color, size: Int = 34) {
 }
 
 @Composable
-fun ChevronEnd() = Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+fun ChevronEnd() = Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.dim(0.7f))
 
 @Composable
 fun EmptyState(icon: ImageVector, title: String, body: String? = null, action: @Composable () -> Unit = {}) {

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, pager, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { applyHistory, applySync, setOwnIdentity } from "./reducer";
-import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings } from "./settings";
+import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
 import {
   ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
   labelsOf, lastPreview, lastTs, nameOf, previewOf,
@@ -152,6 +152,25 @@ function begin(s: Session, cache?: { userId: string; since?: string; chats: Reco
   armReminders();
 }
 
+// ---- Settings that follow your account (see settings.ts) -----------------------------------------
+let settingsPushTimer: number | undefined;
+let settingsChecked = false;
+function pushSettings(userId: string) {
+  window.clearTimeout(settingsPushTimer);
+  settingsPushTimer = window.setTimeout(() => { void pager_putSettings(userId); }, 1500);
+}
+function pager_putSettings(userId: string) { return matrix.putAccountData(userId, settingsSyncType(), settingsPayload()).catch(() => {}); }
+/** Runs on every sync: takes newer settings from the account, or uploads ours if the account has none or older ones. */
+function handleSettingsSync(remote: unknown, userId: string) {
+  const first = !settingsChecked;
+  if (remote !== undefined) {
+    const applied = applyRemoteSettings(remote);
+    if (!applied && first && getSettingsUpdatedAt() > ((remote as { updatedAt?: number }).updatedAt ?? 0)) pushSettings(userId);
+  } else if (first && getSettingsUpdatedAt() > 0) pushSettings(userId);
+  settingsChecked = true;
+}
+onLocalSettingsChange(() => { const s = state.session; if (s) pushSettings(s.userId); });
+
 async function syncLoop(s: Session, signal: AbortSignal) {
   let backoff = 1000;
   while (!signal.aborted) {
@@ -161,6 +180,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       const r = applySync(state.chats, res, s.userId, initial);
       set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}), ...(r.userStickers ? { userStickers: r.userStickers } : {}) });
       if (r.userStickers) lsSet("pager.userStickers", r.userStickers);
+      handleSettingsSync(r.accountData?.[settingsSyncType()], s.userId);
       r.invites.forEach((id) => void matrix.join(id).catch(() => {}));
       const muted = state.muted, scope = getSettings().notifScope;
       // Beeper-style: muted and low-priority chats stay quiet except for @mentions and replies to you.

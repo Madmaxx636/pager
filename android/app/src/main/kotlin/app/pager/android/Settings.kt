@@ -51,7 +51,7 @@ data class AppSettings(
     val doubleTapReact: Boolean = true,
 
     // --- Chats ---
-    val enterToSend: Boolean = false,
+    val enterSends: Boolean = true,            // Enter sends (Shift+Enter adds a line); on by default
     val sendReadReceipts: Boolean = true,
     val sendTyping: Boolean = true,
     val linkPreviews: Boolean = true,
