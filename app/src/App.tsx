@@ -1,6 +1,6 @@
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { applyTheme, useSettings } from "./core/settings";
+import { applyTheme, getSettings, setSystemTheme, useSettings, type SystemTheme } from "./core/settings";
 import { forward, getState, requestNotifications, restoreSession, useStore } from "./core/store";
 import { Auth } from "./ui/Auth";
 import { Sidebar } from "./ui/Sidebar";
@@ -40,6 +40,13 @@ export function App() {
     window.addEventListener("resize", f);
     return () => { mq.removeEventListener("change", f); window.removeEventListener("resize", f); };
   }, [st]);
+  useEffect(() => {
+    const d = window.pagerDesktop;
+    if (!d?.getSystemTheme) return;
+    const apply = (t: SystemTheme) => { setSystemTheme(t); applyTheme(getSettings()); };
+    void d.getSystemTheme().then(apply).catch(() => {});
+    d.onSystemTheme(apply);
+  }, []);
   useEffect(() => {
     const open = (e: Event) => nav(`chat:${(e as CustomEvent<string>).detail}`);
     window.addEventListener("pager:open", open);

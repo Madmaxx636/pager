@@ -4,6 +4,7 @@ const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, session, n
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
+const { readSystemTheme, watchSystemTheme } = require("./system-theme.js");
 
 app.commandLine.appendSwitch("ozone-platform-hint", "auto"); // native Wayland when available
 
@@ -34,6 +35,23 @@ function createWindow() {
   // Links in messages open in the real browser, never inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:|^mailto:|^geo:/.test(url)) shell.openExternal(url); return { action: "deny" }; });
   win.webContents.on("will-navigate", (e, url) => { if (!url.startsWith("file:")) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); } });
+
+  // Spell check with suggestions, plus the usual edit menu, in a right-click menu.
+  win.webContents.on("context-menu", (_e, p) => {
+    const items = [];
+    if (p.misspelledWord) {
+      for (const s of p.dictionarySuggestions.slice(0, 5)) items.push({ label: s, click: () => win.webContents.replaceMisspelling(s) });
+      if (!p.dictionarySuggestions.length) items.push({ label: "No suggestions", enabled: false });
+      items.push({ label: "Add to dictionary", click: () => win.webContents.session.addWordToSpellCheckerDictionary(p.misspelledWord) }, { type: "separator" });
+    }
+    if (p.isEditable) items.push({ role: "cut", enabled: p.editFlags.canCut }, { role: "copy", enabled: p.editFlags.canCopy }, { role: "paste", enabled: p.editFlags.canPaste }, { role: "selectAll" });
+    else if (p.selectionText) items.push({ role: "copy" });
+    if (p.linkURL) items.push({ type: "separator" }, { label: "Copy link address", click: () => require("electron").clipboard.writeText(p.linkURL) });
+    if (items.length) Menu.buildFromTemplate(items).popup({ window: win });
+  });
+  // Follow the desktop's colors (KDE Plasma, GNOME, Windows, macOS) and tell the page when they change.
+  const sendTheme = (t) => { if (win && !win.isDestroyed()) win.webContents.send("system-theme", t); };
+  watchSystemTheme(sendTheme);
 
   win.on("close", (e) => {
     prefs.bounds = win.getBounds(); savePrefs();
@@ -69,6 +87,13 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", showWindow);
 
   app.whenReady().then(() => {
+    // Restore spell check choices (default: on, in the system language).
+    try {
+      const ses = session.defaultSession;
+      ses.setSpellCheckerEnabled(prefs.spell?.enabled ?? true);
+      const wanted = (prefs.spell?.languages ?? [app.getLocale()]).filter((l) => ses.availableSpellCheckerLanguages.includes(l));
+      if (wanted.length) ses.setSpellCheckerLanguages(wanted);
+    } catch { /* spell check unavailable */ }
     const allowed = new Set(["notifications", "media", "geolocation", "clipboard-sanitized-write", "fullscreen"]);
     session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
     session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
@@ -135,6 +160,17 @@ if (!app.requestSingleInstanceLock()) {
     w.webContents.setWindowOpenHandler(({ url }) => { try { if (new URL(url).protocol === "https:") w.loadURL(url); } catch { /* ignore */ } return { action: "deny" }; });
     w.loadURL(spec.url).catch((e) => { if (!done) { done = true; clearInterval(timer); if (!w.isDestroyed()) w.destroy(); reject(e); } });
   }));
+  ipcMain.handle("system-theme", () => readSystemTheme());
+  ipcMain.handle("spell:get", () => {
+    const ses = session.defaultSession;
+    return { enabled: ses.isSpellCheckerEnabled(), languages: ses.getSpellCheckerLanguages(), available: ses.availableSpellCheckerLanguages };
+  });
+  ipcMain.on("spell:set", (_e, o) => {
+    const ses = session.defaultSession;
+    if (typeof o?.enabled === "boolean") ses.setSpellCheckerEnabled(o.enabled);
+    if (Array.isArray(o?.languages)) { const ok = o.languages.filter((l) => ses.availableSpellCheckerLanguages.includes(l)); if (ok.length) ses.setSpellCheckerLanguages(ok); }
+    prefs.spell = { enabled: ses.isSpellCheckerEnabled(), languages: ses.getSpellCheckerLanguages() }; savePrefs();
+  });
   ipcMain.on("hostname", (e) => { e.returnValue = os.hostname(); });
   ipcMain.handle("autostart:get", getAutostart);
   ipcMain.on("autostart:set", (_e, on) => setAutostart(!!on));

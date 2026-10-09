@@ -10,6 +10,7 @@ import {
   edit, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, toggleStar, typing, useStore, votePoll, getState,
 } from "../core/store";
+import { SOUNDS, playSound } from "../core/sounds";
 import { Avatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
 import { MessageRow } from "./Message";
 import { Effects } from "./Effects";
@@ -438,6 +439,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
               return <>
                 <Select title="Notify me about" value={p.mode ?? "default"} options={[["default", "Use my general settings"], ["all", "Every message"], ["mentions", "Mentions and replies only"], ["none", "Nothing"]]} onChange={(v) => set({ mode: v })} />
                 <Select title="Sound" value={p.sound ?? "default"} options={[["default", "Use my general settings"], ["off", "Silent"]]} onChange={(v) => set({ sound: v })} />
+                <Select title="Alert sound" value={p.soundId ?? "default"} options={[["default", "Use the app or network sound"], ...SOUNDS]} onChange={(v) => { set({ soundId: v }); if (v !== "default") playSound(v, st.notifSoundVolume); }} />
                 <Select title="Message previews" value={p.preview ?? "default"} options={[["default", "Use my general settings"], ["show", "Show message"], ["hide", "Hide message"]]} onChange={(v) => set({ preview: v })} />
                 <p className="muted">Mute and Low priority still apply: muted chats only notify for mentions, replies and your keywords.</p>
                 <div className="row-end"><button className="link" onClick={() => { const { [chat.id]: _x, ...rest } = st.notifChat; updateSettings({ notifChat: rest }); }}>Reset</button><button className="primary" onClick={() => setNotifDlg(false)}>Done</button></div>

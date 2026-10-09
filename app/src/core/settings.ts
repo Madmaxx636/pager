@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 /** Everything the user can tune. One JSON blob in localStorage. */
 export type RowAction = "none" | "archive" | "read" | "pin" | "mute" | "low" | "snooze";
 
-export type ChatNotifPrefs = { mode?: "default" | "all" | "mentions" | "none"; preview?: "default" | "show" | "hide"; sound?: "default" | "off" };
+export type ChatNotifPrefs = { soundId?: string; mode?: "default" | "all" | "mentions" | "none"; preview?: "default" | "show" | "hide"; sound?: "default" | "off" };
 
 export interface AppSettings {
   // Appearance
@@ -36,6 +36,8 @@ export interface AppSettings {
   reduceMotion: boolean;
   sidebarWidth: number;
   /** Quick actions that appear when hovering a chat row (desktop's version of swipe actions). */
+  /** Desktop app only: use the operating system's colors. */
+  themeFollowSystem: boolean;
   rowAction1: RowAction;
   rowAction2: RowAction;
   // Chats
@@ -77,6 +79,12 @@ export interface AppSettings {
   notifQuietBreakThrough: boolean;
   /** Wait this long before alerting, and skip it if you read the chat somewhere else meanwhile. */
   notifDelaySec: number;
+  /** App-wide alert sound, and how loud (0 to 1). Per network and per chat sounds win over this. */
+  notifSoundId: string;
+  notifSoundVolume: number;
+  notifNetworkSound: Record<string, string>;
+  /** Do not disturb: no alerts until this time (ms since 1970). 0 = off. */
+  dndUntil: number;
   /** What the unread badge counts. */
   notifBadge: "unmuted" | "all" | "off";
   quietHoursEnabled: boolean;
@@ -100,10 +108,10 @@ export const DEFAULTS: AppSettings = {
   themeMode: "system", accent: "teal", fontScale: 1, bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
-  avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, rowAction1: "read", rowAction2: "archive",
+  avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
   enterToSend: true, sendReadReceipts: true, sendTyping: true, linkPreviews: true, autoDownload: "always", unarchiveOnMessage: true,
   confirmDelete: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtFirstUnread: true, gifProvider: "giphy", gifKey: "", doubleTapReact: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
-  notifEnabled: true, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [], notifNetworkMode: {}, notifChat: {}, notifKeywords: [], notifQuietDays: [0, 1, 2, 3, 4, 5, 6], notifQuietBreakThrough: false, notifDelaySec: 0, notifBadge: "unmuted",
+  notifEnabled: true, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [], notifNetworkMode: {}, notifChat: {}, notifKeywords: [], notifQuietDays: [0, 1, 2, 3, 4, 5, 6], notifQuietBreakThrough: false, notifDelaySec: 0, notifBadge: "unmuted", notifSoundId: "chime", notifSoundVolume: 0.7, notifNetworkSound: {}, dndUntil: 0,
   quietHoursEnabled: false, quietStartMin: 22 * 60, quietEndMin: 7 * 60,
   hiddenNetworks: [],
   developerMode: false, shortcuts: {},
@@ -217,6 +225,12 @@ export const ACCENTS: Record<string, { dark: string; light: string; onDark: stri
 };
 
 /** Writes the theme to CSS variables on <html>. */
+/** What the desktop app tells us about the operating system's theme. */
+export interface SystemTheme { dark: boolean; source: string; name?: string; bg?: string; panel?: string; fg?: string; accent?: string; accentInk?: string }
+let system: SystemTheme | undefined;
+export function setSystemTheme(t: SystemTheme | undefined) { system = t; listeners.forEach((l) => l()); }
+const lum = (h: string) => { const n = parseInt(h.slice(1), 16); const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+
 export function applyTheme(s: AppSettings) {
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const dark = s.themeMode === "dark" || s.themeMode === "black" || (s.themeMode === "system" && prefersDark);
@@ -226,6 +240,22 @@ export function applyTheme(s: AppSettings) {
   r.style.setProperty("--accent", dark ? a.dark : a.light);
   r.style.setProperty("--accent-ink", dark ? a.onDark : a.onLight);
   r.style.setProperty("--font-scale", String(s.fontScale));
+  // Desktop app: borrow the operating system's colors (KDE Plasma, GNOME, Windows, macOS).
+  const sys = s.themeFollowSystem && window.pagerDesktop ? system : undefined;
+  const props = ["--bg", "--panel", "--panel-2", "--line", "--text", "--muted", "--theirs"];
+  if (sys?.bg && sys.fg && sys.panel) {
+    const isDark = lum(sys.bg) < 0.4;
+    r.dataset.theme = isDark ? "dark" : "light";
+    r.style.setProperty("--bg", sys.bg); r.style.setProperty("--panel", sys.panel); r.style.setProperty("--text", sys.fg);
+    r.style.setProperty("--theirs", sys.panel);
+    r.style.setProperty("--panel-2", `color-mix(in srgb, ${sys.panel} 90%, ${sys.fg})`);
+    r.style.setProperty("--line", `color-mix(in srgb, ${sys.bg} 85%, ${sys.fg})`);
+    r.style.setProperty("--muted", `color-mix(in srgb, ${sys.fg} 62%, ${sys.bg})`);
+  } else props.forEach((p) => r.style.removeProperty(p));
+  if (sys?.accent) {
+    r.style.setProperty("--accent", sys.accent);
+    r.style.setProperty("--accent-ink", sys.accentInk ?? (lum(sys.accent) > 0.45 ? "#111418" : "#ffffff"));
+  }
   r.dataset.bubble = s.bubbleStyle;
   r.dataset.fill = s.bubbleFill;
   r.dataset.depth = s.bubbleDepth;

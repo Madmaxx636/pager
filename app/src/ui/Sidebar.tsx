@@ -8,7 +8,7 @@ import { networkMeta } from "../core/emoji";
 import {
   addLabel, markAllRead, markRead, markUnread, me, movePin, pin, remind, removeLabel, setLowPriority, setMuted, setTag, snooze, leave, useInbox, useLabels, useStore, useChatsRaw,
 } from "../core/store";
-import { RowAction, useSettings } from "../core/settings";
+import { RowAction, updateSettings, useSettings } from "../core/settings";
 import { Avatar, IconButton, Modal, SheetItem, TypingDots, WhenModal, EmptyState } from "./common";
 import { needsAttention } from "./Accounts";
 
@@ -116,7 +116,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
         </header>
       ) : (
         <header className="side-head">
-          <div><h1>Chats</h1>{totalUnread > 0 && <small className="accent">{totalUnread} unread</small>}</div>
+          <div><h1>Chats</h1>{st.dndUntil > Date.now() ? <small className="accent">Do not disturb</small> : totalUnread > 0 && <small className="accent">{totalUnread} unread</small>}</div>
           <div className="head-actions">
             <IconButton icon={SquarePen} label="New chat (Ctrl+N)" onClick={() => nav("new")} />
             <IconButton icon={Search} label="Search all messages (Ctrl+Shift+F)" onClick={() => nav("search")} />
@@ -127,6 +127,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
                   <div className="menu-id">{me()}</div>
                   <button onClick={onAccounts}><UserRoundCog size={18} />Accounts</button>
                   <button onClick={markAllRead}><CheckCheck size={18} />Mark all as read</button>
+                  <button onClick={() => updateSettings({ dndUntil: st.dndUntil > Date.now() ? 0 : Date.now() + 3.6e6 })}><BellOff size={18} />{st.dndUntil > Date.now() ? "Turn off Do not disturb" : "Do not disturb for 1 hour"}</button>
                   <button onClick={() => nav("settings/starred")}><Star size={18} />Starred messages</button>
                   <button onClick={() => nav("settings")}><SettingsIcon size={18} />Settings</button>
                 </div>

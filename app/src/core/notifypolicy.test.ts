@@ -48,4 +48,15 @@ describe("notification policy", () => {
     const s = S({ notifChat: { "!a": { sound: "off", preview: "hide" } } });
     expect(decide(msg(), s)).toMatchObject({ show: true, silent: true, preview: "hidden" });
   });
+  it("do not disturb silences everything, but important things can break through if allowed", () => {
+    const dnd = S({ dndUntil: 10_000 });
+    expect(decide(msg({ nowMs: 5_000 }), dnd).show).toBe(false);
+    expect(decide(msg({ nowMs: 20_000 }), dnd).show).toBe(true);
+    expect(decide(msg({ nowMs: 5_000, mentioned: true }), { ...dnd, notifQuietBreakThrough: true }).show).toBe(true);
+  });
+  it("picks the sound: chat, then network, then the app's", () => {
+    expect(decide(msg(), S()).sound).toBe("chime");
+    expect(decide(msg(), S({ notifNetworkSound: { signal: "pop" } })).sound).toBe("pop");
+    expect(decide(msg(), S({ notifNetworkSound: { signal: "pop" }, notifChat: { "!a": { soundId: "knock" } } })).sound).toBe("knock");
+  });
 });
