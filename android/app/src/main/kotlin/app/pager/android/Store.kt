@@ -156,6 +156,7 @@ class Store(private val context: Context) {
     private fun begin(s: Session) {
         http.baseUrl = s.baseUrl
         http.token = s.token
+        restoreIdentity()
         loadCache(s.userId)
         _session.value = s
         syncJob?.cancel()
@@ -572,8 +573,8 @@ class Store(private val context: Context) {
         if (!synchronized(loadingOlder) { loadingOlder.add(roomId) }) return
         scope.launch {
             try {
-                val (events, end) = matrix.messages(roomId, token)
-                update(roomId) { SyncReducer.applyHistory(it, events, end) }
+                val (events, end, state) = matrix.messages(roomId, token)
+                update(roomId) { SyncReducer.applyHistory(it, events, end, state, me) }
             } catch (_: Exception) {
             } finally {
                 synchronized(loadingOlder) { loadingOlder.remove(roomId) }
@@ -795,7 +796,41 @@ class Store(private val context: Context) {
 
     suspend fun refreshBridges() {
         if (_session.value == null) return
-        runCatching { pager.networks() }.onSuccess { _bridges.value = it }
+        runCatching { pager.networks() }.onSuccess { applyIdentity(it); _bridges.value = it }
+    }
+
+    /** localpart escaping used by the bridges for ghost user ids (uppercase and odd characters are escaped). */
+    private fun escLocalpart(s: String) = buildString {
+        for (c in s) when {
+            c in 'a'..'z' || c in '0'..'9' || c in "-./=" -> append(c)
+            c == '_' -> append("__")
+            c in 'A'..'Z' -> append('_').append(c.lowercaseChar())
+            else -> append('=').append(c.code.toString(16).padStart(2, '0'))
+        }
+    }
+
+    private fun restoreIdentity() {
+        val names = prefs.getStringSet("identity.names", null) ?: return
+        SyncReducer.setOwnIdentity(names, prefs.getStringSet("identity.ids", emptySet()).orEmpty())
+    }
+
+    private fun applyIdentity(nets: List<Network>) {
+        val domain = _session.value?.userId?.substringAfter(':', "") ?: ""
+        val names = sortedSetOf<String>(); val ids = sortedSetOf<String>()
+        for (n in nets) for (l in n.logins) {
+            ids.add("@${n.id}_${escLocalpart(l.id)}:$domain")
+            if (l.name.isNotBlank()) names.add(l.name)
+            if (l.profileName.isNotBlank()) names.add(l.profileName)
+        }
+        val key = names.joinToString("|") + "##" + ids.joinToString("|")
+        if (key == prefs.getString("identity.key", "")) return
+        prefs.edit().putString("identity.key", key).putStringSet("identity.names", names).putStringSet("identity.ids", ids).apply()
+        SyncReducer.setOwnIdentity(names, ids)
+        // Messages already loaded were attributed before we knew who you are on each network: start over once.
+        val s = _session.value ?: return
+        syncJob?.cancel()
+        since = null; _chats.value = emptyMap(); _synced.value = false; cacheFile.delete()
+        syncJob = scope.launch { syncLoop(s) }
     }
 
     private suspend fun bridgeLoop() {
@@ -809,12 +844,13 @@ class Store(private val context: Context) {
     // --- Session -----------------------------------------------------------------
 
     fun signOut() {
-        scope.launch { runCatching { matrix.logout() }; signOutLocal() }
+        scope.launch { kotlinx.coroutines.withTimeoutOrNull(2500) { runCatching { matrix.logout() } }; signOutLocal() }
     }
 
     private fun signOutLocal() {
         syncJob?.cancel()
-        prefs.edit().remove("token").remove("userId").apply()
+        prefs.edit().remove("token").remove("userId").remove("identity.key").remove("identity.names").remove("identity.ids").apply()
+        SyncReducer.setOwnIdentity(emptyList(), emptyList())
         http.token = null
         since = null
         cacheFile.delete()

@@ -102,3 +102,33 @@ class EffectsTest {
         assertFalse(alive)
     }
 }
+
+class OwnGhostTest {
+    private val me = "@me:pager.test"
+    private val ghost = "@whatsapp_lid-111:pager.test"
+    private val other = "@whatsapp_222:pager.test"
+    private fun parse(s: String) = json.parseToJsonElement(s).jsonObject
+    private fun member(id: String, name: String) = """{"type":"m.room.member","state_key":"$id","sender":"$id","content":{"membership":"join","displayname":"$name"}}"""
+    private fun text(id: String, sender: String, body: String, ts: Long) = """{"type":"m.room.message","event_id":"$id","sender":"$sender","origin_server_ts":$ts,"content":{"msgtype":"m.text","body":"$body"}}"""
+
+    @org.junit.After fun reset() = SyncReducer.setOwnIdentity(emptyList(), emptyList())
+
+    @Test fun ownGhostMessagesShowAsSent() {
+        SyncReducer.setOwnIdentity(listOf("Lane McDonald"), emptyList())
+        val sync = parse("""{"rooms":{"join":{"!r:x":{"state":{"events":[${member(ghost, "Lane McDonald (WA)")},${member(other, "Amy")}]},"timeline":{"events":[${text("\$1", ghost, "hi", 1)},${text("\$2", other, "hello", 2)}]}}}}}""")
+        val msgs = SyncReducer.apply(emptyMap(), sync, me, true).chats["!r:x"]!!.messages
+        assertEquals(listOf(me, other), msgs.map { it.sender })
+    }
+
+    @Test fun historyPagesToo() {
+        SyncReducer.setOwnIdentity(listOf("Lane McDonald"), emptyList())
+        val chat = SyncReducer.apply(emptyMap(), parse("""{"rooms":{"join":{"!r:x":{"state":{"events":[]},"timeline":{"events":[],"prev_batch":"p"}}}}}"""), me, true).chats["!r:x"]!!
+        val next = SyncReducer.applyHistory(chat, listOf(parse(text("\$2", other, "hello", 2)), parse(text("\$1", ghost, "hi", 1))), null, listOf(parse(member(ghost, "lane mcdonald"))), me)
+        assertEquals(listOf(me, other), next.messages.map { it.sender })
+    }
+
+    @Test fun noAccountsMeansNoChange() {
+        val sync = parse("""{"rooms":{"join":{"!r:x":{"state":{"events":[${member(ghost, "Lane McDonald")}]},"timeline":{"events":[${text("\$1", ghost, "hi", 1)}]}}}}}""")
+        assertEquals(ghost, SyncReducer.apply(emptyMap(), sync, me, true).chats["!r:x"]!!.messages[0].sender)
+    }
+}

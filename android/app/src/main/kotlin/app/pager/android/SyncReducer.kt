@@ -26,6 +26,29 @@ data class SyncResult(
 )
 
 object SyncReducer {
+    // ---- Your own accounts on other networks ----------------------------------------------------
+    // A bridge without double puppeting sends the messages you wrote on your phone (and your history) as your own "ghost"
+    // user on that network, not as you. Treat those ghosts as you, so they show as sent instead of received.
+    @Volatile private var ownNames: Set<String> = emptySet()
+    @Volatile private var ownIds: Set<String> = emptySet()
+    fun setOwnIdentity(names: Collection<String>, ids: Collection<String>) {
+        ownNames = names.map { it.trim().lowercase() }.filter { it.length >= 2 }.toSet()
+        ownIds = ids.toSet()
+    }
+    /** Bridges decorate ghost names, e.g. "Lane McDonald (WA)": compare without that suffix. */
+    private val nameSuffix = Regex("\\s*\\([^)]{1,12}\\)$")
+    private fun baseName(n: String) = n.trim().lowercase().replace(nameSuffix, "")
+    private fun ownGhosts(chat: ChatState, me: String): Set<String> {
+        val out = HashSet<String>()
+        for ((id, name) in chat.members) if (id != me && (id in ownIds || baseName(name) in ownNames)) out.add(id)
+        for (id in ownIds) if (id != me) out.add(id)
+        return out
+    }
+    private fun claimOwn(events: List<JsonObject>, ghosts: Set<String>, me: String): List<JsonObject> {
+        if (ghosts.isEmpty()) return events
+        return events.map { e -> if (e["state_key"] == null && e["sender"].str() in ghosts) JsonObject(e + ("sender" to JsonPrimitive(me))) else e }
+    }
+
     /** Folds one /sync response into the chat map. Pure, so it can be unit-tested. */
     fun apply(old: Map<String, ChatState>, sync: JsonObject, me: String, initial: Boolean): SyncResult {
         val chats = old.toMutableMap()
@@ -46,7 +69,7 @@ object SyncReducer {
             else if (chat.prevBatch == null && chat.messages.isEmpty() && prev != null) chat = chat.copy(prevBatch = prev)
 
             val pre = chat
-            chat = process(chat, tl["events"].arr().map { it.obj() }, applyStates = true) { m, parentSender ->
+            chat = process(chat, claimOwn(tl["events"].arr().map { it.obj() }, ownGhosts(chat, me), me), applyStates = true) { m, parentSender ->
                 if (!initial && m.sender != me) {
                     val mine = pre.members[me] ?: me.removePrefix("@").substringBefore(':')
                     val mentioned = me in m.mentions || m.body.contains("@$mine", ignoreCase = true)
@@ -77,9 +100,11 @@ object SyncReducer {
     }
 
     /** Merges a page of older events (as returned by /messages, newest first) into a chat. */
-    fun applyHistory(chat: ChatState, chunk: List<JsonObject>, end: String?): ChatState {
-        val chronological = chunk.asReversed()
-        return process(chat, chronological, applyStates = false, onNew = null).copy(prevBatch = end, reachedStart = end == null)
+    fun applyHistory(chat: ChatState, chunk: List<JsonObject>, end: String?, state: List<JsonObject> = emptyList(), me: String = ""): ChatState {
+        var base = chat
+        for (s in state) if (s["type"].str() == "m.room.member") base = applyState(base, s)
+        val chronological = claimOwn(chunk.asReversed(), if (me.isEmpty()) emptySet() else ownGhosts(base, me), me)
+        return process(base, chronological, applyStates = false, onNew = null).copy(prevBatch = end, reachedStart = end == null)
     }
 
     /** The core event loop shared by sync and history. */
