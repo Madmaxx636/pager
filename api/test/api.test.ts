@@ -20,6 +20,7 @@ const readBody = async (req: any) => {
 let synapse: Server, bridge: Server, api: Server;
 let base: string;
 const registered: any[] = [];
+const adminCalls: { method: string; url: string; body: any }[] = [];
 const bridgeCalls: { method: string; url: string; auth?: string; body: any }[] = [];
 
 before(async () => {
@@ -27,16 +28,27 @@ before(async () => {
     if (req.url === "/_synapse/admin/v1/register" && req.method === "GET") return json(res, 200, { nonce: "abc" });
     if (req.url === "/_synapse/admin/v1/register") {
       const b = await readBody(req);
-      const mac = createHmac("sha1", "regsecret").update(`abc\0${b.username}\0${b.password}\0notadmin`).digest("hex");
+      const mac = createHmac("sha1", "regsecret").update(`abc\0${b.username}\0${b.password}\0${b.admin ? "admin" : "notadmin"}`).digest("hex");
       if (mac !== b.mac) return json(res, 403, { errcode: "M_FORBIDDEN", error: "bad mac" });
       if (b.username === "taken") return json(res, 400, { errcode: "M_USER_IN_USE", error: "in use" });
       registered.push(b);
       return json(res, 200, { user_id: `@${b.username}:test.local` });
     }
     if (req.url === "/_matrix/client/v3/account/whoami")
-      return req.headers.authorization === "Bearer goodtoken"
-        ? json(res, 200, { user_id: "@alice:test.local" })
+      return req.headers.authorization === "Bearer goodtoken" ? json(res, 200, { user_id: "@alice:test.local" })
+        : req.headers.authorization === "Bearer admintoken" ? json(res, 200, { user_id: "@root:test.local" })
         : json(res, 401, { errcode: "M_UNKNOWN_TOKEN" });
+    // Synapse's admin API: only admintoken may use it.
+    req.url = decodeURIComponent(req.url!);
+    if (req.method === "GET" && req.url!.startsWith("/_synapse/admin/v2/users/@root")) return json(res, 200, { name: "@root:test.local", admin: true });
+    if (req.method === "GET" && req.url!.startsWith("/_synapse/admin/v2/users/@alice")) return json(res, 200, { name: "@alice:test.local", admin: false });
+    if (req.url!.startsWith("/_synapse/admin/")) {
+      if (req.headers.authorization !== "Bearer admintoken") return json(res, 403, { errcode: "M_FORBIDDEN", error: "not admin" });
+      if (req.url!.startsWith("/_synapse/admin/v2/users?")) return json(res, 200, { users: [
+        { name: "@root:test.local", admin: true, creation_ts: 1 }, { name: "@alice:test.local", admin: false, creation_ts: 2 }, { name: "@whatsappbot:test.local", admin: false } ] });
+      adminCalls.push({ method: req.method!, url: req.url!, body: await readBody(req) });
+      return json(res, 200, {});
+    }
     json(res, 404, {});
   });
   bridge = createServer(async (req, res) => {
@@ -52,7 +64,7 @@ before(async () => {
     synapseUrl: `http://127.0.0.1:${sp}`,
     registrationSecret: "regsecret",
     provisioningSecret: "provsecret",
-    signup: { mode: "invite", inviteCode: "family" },
+    signup: { mode: "invite", inviteCode: "family", adminInviteCode: "boss" },
     bridges: [{ id: "whatsapp", name: "WhatsApp", url: `http://127.0.0.1:${bp}` }],
   };
   api = createApp(cfg);
@@ -133,4 +145,46 @@ test("CORS: preflight succeeds and responses allow cross-origin callers", async 
   const bad = await fetch(base + "/api/bridges");
   assert.equal(bad.status, 401);
   assert.equal(bad.headers.get("access-control-allow-origin"), "*");
+});
+
+test("the admin invite code creates an administrator, even when signups are closed", async () => {
+  const r = await post("/api/signup", { username: "root", password: "longenough", invite: "boss" });
+  assert.equal(r.status, 201);
+  assert.equal(registered.at(-1).admin, true);
+  assert.equal((await post("/api/signup", { username: "dave", password: "longenough", invite: "family" }).then((x) => x.json()) as any).user_id, "@dave:test.local");
+  assert.equal(registered.at(-1).admin, false);
+});
+
+test("/api/me says whether you are an admin", async () => {
+  const me = async (t: string) => (await (await fetch(base + "/api/me", { headers: { authorization: `Bearer ${t}` } })).json()) as any;
+  assert.equal((await me("goodtoken")).admin, false);
+  assert.equal((await me("admintoken")).admin, true);
+});
+
+test("admin routes refuse everyone but admins", async () => {
+  assert.equal((await fetch(base + "/api/admin/users", { headers: { authorization: "Bearer goodtoken" } })).status, 403);
+  assert.equal((await fetch(base + "/api/admin/users")).status, 401);
+});
+
+test("admins can list profiles (without bridge bots), see logins, change roles and delete", async () => {
+  const h = { authorization: "Bearer admintoken", "content-type": "application/json" };
+  const users: any = await (await fetch(base + "/api/admin/users", { headers: h })).json();
+  assert.deepEqual(users.users.map((u: any) => u.id), ["@root:test.local", "@alice:test.local"]);
+  assert.equal(users.users[0].you, true);
+  const logins: any = await (await fetch(base + "/api/admin/users/@alice:test.local/logins", { headers: h })).json();
+  assert.equal(logins.networks[0].logins[0].id, "123");
+  assert.equal((await fetch(base + "/api/admin/users/@alice:test.local/admin", { method: "POST", headers: h, body: JSON.stringify({ admin: true }) })).status, 200);
+  assert.deepEqual(adminCalls.at(-1)?.body, { admin: true });
+  assert.equal((await fetch(base + "/api/admin/users/@root:test.local/admin", { method: "POST", headers: h, body: JSON.stringify({ admin: false }) })).status, 400);
+  assert.equal((await fetch(base + "/api/admin/users/@alice:test.local/delete", { method: "POST", headers: h, body: "{}" })).status, 200);
+  assert.ok(adminCalls.at(-1)!.url.includes("/deactivate/"));
+  assert.equal((await fetch(base + "/api/admin/users/@root:test.local/delete", { method: "POST", headers: h, body: "{}" })).status, 400);
+});
+
+test("admins can close signups and make a new invite code", async () => {
+  const h = { authorization: "Bearer admintoken", "content-type": "application/json" };
+  const r: any = await (await fetch(base + "/api/admin/server", { method: "POST", headers: h, body: JSON.stringify({ signup: "invite", regenerateInvite: true }) })).json();
+  assert.equal(r.signup, "invite");
+  assert.notEqual(r.inviteCode, "family");
+  assert.equal((await post("/api/signup", { username: "erin", password: "longenough", invite: "family" })).status, 403);
 });

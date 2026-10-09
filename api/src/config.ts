@@ -11,7 +11,9 @@ export interface Config {
   synapseUrl: string;
   registrationSecret: string;
   provisioningSecret: string;
-  signup: { mode: "invite" | "open" | "closed"; inviteCode: string };
+  signup: { mode: "invite" | "open" | "closed"; inviteCode: string; adminInviteCode: string };
+  /** Where changes made from the admin page are kept so they survive a restart. */
+  stateFile?: string;
   bridges: BridgeConfig[];
 }
 
@@ -35,7 +37,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     synapseUrl: env.SYNAPSE_URL ?? "http://synapse:8008",
     registrationSecret: need("REGISTRATION_SECRET"),
     provisioningSecret: need("PROVISIONING_SECRET"),
-    signup: { mode, inviteCode: env.INVITE_CODE ?? "" },
+    signup: { mode, inviteCode: env.INVITE_CODE ?? "", adminInviteCode: env.ADMIN_INVITE_CODE ?? "" },
+    stateFile: env.STATE_FILE,
     bridges: env.BRIDGES_FILE ? JSON.parse(readFileSync(env.BRIDGES_FILE, "utf8")) : DEFAULT_BRIDGES,
   };
 }

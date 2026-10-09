@@ -18,6 +18,7 @@ need POSTGRES_PASSWORD || echo "POSTGRES_PASSWORD=$(rand)" >> .env
 need PROVISIONING_SECRET || echo "PROVISIONING_SECRET=$(rand)" >> .env
 need INVITE_CODE || echo "INVITE_CODE=$(rand | head -c 12)" >> .env
 need SIGNUP_MODE || echo "SIGNUP_MODE=invite" >> .env
+need ADMIN_INVITE_CODE || echo "ADMIN_INVITE_CODE=$(rand | head -c 16)" >> .env
 # Local or rootless installs: plain HTTP (no certificate possible for localhost/IPs) and unprivileged ports.
 domain_now="$(grep '^PAGER_DOMAIN=' .env | cut -d= -f2)"
 if ! grep -q '^PAGER_ADDRESS=' .env && [[ "$domain_now" =~ ^(localhost|[0-9.]+|.*\.local)$ ]]; then
@@ -48,7 +49,7 @@ BRIDGE_TABLE=(
   "telegram;Telegram;telegram;mautrix-telegram;.network.api_id = ${TELEGRAM_API_ID:-0} | .network.api_hash = \"${TELEGRAM_API_HASH:-}\";TELEGRAM_API_HASH"
 )
 
-mkdir -p data/synapse data/postgres data/caddy data/bridges
+mkdir -p data/synapse data/postgres data/caddy data/bridges data/api
 
 # --- Synapse ---------------------------------------------------------------
 if [ ! -f data/synapse/homeserver.yaml ]; then
@@ -144,3 +145,4 @@ echo
 echo "Bridges enabled: ${enabled[*]}"
 echo "Done. Next:  docker compose up -d --build"
 echo "Then open https://$PAGER_DOMAIN/ and sign up with invite code: $INVITE_CODE"
+echo "To create the ADMIN account (can manage every profile, bridge and setting), sign up with the admin code instead: $ADMIN_INVITE_CODE"

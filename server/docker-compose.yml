@@ -53,10 +53,13 @@ services:
       REGISTRATION_SECRET: ${REGISTRATION_SECRET}
       PROVISIONING_SECRET: ${PROVISIONING_SECRET}
       INVITE_CODE: ${INVITE_CODE}
+      ADMIN_INVITE_CODE: ${ADMIN_INVITE_CODE:-}
+      STATE_FILE: /state/settings.json
       SIGNUP_MODE: ${SIGNUP_MODE:-invite}
       BRIDGES_FILE: /config/bridges.json
     volumes:
       - ./data/bridges.json:/config/bridges.json:ro
+      - ./data/api:/state
     depends_on: [synapse]
     networks: [pager]
 
