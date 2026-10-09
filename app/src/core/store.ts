@@ -131,7 +131,7 @@ export async function restoreSession(): Promise<boolean> {
   // Caches from before room types were tracked can't tell DMs from groups: resync from scratch.
   if (cached && Object.values(cached.chats).some((c) => c.network !== "matrix" && !c.roomType)) cached = undefined;
   // Bump when the way messages are read changes (e.g. pictures that arrive as edits), so old saved chats are read again.
-  const CACHE_VERSION = 2;
+  const CACHE_VERSION = 3;
   if (lsGet<number>("pager.cacheV", 0) !== CACHE_VERSION) { cached = undefined; lsSet("pager.cacheV", CACHE_VERSION); }
   begin(s, cached);
   return true;

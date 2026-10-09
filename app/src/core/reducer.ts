@@ -121,7 +121,13 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
         const msg = toMsg(e);
         if (!msg) continue;
         if (msg.txn) msgs = msgs.filter((m) => m.id !== `local-${msg.txn}`);
-        if (ids.has(msg.id)) continue;
+        if (ids.has(msg.id)) {
+          // Our own message already took its real id when the send finished, but it was made without its picture's address
+          // (that only exists on the server's copy). When that copy arrives, fill the address in.
+          const at = msgs.findIndex((m) => m.id === msg.id);
+          if (at >= 0 && !msgs[at].mxc && msg.mxc) msgs[at] = { ...msg, status: msgs[at].status };
+          continue;
+        }
         ids.add(msg.id); msgs.push(msg);
         onNew?.(msg, msg.replyTo ? msgs.find((m) => m.id === msg.replyTo)?.sender : undefined);
         break;

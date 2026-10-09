@@ -136,7 +136,13 @@ object SyncReducer {
                     }
                     val msg = toMsg(e) ?: continue
                     msg.txn?.let { txn -> msgs.removeAll { it.id == "local-$txn" } }
-                    if (!ids.add(msg.id)) continue
+                    if (!ids.add(msg.id)) {
+                        // Our own message already took its real id when the send finished, but it was made without its picture's address
+                        // (that only exists on the server's copy). When that copy arrives, fill the address in.
+                        val at = msgs.indexOfFirst { it.id == msg.id }
+                        if (at >= 0 && msgs[at].mxc == null && msg.mxc != null) msgs[at] = msg.copy(status = msgs[at].status)
+                        continue
+                    }
                     msgs.add(msg)
                     onNew?.invoke(msg, msg.replyTo?.let { p -> msgs.firstOrNull { it.id == p }?.sender })
                 }

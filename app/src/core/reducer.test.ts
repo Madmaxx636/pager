@@ -85,6 +85,14 @@ describe("applySync", () => {
     registerAllEncrypted({ "!a:x": { messages: [{ enc: { ...file, url: "mxc://x/other" } as never, mime: "image/png" }] } });
     expect(encryptedInfo("mxc://x/other")?.mime).toBe("image/png");
   });
+  it("our own picture gets its address when the server's copy arrives after the send finished", () => {
+    const withLocal = { ...base()["!a:x"], messages: [{ id: "$real", sender: me, ts: 9000, type: "m.image", body: "pic.jpg", status: 0, mentions: [] } as never] };
+    const out = applySync({ "!a:x": withLocal }, join([
+      { type: "m.room.message", event_id: "$real", sender: me, origin_server_ts: 9000, content: { msgtype: "m.image", body: "pic.jpg", url: "mxc://x/pic", info: { mimetype: "image/jpeg", w: 3, h: 4 } } },
+    ]), me, false).chats["!a:x"];
+    const m = out.messages.find((x) => x.id === "$real")!;
+    expect(m.mxc).toBe("mxc://x/pic"); expect(out.messages.filter((x) => x.id === "$real").length).toBe(1);
+  });
   it("notifies only for others' new messages and dedupes", () => {
     const r = applySync(base(), join([text("$2", me, 2000, "Yes!"), text("$3", mom, 3000, "Great")]), me, false);
     expect(r.chats["!a:x"].messages).toHaveLength(3);
