@@ -8,7 +8,7 @@ import { networkMeta } from "../core/emoji";
 import { getSettings, useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
   edit, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
-  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, toggleStar, typing, useStore, votePoll, getState,
+  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState,
 } from "../core/store";
 import { SOUNDS, playSound } from "../core/sounds";
 import { Avatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
@@ -38,8 +38,8 @@ function buildItems(messages: Msg[], unreadBefore: string | undefined, gapMs: nu
   return out;
 }
 
-const notifSummary = (p?: ChatNotifPrefs) => !p || ((!p.mode || p.mode === "default") && (!p.sound || p.sound === "default") && (!p.preview || p.preview === "default")) ? "Default"
-  : [p.mode && p.mode !== "default" ? { all: "Every message", mentions: "Mentions only", none: "Off" }[p.mode] : "", p.sound === "off" ? "Silent" : "", p.preview === "hide" ? "Hidden previews" : p.preview === "show" ? "Shown previews" : ""].filter(Boolean).join(" · ");
+const notifSummary = (p?: ChatNotifPrefs) => !p || ((!p.level || p.level === "default") && (!p.mode || p.mode === "default") && (!p.sound || p.sound === "default") && (!p.preview || p.preview === "default")) ? "Default"
+  : [p.level === "priority" ? "Priority" : p.level === "silent" ? "Silent" : "", p.mode && p.mode !== "default" ? { all: "Every message", mentions: "Mentions only", none: "Off" }[p.mode] : "", p.sound === "off" ? "Silent" : "", p.preview === "hide" ? "Hidden previews" : p.preview === "show" ? "Shown previews" : ""].filter(Boolean).join(" · ");
 /** "Billy · WhatsApp": who you are writing to and on which service. */
 const placeholderName = (chat: ChatState) => `${displayName(chat, me()).split(/\s+/)[0] || "chat"} · ${networkMeta(chat.network).label}`;
 const fullTime = (ts: number) => new Date(ts).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
@@ -225,6 +225,7 @@ function MenuItems({ roomId, m, mine, starred, dev, close, onReply, onEdit, onFo
       <Item icon={Forward} label="Forward" f={onForward} />
       {["m.text", "m.notice", "m.emote"].includes(m.type) && <Item icon={Copy} label="Copy text" f={() => void navigator.clipboard.writeText(m.body)} />}
       <Item icon={Star} label={starred ? "Remove star" : "Star"} f={() => toggleStar(roomId, m)} />
+      {m.type === "m.image" && m.mxc && <Item icon={Smile} label="Save as sticker" f={() => void saveAsSticker(m)} />}
       {mine && m.type === "m.text" && m.status === STATUS_SENT && <Item icon={Pencil} label="Edit" f={onEdit} />}
       <Item icon={Info} label="Details" f={onDetails} />
       {dev && <Item icon={Code2} label="Copy event ID" f={() => void navigator.clipboard.writeText(m.id)} />}
@@ -437,6 +438,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
               const p = st.notifChat[chat.id] ?? {};
               const set = (patch: Partial<ChatNotifPrefs>) => updateSettings({ notifChat: { ...st.notifChat, [chat.id]: { ...p, ...patch } } });
               return <>
+                <Select title="Importance" value={p.level ?? "default"} options={[["default", "Default"], ["priority", "Priority: always gets through"], ["silent", "Silent: shown without sound"]]} onChange={(v) => set({ level: v })} />
                 <Select title="Notify me about" value={p.mode ?? "default"} options={[["default", "Use my general settings"], ["all", "Every message"], ["mentions", "Mentions and replies only"], ["none", "Nothing"]]} onChange={(v) => set({ mode: v })} />
                 <Select title="Sound" value={p.sound ?? "default"} options={[["default", "Use my general settings"], ["off", "Silent"]]} onChange={(v) => set({ sound: v })} />
                 <Select title="Alert sound" value={p.soundId ?? "default"} options={[["default", "Use the app or network sound"], ...SOUNDS]} onChange={(v) => { set({ soundId: v }); if (v !== "default") playSound(v, st.notifSoundVolume); }} />

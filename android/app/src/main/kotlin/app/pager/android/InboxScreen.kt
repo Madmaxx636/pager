@@ -425,7 +425,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
             val start = dismiss.dismissDirection == SwipeToDismissBoxValue.StartToEnd
             val action = if (start) s.swipeRight else s.swipeLeft
             val armed = dismiss.targetValue != SwipeToDismissBoxValue.Settled
-            val tint by androidx.compose.animation.animateColorAsState(if (armed) swipeColor(action) else swipeColor(action).dim(0.55f), label = "swipe")
+            val tint by androidx.compose.animation.animateColorAsState(if (armed) swipeColor(action) else swipeColor(action).dim(0.55f), animationSpec = if (s.reduceMotion) androidx.compose.animation.core.snap() else androidx.compose.animation.core.spring(), label = "swipe")
             Row(Modifier.fillMaxSize().background(tint).padding(horizontal = 24.dp), horizontalArrangement = if (start) Arrangement.Start else Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 Icon(swipeIcon(action, c), null, tint = androidx.compose.ui.graphics.Color.White)
                 Spacer(Modifier.width(8.dp))

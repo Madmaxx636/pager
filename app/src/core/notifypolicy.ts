@@ -33,7 +33,7 @@ export function keywordHit(text: string, keywords: string[]): boolean {
   return keywords.some((k) => k.trim() && new RegExp(`(^|[^\\p{L}\\p{N}])${escape(k.trim())}($|[^\\p{L}\\p{N}])`, "iu").test(text));
 }
 
-type Slice = Pick<AppSettings, "notifEnabled" | "notifScope" | "notifGroupMentionsOnly" | "notifMutedNetworks" | "notifNetworkMode" | "notifChat" | "notifKeywords" | "notifQuietDays" | "notifQuietBreakThrough" | "notifPreview" | "notifSoundId" | "notifNetworkSound" | "dndUntil" | "notifSound" | "quietHoursEnabled" | "quietStartMin" | "quietEndMin">;
+type Slice = Pick<AppSettings, "notifEnabled" | "notifScope" | "notifGroupMentionsOnly" | "notifMutedNetworks" | "notifNetworkMode" | "notifChat" | "notifKeywords" | "notifQuietDays" | "notifQuietBreakThrough" | "notifPreview" | "notifSoundId" | "notifNetworkSound" | "dndUntil" | "notifDirectMode" | "notifGroupMode" | "notifSound" | "quietHoursEnabled" | "quietStartMin" | "quietEndMin">;
 
 export function decide(m: PolicyInput, s: Slice): Decision {
   const direct = m.mentioned || !!m.replyToMe || keywordHit(m.text, s.notifKeywords);
@@ -47,7 +47,7 @@ export function decide(m: PolicyInput, s: Slice): Decision {
   if (!s.notifEnabled || chatMode === "none") return no;
   // Do not disturb: nothing alerts, except important things if you allowed that for quiet hours.
   const dnd = (s.dndUntil ?? 0) > (m.nowMs ?? Date.now());
-  if (dnd && !(s.notifQuietBreakThrough && (m.pinned || direct))) return no;
+  if (dnd && !(chat.level === "priority" || (s.notifQuietBreakThrough && (m.pinned || direct)))) return no;
 
   // Is this kind of message allowed at all?
   let allowed: boolean;
@@ -55,17 +55,22 @@ export function decide(m: PolicyInput, s: Slice): Decision {
   else if (chatMode === "all") allowed = true;
   else if (netMode === "none") allowed = false;
   else if (netMode === "mentions") allowed = direct;
+  else if ((m.isGroup ? s.notifGroupMode : s.notifDirectMode) === "none") allowed = false;
+  else if ((m.isGroup ? s.notifGroupMode : s.notifDirectMode) === "mentions") allowed = direct;
   else {
     allowed = s.notifScope === "dm_mentions" ? !m.isGroup || direct : s.notifScope === "favorites" ? m.pinned || direct : true;
     if (m.isGroup && s.notifGroupMentionsOnly && !direct) allowed = false;
   }
+  // Priority chats always get through, like Android's priority conversations.
+  const priority = chat.level === "priority";
   // Muted and Low priority chats stay quiet except for things about you.
-  if (m.quiet && !direct) allowed = false;
+  if (m.quiet && !direct && !priority) allowed = false;
+  if (priority) allowed = true;
   if (!allowed) return no;
 
   // Quiet hours: still shown, without sound, unless it is important to you and you allowed that.
   const inQuiet = s.notifQuietDays.includes(m.day) && inQuietHours(s as AppSettings, m.nowMin);
-  const breaks = inQuiet && (m.pinned || direct) && s.notifQuietBreakThrough;
-  const silent = (inQuiet && !breaks) || !s.notifSound || chat.sound === "off";
+  const breaks = inQuiet && (priority || ((m.pinned || direct) && s.notifQuietBreakThrough));
+  const silent = (inQuiet && !breaks) || !s.notifSound || chat.sound === "off" || chat.level === "silent";
   return { show: true, silent, preview, direct, sound };
 }

@@ -70,7 +70,8 @@ object Notifier {
 
         val me = Person.Builder().setName("You").build()
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(if (m.isGroup) m.chat else null).setGroupConversation(m.isGroup)
-        lines.forEach { style.addMessage(it.text, it.ts, Person.Builder().setName(it.sender).build()) }
+        val prio = s.notifChat[m.roomId]?.level == "priority"
+        lines.forEach { style.addMessage(it.text, it.ts, Person.Builder().setName(it.sender).setImportant(prio).build()) }
 
         val open = PendingIntent.getActivity(
             context, id, Intent(context, MainActivity::class.java).putExtra("roomId", m.roomId), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -79,6 +80,7 @@ object Notifier {
             .setSmallIcon(R.drawable.ic_notif).setContentTitle(m.chat)
             .setContentText(if (m.isGroup) "${lines.last().sender}: ${lines.last().text}" else lines.last().text)
             .setStyle(style).setContentIntent(open).setAutoCancel(true).setGroup(GROUP)
+            .setPriority(if (prio) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setOnlyAlertOnce(s.notifAlertOnce && lines.size > 1)
             .setVisibility(when (s.notifLockScreen) { "hide" -> NotificationCompat.VISIBILITY_SECRET; "hide_content" -> NotificationCompat.VISIBILITY_PRIVATE; else -> NotificationCompat.VISIBILITY_PUBLIC })
             .setColor(networkMeta(m.network).color.toArgb())

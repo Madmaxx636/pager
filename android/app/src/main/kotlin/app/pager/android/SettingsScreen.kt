@@ -469,6 +469,8 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
         }
         SettingsGroup("What to notify", footer = "Muted and Low priority chats stay quiet except for @mentions, replies to your messages and your keywords.") {
             ChoiceRow("Notify me about", listOf("all" to "Every message", "dm_mentions" to "Direct messages and mentions", "favorites" to "Pinned chats and mentions"), s.notifScope, s.notifEnabled) { v -> set { copy(notifScope = v) } }; GroupDivider()
+            ChoiceRow("Direct messages", listOf("all" to "Every message", "mentions" to "Mentions and replies only", "none" to "Nothing"), s.notifDirectMode, s.notifEnabled) { v -> set { copy(notifDirectMode = v) } }; GroupDivider()
+            ChoiceRow("Group chats", listOf("all" to "Every message", "mentions" to "Mentions and replies only", "none" to "Nothing"), s.notifGroupMode, s.notifEnabled) { v -> set { copy(notifGroupMode = v) } }; GroupDivider()
             SwitchRow("Groups: only when mentioned", "Group chats stay quiet unless someone @mentions you", s.notifGroupMentionsOnly, s.notifEnabled) { v -> set { copy(notifGroupMentionsOnly = v) } }
         }
         SettingsGroup("Keywords", footer = "A message with one of these words always notifies you, even in a muted chat. Whole words only.") {
@@ -567,6 +569,7 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
 fun notifSummary(p: ChatNotifPrefs?): String {
     if (p == null || p.isDefault) return "Default"
     return listOfNotNull(
+        when (p.level) { "priority" -> "Priority"; "silent" -> "Silent"; else -> null },
         when (p.mode) { "all" -> "Every message"; "mentions" -> "Mentions only"; "none" -> "Off"; else -> null },
         if (p.sound == "off") "Silent" else null, if (p.vibrate == "off") "No vibration" else null,
         when (p.preview) { "hide" -> "Hidden previews"; "show" -> "Shown previews"; else -> null },

@@ -159,6 +159,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
         fun upd(n: ChatNotifPrefs) = store.settings.update { copy(notifChat = if (n.isDefault) notifChat - roomId else notifChat + (roomId to n)) }
         Sheet({ notifSheet = false }) {
             SheetTitle("Notifications for $name")
+            ChoiceRow("Importance", listOf("default" to "Default", "priority" to "Priority: always gets through", "silent" to "Silent: shown without sound"), p.level) { upd(p.copy(level = it)) }
             ChoiceRow("Notify me about", listOf("default" to "Use my general settings", "all" to "Every message", "mentions" to "Mentions and replies only", "none" to "Nothing"), p.mode) { upd(p.copy(mode = it)) }
             ChoiceRow("Sound", listOf("default" to "Use my general settings", "off" to "Silent"), p.sound) { upd(p.copy(sound = it)) }
             ChoiceRow("Vibration", listOf("default" to "Use my general settings", "off" to "No vibration"), p.vibrate) { upd(p.copy(vibrate = it)) }

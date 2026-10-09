@@ -85,7 +85,7 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
   let userStickers: StickerPack | undefined;
   for (const e of arr(obj(sync.account_data).events)) {
     const ev = obj(e);
-    if (typeof ev.type === "string" && ev.type.startsWith("app.pager.settings.")) accountData[ev.type] = obj(ev.content);
+    if (typeof ev.type === "string" && (ev.type.startsWith("app.pager.settings.") || ev.type === "app.pager.favorite_gifs")) accountData[ev.type] = obj(ev.content);
     if (ev.type === "m.push_rules") muted = parseMuted(ev);
     else if (ev.type === "im.ponies.user_emotes") userStickers = parseStickerPack("user", "My stickers", obj(ev.content));
   }
