@@ -8,7 +8,9 @@ export type ChatNotifPrefs = { level?: "default" | "priority" | "silent"; soundI
 export interface AppSettings {
   // Appearance
   themeMode: "system" | "light" | "dark" | "black";
-  accent: string; // teal | blue | purple | pink | orange | green | red
+  accent: string; // teal | blue | purple | pink | orange | green | red | custom
+  /** The colour used when accent is "custom" (#rrggbb). */
+  accentCustom: string;
   fontScale: number;
   bubbleStyle: "round" | "soft" | "square" | "tail" | "outline" | "plain";
   bubbleFill: "solid" | "gradient" | "tinted";
@@ -112,7 +114,7 @@ export interface AppSettings {
 export const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 export const DEFAULTS: AppSettings = {
-  themeMode: "system", accent: "teal", fontScale: 1, bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
+  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
@@ -233,6 +235,38 @@ export const ACCENTS: Record<string, { dark: string; light: string; onDark: stri
 
 /** Writes the theme to CSS variables on <html>. */
 /** What the desktop app tells us about the operating system's theme. */
+const HEX = /^#[0-9a-f]{6}$/i;
+/** The accent's four tones. A custom colour is nudged so it stays readable on light and dark backgrounds. */
+export function accentTones(accent: string, custom: string) {
+  if (accent !== "custom") return ACCENTS[accent] ?? ACCENTS.teal;
+  const base = HEX.test(custom) ? custom : "#0d9488";
+  const [h, sat, l] = rgbToHsl(base);
+  const dark = hslToHex(h, sat, Math.max(l, 0.68)), light = hslToHex(h, sat, Math.min(l, 0.42));
+  const ink = (c: string) => (lumOf(c) > 0.45 ? "#101418" : "#ffffff");
+  return { dark, light, onDark: ink(dark), onLight: ink(light) };
+}
+const lumOf = (h: string) => { const n = parseInt(h.slice(1), 16); const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+function rgbToHsl(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16), r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [((h * 60) + 360) % 360, s, l];
+}
+function hslToHex(h: number, s: number, l: number) {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return "#" + [r, g, b].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, "0")).join("");
+}
+// Plain colours of each theme; the accent is mixed into them so it colours the whole app, not just the buttons.
+const BASES: Record<string, Record<string, string>> = {
+  light: { "--bg": "#f2f4f7", "--panel": "#ffffff", "--panel-2": "#e9ecf1", "--line": "#e1e5ec", "--theirs": "#ffffff" },
+  dark: { "--bg": "#0b0e13", "--panel": "#12161d", "--panel-2": "#1c222c", "--line": "#232a35", "--theirs": "#171c24" },
+  black: { "--bg": "#000000", "--panel": "#0a0a0a", "--panel-2": "#161616", "--line": "#1d1d1d", "--theirs": "#121212" },
+};
+const TINT: Record<string, number> = { "--bg": 7, "--panel": 4, "--panel-2": 15, "--line": 14, "--theirs": 6 };
+
 export interface SystemTheme { dark: boolean; source: string; name?: string; bg?: string; panel?: string; fg?: string; accent?: string; accentInk?: string }
 let system: SystemTheme | undefined;
 export function setSystemTheme(t: SystemTheme | undefined) { system = t; listeners.forEach((l) => l()); }
@@ -241,7 +275,7 @@ const lum = (h: string) => { const n = parseInt(h.slice(1), 16); const c = [(n >
 export function applyTheme(s: AppSettings) {
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const dark = s.themeMode === "dark" || s.themeMode === "black" || (s.themeMode === "system" && prefersDark);
-  const a = ACCENTS[s.accent] ?? ACCENTS.teal;
+  const a = accentTones(s.accent, s.accentCustom);
   const r = document.documentElement;
   r.dataset.theme = dark ? (s.themeMode === "black" ? "black" : "dark") : "light";
   r.style.setProperty("--accent", dark ? a.dark : a.light);
@@ -258,7 +292,11 @@ export function applyTheme(s: AppSettings) {
     r.style.setProperty("--panel-2", `color-mix(in srgb, ${sys.panel} 90%, ${sys.fg})`);
     r.style.setProperty("--line", `color-mix(in srgb, ${sys.bg} 85%, ${sys.fg})`);
     r.style.setProperty("--muted", `color-mix(in srgb, ${sys.fg} 62%, ${sys.bg})`);
-  } else props.forEach((p) => r.style.removeProperty(p));
+  } else {
+    const base = BASES[r.dataset.theme ?? "light"] ?? BASES.light;
+    for (const p of Object.keys(TINT)) r.style.setProperty(p, `color-mix(in srgb, ${base[p]}, var(--accent) ${TINT[p]}%)`);
+    ["--text", "--muted"].forEach((p) => r.style.removeProperty(p));
+  }
   if (sys?.accent) {
     r.style.setProperty("--accent", sys.accent);
     r.style.setProperty("--accent-ink", sys.accentInk ?? (lum(sys.accent) > 0.45 ? "#111418" : "#ffffff"));

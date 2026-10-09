@@ -369,3 +369,10 @@ code.copy { display: block; padding: 8px 12px; border-radius: 10px; background: 
 .greeting-lcd { max-width: min(80vw, 420px); padding: 14px 20px; border-radius: 14px; text-align: center; font: 700 1.35rem ui-monospace, "SF Mono", Menlo, monospace; color: #0b4a22; background: linear-gradient(#8ceb99, #5fc774); box-shadow: 0 0 0 4px #14161a, 0 10px 30px rgba(0,0,0,.4); }
 @keyframes greet-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
 :root[data-motion="reduced"] .greeting { animation: none; }
+
+/* Make-your-own accent */
+.swatch-custom { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); border: 2px solid transparent; } .swatch-custom.on { border-color: var(--text); }
+.color-dialog { display: grid; gap: 14px; justify-items: center; padding: 6px 0 12px; }
+.color-dialog input[type="color"] { width: 200px; height: 140px; padding: 0; border: 0; border-radius: 16px; background: none; cursor: pointer; }
+.color-dialog label { display: grid; gap: 4px; font-size: .8rem; color: var(--muted); width: 200px; } .color-dialog input.bad { border-color: var(--danger); }
+.color-preview { width: 200px; height: 18px; border-radius: 9px; border: 1px solid var(--line); }

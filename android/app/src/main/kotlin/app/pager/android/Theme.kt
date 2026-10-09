@@ -33,6 +33,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -76,21 +79,56 @@ val ACCENTS: Map<String, List<Color>> = mapOf(
     "red" to listOf(Color(0xFFFCA5A5), Color(0xFFDC2626), Color(0xFF3B0A0A), Color.White),
 )
 
-private fun scheme(dark: Boolean, black: Boolean, accent: String): ColorScheme {
-    val a = ACCENTS[accent] ?: ACCENTS.getValue("teal")
+/** Parses "#RRGGBB" (or without the #); null if it isn't a colour. */
+fun parseHex(s: String): Color? = runCatching {
+    val h = s.trim().removePrefix("#")
+    if (h.length != 6) null else Color(0xFF000000L or h.toLong(16))
+}.getOrNull()
+
+fun Color.toHex(): String = "#%02X%02X%02X".format((red * 255 + 0.5f).toInt(), (green * 255 + 0.5f).toInt(), (blue * 255 + 0.5f).toInt())
+
+private fun hsl(c: Color): FloatArray = FloatArray(3).also { androidx.core.graphics.ColorUtils.colorToHSL(c.toArgb(), it) }
+private fun fromHsl(h: Float, s: Float, l: Float) = Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(((h % 360f) + 360f) % 360f, s.coerceIn(0f, 1f), l.coerceIn(0f, 1f))))
+private fun onColor(c: Color) = if (c.luminance() > 0.45f) Color(0xFF101418) else Color.White
+
+/** The four tones of an accent: (dark theme, light theme, text on it in dark, text on it in light). A custom colour is adjusted so it stays readable in both. */
+fun accentTones(accent: String, custom: String): List<Color> {
+    ACCENTS[accent]?.let { return it }
+    val base = parseHex(custom) ?: return ACCENTS.getValue("teal")
+    val (h, s, l) = hsl(base)
+    val dark = fromHsl(h, s, l.coerceAtLeast(0.68f))
+    val light = fromHsl(h, s, l.coerceAtMost(0.42f))
+    return listOf(dark, light, onColor(dark), onColor(light))
+}
+
+/** The accent colours the whole app, not just buttons: backgrounds, cards, chips and selections all take a tint of it. */
+private fun scheme(dark: Boolean, black: Boolean, accent: String, custom: String): ColorScheme {
+    val a = accentTones(accent, custom)
     val primary = if (dark) a[0] else a[1]
     val on = if (dark) a[2] else a[3]
+    val (h, s, l) = hsl(primary)
+    val tertiary = fromHsl(h + 40f, s, l)
+    fun tint(base: Color, f: Float) = lerp(base, primary, f)
     return if (dark) darkColorScheme(
         primary = primary, onPrimary = on, primaryContainer = if (black) primary.copy(alpha = 0.85f) else primary.copy(alpha = 0.9f), onPrimaryContainer = on,
-        background = if (black) Color.Black else Color(0xFF0B0E13), onBackground = Color(0xFFE8ECF2),
-        surface = if (black) Color(0xFF0A0A0A) else Color(0xFF12161D), onSurface = Color(0xFFE8ECF2),
-        surfaceVariant = if (black) Color(0xFF1A1A1A) else Color(0xFF1E2530), onSurfaceVariant = Color(0xFF8B95A5),
+        secondary = primary, onSecondary = on, secondaryContainer = tint(if (black) Color(0xFF111111) else Color(0xFF1E2530), 0.32f), onSecondaryContainer = Color(0xFFE8ECF2),
+        tertiary = tertiary, onTertiary = onColor(tertiary), surfaceTint = primary,
+        background = if (black) Color.Black else tint(Color(0xFF0B0E13), 0.07f), onBackground = Color(0xFFE8ECF2),
+        surface = if (black) Color(0xFF0A0A0A) else tint(Color(0xFF12161D), 0.07f), onSurface = Color(0xFFE8ECF2),
+        surfaceVariant = if (black) tint(Color(0xFF1A1A1A), 0.14f) else tint(Color(0xFF1E2530), 0.18f), onSurfaceVariant = tint(Color(0xFF8B95A5), 0.2f),
+        outline = tint(Color(0xFF6B7585), 0.25f), outlineVariant = tint(Color(0xFF2B3340), 0.2f),
+        surfaceContainer = if (black) Color(0xFF0E0E0E) else tint(Color(0xFF161B23), 0.1f), surfaceContainerHigh = tint(if (black) Color(0xFF161616) else Color(0xFF1C222C), 0.14f),
+        surfaceContainerHighest = tint(if (black) Color(0xFF1C1C1C) else Color(0xFF232A36), 0.18f),
         error = Color(0xFFFF7B7B),
     ) else lightColorScheme(
         primary = primary, onPrimary = on, primaryContainer = primary, onPrimaryContainer = on,
-        background = Color(0xFFF2F4F7), onBackground = Color(0xFF111418),
-        surface = Color.White, onSurface = Color(0xFF14181F),
-        surfaceVariant = Color(0xFFE9ECF1), onSurfaceVariant = Color(0xFF5F6B7A),
+        secondary = primary, onSecondary = on, secondaryContainer = tint(Color.White, 0.22f), onSecondaryContainer = Color(0xFF14181F),
+        tertiary = tertiary, onTertiary = onColor(tertiary), surfaceTint = primary,
+        background = tint(Color(0xFFF4F6F9), 0.08f), onBackground = Color(0xFF111418),
+        surface = tint(Color.White, 0.03f), onSurface = Color(0xFF14181F),
+        surfaceVariant = tint(Color(0xFFE9ECF1), 0.16f), onSurfaceVariant = tint(Color(0xFF5F6B7A), 0.18f),
+        outline = tint(Color(0xFF7A8594), 0.25f), outlineVariant = tint(Color(0xFFCDD3DC), 0.25f),
+        surfaceContainer = tint(Color(0xFFF1F3F6), 0.1f), surfaceContainerHigh = tint(Color(0xFFEBEEF2), 0.14f), surfaceContainerHighest = tint(Color(0xFFE5E8ED), 0.18f),
         error = Color(0xFFC62828),
     )
 }
@@ -211,7 +249,7 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
     }
     val colors = if (settings.accent == "dynamic" && Build.VERSION.SDK_INT >= 31) {
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else scheme(dark, settings.themeMode == "black", settings.accent)
+    } else scheme(dark, settings.themeMode == "black", settings.accent, settings.accentCustom)
     val base = LocalDensity.current
     CompositionLocalProvider(
         LocalSettings provides settings,

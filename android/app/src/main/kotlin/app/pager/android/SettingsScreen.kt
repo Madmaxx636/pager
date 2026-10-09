@@ -72,6 +72,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -405,6 +407,8 @@ private fun AppearancePage() {
         if (s.scaleMode == "manual") { GroupDivider(); SliderRow("Size", s.uiScale, 0.6f..1.8f, "${(s.uiScale * 100).toInt()}%") { v -> set { copy(uiScale = Math.round(v * 40) / 40f) } } }
         GroupDivider(); ChoiceRow("Small screen layout", listOf("auto" to "Automatic", "on" to "Always", "off" to "Never"), s.smallScreen) { v -> set { copy(smallScreen = v) } }
     }
+    var pickingColor by remember { mutableStateOf(false) }
+    if (pickingColor) ColorPickerDialog(parseHex(s.accentCustom) ?: Color(0xFF0D9488), { pickingColor = false }) { c -> set { copy(accent = "custom", accentCustom = c.toHex()) }; pickingColor = false }
     SettingsGroup("Theme") {
         ChoiceRow("Mode", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark", "black" to "Black (AMOLED)"), s.themeMode) { v -> set { copy(themeMode = v) } }
         GroupDivider()
@@ -417,6 +421,12 @@ private fun AppearancePage() {
                         if (s.accent == name) Icon(Icons.Rounded.Check, null, tint = c[2], modifier = Modifier.size(20.dp))
                     }
                 }
+                val customColor = parseHex(s.accentCustom) ?: Color(0xFF0D9488)
+                Box(
+                    Modifier.size(38.dp).clip(CircleShape).background(if (s.accent == "custom") Brush.linearGradient(listOf(customColor, customColor)) else Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)))
+                        .clickable { pickingColor = true },
+                    contentAlignment = Alignment.Center,
+                ) { if (s.accent == "custom") Icon(Icons.Rounded.Check, "Your colour", tint = if (customColor.luminance() > 0.45f) Color.Black else Color.White, modifier = Modifier.size(20.dp)) else Icon(Icons.Rounded.Palette, "Make your own", tint = Color.White, modifier = Modifier.size(18.dp)) }
                 if (Build.VERSION.SDK_INT >= 31) Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable { set { copy(accent = "dynamic") } }, contentAlignment = Alignment.Center) {
                     Icon(if (s.accent == "dynamic") Icons.Rounded.Check else Icons.Rounded.Palette, "Material You", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 }

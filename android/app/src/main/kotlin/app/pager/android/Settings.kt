@@ -27,7 +27,8 @@ data class ChatNotifPrefs(
 data class AppSettings(
     // --- Appearance ---
     val themeMode: String = "system",          // system | light | dark | black
-    val accent: String = "teal",               // teal | blue | purple | pink | orange | green | red | dynamic
+    val accent: String = "teal",               // teal | blue | purple | pink | orange | green | red | dynamic | custom
+    val accentCustom: String = "#0D9488",      // the colour used when accent is "custom"
     val fontScale: Float = 1f,
     val bubbleStyle: String = "round",         // round | soft | square | tail | outline | plain
     val bubbleFill: String = "solid",          // solid | gradient | tinted
