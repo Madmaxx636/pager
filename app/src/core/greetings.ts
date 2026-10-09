@@ -45,7 +45,8 @@ export const GREETINGS = [
   "Beep boop, human",
   "Roger that!",
   "10-4, good buddy",
-  "Wassup?!"
+  "Wassup?!",
+  "What's the sitch?"
 ];
 
 export const pickGreeting = (rand: () => number = Math.random) => GREETINGS[Math.floor(rand() * GREETINGS.length)];
