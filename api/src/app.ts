@@ -4,6 +4,8 @@ import { HttpError, registerUser, synapseAdmin, whoami } from "./synapse.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { bridgeRequest } from "./bridges.ts";
+import { control, dockerAvailable, findContainer, logs } from "./docker.ts";
+import { readSettings, writeSettings } from "./bridgeconfig.ts";
 
 const USERNAME_RE = /^[a-z0-9._-]{3,32}$/;
 
@@ -109,13 +111,13 @@ export function createApp(cfg: Config) {
       const me = await whoami(cfg, token);
       if (!(await isAdmin(token, me))) throw new HttpError(403, "Admins only");
       const enc = encodeURIComponent;
-      const target = parts[2] ? decodeURIComponent(parts[2]) : "";
+      const target = parts[1] === "users" && parts[2] ? decodeURIComponent(parts[2]) : "";
       if (target && !/^@[a-z0-9._=\-/+]+:[a-z0-9.\-:]+$/i.test(target)) throw new HttpError(400, "Bad user id");
 
       // Everyone, with what each person has connected, in one call.
       if (parts[1] === "overview" && parts.length === 2 && method === "GET") {
         const r = await synapseAdmin(cfg, token, "GET", "/_synapse/admin/v2/users?from=0&limit=500&guests=false&order_by=creation_ts");
-        const bots = new RegExp(`^@(${cfg.bridges.map((b) => b.id).join("|")})bot:`);
+        const bots = new RegExp(`^@(${cfg.bridges.map((b) => b.id).join("|")})(bot:|_)`); // bridge bots and the puppets that stand in for your contacts
         const people = (r.users ?? []).filter((u: any) => !bots.test(u.name) && !u.is_guest);
         const users = await Promise.all(people.map(async (u: any) => {
           const networks = u.deactivated ? [] : (await Promise.all(cfg.bridges.map(async (b) => {
@@ -130,7 +132,7 @@ export function createApp(cfg: Config) {
       }
       if (parts[1] === "users" && parts.length === 2 && method === "GET") {
         const r = await synapseAdmin(cfg, token, "GET", "/_synapse/admin/v2/users?from=0&limit=500&guests=false&order_by=creation_ts");
-        const bots = new RegExp(`^@(${cfg.bridges.map((b) => b.id).join("|")})bot:`);
+        const bots = new RegExp(`^@(${cfg.bridges.map((b) => b.id).join("|")})(bot:|_)`); // bridge bots and the puppets that stand in for your contacts
         return send(res, 200, { users: (r.users ?? []).filter((u: any) => !bots.test(u.name) && !u.is_guest).map((u: any) => ({
           id: u.name, displayname: u.displayname ?? "", admin: !!u.admin, deactivated: !!u.deactivated, created: u.creation_ts, you: u.name === me,
         })) });
@@ -164,6 +166,68 @@ export function createApp(cfg: Config) {
         }));
         return send(res, 200, await synapseAdmin(cfg, token, "POST", `/_synapse/admin/v1/deactivate/${enc(target)}`, { erase: true }));
       }
+      // One account's details: devices (and when they were last used).
+      if (parts[1] === "users" && target && parts[3] === "info" && method === "GET") {
+        const u = await synapseAdmin(cfg, token, "GET", `/_synapse/admin/v2/users/${enc(target)}`);
+        const d = await synapseAdmin(cfg, token, "GET", `/_synapse/admin/v2/users/${enc(target)}/devices`).catch(() => ({ devices: [] }));
+        const devices = (d.devices ?? []).map((x: any) => ({ id: x.device_id, name: x.display_name ?? "", lastSeen: x.last_seen_ts ?? 0, ip: x.last_seen_ip ?? "" }));
+        return send(res, 200, { id: target, displayname: u.displayname ?? "", admin: !!u.admin, deactivated: !!u.deactivated, locked: !!u.locked, created: u.creation_ts, devices });
+      }
+      if (parts[1] === "users" && target && parts[3] === "rename" && method === "POST") {
+        const { displayname } = await readJson(req);
+        if (typeof displayname !== "string" || displayname.length > 80) throw new HttpError(400, "Bad name");
+        return send(res, 200, await synapseAdmin(cfg, token, "PUT", `/_synapse/admin/v2/users/${enc(target)}`, { displayname }));
+      }
+      if (parts[1] === "users" && target && parts[3] === "lock" && method === "POST") {
+        const { locked } = await readJson(req);
+        if (target === me) throw new HttpError(400, "You can't lock your own account");
+        return send(res, 200, await synapseAdmin(cfg, token, "PUT", `/_synapse/admin/v2/users/${enc(target)}`, { locked: !!locked }));
+      }
+      if (parts[1] === "users" && target && parts[3] === "logout-all" && method === "POST") {
+        const d = await synapseAdmin(cfg, token, "GET", `/_synapse/admin/v2/users/${enc(target)}/devices`);
+        const ids = (d.devices ?? []).map((x: any) => x.device_id);
+        if (ids.length) await synapseAdmin(cfg, token, "POST", `/_synapse/admin/v2/users/${enc(target)}/delete_devices`, { devices: ids });
+        return send(res, 200, { signedOut: ids.length });
+      }
+
+      // ---- Bridge controls (need the container runtime: see scripts/enable-admin-control.sh) ----
+      if (parts[1] === "control" && method === "GET") return send(res, 200, { docker: dockerAvailable(), settings: !!cfg.bridgesDir });
+      if (parts[1] === "bridges" && parts.length === 2 && method === "GET") {
+        const docker = dockerAvailable();
+        const out = await Promise.all(cfg.bridges.map(async (b) => {
+          const up = await fetch(`${b.url}/_matrix/mau/live`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok).catch(() => false);
+          const c = docker ? await findContainer(b.id).catch(() => undefined) : undefined;
+          return { id: b.id, name: b.name, up, container: c ? { state: c.state, status: c.status, image: c.image } : undefined };
+        }));
+        return send(res, 200, { bridges: out, docker });
+      }
+      if (parts[1] === "bridges" && parts[2] && parts[3] && method === "POST" && ["restart", "stop", "start"].includes(parts[3])) {
+        const b = bridgeById(parts[2]);
+        if (!dockerAvailable()) throw new HttpError(409, "Server control isn't turned on");
+        const c = await findContainer(b.id);
+        if (!c) throw new HttpError(404, `${b.name} isn't running on this server`);
+        await control(c.id, parts[3] as "restart" | "stop" | "start");
+        return send(res, 200, { ok: true });
+      }
+      if (parts[1] === "bridges" && parts[2] && parts[3] === "logs" && method === "GET") {
+        const b = bridgeById(parts[2]);
+        if (!dockerAvailable()) throw new HttpError(409, "Server control isn't turned on");
+        const c = await findContainer(b.id);
+        if (!c) throw new HttpError(404, "Not running");
+        return send(res, 200, { log: await logs(c.id, Number(url.searchParams.get("tail") ?? 200)) });
+      }
+      if (parts[1] === "bridges" && parts[2] && parts[3] === "settings") {
+        const b = bridgeById(parts[2]);
+        if (!cfg.bridgesDir) throw new HttpError(409, "Server control isn't turned on");
+        if (method === "GET") return send(res, 200, { settings: readSettings(cfg.bridgesDir, b.id) ?? [] });
+        if (method === "PUT") {
+          const { values, restart } = await readJson(req);
+          let changed: string[];
+          try { changed = writeSettings(cfg.bridgesDir, b.id, values ?? {}); } catch (e) { throw new HttpError(400, (e as Error).message); }
+          if (restart && changed.length && dockerAvailable()) { const c = await findContainer(b.id); if (c) await control(c.id, "restart"); }
+          return send(res, 200, { changed });
+        }
+      }
       if (parts[1] === "server" && parts.length === 2 && method === "GET") {
         return send(res, 200, { domain: cfg.domain, signup: cfg.signup.mode, inviteCode: cfg.signup.inviteCode });
       }
@@ -173,13 +237,6 @@ export function createApp(cfg: Config) {
         if (regenerateInvite) cfg.signup.inviteCode = randomBytes(9).toString("base64url");
         saveState();
         return send(res, 200, { domain: cfg.domain, signup: cfg.signup.mode, inviteCode: cfg.signup.inviteCode });
-      }
-      if (parts[1] === "bridges" && parts.length === 2 && method === "GET") {
-        const out = await Promise.all(cfg.bridges.map(async (b) => {
-          const ok = await fetch(`${b.url}/_matrix/mau/live`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok).catch(() => false);
-          return { id: b.id, name: b.name, up: ok };
-        }));
-        return send(res, 200, { bridges: out });
       }
       throw new HttpError(404, "Not found");
     }

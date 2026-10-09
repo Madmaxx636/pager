@@ -55,11 +55,16 @@ services:
       INVITE_CODE: ${INVITE_CODE}
       ADMIN_INVITE_CODE: ${ADMIN_INVITE_CODE:-}
       STATE_FILE: /state/settings.json
+      BRIDGES_DIR: ${ADMIN_BRIDGES_DIR:-}
       SIGNUP_MODE: ${SIGNUP_MODE:-invite}
       BRIDGES_FILE: /config/bridges.json
     volumes:
       - ./data/bridges.json:/config/bridges.json:ro
       - ./data/api:/state
+      # Admin bridge controls (restart, logs, settings). Off unless you run scripts/enable-admin-control.sh: these point at empty placeholders.
+      - ${DOCKER_SOCKET:-./data/api/no-docker}:/var/run/docker.sock
+      - ${BRIDGES_DIR_HOST:-./data/api/no-bridges}:/bridges
+    group_add: ["${DOCKER_GID:-65534}"]
     depends_on: [synapse]
     networks: [pager]
 

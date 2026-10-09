@@ -40,12 +40,14 @@ before(async () => {
         : json(res, 401, { errcode: "M_UNKNOWN_TOKEN" });
     // Synapse's admin API: only admintoken may use it.
     req.url = decodeURIComponent(req.url!);
-    if (req.method === "GET" && req.url!.startsWith("/_synapse/admin/v2/users/@root")) return json(res, 200, { name: "@root:test.local", admin: true });
-    if (req.method === "GET" && req.url!.startsWith("/_synapse/admin/v2/users/@alice")) return json(res, 200, { name: "@alice:test.local", admin: false });
+    if (req.method === "GET" && req.url! === "/_synapse/admin/v2/users/@root:test.local") return json(res, 200, { name: "@root:test.local", admin: true });
+    if (req.method === "GET" && req.url! === "/_synapse/admin/v2/users/@alice:test.local") return json(res, 200, { name: "@alice:test.local", admin: false });
     if (req.url!.startsWith("/_synapse/admin/")) {
       if (req.headers.authorization !== "Bearer admintoken") return json(res, 403, { errcode: "M_FORBIDDEN", error: "not admin" });
       if (req.url!.startsWith("/_synapse/admin/v2/users?")) return json(res, 200, { users: [
-        { name: "@root:test.local", admin: true, creation_ts: 1 }, { name: "@alice:test.local", admin: false, creation_ts: 2 }, { name: "@whatsappbot:test.local", admin: false } ] });
+        { name: "@root:test.local", admin: true, creation_ts: 1 }, { name: "@alice:test.local", admin: false, creation_ts: 2 }, { name: "@whatsappbot:test.local", admin: false },
+        { name: "@whatsapp_12345:test.local", admin: false }, { name: "@whatsapp_lid-99:test.local", admin: false } ] });
+      if (req.url!.endsWith("/devices") && req.method === "GET") return json(res, 200, { devices: [{ device_id: "D1", display_name: "Pager Android", last_seen_ts: 5, last_seen_ip: "1.2.3.4" }, { device_id: "D2" }] });
       adminCalls.push({ method: req.method!, url: req.url!, body: await readBody(req) });
       return json(res, 200, {});
     }
@@ -196,4 +198,32 @@ test("admins get everyone with their connected apps in one call", async () => {
   assert.equal(r.users[1].networks[0].id, "whatsapp");
   assert.equal(r.users[1].networks[0].logins[0].id, "123");
   assert.equal((await fetch(base + "/api/admin/overview", { headers: { authorization: "Bearer goodtoken" } })).status, 403);
+});
+
+test("bridge puppets (your contacts) are never listed as accounts", async () => {
+  const h = { authorization: "Bearer admintoken" };
+  const r: any = await (await fetch(base + "/api/admin/users", { headers: h })).json();
+  assert.deepEqual(r.users.map((u: any) => u.id), ["@root:test.local", "@alice:test.local"]);
+});
+
+test("account info lists devices; sign out everywhere removes them all; rename and lock go to Synapse", async () => {
+  const h = { authorization: "Bearer admintoken", "content-type": "application/json" };
+  const info: any = await (await fetch(base + "/api/admin/users/@alice:test.local/info", { headers: h })).json();
+  assert.deepEqual(info.devices.map((d: any) => d.id), ["D1", "D2"]);
+  assert.equal(info.devices[0].name, "Pager Android");
+  const out: any = await (await fetch(base + "/api/admin/users/@alice:test.local/logout-all", { method: "POST", headers: h, body: "{}" })).json();
+  assert.equal(out.signedOut, 2);
+  assert.deepEqual(adminCalls.at(-1)?.body, { devices: ["D1", "D2"] });
+  await fetch(base + "/api/admin/users/@alice:test.local/rename", { method: "POST", headers: h, body: JSON.stringify({ displayname: "Alice A" }) });
+  assert.deepEqual(adminCalls.at(-1)?.body, { displayname: "Alice A" });
+  await fetch(base + "/api/admin/users/@alice:test.local/lock", { method: "POST", headers: h, body: JSON.stringify({ locked: true }) });
+  assert.deepEqual(adminCalls.at(-1)?.body, { locked: true });
+  assert.equal((await fetch(base + "/api/admin/users/@root:test.local/lock", { method: "POST", headers: h, body: JSON.stringify({ locked: true }) })).status, 400);
+});
+
+test("bridge control says so when it isn't turned on", async () => {
+  const h = { authorization: "Bearer admintoken", "content-type": "application/json" };
+  const c: any = await (await fetch(base + "/api/admin/control", { headers: h })).json();
+  assert.equal(c.docker, false);
+  assert.equal((await fetch(base + "/api/admin/bridges/whatsapp/restart", { method: "POST", headers: h, body: "{}" })).status, 409);
 });
