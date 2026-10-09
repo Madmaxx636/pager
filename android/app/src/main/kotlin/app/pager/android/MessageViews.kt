@@ -263,7 +263,7 @@ fun MessageRow(
                     .let { if (fillBrush != null) it.background(fillBrush) else it.background(fill) }
                     .let {
                         when {
-                            outlined -> it.border(1.5.dp, if (mine) scheme.primary else scheme.outlineVariant, shape)
+                            outlined -> it.border(if (s.eink) (if (mine) 3.dp else 2.dp) else 1.5.dp, if (mine) scheme.primary else scheme.outlineVariant, shape)
                             plain -> it.drawBehind { drawRect(if (mine) scheme.primary else scheme.outlineVariant, Offset.Zero, Size(3.dp.toPx(), size.height)) }
                             else -> it
                         }

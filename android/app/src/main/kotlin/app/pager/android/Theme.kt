@@ -95,8 +95,32 @@ private fun scheme(dark: Boolean, black: Boolean, accent: String): ColorScheme {
     )
 }
 
-/** Looks up the live settings anywhere in the UI. */
+/** Looks up the live settings anywhere in the UI (with E-ink mode's overrides applied). */
 val LocalSettings = staticCompositionLocalOf { AppSettings() }
+/** The settings exactly as you chose them; the settings screens show these. */
+val LocalRawSettings = staticCompositionLocalOf { AppSettings() }
+
+/** What the app actually uses: your settings, with E-ink mode and the small-screen layout applied on top. */
+fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int): AppSettings {
+    var e = s
+    if (s.eink) e = e.copy(
+        themeMode = "light", reduceMotion = true, screenEffects = false, messageAnimation = "none", bubbleFill = "solid", bubbleDepth = "flat",
+        bubbleStyle = if (s.bubbleStyle == "plain") "plain" else "outline", wallpaper = "none", autoPlayGifs = false, colorSenderNames = false, accent = "teal",
+    )
+    val small = s.smallScreen == "on" || (s.smallScreen == "auto" && (screenWidthDp < 340 || screenHeightDp < 560))
+    if (small) e = e.copy(density = "compact")
+    return e
+}
+
+/** Pure black on white with light-gray fills: reads well on e-ink and needs no color. */
+private fun einkScheme(): ColorScheme = lightColorScheme(
+    primary = Color.Black, onPrimary = Color.White, primaryContainer = Color.White, onPrimaryContainer = Color.Black,
+    secondary = Color.Black, onSecondary = Color.White, secondaryContainer = Color(0xFFE6E6E6), onSecondaryContainer = Color.Black,
+    background = Color.White, onBackground = Color.Black, surface = Color.White, onSurface = Color.Black,
+    surfaceVariant = Color(0xFFE6E6E6), onSurfaceVariant = Color(0xFF1A1A1A), surfaceContainer = Color.White, surfaceContainerHigh = Color(0xFFF0F0F0),
+    surfaceContainerHighest = Color(0xFFE6E6E6), outline = Color.Black, outlineVariant = Color.Black, error = Color.Black, onError = Color.White,
+    inverseSurface = Color.Black, inverseOnSurface = Color.White, inversePrimary = Color.White, scrim = Color.Black,
+)
 
 fun bubbleShape(style: String) = when (style) {
     "square" -> RoundedCornerShape(6.dp)
@@ -138,8 +162,11 @@ private val PagerShapes = Shapes(
     large = RoundedCornerShape(20.dp), extraLarge = RoundedCornerShape(28.dp),
 )
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun PagerTheme(settings: AppSettings, content: @Composable () -> Unit) {
+fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
+    val config = androidx.compose.ui.platform.LocalConfiguration.current
+    val settings = effectiveSettings(rawSettings, config.screenWidthDp, config.screenHeightDp)
     val dark = isDarkTheme(settings)
     val context = LocalContext.current
     // The app has its own light/dark setting, so the system bars must follow it, not the phone's theme
@@ -157,6 +184,8 @@ fun PagerTheme(settings: AppSettings, content: @Composable () -> Unit) {
     val base = LocalDensity.current
     CompositionLocalProvider(
         LocalSettings provides settings,
-        LocalDensity provides Density(base.density, base.fontScale * settings.fontScale),
-    ) { MaterialTheme(colorScheme = colors, typography = PagerTypography, shapes = PagerShapes, content = content) }
+        LocalRawSettings provides rawSettings,
+        LocalDensity provides Density(base.density * rawSettings.uiScale, base.fontScale * settings.fontScale),
+        androidx.compose.material3.LocalRippleConfiguration provides (if (settings.eink) null else androidx.compose.material3.LocalRippleConfiguration.current),
+    ) { MaterialTheme(colorScheme = if (settings.eink) einkScheme() else colors, typography = PagerTypography, shapes = PagerShapes, content = content) }
 }

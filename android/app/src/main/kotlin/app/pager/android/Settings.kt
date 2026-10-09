@@ -42,6 +42,11 @@ data class AppSettings(
     val avatarShape: String = "circle",        // circle | squircle
     val showLabelsInFilterBar: Boolean = true,
     val reduceMotion: Boolean = false,
+    /** E-ink mode: black on white, no color, no animation, thick lines. */
+    val eink: Boolean = false,
+    /** Scales the whole interface (display size). */
+    val uiScale: Float = 1f,
+    val smallScreen: String = "auto",          // auto | on | off
     val haptics: Boolean = true,
     val doubleTapReact: Boolean = true,
 
