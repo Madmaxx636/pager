@@ -122,10 +122,10 @@ fun Color.dim(alpha: Float): Color = if (Ink.on && alpha >= 0.4f) copy(alpha = 1
 /**
  * How much to scale the whole interface. Automatic reads the screen: Android already normalizes density, so what differs is how many
  * dp fit across the screen's short side (a 3-inch handset has fewer than a 10-inch tablet); we scale so the layout always looks like
- * a ~411dp phone. E-ink mode always uses automatic. Manual uses your slider.
+ * a ~411dp phone. Manual uses your slider.
  */
 fun uiScaleFor(s: AppSettings, config: android.content.res.Configuration): Float {
-    if (s.eink || s.scaleMode == "auto") return (config.smallestScreenWidthDp / 411f).coerceIn(0.8f, 1.6f)
+    if (s.scaleMode == "auto") return (config.smallestScreenWidthDp / 411f).coerceIn(0.8f, 1.6f)
     return s.uiScale.coerceIn(0.6f, 1.8f)
 }
 
