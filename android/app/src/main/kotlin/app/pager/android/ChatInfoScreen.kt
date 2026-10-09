@@ -164,6 +164,8 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
             ChoiceRow("Sound", listOf("default" to "Use my general settings", "off" to "Silent"), p.sound) { upd(p.copy(sound = it)) }
             ChoiceRow("Vibration", listOf("default" to "Use my general settings", "off" to "No vibration"), p.vibrate) { upd(p.copy(vibrate = it)) }
             ChoiceRow("Message previews", listOf("default" to "Use my general settings", "show" to "Show message", "hide" to "Hide message"), p.preview) { upd(p.copy(preview = it)) }
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            NavRow("Android settings for this page", "Priority conversation, bubble and sound, in the system's own settings", Icons.Rounded.Notifications) { Notifier.openSystemSettings(ctx, roomId) }
             Text("Mute and Low priority still apply: muted pages only notify for mentions, replies and your keywords.", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
