@@ -199,11 +199,14 @@ function applyEdit(msgs: Msg[], e: J): Msg[] {
   const prev = msgs[i];
   const next: Msg = { ...prev, body, edited: true };
   // Some bridges (Google Messages, WhatsApp) send a picture or file as an edit of an earlier message: take its media too.
-  const url = str(nc.url);
+  // In an encrypted room the picture is an encrypted file ("file"), not a plain address ("url").
+  const encFile = str(obj(nc.file).url) && obj(nc.file).key ? (obj(nc.file) as unknown as EncFile) : undefined;
+  if (encFile) registerEncrypted(encFile, str(obj(nc.info).mimetype));
+  const url = encFile ? encFile.url : str(nc.url);
   if (url) {
     const info = obj(nc.info);
     Object.assign(next, {
-      type: str(nc.msgtype) ?? prev.type, mxc: url, mime: str(info.mimetype), size: num(info.size), w: num(info.w), h: num(info.h),
+      enc: encFile, type: str(nc.msgtype) ?? prev.type, mxc: url, mime: str(info.mimetype), size: num(info.size), w: num(info.w), h: num(info.h),
       durationMs: num(info.duration) ?? prev.durationMs, edited: prev.edited, // adding the media isn't an edit the reader should see
     });
   } else if (str(nc.msgtype) && str(nc.msgtype) !== prev.type && !prev.mxc) next.type = str(nc.msgtype)!;

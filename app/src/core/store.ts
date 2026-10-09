@@ -2,7 +2,7 @@ import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { applyHistory, applySync, replaceDecrypted, setOwnIdentity } from "./reducer";
 import { Crypto, isEncryptedType } from "./crypto";
-import { decryptAttachment, encryptAttachment, encryptedInfo } from "./mediacrypt";
+import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
 import { playSound } from "./sounds";
 import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
@@ -155,7 +155,7 @@ function begin(s: Session, cache?: { userId: string; since?: string; chats: Reco
   http.base = s.baseUrl; http.token = s.token;
   since = undefined;
   let chats: Record<string, ChatState> = {}, synced = false;
-  if (cache && cache.userId === s.userId) { chats = cache.chats; since = cache.since; synced = true; }
+  if (cache && cache.userId === s.userId) { chats = cache.chats; since = cache.since; synced = true; registerAllEncrypted(chats); }
   set({ session: s, chats, synced });
   syncAbort?.abort();
   syncAbort = new AbortController();
