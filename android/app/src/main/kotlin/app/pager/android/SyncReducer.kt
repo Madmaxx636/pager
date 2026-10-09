@@ -366,6 +366,7 @@ object SyncReducer {
         if (reply != null) body = stripReplyFallback(body)
         return Msg(
             enc = enc,
+            sealed = (content["pagerRaw"] as? JsonObject)?.toString(),
             id = e["event_id"].str() ?: return null,
             sender = e["sender"].str() ?: return null,
             ts = e["origin_server_ts"].long() ?: 0L,

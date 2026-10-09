@@ -209,6 +209,7 @@ async function startCrypto(s: Session) {
     c.onKeys = (rooms) => void retryWaiting(rooms);
     e2ee = c;
     await withTimeout(c.pump(), 15000, "Uploading encryption keys").catch(() => { /* it keeps trying in the background */ });
+    void retryWaiting(); // messages saved while waiting for a key may have their key now
   } catch (e) { startError = (e as Error).message || String(e); console.warn("encryption could not start", e); }
   void refreshEncryptionStatus();
 }
@@ -216,7 +217,7 @@ async function startCrypto(s: Session) {
 /** Tries again (from the settings screen) after a failed start. */
 export async function retryEncryptionStart() { if (state.session) await startCrypto(state.session); }
 
-const unreadable = (e: any) => ({ ...e, type: "m.room.message", content: { msgtype: "m.text", body: "🔒 Waiting for the key to read this message…", pagerWaiting: true } });
+const unreadable = (e: any) => ({ ...e, type: "m.room.message", content: { msgtype: "m.text", body: "🔒 Waiting for the key to read this message…", pagerWaiting: true, pagerRaw: e } });
 
 /** Replaces m.room.encrypted events with what they say. Unreadable ones become a placeholder and are tried again when keys arrive. */
 async function decryptEvents(roomId: string, events: any[]): Promise<any[]> {
@@ -226,7 +227,7 @@ async function decryptEvents(roomId: string, events: any[]): Promise<any[]> {
     if (!isEncryptedType(e?.type)) { out.push(e); continue; }
     const clear = await e2ee.decrypt(roomId, e);
     if (clear) out.push(clear);
-    else { if (e.event_id) waiting.set(e.event_id, { roomId, event: e }); out.push(unreadable(e)); }
+    else out.push(unreadable(e));
   }
   return out;
 }
@@ -240,14 +241,16 @@ async function decryptSync(res: any) {
   }
 }
 
-async function retryWaiting(rooms: string[]) {
+/** Opens messages that were waiting for a key, in the pages whose keys just arrived (or everywhere with no list). They are kept on the message itself, so this also works after a restart. */
+async function retryWaiting(rooms?: string[]) {
   if (!e2ee) return;
-  for (const [id, w] of [...waiting]) {
-    if (!rooms.includes(w.roomId)) continue;
-    const clear = await e2ee.decrypt(w.roomId, w.event);
-    if (!clear) continue;
-    waiting.delete(id);
-    patchChat(w.roomId, (c) => replaceDecrypted(c, clear));
+  for (const [roomId, chat] of Object.entries(state.chats)) {
+    if (rooms && !rooms.includes(roomId)) continue;
+    for (const m of chat.messages) {
+      if (!m.sealed) continue;
+      const clear = await e2ee.decrypt(roomId, m.sealed as any);
+      if (clear) patchChat(roomId, (c) => replaceDecrypted(c, clear));
+    }
   }
 }
 
@@ -285,7 +288,7 @@ export async function createRecoveryKey(): Promise<string> {
 /** Reads the backup with a recovery key; returns how many message keys were restored. */
 export async function restoreWithRecoveryKey(key: string): Promise<number> {
   if (!e2ee) throw new Error("Encryption is not ready yet");
-  const n = await e2ee.restoreBackup(key); await refreshEncryptionStatus(); return n;
+  const n = await e2ee.restoreBackup(key); await refreshEncryptionStatus(); void retryWaiting(); return n;
 }
 
 /**
@@ -323,7 +326,7 @@ export async function exportKeyFile(passphrase: string): Promise<string> {
 /** Reads a key file; returns how many keys were new here. */
 export async function importKeyFile(text: string, passphrase: string): Promise<number> {
   if (!e2ee) throw new Error("Encryption is not ready yet");
-  const n = await e2ee.importKeys(text, passphrase); void retryWaiting([...new Set([...waiting.values()].map((w) => w.roomId))]); return n;
+  const n = await e2ee.importKeys(text, passphrase); void retryWaiting(); return n;
 }
 
 sendHook.fn = async (roomId, type, content) => {

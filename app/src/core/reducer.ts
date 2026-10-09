@@ -340,6 +340,7 @@ export function toMsg(e: J): Msg | undefined {
   if (reply) body = stripReplyFallback(body);
   return {
     id, sender, ts: num(e.origin_server_ts) ?? 0, type, body,
+    sealed: content.pagerRaw ?? undefined,
     mxc: enc ? enc.url : str(content.url), enc, mime: str(info.mimetype), size: num(info.size), w: num(info.w), h: num(info.h),
     durationMs: num(info.duration) ?? num(obj(content["org.matrix.msc1767.audio"]).duration),
     replyTo: reply, txn: str(obj(e.unsigned).transaction_id), geo: str(content.geo_uri),

@@ -266,6 +266,7 @@ class Store(private val context: Context) {
             c.onKeys = { rooms -> scope.launch { retryWaiting(rooms) } }
             e2ee = c
             kotlinx.coroutines.withTimeoutOrNull(15_000) { c.pump() } // upload this device's keys (it keeps trying in the background if slow)
+            scope.launch { retryWaiting() } // messages saved while waiting for a key may have their key now
         } catch (e: Throwable) { startError = e.message ?: e.toString(); android.util.Log.w("Pager", "encryption could not start", e) }
         refreshEncryptionStatus()
     }
@@ -287,7 +288,7 @@ class Store(private val context: Context) {
     /** Reads the backup with a recovery key; returns how many message keys were restored. */
     suspend fun restoreWithRecoveryKey(key: String): Int {
         val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
-        return e.restoreBackup(key).also { refreshEncryptionStatus() }
+        return e.restoreBackup(key).also { refreshEncryptionStatus(); retryWaiting() }
     }
 
     /**
@@ -321,11 +322,11 @@ class Store(private val context: Context) {
     suspend fun exportKeyFile(passphrase: String): String = (e2ee ?: throw java.io.IOException("Encryption is not ready yet")).exportKeys(passphrase)
 
     /** Reads a key file; returns how many keys were new here. */
-    suspend fun importKeyFile(text: String, passphrase: String): Int = (e2ee ?: throw java.io.IOException("Encryption is not ready yet")).importKeys(text, passphrase)
+    suspend fun importKeyFile(text: String, passphrase: String): Int = (e2ee ?: throw java.io.IOException("Encryption is not ready yet")).importKeys(text, passphrase).also { retryWaiting() }
 
     private fun unreadable(e: JsonObject) = JsonObject(e + mapOf(
         "type" to JsonPrimitive("m.room.message"),
-        "content" to buildJsonObject { put("msgtype", "m.text"); put("body", "\uD83D\uDD12 Waiting for the key to read this message…"); put("pagerWaiting", true) },
+        "content" to buildJsonObject { put("msgtype", "m.text"); put("body", "\uD83D\uDD12 Waiting for the key to read this message…"); put("pagerWaiting", true); put("pagerRaw", e) },
     ))
 
     /** Replaces m.room.encrypted events with what they say. Unreadable ones become a placeholder and are tried again when keys arrive. */
@@ -334,7 +335,7 @@ class Store(private val context: Context) {
         if (events.none { (it["type"] as? JsonPrimitive)?.contentOrNull == "m.room.encrypted" }) return events
         return events.map { ev ->
             if ((ev["type"] as? JsonPrimitive)?.contentOrNull != "m.room.encrypted") ev
-            else e.decrypt(roomId, ev) ?: run { (ev["event_id"] as? JsonPrimitive)?.contentOrNull?.let { waiting[it] = roomId to ev }; unreadable(ev) }
+            else e.decrypt(roomId, ev) ?: unreadable(ev)
         }
     }
 
@@ -352,13 +353,16 @@ class Store(private val context: Context) {
         return JsonObject(res + ("rooms" to JsonObject(rooms + ("join" to newJoin))))
     }
 
-    private suspend fun retryWaiting(rooms: List<String>) {
+    /** Opens messages that were waiting for a key, in the pages whose keys just arrived (or everywhere with no list). They are kept on the message itself, so this also works after a restart. */
+    private suspend fun retryWaiting(rooms: List<String>? = null) {
         val e = e2ee ?: return
-        for ((id, w) in waiting.entries.toList()) {
-            if (w.first !in rooms) continue
-            val clear = e.decrypt(w.first, w.second) ?: continue
-            waiting.remove(id)
-            update(w.first) { SyncReducer.replaceDecrypted(it, clear) }
+        for ((roomId, chat) in _chats.value.entries.toList()) {
+            if (rooms != null && roomId !in rooms) continue
+            for (m in chat.messages.filter { it.sealed != null }) {
+                val raw = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(m.sealed!!) as? JsonObject }.getOrNull() ?: continue
+                val clear = e.decrypt(roomId, raw) ?: continue
+                update(roomId) { SyncReducer.replaceDecrypted(it, clear) }
+            }
         }
     }
 
