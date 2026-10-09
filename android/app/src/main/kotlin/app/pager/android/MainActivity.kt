@@ -1,5 +1,6 @@
 package app.pager.android
 
+import androidx.compose.animation.togetherWith
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -135,24 +136,35 @@ class MainActivity : FragmentActivity() {
 
         if (session == null) { AuthScreen(store); return }
 
-        val arg = screen.substringAfter(':', "")
+        val calm = LocalSettings.current.reduceMotion
+        // Screens slide and fade into each other; everything stays put with "Reduce motion" (and in E-ink mode).
+        androidx.compose.animation.AnimatedContent(
+            targetState = screen,
+            transitionSpec = {
+                if (calm) androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
+                else (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { it / 14 }) togetherWith
+                    androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
+            },
+            label = "screens",
+        ) { cur ->
+            val arg = cur.substringAfter(':', "")
         when {
-            screen.startsWith("chat:") -> {
+            cur.startsWith("chat:") -> {
                 BackHandler { screen = "inbox" }
                 ChatScreen(arg, onBack = { screen = "inbox" }, onInfo = { screen = "info:$arg" }, onSearch = { go("search:$arg") },
                     onForward = { m -> screen = "forward:$arg|${m.id}" }, onSettings = { p -> screen = if (p.isEmpty()) "settings" else "settings/$p" })
             }
-            screen.startsWith("info:") -> {
+            cur.startsWith("info:") -> {
                 BackHandler { screen = "chat:$arg" }
                 ChatInfoScreen(arg, onBack = { screen = "chat:$arg" }, onLeft = { screen = "inbox" }, onSearch = { go("search:$arg") })
             }
-            screen.startsWith("search") -> {
+            cur.startsWith("search") -> {
                 val room = arg.ifEmpty { null }
                 val up = if (room != null) "chat:$room" else "inbox"
                 BackHandler { screen = up }
                 SearchScreen(room, onBack = { screen = up }, onOpen = { screen = "chat:$it" })
             }
-            screen.startsWith("forward:") -> {
+            cur.startsWith("forward:") -> {
                 val (from, id) = arg.split('|', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
                 BackHandler { screen = "chat:$from" }
                 ChatPicker("Forward to…", onBack = { screen = "chat:$from" }) { target ->
@@ -160,7 +172,7 @@ class MainActivity : FragmentActivity() {
                     screen = "chat:$target"
                 }
             }
-            screen == "share" -> {
+            cur == "share" -> {
                 val sh = shared
                 BackHandler { shared = null; screen = "inbox" }
                 ChatPicker("Share to…", onBack = { shared = null; screen = "inbox" }) { target ->
@@ -169,12 +181,12 @@ class MainActivity : FragmentActivity() {
                     shared = null; screen = "chat:$target"
                 }
             }
-            screen == "new" -> {
+            cur == "new" -> {
                 BackHandler { screen = "inbox" }
                 NewChatScreen(onBack = { screen = "inbox" }, onOpen = { screen = "chat:$it" })
             }
-            screen.startsWith("settings") -> {
-                val page = screen.substringAfter("settings/", "")
+            cur.startsWith("settings") -> {
+                val page = cur.substringAfter("settings/", "")
                 BackHandler { screen = if (page.isEmpty()) "inbox" else "settings" }
                 SettingsScreen(page, navigate = { p ->
                     when {
@@ -188,6 +200,7 @@ class MainActivity : FragmentActivity() {
                 onOpen = { screen = "chat:$it" }, onNewChat = { screen = "new" }, onSearch = { go("search") },
                 onSettings = { p -> screen = if (p.isEmpty()) "settings" else "settings/$p" },
             )
+        }
         }
     }
 }

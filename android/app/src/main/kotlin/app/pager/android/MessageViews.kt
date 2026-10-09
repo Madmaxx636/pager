@@ -371,8 +371,11 @@ fun MessageRow(
             FlowRow(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 reactions.forEach { (key, who) ->
                     val minePicked = me in who
+                    // New reactions pop in.
+                    val pop = remember(key) { androidx.compose.animation.core.Animatable(if (s.reduceMotion) 1f else 0.4f) }
+                    LaunchedEffect(key) { if (!s.reduceMotion) pop.animateTo(1f, androidx.compose.animation.core.spring(androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, androidx.compose.animation.core.Spring.StiffnessMedium)) }
                     Row(
-                        Modifier.clip(CircleShape).background(if (minePicked) scheme.primary.copy(alpha = if (s.eink) 0.18f else 0.22f) else scheme.surface)
+                        Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }.clip(CircleShape).background(if (minePicked) scheme.primary.copy(alpha = if (s.eink) 0.18f else 0.22f) else scheme.surface)
                             .let { if (s.eink) it.border(if (minePicked) 3.dp else 2.dp, Color.Black, CircleShape) else it }
                             .combinedClickable(onClick = { onReact(key) }, onLongClick = { onWho(key) }).padding(horizontal = 9.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
