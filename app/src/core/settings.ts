@@ -34,12 +34,6 @@ export interface AppSettings {
   avatarShape: "circle" | "squircle";
   showLabelsInFilterBar: boolean;
   reduceMotion: boolean;
-  /** E-ink mode: black on white, no color, no animation, thick lines. */
-  eink: boolean;
-  /** Scales the whole interface (display size). */
-  uiScale: number;
-  /** Tighter layout for small screens; auto turns on below ~480×560. */
-  smallScreen: "auto" | "on" | "off";
   sidebarWidth: number;
   /** Quick actions that appear when hovering a chat row (desktop's version of swipe actions). */
   rowAction1: RowAction;
@@ -95,7 +89,6 @@ export interface AppSettings {
   // Keyboard shortcuts (desktop and web); values like "Ctrl+Shift+A"
   shortcuts: Record<string, string>;
   // Desktop
-  uiZoom: number;
   closeToTray: boolean;
   startMinimized: boolean;
   launchAtLogin: boolean;
@@ -107,13 +100,13 @@ export const DEFAULTS: AppSettings = {
   themeMode: "system", accent: "teal", fontScale: 1, bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
-  avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, eink: false, uiScale: 1, smallScreen: "auto", sidebarWidth: 360, rowAction1: "read", rowAction2: "archive",
+  avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, rowAction1: "read", rowAction2: "archive",
   enterToSend: true, sendReadReceipts: true, sendTyping: true, linkPreviews: true, autoDownload: "always", unarchiveOnMessage: true,
   confirmDelete: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtFirstUnread: true, gifProvider: "giphy", gifKey: "", doubleTapReact: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
   notifEnabled: true, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [], notifNetworkMode: {}, notifChat: {}, notifKeywords: [], notifQuietDays: [0, 1, 2, 3, 4, 5, 6], notifQuietBreakThrough: false, notifDelaySec: 0, notifBadge: "unmuted",
   quietHoursEnabled: false, quietStartMin: 22 * 60, quietEndMin: 7 * 60,
   hiddenNetworks: [],
-  developerMode: false, shortcuts: {}, uiZoom: 1,
+  developerMode: false, shortcuts: {},
   closeToTray: true, startMinimized: false, launchAtLogin: false,
 };
 
@@ -137,15 +130,7 @@ export const SHORTCUTS: { id: string; label: string; keys: string }[] = [
 
 const KEY = "pager.settings";
 let raw: AppSettings = load();
-/** What the app actually uses: your settings, with E-ink mode's overrides on top. */
-export function effective(s: AppSettings): AppSettings {
-  if (!s.eink) return s;
-  return {
-    ...s, themeMode: "light", reduceMotion: true, screenEffects: false, messageAnimation: "none", bubbleFill: "solid", bubbleDepth: "flat",
-    bubbleStyle: s.bubbleStyle === "plain" ? "plain" : "outline", wallpaper: "none", autoPlayGifs: false, colorSenderNames: false, showNetworkBadges: s.showNetworkBadges,
-  };
-}
-let state: AppSettings = effective(raw);
+let state: AppSettings = raw;
 const listeners = new Set<() => void>();
 
 function load(): AppSettings {
@@ -159,8 +144,18 @@ const SYNC_EXCLUDE: (keyof AppSettings)[] = ["gifKey", "sidebarWidth"];
 const TS_KEY = "pager.settingsUpdatedAt";
 let updatedAt = (() => { try { return Number(localStorage.getItem(TS_KEY) ?? 0) || 0; } catch { return 0; } })();
 const localListeners = new Set<() => void>();
-export const settingsKind = () => (typeof window !== "undefined" && window.pagerDesktop ? "desktop" : "web");
-export const settingsSyncType = () => `app.pager.settings.${settingsKind()}`;
+/** Settings belong to one device, found by its name: two computers or browsers never share them. */
+export function deviceKey(): string {
+  const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "device";
+  if (typeof window === "undefined") return "web.test";
+  if (window.pagerDesktop) return `desktop.${slug(window.pagerDesktop.hostname || "computer")}`;
+  const ua = navigator.userAgent;
+  const browser = /Edg\//.test(ua) ? "edge" : /Firefox\//.test(ua) ? "firefox" : /Chrome\//.test(ua) ? "chrome" : /Safari\//.test(ua) ? "safari" : "browser";
+  const os = /Windows/.test(ua) ? "windows" : /Android/.test(ua) ? "android" : /iPhone|iPad/.test(ua) ? "ios" : /Mac OS/.test(ua) ? "mac" : /Linux/.test(ua) ? "linux" : "os";
+  return `web.${browser}-${os}`;
+}
+export const settingsKind = deviceKey;
+export const settingsSyncType = () => `app.pager.settings.${deviceKey()}`;
 export const getSettingsUpdatedAt = () => updatedAt;
 export function settingsPayload(): { v: 1; updatedAt: number; settings: Partial<AppSettings> } {
   const s: Partial<AppSettings> = { ...raw };
@@ -174,7 +169,7 @@ export function applyRemoteSettings(content: unknown): boolean {
   const next: Partial<AppSettings> = { ...c.settings };
   for (const k of SYNC_EXCLUDE) delete next[k];
   raw = { ...raw, ...next };
-  state = effective(raw);
+  state = raw;
   updatedAt = c.updatedAt;
   try { localStorage.setItem(KEY, JSON.stringify(raw)); localStorage.setItem(TS_KEY, String(updatedAt)); } catch { /* storage may be unavailable */ }
   listeners.forEach((l) => l());
@@ -188,7 +183,7 @@ export const getSettings = () => state;
 export const getRawSettings = () => raw;
 export function updateSettings(patch: Partial<AppSettings>) {
   raw = { ...raw, ...patch };
-  state = effective(raw);
+  state = raw;
   updatedAt = Date.now();
   try { localStorage.setItem(KEY, JSON.stringify(raw)); localStorage.setItem(TS_KEY, String(updatedAt)); } catch { /* storage may be unavailable */ }
   listeners.forEach((l) => l());
@@ -228,13 +223,9 @@ export function applyTheme(s: AppSettings) {
   const a = ACCENTS[s.accent] ?? ACCENTS.teal;
   const r = document.documentElement;
   r.dataset.theme = dark ? (s.themeMode === "black" ? "black" : "dark") : "light";
-  r.style.setProperty("--accent", s.eink ? "#000000" : dark ? a.dark : a.light);
-  r.style.setProperty("--accent-ink", s.eink ? "#ffffff" : dark ? a.onDark : a.onLight);
+  r.style.setProperty("--accent", dark ? a.dark : a.light);
+  r.style.setProperty("--accent-ink", dark ? a.onDark : a.onLight);
   r.style.setProperty("--font-scale", String(s.fontScale));
-  r.dataset.eink = s.eink ? "1" : "0";
-  r.style.setProperty("zoom", String(s.uiScale));
-  const small = s.smallScreen === "on" || (s.smallScreen === "auto" && (window.innerWidth < 480 || window.innerHeight < 560));
-  r.dataset.compact = small ? "1" : "0";
   r.dataset.bubble = s.bubbleStyle;
   r.dataset.fill = s.bubbleFill;
   r.dataset.depth = s.bubbleDepth;

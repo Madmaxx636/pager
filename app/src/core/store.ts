@@ -557,6 +557,7 @@ declare global {
       onOpenRoom(cb: (roomId: string) => void): void;
       cookieLogin(spec: unknown): Promise<Record<string, string> | null>;
       platform: string;
+      hostname?: string;
     };
   }
 }

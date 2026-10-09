@@ -10,7 +10,7 @@ import {
   edit, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, toggleStar, typing, useStore, votePoll, getState,
 } from "../core/store";
-import { Avatar, EmojiPicker, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
+import { Avatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
 import { MessageRow } from "./Message";
 import { Effects } from "./Effects";
 import { AttachKind, AttachMenu, ContactModal, GifModal, PollModal, StickerModal } from "./Attach";
@@ -39,6 +39,8 @@ function buildItems(messages: Msg[], unreadBefore: string | undefined, gapMs: nu
 
 const notifSummary = (p?: ChatNotifPrefs) => !p || ((!p.mode || p.mode === "default") && (!p.sound || p.sound === "default") && (!p.preview || p.preview === "default")) ? "Default"
   : [p.mode && p.mode !== "default" ? { all: "Every message", mentions: "Mentions only", none: "Off" }[p.mode] : "", p.sound === "off" ? "Silent" : "", p.preview === "hide" ? "Hidden previews" : p.preview === "show" ? "Shown previews" : ""].filter(Boolean).join(" · ");
+/** "Billy · WhatsApp": who you are writing to and on which service. */
+const placeholderName = (chat: ChatState) => `${displayName(chat, me()).split(/\s+/)[0] || "chat"} · ${networkMeta(chat.network).label}`;
 const fullTime = (ts: number) => new Date(ts).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
 
 export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBack: () => void; nav: Nav; onForward: (m: Msg) => void }) {
@@ -47,7 +49,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const st = useSettings();
   const user = me();
   const scroller = useRef<HTMLDivElement>(null);
-  const [infoOpen, setInfoOpen] = useState(() => window.innerWidth > 1380);
+  const [infoOpen, setInfoOpen] = useState(false); // the info panel stays out of the way until you ask for it
   const [menu, setMenu] = useState<{ msg: Msg; x: number; y: number }>();
   const [viewer, setViewer] = useState<string>();
   const [picker, setPicker] = useState<Msg>();
@@ -131,8 +133,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
             {st.showAvatars && <Avatar name={name} mxc={chat.avatarMxc} size={40} network={st.showNetworkBadges ? chat.network : undefined} />}
             <div>
               <div className="chat-title">{name}</div>
-              {typingNames.length ? <div className="chat-sub typing">{typingNames.length === 1 ? `${typingNames[0]} is typing…` : "Several people are typing…"}</div>
-                : <div className="chat-sub"><i style={{ background: meta.color }} />{meta.label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</div>}
+              {<div className="chat-sub"><i style={{ background: meta.color }} />{meta.label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</div>}
             </div>
           </button>
           <IconButton icon={Search} label="Search in chat (Ctrl+F)" onClick={() => nav(`search:${roomId}`)} />
@@ -146,6 +147,12 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
                 st={st} starred={stars.some((s) => s.eventId === it.msg.id)} onMenu={(x, y) => setMenu({ msg: it.msg, x, y })} onOpen={() => openMsg(it.msg)} onWho={(key) => setWho({ msg: it.msg, key })}
                 onReact={(key) => react(roomId, it.msg.id, key)} onReply={() => { setReplyTo(it.msg); setEditing(undefined); }}
                 onVote={(ids) => votePoll(roomId, it.msg.id, ids)} onEndPoll={() => endPoll(roomId, it.msg.id)} />)}
+          {typingNames.length > 0 && (
+            <div className="msg typing-row" aria-live="polite">
+              {group && <div className="msg-sender">{typingNames.join(", ")}</div>}
+              <div className="msg-line"><div className="bubble typing-bubble" aria-label={`${typingNames.join(", ")} typing`}><TypingDots /></div></div>
+            </div>
+          )}
         </div>
         {showJump && <button className="jump" onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: st.reduceMotion ? "auto" : "smooth" })} aria-label="Jump to latest"><ChevronDown size={20} /></button>}
 
@@ -322,7 +329,7 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
             {attach && <AttachMenu onPick={pick} onClose={() => setAttach(false)} />}
           </div>
           <div className="field">
-            <textarea ref={ta} rows={1} placeholder="Message" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={sendKey} spellCheck
+            <textarea ref={ta} rows={1} placeholder={`Message ${placeholderName(chat)}`} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={sendKey} spellCheck
               onPaste={(e) => { const fs = Array.from(e.clipboardData.files); if (fs.length) { e.preventDefault(); onFiles(fs); } }} />
             <IconButton icon={Smile} label="Emoji" onClick={() => setEmoji(true)} />
           </div>

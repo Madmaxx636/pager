@@ -210,13 +210,16 @@ export function BridgesPage() {
   const networks = useStore((s) => s.bridges);
   const st = useSettings();
   const [relogin, setRelogin] = useState<Network>();
+  const [adding, setAdding] = useState(false);
   useEffect(() => { void refreshBridges(); }, []);
   return (
     <>
       <p className="muted pad">Each app you connect is bridged through your own server. Pager shows if a connection needs attention.</p>
       {note && <p className="muted pad">{note}</p>}
       {!networks.length && <p className="muted pad">Loading…</p>}
-      {networks.map((n) => {
+      {networks.length > 0 && !networks.some((n) => n.logins.length) && <p className="muted pad">Nothing connected yet.</p>}
+      <div className="pad"><button className="primary" onClick={() => setAdding(true)}>Add account</button></div>
+      {networks.filter((n) => n.logins.length > 0).map((n) => {
         const meta = networkMeta(n.id);
         return (
           <section key={n.id}>
@@ -233,13 +236,13 @@ export function BridgesPage() {
                 </Row>
               );
             })}
-            {!n.logins.length && <p className="muted pad">Not connected</p>}
-            <div className="pad"><button className="link" onClick={() => setRelogin(n)}>{n.logins.length ? `Add another ${meta.label} account` : `Connect ${meta.label}`}</button></div>
+            <div className="pad"><button className="link" onClick={() => setRelogin(n)}>{`Add another ${meta.label} account`}</button></div>
             <SwitchRow title={`Show ${meta.label} chats in inbox`} checked={!st.hiddenNetworks.includes(n.id)} onChange={(on) => updateSettings({ hiddenNetworks: on ? st.hiddenNetworks.filter((x) => x !== n.id) : [...st.hiddenNetworks, n.id] })} />
           </section>
         );
       })}
       {relogin && <AccountsModal initial={relogin} onClose={() => setRelogin(undefined)} />}
+      {adding && <AccountsModal onClose={() => { setAdding(false); void refreshBridges(); }} />}
     </>
   );
 }

@@ -47,7 +47,6 @@ export function App() {
     return () => window.removeEventListener("pager:open", open);
   }, [nav]);
   useEffect(() => { if (session) requestNotifications(); }, [session]);
-  useEffect(() => { window.pagerDesktop?.setZoom(st.uiZoom); }, [st.uiZoom]);
 
   // Keyboard shortcuts (rebindable in Settings → Keyboard shortcuts).
   useEffect(() => {
