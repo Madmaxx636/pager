@@ -29,3 +29,26 @@ class MediaCryptTest {
         assertTrue(file.sha256.length == 43)
     }
 }
+
+class MediaCryptWebCompatTest {
+    // Made by the web app's mediacrypt.ts (WebCrypto) with a fixed key: the same bytes must open on Android, and what Android makes must open there.
+    private val file = EncFile("mxc://x/y", "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA", "CQgHBgUEAwIAAAAAAAAAAA", "U8kiecLG66fRQpG6zHEv4ueJq0JCXAJ6efMwCfWJp/0")
+    private val cipherHex = "429fb5cee38163a4f5e389ce1856a975ed1dc8ab45ca3526cb660301c41a0b1b8b6376dba1f5e97c33291a462e78da3409dc236049a6580139304257387f76"
+
+    @Test fun androidOpensWhatTheWebAppScrambled() {
+        val src = File.createTempFile("web", ".bin").apply { writeBytes(cipherHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()); deleteOnExit() }
+        val out = File.createTempFile("dec", ".bin").apply { deleteOnExit() }
+        MediaCrypt.decrypt(src, out, file)
+        org.junit.Assert.assertEquals("hello from the spec, with enough bytes to span two AES blocks!!", out.readText())
+    }
+
+    @Test fun streamedEncryptionMatchesAndRoundTrips() {
+        val plain = ByteArray(300_000) { (it % 251).toByte() } // several chunks
+        val enc = File.createTempFile("enc", ".bin").apply { deleteOnExit() }
+        val ef = MediaCrypt.encryptToFile(plain.inputStream(), enc)
+        org.junit.Assert.assertEquals(plain.size.toLong(), enc.length())
+        val out = File.createTempFile("dec", ".bin").apply { deleteOnExit() }
+        MediaCrypt.decrypt(enc, out, ef)
+        org.junit.Assert.assertArrayEquals(plain, out.readBytes())
+    }
+}

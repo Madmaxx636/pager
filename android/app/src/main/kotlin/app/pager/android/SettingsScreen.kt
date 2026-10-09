@@ -779,6 +779,10 @@ private fun EncryptionGroup() {
     SettingsGroup("Encryption", footer = "Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.") {
         NavRow("Encryption on this device", if (e.ready) "Ready · device ${e.deviceId}" else if (e.error != null) "Couldn't start: ${e.error}. Tap to try again" else "Starting…", Icons.Rounded.Lock) { if (!e.ready && e.error != null) scope.launch { store.retryEncryptionStart() } }
         problem?.let { GroupDivider(); NavRow("Last problem reading updates", it, Icons.Rounded.Help) {} }
+        val crashPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("pager.crash", android.content.Context.MODE_PRIVATE)
+        var crash by remember { mutableStateOf(crashPrefs.getString("last", null)) }
+        val clip = LocalClipboardManager.current
+        crash?.let { c -> GroupDivider(); NavRow("The app closed unexpectedly last time", "Tap to copy the details and send them to me. ${c.lineSequence().drop(1).firstOrNull().orEmpty().take(120)}", Icons.Rounded.Help) { clip.setText(AnnotatedString(c)); crashPrefs.edit().remove("last").apply(); crash = null } }
         if (e.ready) { GroupDivider(); NavRow("Device fingerprint", e.fingerprint.chunked(4).joinToString(" "), Icons.Rounded.Key) {} }
         GroupDivider()
         NavRow(
