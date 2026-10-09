@@ -1,6 +1,7 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, pager, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { applyHistory, applySync, setOwnIdentity } from "./reducer";
+import { Decision, decide } from "./notifypolicy";
 import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
 import {
   ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
@@ -182,13 +183,17 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       if (r.userStickers) lsSet("pager.userStickers", r.userStickers);
       handleSettingsSync(r.accountData?.[settingsSyncType()], s.userId);
       r.invites.forEach((id) => void matrix.join(id).catch(() => {}));
-      const muted = state.muted, scope = getSettings().notifScope;
-      // Beeper-style: muted and low-priority chats stay quiet except for @mentions and replies to you.
-      r.incoming.filter((m) => {
-        const c = r.chats[m.roomId], direct = m.mentioned || !!m.replyToMe;
-        const quiet = muted.includes(m.roomId) || (c ? isLowPriority(c) : false);
-        return (!quiet || direct) && (scope === "dm_mentions" ? !m.isGroup || direct : scope === "favorites" ? (c ? isPinned(c) : false) || direct : true);
-      }).forEach(notify);
+      const muted = state.muted, st = getSettings();
+      const when = new Date();
+      for (const m of r.incoming) {
+        const c = r.chats[m.roomId];
+        const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text,
+          quiet: muted.includes(m.roomId) || (c ? isLowPriority(c) : false), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
+        if (!d.show) continue;
+        // Optionally wait, and drop the alert if you read the chat somewhere else in the meantime.
+        if (st.notifDelaySec > 0) window.setTimeout(() => { const cc = state.chats[m.roomId]; if (cc && (cc.unread > 0 || cc.markedUnread)) notify(m, d); }, st.notifDelaySec * 1000);
+        else notify(m, d);
+      }
       if (getSettings().unarchiveOnMessage) {
         for (const id of new Set(r.incoming.map((m) => m.roomId))) if (!muted.includes(id) && state.chats[id] && isArchived(state.chats[id])) setTag(id, "u.archived", false);
       }
@@ -223,18 +228,13 @@ async function signOutLocal() {
 
 // ---- Notifications ----------------------------------------------------------------------
 
-function notify(m: Incoming) {
-  const st = getSettings();
-  if (!st.notifEnabled || st.notifMutedNetworks.includes(m.network)) return;
-  if (m.isGroup && st.notifGroupMentionsOnly && !m.mentioned) return;
+function notify(m: Incoming, d: Decision) {
   if (document.hasFocus() && document.visibilityState === "visible") return;
-  const now = new Date();
-  const quiet = inQuietHours(st, now.getHours() * 60 + now.getMinutes());
-  const body = st.notifPreview === "full" ? (m.isGroup ? `${m.sender}: ${m.text}` : m.text) : st.notifPreview === "sender" ? m.sender : "New message";
+  const body = d.preview === "full" ? (m.isGroup ? `${m.sender}: ${m.text}` : m.text) : d.preview === "sender" ? m.sender : "New message";
   const desktop = window.pagerDesktop;
-  if (desktop) { desktop.notify({ title: m.chat, body, roomId: m.roomId, silent: quiet || !st.notifSound }); return; }
+  if (desktop) { desktop.notify({ title: m.chat, body, roomId: m.roomId, silent: d.silent }); return; }
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-  const n = new Notification(m.chat, { body, tag: m.roomId, silent: quiet || !st.notifSound });
+  const n = new Notification(m.chat, { body, tag: m.roomId, silent: d.silent });
   n.onclick = () => { window.focus(); window.dispatchEvent(new CustomEvent("pager:open", { detail: m.roomId })); };
 }
 
@@ -242,7 +242,7 @@ export function requestNotifications() { if (typeof Notification !== "undefined"
 
 function updateBadge() {
   const st = getSettings();
-  const n = Object.values(state.chats).filter((c) => !isArchived(c) && !state.muted.includes(c.id) && !st.hiddenNetworks.includes(c.network) && (c.unread > 0 || c.markedUnread)).length;
+  const n = st.notifBadge === "off" ? 0 : Object.values(state.chats).filter((c) => !isArchived(c) && (st.notifBadge === "all" || (!state.muted.includes(c.id) && !isLowPriority(c))) && !st.hiddenNetworks.includes(c.network) && (c.unread > 0 || c.markedUnread)).length;
   document.title = n ? `(${n}) Pager` : "Pager";
   window.pagerDesktop?.setBadge(n);
 }
