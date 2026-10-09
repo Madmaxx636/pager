@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { RowAction, ACCENTS, accentTones, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
-import { addStickers, cancelReminder, createRecoveryKey, enableEncryptionForAll, exportKeyFile, importKeyFile, restoreWithRecoveryKey, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
+import { addStickers, cancelReminder, createRecoveryKey, retryEncryptionStart, enableEncryptionForAll, exportKeyFile, importKeyFile, restoreWithRecoveryKey, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
@@ -507,7 +507,7 @@ function EncryptionGroup() {
   const [dlg, setDlg] = useState<"create" | "restore" | "export" | "import" | "all">();
   return (
     <Group title="Encryption" footer="Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.">
-      <Row title="Encryption on this device" hint={e.ready ? `Ready · device ${e.deviceId}` : "Starting…"} />
+      <Row title="Encryption on this device" hint={e.ready ? `Ready · device ${e.deviceId}` : e.error ? `Couldn't start: ${e.error}` : "Starting…"} onClick={!e.ready && e.error ? () => void retryEncryptionStart() : undefined}>{!e.ready && e.error && <span className="accent">Try again</span>}</Row>
       {e.ready && <Row title="Device fingerprint" hint={e.fingerprint.match(/.{1,4}/g)?.join(" ")} />}
       <Row title="Recovery key" hint={e.backupHere ? "On: your message keys are backed up" : e.backupOnServer ? "A backup exists. Enter the recovery key to read your history here" : "Not set up yet"}
         onClick={e.ready ? () => setDlg(e.backupOnServer && !e.backupHere ? "restore" : "create") : undefined}>

@@ -160,7 +160,8 @@ function begin(s: Session, cache?: { userId: string; since?: string; chats: Reco
   syncAbort?.abort();
   syncAbort = new AbortController();
   const signal = syncAbort.signal;
-  void startCrypto(s).finally(() => { if (!signal.aborted) void syncLoop(s, signal); });
+  // Messages wait a moment for encryption to be ready (so encrypted ones can be read), but never for long.
+  void withTimeout(startCrypto(s), 8000, "Encryption").catch(() => {}).finally(() => { if (!signal.aborted) void syncLoop(s, signal); });
   void refreshBridges();
   void pager.me().then((m) => set({ isAdmin: m.admin })).catch(() => {});
   armReminders();
@@ -191,16 +192,29 @@ let e2ee: Crypto | undefined;
 const waiting = new Map<string, { roomId: string; event: any }>();
 const memberCache = new Map<string, { at: number; ids: string[] }>();
 
+let startError: string | undefined;
+const withTimeout = <T,>(p: Promise<T>, ms: number, what: string) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`${what} took too long`)), ms))]);
+
 async function startCrypto(s: Session) {
-  e2ee?.close(); e2ee = undefined; waiting.clear();
+  e2ee?.close(); e2ee = undefined; waiting.clear(); startError = undefined;
   try {
-    const c = await Crypto.create((method, path, body) => matrixCall(method, path, body), s.userId, s.deviceId, `pager-e2ee-${s.userId}-${s.deviceId}`);
+    // Older sign-ins did not save which device this is; the server knows.
+    let deviceId = s.deviceId;
+    if (!deviceId) {
+      deviceId = (await matrixCall("GET", "/_matrix/client/v3/account/whoami")).device_id ?? "";
+      if (!deviceId) throw new Error("the server did not say which device this is. Sign out and in again");
+      const saved = { ...s, deviceId }; lsSet(SESSION_KEY, saved); set({ session: saved });
+    }
+    const c = await withTimeout(Crypto.create((method, path, body) => matrixCall(method, path, body), s.userId, deviceId, `pager-e2ee-${s.userId}-${deviceId}`), 20000, "Starting encryption");
     c.onKeys = (rooms) => void retryWaiting(rooms);
     e2ee = c;
-    await c.pump(); // upload this device's keys
-    void refreshEncryptionStatus();
-  } catch (e) { console.warn("encryption could not start", e); }
+    await withTimeout(c.pump(), 15000, "Uploading encryption keys").catch(() => { /* it keeps trying in the background */ });
+  } catch (e) { startError = (e as Error).message || String(e); console.warn("encryption could not start", e); }
+  void refreshEncryptionStatus();
 }
+
+/** Tries again (from the settings screen) after a failed start. */
+export async function retryEncryptionStart() { if (state.session) await startCrypto(state.session); }
 
 const unreadable = (e: any) => ({ ...e, type: "m.room.message", content: { msgtype: "m.text", body: "🔒 Waiting for the key to read this message…", pagerWaiting: true } });
 
@@ -246,12 +260,12 @@ async function roomMembers(roomId: string): Promise<string[]> {
 }
 
 // What the settings screen shows about encryption on this device.
-export interface EncryptionStatus { ready: boolean; backupHere: boolean; backupOnServer: boolean; deviceId: string; fingerprint: string }
+export interface EncryptionStatus { ready: boolean; backupHere: boolean; backupOnServer: boolean; deviceId: string; fingerprint: string; /** Why encryption could not start, if it could not. */ error?: string }
 let encStatus: EncryptionStatus = { ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "" };
 const encListeners = new Set<() => void>();
 function setEncStatus(s: EncryptionStatus) { encStatus = s; encListeners.forEach((l) => l()); }
 export async function refreshEncryptionStatus() {
-  if (!e2ee) { setEncStatus({ ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "" }); return; }
+  if (!e2ee) { setEncStatus({ ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "", error: startError }); return; }
   const [backupHere, ver] = await Promise.all([e2ee.backupOn(), e2ee.backupVersion()]);
   setEncStatus({ ready: true, backupHere, backupOnServer: !!ver, deviceId: e2ee.deviceId, fingerprint: e2ee.machine.identityKeys.ed25519.toBase64() });
 }
