@@ -1,5 +1,6 @@
 package app.pager.android
 
+import kotlinx.serialization.json.longOrNull
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -60,7 +61,8 @@ class Store(private val context: Context) {
     val matrix = MatrixApi(http)
     val media = MediaLoader(context, http)
     val audio = AudioController(media)
-    val settings = SettingsStore(context)
+    val settings = SettingsStore(context).also { s -> s.onLocalChange = { pushSettingsRef?.invoke() } }
+    private var pushSettingsRef: (() -> Unit)? = null
     val reminders = Reminders(context)
     private val cacheFile = File(context.filesDir, "chats.json")
     private val cacheSerializer = Cache.serializer()
@@ -164,6 +166,32 @@ class Store(private val context: Context) {
         scope.launch { refreshBridges() }
     }
 
+    // --- Settings that follow your account ---------------------------------------------
+    private var settingsPush: Job? = null
+    private var settingsChecked = false
+
+    init { pushSettingsRef = { pushSettings() } }
+
+    private fun pushSettings() {
+        val me = _session.value?.userId ?: return
+        settingsPush?.cancel()
+        settingsPush = scope.launch {
+            kotlinx.coroutines.delay(1500)
+            runCatching { matrix.putAccountData(me, "app.pager.settings.android", settings.payload()) }
+        }
+    }
+
+    /** Runs on every sync: takes newer settings from the account, or uploads ours if the account has none or older ones. */
+    private fun handleSettingsSync(remote: JsonObject?, userId: String) {
+        val first = !settingsChecked
+        settingsChecked = true
+        if (remote != null) {
+            val applied = settings.applyRemote(remote)
+            val remoteAt = (remote["updatedAt"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: 0L
+            if (!applied && first && settings.updatedAt > remoteAt) pushSettings()
+        } else if (first && settings.updatedAt > 0) pushSettings()
+    }
+
     // --- Cache -------------------------------------------------------------------
 
     private fun loadCache(userId: String) {
@@ -207,6 +235,7 @@ class Store(private val context: Context) {
                 val r = SyncReducer.apply(_chats.value, res, s.userId, initial)
                 _chats.value = r.chats
                 r.muted?.let { _muted.value = it }
+                handleSettingsSync(r.accountData["app.pager.settings.android"], s.userId)
                 r.userStickers?.let { _userStickers.value = it; writeJson("userStickers", StickerPack.serializer().nullable, it) }
                 r.invites.forEach { id -> scope.launch { runCatching { matrix.join(id) } } }
                 val muted = _muted.value

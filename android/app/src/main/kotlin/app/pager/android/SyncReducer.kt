@@ -23,6 +23,8 @@ data class SyncResult(
     val muted: Set<String>?,
     /** The user's own sticker pack when this sync carried it. */
     val userStickers: StickerPack? = null,
+    /** Pager's own account data (settings saved per kind of device) carried by this sync. */
+    val accountData: Map<String, JsonObject> = emptyMap(),
 )
 
 object SyncReducer {
@@ -90,13 +92,15 @@ object SyncReducer {
 
         var muted: Set<String>? = null
         var userStickers: StickerPack? = null
+        val accountData = HashMap<String, JsonObject>()
         for (e in sync["account_data"].obj()["events"].arr()) {
+            e.obj()["type"].str()?.takeIf { it.startsWith("app.pager.settings.") }?.let { accountData[it] = e.obj()["content"].obj() }
             when (e.obj()["type"].str()) {
                 "m.push_rules" -> muted = parseMuted(e.obj())
                 "im.ponies.user_emotes" -> userStickers = parseStickerPack("user", "My stickers", e.obj()["content"].obj())
             }
         }
-        return SyncResult(chats, incoming, invites, muted, userStickers)
+        return SyncResult(chats, incoming, invites, muted, userStickers, accountData)
     }
 
     /** Merges a page of older events (as returned by /messages, newest first) into a chat. */
