@@ -2,6 +2,14 @@
 
 package app.pager.android
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -235,9 +243,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
 
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                 if (pins.isNotEmpty()) item("pins") {
-                    LazyRow(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(pins, key = { "pin-" + it.id }) { c -> PinnedChip(c, onOpen = { if (selecting) toggleSelect(c.id) else onOpen(c.id) }, onLong = { menuFor = c }) }
-                    }
+                    PinnedGrid(pins, onOpen = { id -> if (selecting) toggleSelect(id) else onOpen(id) }, onMenu = { menuFor = it }, onMove = { id, to -> store.movePin(id, to) })
                 }
                 if (shown.isEmpty() && pins.isEmpty()) item("empty") {
                     when {
@@ -471,4 +477,62 @@ private fun UnreadBadge(c: ChatSummary) {
     if (c.unread > 0) Box(Modifier.defaultMinSize(minWidth = 20.dp).height(20.dp).clip(CircleShape).background(color).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
         Text(if (c.unread > 99) "99+" else "${c.unread}", color = MaterialTheme.colorScheme.onPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     } else Box(Modifier.size(12.dp).clip(CircleShape).background(color))
+}
+
+
+/**
+ * Pinned chats as a grid of big profile pictures (three across), like iMessage and Google Messages.
+ * Press and hold a picture, then drag it onto another to rearrange; hold without moving for its menu.
+ */
+@Composable
+private fun PinnedGrid(pins: List<ChatSummary>, onOpen: (String) -> Unit, onMenu: (ChatSummary) -> Unit, onMove: (String, Int) -> Unit) {
+    val cols = 3
+    val s = LocalSettings.current
+    val bounds = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
+    var dragId by remember { mutableStateOf<String?>(null) }
+    var drag by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val haptic = LocalHapticFeedback.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
+        pins.chunked(cols).forEach { row ->
+            Row(Modifier.fillMaxWidth()) {
+                row.forEach { c ->
+                    val unread = c.unread > 0 || c.markedUnread
+                    val dragging = dragId == c.id
+                    Column(
+                        Modifier.weight(1f).padding(vertical = 6.dp)
+                            .onGloballyPositioned { bounds[c.id] = it.boundsInRoot() }
+                            .zIndex(if (dragging) 1f else 0f)
+                            .graphicsLayer { if (dragging) { translationX = drag.x; translationY = drag.y; scaleX = 1.1f; scaleY = 1.1f; alpha = 0.92f } }
+                            .pointerInput(c.id) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = { dragId = c.id; drag = androidx.compose.ui.geometry.Offset.Zero; if (s.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                                    onDrag = { change, delta -> change.consume(); drag += delta },
+                                    onDragEnd = {
+                                        val from = bounds[c.id]
+                                        if (drag.getDistance() < 16f) onMenu(c)
+                                        else if (from != null) {
+                                            val centre = from.center + drag
+                                            val target = pins.firstOrNull { it.id != c.id && bounds[it.id]?.contains(centre) == true }
+                                            if (target != null) onMove(c.id, pins.indexOf(target))
+                                        }
+                                        dragId = null; drag = androidx.compose.ui.geometry.Offset.Zero
+                                    },
+                                    onDragCancel = { dragId = null; drag = androidx.compose.ui.geometry.Offset.Zero },
+                                )
+                            }
+                            .clickable { onOpen(c.id) },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Box {
+                            Avatar(c.name, if (s.showNetworkBadges) c.network else null, 76.dp, c.avatarMxc)
+                            if (unread) Box(Modifier.align(Alignment.TopEnd).size(20.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background).padding(3.dp).clip(CircleShape).background(if (c.muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary))
+                            if (c.typing) Box(Modifier.align(Alignment.BottomCenter).offset(y = 6.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface).padding(horizontal = 9.dp, vertical = 5.dp)) { TypingDots(MaterialTheme.colorScheme.primary, 5.dp) }
+                        }
+                        Text(c.name, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold)
+                    }
+                }
+                repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
 }
