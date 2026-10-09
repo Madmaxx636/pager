@@ -46,11 +46,17 @@ class MediaLoader(private val context: Context, private val http: Http) {
             val name = "dec_" + mxc.replace(Regex("[^A-Za-z0-9._-]"), "_")
             val out = File(dir, name)
             if (out.exists() && out.length() > 0) return out
-            val raw = fetchRaw(mxc, 0) ?: return null
-            return withContext(Dispatchers.IO) { runCatching { MediaCrypt.decrypt(raw, out, enc); out }.getOrNull() }
+            val raw = fetchRaw(mxc, 0) ?: run { failures[mxc] = "the server did not give the file"; return null }
+            return withContext(Dispatchers.IO) {
+                runCatching { MediaCrypt.decrypt(raw, out, enc); failures.remove(mxc); out }
+                    .onFailure { failures[mxc] = "could not unlock it (${it.javaClass.simpleName}: ${it.message})" }.getOrNull()
+            }
         }
-        return fetchRaw(mxc, thumb)
+        return fetchRaw(mxc, thumb).also { if (it == null) failures[mxc] = "the server did not give the file" else failures.remove(mxc) }
     }
+
+    /** Why a picture could not be shown, by mxc address (for a message in the bubble instead of a blank one). */
+    val failures = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     private suspend fun fetchRaw(mxc: String, thumb: Int): File? {
         val (server, id) = mxcParts(mxc) ?: return null

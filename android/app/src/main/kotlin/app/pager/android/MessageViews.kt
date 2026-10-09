@@ -406,7 +406,8 @@ private fun ImageContent(msg: Msg, allowAuto: Boolean, autoPlay: Boolean) {
         val animated by produceState<File?>(null, msg.mxc, enabled, isGif && autoPlay && Build.VERSION.SDK_INT >= 28) {
             value = if (enabled && isGif && autoPlay && Build.VERSION.SDK_INT >= 28 && msg.mxc != null) store.media.fetch(msg.mxc) else null
         }
-        val still = rememberMxcImage(msg.mxc, if (msg.sticker) 320 else 640, enabled = enabled && animated == null)
+        var failure by remember(msg.mxc) { mutableStateOf<String?>(null) }
+        val still = rememberMxcImage(msg.mxc, if (msg.sticker) 320 else 640, enabled = enabled && animated == null, onFail = { failure = it })
         when {
             animated != null -> AnimatedImage(animated!!, msg.sticker)
             still != null -> {
@@ -414,7 +415,9 @@ private fun ImageContent(msg: Msg, allowAuto: Boolean, autoPlay: Boolean) {
                 if (isGif && !autoPlay) Box(Modifier.align(Alignment.BottomStart).padding(8.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x99000000)).padding(horizontal = 6.dp, vertical = 2.dp)) { Text("GIF", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
             }
             else -> Text(
-                if (msg.status == STATUS_SENDING) "Sending…" else if (!enabled) "Tap to load${msg.size?.let { " · ${humanSize(it)}" } ?: ""}" else "",
+                if (msg.status == STATUS_SENDING) "Sending…" else if (!enabled) "Tap to load${msg.size?.let { " · ${humanSize(it)}" } ?: ""}"
+                else if (msg.mxc == null) "Picture not available yet"
+                else failure?.let { "Couldn't show this picture: $it" } ?: "",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

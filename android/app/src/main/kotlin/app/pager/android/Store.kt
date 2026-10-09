@@ -384,9 +384,13 @@ class Store(private val context: Context) {
     /** Uploads a file for a page: scrambled first when the page is encrypted. Returns the address and, if scrambled, the key material. */
     private suspend fun uploadFor(roomId: String, name: String, mime: String, size: Long, open: () -> java.io.InputStream): Pair<String, EncFile?> {
         if (_chats.value[roomId]?.encrypted != true) return http.upload(name, mime, size, open) to null
-        val (scrambled, ef) = MediaCrypt.encrypt(open().use { it.readBytes() })
-        val mxc = http.upload("encrypted", "application/octet-stream", scrambled.size.toLong()) { java.io.ByteArrayInputStream(scrambled) }
-        return mxc to ef.copy(url = mxc)
+        // Scramble to a temporary file, so even a 30 MB file never sits in memory more than a little at a time.
+        val tmp = File(context.cacheDir, "enc-upload-${System.nanoTime()}")
+        try {
+            val ef = withContext(Dispatchers.IO) { open().use { MediaCrypt.encryptToFile(it, tmp) } }
+            val mxc = http.upload("encrypted", "application/octet-stream", tmp.length()) { tmp.inputStream() }
+            return mxc to ef.copy(url = mxc)
+        } finally { tmp.delete() }
     }
 
     private fun JsonObjectBuilder.putMedia(mxc: String, enc: EncFile?) {

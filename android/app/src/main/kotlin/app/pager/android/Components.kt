@@ -43,10 +43,10 @@ fun hueColor(s: String): Color = Color.hsv(hueOf(s), 0.45f, 0.55f)
 
 /** Loads a Matrix image (thumbnail of [thumb] px; 0 = original). Returns null while loading or on failure. */
 @Composable
-fun rememberMxcImage(mxc: String?, thumb: Int, enabled: Boolean = true): ImageBitmap? {
+fun rememberMxcImage(mxc: String?, thumb: Int, enabled: Boolean = true, onFail: (String) -> Unit = {}): ImageBitmap? {
     val media = LocalStore.current.media
     val bmp by produceState<ImageBitmap?>(null, mxc, thumb, enabled) {
-        value = if (mxc == null || !enabled) null else media.bitmap(mxc, thumb)?.asImageBitmap()
+        value = if (mxc == null || !enabled) null else media.bitmap(mxc, thumb)?.asImageBitmap().also { if (it == null) onFail(media.failures[mxc] ?: "it could not be read") }
     }
     return bmp
 }

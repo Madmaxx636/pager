@@ -27,6 +27,26 @@ object MediaCrypt {
         return scrambled to EncFile("", urlB64.encodeToString(key), stdB64.encodeToString(iv), stdB64.encodeToString(MessageDigest.getInstance("SHA-256").digest(scrambled)))
     }
 
+    /** Scrambles a stream into [out] without holding it all in memory (big files). Returns the key material (url is filled in after upload). */
+    fun encryptToFile(input: java.io.InputStream, out: File): EncFile {
+        val rnd = java.security.SecureRandom()
+        val key = ByteArray(32).also(rnd::nextBytes)
+        val iv = ByteArray(16).also { val half = ByteArray(8).also(rnd::nextBytes); System.arraycopy(half, 0, it, 0, 8) }
+        val cipher = Cipher.getInstance("AES/CTR/NoPadding").apply { init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv)) }
+        val digest = MessageDigest.getInstance("SHA-256")
+        out.outputStream().use { fileOut ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf); if (n < 0) break
+                val chunk = cipher.update(buf, 0, n) ?: continue
+                digest.update(chunk); fileOut.write(chunk)
+            }
+            val last = cipher.doFinal()
+            if (last.isNotEmpty()) { digest.update(last); fileOut.write(last) }
+        }
+        return EncFile("", urlB64.encodeToString(key), stdB64.encodeToString(iv), stdB64.encodeToString(digest.digest()))
+    }
+
     /** Unscrambles a downloaded file into [out]. Throws if it was tampered with. */
     fun decrypt(scrambled: File, out: File, f: EncFile) {
         val digest = MessageDigest.getInstance("SHA-256")
