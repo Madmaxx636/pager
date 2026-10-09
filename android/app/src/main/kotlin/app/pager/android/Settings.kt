@@ -1,5 +1,8 @@
 package app.pager.android
 
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -108,10 +111,41 @@ class SettingsStore(context: Context) {
         json.decodeFromString(AppSettings.serializer(), prefs.getString("json", null) ?: return@runCatching AppSettings())
     }.getOrDefault(AppSettings())
 
+    // ---- Settings that follow your account ----------------------------------------------------
+    // Phone settings are kept in your Matrix account data (separately from the web and desktop apps), so a new phone gets
+    // your layout back. Device security and keys stay on the device.
+    private val full = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val excluded = setOf("appLock", "lockAfterSec", "hideInRecents", "gifKey")
+    var updatedAt: Long = prefs.getLong("updatedAt", 0L)
+        private set
+    /** Called after the user changes a setting here (not when settings arrive from the account). */
+    var onLocalChange: (() -> Unit)? = null
+
+    fun payload(): kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.buildJsonObject {
+        put("v", 1)
+        put("updatedAt", updatedAt)
+        put("settings", kotlinx.serialization.json.JsonObject(full.encodeToJsonElement(AppSettings.serializer(), _state.value).jsonObject.filterKeys { it !in excluded }))
+    }
+
+    /** Applies settings saved in the account if they are newer than ours. Returns whether anything changed. */
+    fun applyRemote(content: kotlinx.serialization.json.JsonObject): Boolean {
+        val at = (content["updatedAt"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: return false
+        if (at <= updatedAt) return false
+        val remote = content["settings"] as? kotlinx.serialization.json.JsonObject ?: return false
+        val merged = kotlinx.serialization.json.JsonObject(full.encodeToJsonElement(AppSettings.serializer(), _state.value).jsonObject + remote.filterKeys { it !in excluded })
+        val next = runCatching { full.decodeFromJsonElement(AppSettings.serializer(), merged) }.getOrNull() ?: return false
+        _state.value = next
+        updatedAt = at
+        prefs.edit().putString("json", json.encodeToString(AppSettings.serializer(), next)).putLong("updatedAt", at).apply()
+        return true
+    }
+
     fun update(f: AppSettings.() -> AppSettings) {
         val next = _state.value.f()
         _state.value = next
-        prefs.edit().putString("json", json.encodeToString(AppSettings.serializer(), next)).apply()
+        updatedAt = System.currentTimeMillis()
+        prefs.edit().putString("json", json.encodeToString(AppSettings.serializer(), next)).putLong("updatedAt", updatedAt).apply()
+        onLocalChange?.invoke()
     }
 
     fun reset() = update { AppSettings() }

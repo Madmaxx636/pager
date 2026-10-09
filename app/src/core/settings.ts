@@ -3,6 +3,8 @@ import { useSyncExternalStore } from "react";
 /** Everything the user can tune. One JSON blob in localStorage. */
 export type RowAction = "none" | "archive" | "read" | "pin" | "mute" | "low" | "snooze";
 
+export type ChatNotifPrefs = { mode?: "default" | "all" | "mentions" | "none"; preview?: "default" | "show" | "hide"; sound?: "default" | "off" };
+
 export interface AppSettings {
   // Appearance
   themeMode: "system" | "light" | "dark" | "black";
@@ -69,6 +71,20 @@ export interface AppSettings {
   notifGroupMentionsOnly: boolean;
   notifScope: "all" | "dm_mentions" | "favorites";
   notifMutedNetworks: string[];
+  /** Per network: all messages, only mentions/replies/keywords, or nothing. */
+  notifNetworkMode: Record<string, "all" | "mentions" | "none">;
+  /** Per chat overrides, set from the chat's info page. */
+  notifChat: Record<string, ChatNotifPrefs>;
+  /** Words that always notify (even in muted chats), like a name or a nickname. */
+  notifKeywords: string[];
+  /** Days of the week quiet hours apply on (0 = Sunday). */
+  notifQuietDays: number[];
+  /** Pinned chats and mentions can still make a sound during quiet hours. */
+  notifQuietBreakThrough: boolean;
+  /** Wait this long before alerting, and skip it if you read the chat somewhere else meanwhile. */
+  notifDelaySec: number;
+  /** What the unread badge counts. */
+  notifBadge: "unmuted" | "all" | "off";
   quietHoursEnabled: boolean;
   quietStartMin: number;
   quietEndMin: number;
@@ -94,7 +110,7 @@ export const DEFAULTS: AppSettings = {
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, eink: false, uiScale: 1, smallScreen: "auto", sidebarWidth: 360, rowAction1: "read", rowAction2: "archive",
   enterToSend: true, sendReadReceipts: true, sendTyping: true, linkPreviews: true, autoDownload: "always", unarchiveOnMessage: true,
   confirmDelete: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtFirstUnread: true, gifProvider: "giphy", gifKey: "", doubleTapReact: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
-  notifEnabled: true, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [],
+  notifEnabled: true, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [], notifNetworkMode: {}, notifChat: {}, notifKeywords: [], notifQuietDays: [0, 1, 2, 3, 4, 5, 6], notifQuietBreakThrough: false, notifDelaySec: 0, notifBadge: "unmuted",
   quietHoursEnabled: false, quietStartMin: 22 * 60, quietEndMin: 7 * 60,
   hiddenNetworks: [],
   developerMode: false, shortcuts: {}, uiZoom: 1,
