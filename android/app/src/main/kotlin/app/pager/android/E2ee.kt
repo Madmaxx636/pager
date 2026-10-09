@@ -194,7 +194,7 @@ class E2ee private constructor(
             }
         }
         val listener = object : ProgressListener { override fun onProgress(progress: Int, total: Int) = onProgress(progress, total) }
-        val result = withContext(Dispatchers.IO) { machine.importRoomKeysFromBackup(rooms.toString(), version, listener) }
+        val result = withContext(Dispatchers.IO) { machine.importRoomKeysFromBackup(E2eeBodies.backupToExport(rooms).toString(), version, listener) }
         withContext(Dispatchers.IO) { machine.saveRecoveryKey(key, version); machine.enableBackupV1(pub, version) }
         pump()
         val rooms2 = result.keys.keys.toList()
