@@ -52,6 +52,24 @@ describe("applySync", () => {
     expect(isBotRoom(note, me)).toBe(false);
     expect(isBotRoom({ ...c["!bot:x"], memberCount: 2 }, me)).toBe(true);
   });
+  it("keeps Signal's Note to Self from a real sync (only you and the bot loaded, three members in total)", () => {
+    const sync = { rooms: { join: { "!n:x": {
+      state: { events: [
+        { type: "m.room.name", state_key: "", content: { name: "Signal Note to Self" } },
+        { type: "m.bridge", state_key: "bridge-signal", content: { protocol: { id: "signal" } } },
+        { type: "m.room.member", state_key: me, content: { membership: "join" } },
+        { type: "m.room.member", state_key: "@signalbot:pager.test", content: { membership: "join" } },
+      ] },
+      timeline: { events: [{ type: "m.room.message", event_id: "$n", sender: "@signalbot:pager.test", origin_server_ts: 5, content: { msgtype: "m.notice", body: "ok" } }] },
+      summary: { "m.joined_member_count": 3, "m.heroes": ["@signalbot:pager.test"] },
+    } } } };
+    const c = applySync({}, sync, me, true).chats["!n:x"];
+    expect(c.memberCount).toBe(3);
+    expect(isBotRoom(c, me)).toBe(false);
+    // and when a later sync carries no summary, the count is remembered
+    const again = applySync({ "!n:x": c }, { rooms: { join: { "!n:x": { timeline: { events: [] } } } } }, me, false).chats["!n:x"];
+    expect(isBotRoom(again, me)).toBe(false);
+  });
   it("notifies only for others' new messages and dedupes", () => {
     const r = applySync(base(), join([text("$2", me, 2000, "Yes!"), text("$3", mom, 3000, "Great")]), me, false);
     expect(r.chats["!a:x"].messages).toHaveLength(3);
