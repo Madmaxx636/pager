@@ -151,6 +151,17 @@ class E2ee private constructor(
 
     suspend fun backupOn(): Boolean = withContext(Dispatchers.IO) { machine.backupEnabled() }
 
+    /**
+     * Does the server hold the same device key we do? If not (the app's key store was reset while the sign-in survived), the bridges
+     * encrypt to a key this phone no longer has and every new message says "waiting for the key". Null when we could not ask.
+     */
+    suspend fun serverKeyMatches(): Boolean? = try {
+        val r = tx("POST", "/_matrix/client/v3/keys/query", buildJsonObject { put("timeout", 10000); putJsonObject("device_keys") { put(userId, JsonArray(listOf(JsonPrimitive(deviceId)))) } })
+        val mine = (((r["device_keys"] as? JsonObject)?.get(userId) as? JsonObject)?.get(deviceId) as? JsonObject)
+        val theirs = ((mine?.get("keys") as? JsonObject)?.get("ed25519:$deviceId") as? JsonPrimitive)?.contentOrNull
+        if (theirs == null) null else theirs == fingerprint()
+    } catch (_: Exception) { null }
+
     fun fingerprint(): String = machine.identityKeys()["ed25519"].orEmpty()
 
     /** Starts a new backup and returns the recovery key to show the person once. */

@@ -778,6 +778,7 @@ private fun EncryptionGroup() {
     var dialog by remember { mutableStateOf<String?>(null) }
     SettingsGroup("Encryption", footer = "Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.") {
         NavRow("Encryption on this device", if (e.ready) "Ready · device ${e.deviceId}" else if (e.error != null) "Couldn't start: ${e.error}. Tap to try again" else "Starting…", Icons.Rounded.Lock) { if (!e.ready && e.error != null) scope.launch { store.retryEncryptionStart() } }
+        if (e.mismatch) { GroupDivider(); NavRow("This phone's keys don't match your account", "New messages can't be read here. Tap to sign out, then sign in again and enter your recovery key.", Icons.Rounded.Help) { store.signOut() } }
         problem?.let { GroupDivider(); NavRow("Last problem reading updates", it, Icons.Rounded.Help) {} }
         val crashPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("pager.crash", android.content.Context.MODE_PRIVATE)
         var crash by remember { mutableStateOf(crashPrefs.getString("last", null)) }
