@@ -283,6 +283,11 @@ class MatrixApi(private val http: Http) {
         })
     }
 
+    /** Asks the server to turn on encryption for a page from a connected app (you are not allowed to change those yourself). */
+    suspend fun encryptRoom(roomId: String) {
+        http.request("POST", "/api/rooms/${enc(roomId)}/encrypt", JsonObject(emptyMap()))
+    }
+
     suspend fun setState(roomId: String, type: String, content: JsonObject) {
         http.request("PUT", "/_matrix/client/v3/rooms/${enc(roomId)}/state/${enc(type)}/", content)
     }

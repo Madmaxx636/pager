@@ -305,7 +305,12 @@ class Store(private val context: Context) {
         if (!e.botsCanEncrypt(bots)) throw java.io.IOException("This page's app isn't set up for encryption on your server yet (the server admin turns it on)")
         try {
             matrix.setState(roomId, "m.room.encryption", buildJsonObject { put("algorithm", "m.megolm.v1.aes-sha2"); put("rotation_period_ms", 604_800_000L); put("rotation_period_msgs", 100) })
-        } catch (x: ApiException) { throw java.io.IOException(if (x.status == 403) "Your account isn't allowed to change this page's settings" else (x.message ?: "Couldn't turn on encryption")) }
+        } catch (x: ApiException) {
+            if (x.status != 403) throw java.io.IOException(x.message ?: "Couldn't turn on encryption")
+            // Pages from connected apps belong to the app's bot, so you can't change them yourself: the server does it for you.
+            try { matrix.encryptRoom(roomId) }
+            catch (y: ApiException) { throw java.io.IOException(if (y.status == 409) "The server isn't set up to turn encryption on for you (the admin turns on server control)" else (y.message ?: "Couldn't turn on encryption")) }
+        }
         update(roomId) { it.copy(encrypted = true) }
     }
 

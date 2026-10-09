@@ -8,7 +8,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { bridgeRequest } from "./bridges.ts";
 import { control, dockerAvailable, findContainer, logs } from "./docker.ts";
-import { readSettings, writeSettings } from "./bridgeconfig.ts";
+import { readRegistration, readSettings, writeSettings } from "./bridgeconfig.ts";
 
 const USERNAME_RE = /^[a-z0-9._-]{3,32}$/;
 
@@ -106,6 +106,33 @@ export function createApp(cfg: Config) {
       const token = tokenOf(req);
       const userId = await whoami(cfg, token);
       return send(res, 200, { user_id: userId, admin: await isAdmin(token, userId) });
+    }
+
+    // Turn on encryption for a page that comes from a connected app. People are not allowed to change those rooms' settings
+    // themselves (the app's bot owns them), so the server does this one thing, as that bot, for anyone who is in the page.
+    if (parts[0] === "rooms" && parts[1] && parts[2] === "encrypt" && parts.length === 3 && method === "POST") {
+      const token = tokenOf(req);
+      await whoami(cfg, token);
+      const roomId = decodeURIComponent(parts[1]);
+      if (!/^![^\s/]+:[^\s/]+$/.test(roomId)) throw new HttpError(400, "Bad page id");
+      const api = (path: string, init: RequestInit = {}) => fetch(`${cfg.synapseUrl}/_matrix/client/v3${path}`, init).catch(() => { throw new HttpError(502, "Homeserver unavailable"); });
+      const members = await api(`/rooms/${encodeURIComponent(roomId)}/joined_members`, { headers: { authorization: `Bearer ${token}` } });
+      if (!members.ok) throw new HttpError(403, "You are not in that page");
+      const ids = Object.keys(((await members.json()) as { joined?: Record<string, unknown> }).joined ?? {});
+      const bridge = cfg.bridges.find((b) => ids.some((u) => u.startsWith(`@${b.id}bot:`)));
+      if (!bridge) throw new HttpError(400, "This page doesn't come from a connected app");
+      if (!cfg.bridgesDir) throw new HttpError(409, "Server control isn't turned on, so the server can't switch this page for you");
+      const reg = readRegistration(cfg.bridgesDir, bridge.id);
+      if (!reg) throw new HttpError(500, `Can't read ${bridge.name}'s registration`);
+      const already = await api(`/rooms/${encodeURIComponent(roomId)}/state/m.room.encryption`, { headers: { authorization: `Bearer ${token}` } });
+      if (already.ok) return send(res, 200, { ok: true, already: true });
+      const put = await api(`/rooms/${encodeURIComponent(roomId)}/state/m.room.encryption/?user_id=${encodeURIComponent(`@${reg.bot}:${cfg.domain}`)}`, {
+        method: "PUT", headers: { authorization: `Bearer ${reg.asToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ algorithm: "m.megolm.v1.aes-sha2", rotation_period_ms: 604_800_000, rotation_period_msgs: 100 }),
+      });
+      if (!put.ok) throw new HttpError(502, `${bridge.name} could not turn on encryption for this page`);
+      console.log(`[rooms] ${(await whoami(cfg, token))} turned on encryption in ${roomId} (via ${bridge.id})`);
+      return send(res, 200, { ok: true });
     }
 
     // ---- Admin: Synapse enforces who may do this, using the caller's own token ----------------
