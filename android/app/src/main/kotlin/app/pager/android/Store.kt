@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -399,13 +400,27 @@ class Store(private val context: Context) {
 
     // --- Sync --------------------------------------------------------------------
 
+    /** The last thing that went wrong while reading an update from the server, for the Encryption settings (cleared by the next good update). */
+    private val _syncProblem = MutableStateFlow<String?>(null)
+    val syncProblem: StateFlow<String?> = _syncProblem.asStateFlow()
+    private fun noteSyncProblem(what: String, e: Throwable) {
+        android.util.Log.w("Pager", "problem $what", e)
+        _syncProblem.value = "$what: ${e::class.java.simpleName}: ${e.message ?: ""}".take(300)
+    }
+
     private suspend fun syncLoop(s: Session) {
         var backoff = 1000L
         while (scope.isActive) {
             try {
-                val res = decryptSync(matrix.sync(since))
+                val raw = matrix.sync(since)
+                // If reading the encrypted parts goes wrong, show the update with those messages still locked rather than never moving on.
+                val res = try { decryptSync(raw) } catch (e: CancellationException) { throw e } catch (e: Throwable) { noteSyncProblem("decrypting", e); raw }
                 val initial = since == null
-                val r = SyncReducer.apply(_chats.value, res, s.userId, initial)
+                val r = try { SyncReducer.apply(_chats.value, res, s.userId, initial) } catch (e: CancellationException) { throw e } catch (e: Throwable) {
+                    noteSyncProblem("reading messages", e)
+                    if (res === raw) throw e
+                    SyncReducer.apply(_chats.value, raw, s.userId, initial)
+                }
                 _chats.value = r.chats
                 r.muted?.let { _muted.value = it }
                 handleSettingsSync(r.accountData[settingsType], s.userId)
@@ -453,12 +468,14 @@ class Store(private val context: Context) {
                 since = (res["next_batch"] as? JsonPrimitive)?.content ?: since
                 _synced.value = true
                 backoff = 1000L
+                if (res === raw) _syncProblem.value = null
             } catch (e: ApiException) {
                 if (e.status == 401) { signOutLocal(); return }
                 if (e.status == 400 && since != null) { since = null; _chats.value = emptyMap(); continue } // stale cache token
                 delay(backoff); backoff = (backoff * 2).coerceAtMost(30_000)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                noteSyncProblem("updating", e)
                 delay(backoff); backoff = (backoff * 2).coerceAtMost(30_000)
             }
         }
