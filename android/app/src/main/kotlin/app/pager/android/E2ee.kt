@@ -75,7 +75,7 @@ class E2ee private constructor(
 
     private suspend fun send(r: Request) {
         if (closed) return
-        val parsed = { s: String -> kotlinx.serialization.json.Json.parseToJsonElement(s) }
+        val parsed = { s: String -> E2eeBodies.stripNulls(kotlinx.serialization.json.Json.parseToJsonElement(s)) }
         val (id, type, response) = try {
             when (r) {
                 is Request.KeysUpload -> Triple(r.requestId, RequestType.KEYS_UPLOAD, tx("POST", "/_matrix/client/v3/keys/upload", parsed(r.body)))
@@ -86,7 +86,7 @@ class E2ee private constructor(
                     put("timeout", 10000)
                     putJsonObject("one_time_keys") { r.oneTimeKeys.forEach { (u, devs) -> putJsonObject(u) { devs.forEach { (d, alg) -> put(d, alg) } } } }
                 }))
-                is Request.ToDevice -> Triple(r.requestId, RequestType.TO_DEVICE, tx("PUT", "/_matrix/client/v3/sendToDevice/${enc(r.eventType)}/${enc(r.requestId)}", parsed(r.body)))
+                is Request.ToDevice -> Triple(r.requestId, RequestType.TO_DEVICE, tx("PUT", "/_matrix/client/v3/sendToDevice/${enc(r.eventType)}/${enc(r.requestId)}", E2eeBodies.toDevice(parsed(r.body))))
                 is Request.SignatureUpload -> Triple(r.requestId, RequestType.SIGNATURE_UPLOAD, tx("POST", "/_matrix/client/v3/keys/signatures/upload", parsed(r.body)))
                 is Request.KeysBackup -> Triple(r.requestId, RequestType.KEYS_BACKUP, tx("PUT", "/_matrix/client/v3/room_keys/keys?version=${enc(r.version)}", buildJsonObject { put("rooms", parsed(r.rooms)) }))
                 is Request.RoomMessage -> Triple(r.requestId, RequestType.ROOM_MESSAGE, tx("PUT", "/_matrix/client/v3/rooms/${enc(r.roomId)}/send/${enc(r.eventType)}/${enc(r.requestId)}", parsed(r.content)))
