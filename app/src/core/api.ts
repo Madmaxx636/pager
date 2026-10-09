@@ -49,12 +49,25 @@ export function parseCookies(text: string): Record<string, string> {
   return out;
 }
 
+export interface AdminInfo { id: string; displayname: string; admin: boolean; deactivated: boolean; locked: boolean; created?: number; devices: { id: string; name: string; lastSeen: number; ip: string }[] }
+export interface AdminBridge { id: string; name: string; up: boolean; container?: { state: string; status: string; image: string } }
+export interface AdminSetting { key: string; label: string; hint: string; kind: "bool" | "number"; value: boolean | number }
 export interface AdminPerson extends AdminUser { networks: (Network & { error?: string })[] }
 export interface AdminUser { id: string; displayname: string; admin: boolean; deactivated: boolean; created?: number; you: boolean }
 
 export const pager = {
   me: () => call<{ user_id: string; admin: boolean }>("GET", "/api/me"),
   admin: {
+    info: (id: string) => call<AdminInfo>("GET", `/api/admin/users/${enc(id)}/info`),
+    rename: (id: string, displayname: string) => call("POST", `/api/admin/users/${enc(id)}/rename`, { displayname }),
+    lock: (id: string, locked: boolean) => call("POST", `/api/admin/users/${enc(id)}/lock`, { locked }),
+    logoutAll: (id: string) => call<{ signedOut: number }>("POST", `/api/admin/users/${enc(id)}/logout-all`, {}),
+    control: () => call<{ docker: boolean; settings: boolean }>("GET", "/api/admin/control"),
+    bridgeList: () => call<{ bridges: AdminBridge[]; docker: boolean }>("GET", "/api/admin/bridges"),
+    bridgeAction: (id: string, action: "restart" | "stop" | "start") => call("POST", `/api/admin/bridges/${enc(id)}/${action}`, {}),
+    bridgeLogs: (id: string, tail = 300) => call<{ log: string }>("GET", `/api/admin/bridges/${enc(id)}/logs?tail=${tail}`).then((r) => r.log),
+    bridgeSettings: (id: string) => call<{ settings: AdminSetting[] }>("GET", `/api/admin/bridges/${enc(id)}/settings`).then((r) => r.settings),
+    saveBridgeSettings: (id: string, values: Record<string, boolean | number>, restart: boolean) => call<{ changed: string[] }>("PUT", `/api/admin/bridges/${enc(id)}/settings`, { values, restart }),
     overview: () => call<{ users: AdminPerson[] }>("GET", "/api/admin/overview").then((r) => r.users),
     users: () => call<{ users: AdminUser[] }>("GET", "/api/admin/users").then((r) => r.users),
     logins: (id: string) => call<{ networks: Network[] }>("GET", `/api/admin/users/${enc(id)}/logins`).then((r) => r.networks),

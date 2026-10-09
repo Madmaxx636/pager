@@ -347,3 +347,14 @@ button:active:not(:disabled) { transform: scale(.94); }
 .admin-state { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; color: var(--muted); } .admin-state .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .admin-card footer { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--panel-2) 40%, transparent); }
 @media (max-width: 520px) { .admin-app { grid-template-columns: auto 1fr auto; } .admin-app .link { grid-column: 2 / -1; justify-self: start; } }
+
+/* Admin v2: accounts, bridges, server */
+.admin-head { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; text-align: left; } .admin-head.static { cursor: default; }
+.admin-head:hover:not(.static) { background: var(--panel-2); }
+.admin-body { padding: 4px 16px 16px; border-top: 1px solid var(--line); } .admin-body h4 { margin: 14px 0 6px; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.admin-body .details { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; } .admin-body .details dd { margin: 0; } .admin-body .details dt { color: var(--muted); }
+.admin-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.admin-note { margin: 4px 16px 10px; padding: 14px 16px; border-radius: 14px; background: color-mix(in srgb, var(--warn) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); } .admin-note p { margin: 6px 0; font-size: .92rem; }
+code.copy { display: block; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); font: 0.85rem ui-monospace, monospace; cursor: copy; overflow-x: auto; white-space: nowrap; }
+.admin-log { max-height: 55vh; overflow: auto; margin: 0 0 12px; padding: 12px; border-radius: 12px; background: #0a0d12; color: #c9d4e3; font: 0.78rem/1.45 ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; }
+.admin-set { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 0; } .admin-set div { display: grid; } .admin-set small { color: var(--muted); } .admin-set input[type=number] { width: 110px; }
