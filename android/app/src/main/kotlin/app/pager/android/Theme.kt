@@ -148,12 +148,18 @@ private fun scheme(dark: Boolean, black: Boolean, accent: String, custom: String
 
 /** Looks up the live settings anywhere in the UI (with E-ink mode's overrides applied). */
 val LocalSettings = staticCompositionLocalOf { AppSettings() }
+/** True on a phone driven by a d-pad and keys (or when switched on in Settings): focus is drawn clearly and everything is reachable without touching the screen. */
+val LocalKeypad = staticCompositionLocalOf { false }
+/** A phone with a d-pad or a number pad (flip phones, the CAT S22 Flip and the like). */
+fun keypadDevice(c: android.content.res.Configuration) = c.navigation == android.content.res.Configuration.NAVIGATION_DPAD || c.keyboard == android.content.res.Configuration.KEYBOARD_12KEY
 /** The settings exactly as you chose them; the settings screens show these. */
 val LocalRawSettings = staticCompositionLocalOf { AppSettings() }
 
 /** What the app actually uses: your settings, with E-ink mode and the small-screen layout applied on top. */
-fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int): AppSettings {
+fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int, keypad: Boolean = false): AppSettings {
     var e = s
+    // Keypad phones are slow and have no gestures: calm, light and plain.
+    if (keypad) e = e.copy(reduceMotion = true, screenEffects = false, autoPlayGifs = false)
     if (s.eink) e = e.copy(
         themeMode = "light", reduceMotion = true, screenEffects = false, messageAnimation = "none", bubbleFill = "solid", bubbleDepth = "flat",
         bubbleStyle = if (s.bubbleStyle == "plain") "plain" else "outline", wallpaper = "none", autoPlayGifs = false, colorSenderNames = false, accent = "teal",
@@ -246,7 +252,8 @@ private val PagerShapes = Shapes(
 @Composable
 fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
     val config = androidx.compose.ui.platform.LocalConfiguration.current
-    val settings = effectiveSettings(rawSettings, config.screenWidthDp, config.screenHeightDp)
+    val keypad = rawSettings.keypad == "on" || (rawSettings.keypad == "auto" && keypadDevice(config))
+    val settings = effectiveSettings(rawSettings, config.screenWidthDp, config.screenHeightDp, keypad)
     Ink.on = settings.eink
     val dark = isDarkTheme(settings)
     val context = LocalContext.current
@@ -268,6 +275,7 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
         LocalSettings provides settings,
         LocalRawSettings provides rawSettings,
         LocalDensity provides Density(base.density * uiScaleFor(rawSettings, config), base.fontScale * settings.fontScale),
-        androidx.compose.material3.LocalRippleConfiguration provides (if (settings.eink) null else androidx.compose.material3.LocalRippleConfiguration.current),
+        LocalKeypad provides keypad,
+        androidx.compose.material3.LocalRippleConfiguration provides (if (settings.eink) null else if (keypad) androidx.compose.material3.RippleConfiguration(rippleAlpha = androidx.compose.material.ripple.RippleAlpha(draggedAlpha = 0.16f, focusedAlpha = 0.14f, hoveredAlpha = 0.08f, pressedAlpha = 0.3f)) else androidx.compose.material3.LocalRippleConfiguration.current),
     ) { MaterialTheme(colorScheme = if (settings.eink) einkScheme() else colors, typography = if (settings.eink) EinkTypography else PagerTypography, shapes = PagerShapes, content = content) }
 }

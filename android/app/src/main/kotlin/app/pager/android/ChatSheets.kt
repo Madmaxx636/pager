@@ -105,7 +105,7 @@ fun AttachSheet(onPick: (Attach) -> Unit, onDismiss: () -> Unit) {
             rows.forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     row.forEach { a ->
-                        Column(Modifier.width(88.dp).clip(RoundedCornerShape(16.dp)).clickable { onPick(a) }.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(Modifier.width(88.dp).clip(RoundedCornerShape(16.dp)).dpadFocus().clickable { onPick(a) }.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(Modifier.size(60.dp).clip(CircleShape).background(a.color), contentAlignment = Alignment.Center) { Icon(a.icon, a.label, tint = Color.White, modifier = Modifier.size(28.dp)) }
                             Text(a.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
                         }
@@ -168,9 +168,9 @@ private fun GifTile(g: Gif, starred: Boolean, onStar: () -> Unit, onClick: () ->
         value = runCatching { store.gifs.download(g.previewUrl).let { b -> BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() } }.getOrNull()
     }
     val ratio = if (g.w > 0 && g.h > 0) (g.w.toFloat() / g.h).coerceIn(0.6f, 2f) else 1.4f
-    Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable(onClick = onClick)) {
+    Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable(onClick = onClick)) {
         bmp?.let { Image(it, g.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
-        Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(32.dp).clip(CircleShape).background(Color(0x99000000)).clickable(onClick = onStar), contentAlignment = Alignment.Center) {
+        Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(32.dp).clip(CircleShape).background(Color(0x99000000)).dpadFocus().clickable(onClick = onStar), contentAlignment = Alignment.Center) {
             Icon(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (starred) "Remove from favorites" else "Add to favorites", tint = Color(0xFFFFD54A), modifier = Modifier.size(20.dp))
         }
     }
@@ -193,16 +193,16 @@ fun StickerSheet(roomId: String, onPick: (Sticker) -> Unit, onAdd: () -> Unit, o
                     items(packs.size) { i ->
                         val on = tab == i
                         Text(packs[i].name, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant).clickable { tab = i }.padding(horizontal = 14.dp, vertical = 8.dp))
+                            modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { tab = i }.padding(horizontal = 14.dp, vertical = 8.dp))
                     }
-                    item { Box(Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable(onClick = onAdd), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, "Add stickers", modifier = Modifier.size(20.dp)) } }
+                    item { Box(Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable(onClick = onAdd), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, "Add stickers", modifier = Modifier.size(20.dp)) } }
                 }
                 Spacer(Modifier.height(12.dp))
                 val pack = packs.getOrNull(tab) ?: packs.first()
                 LazyVerticalGrid(GridCells.Fixed(4), contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
                     items(pack.stickers, key = { it.shortcode + it.url }) { st ->
                         val img = rememberMxcImage(st.url, 256)
-                        Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).clickable { onPick(st) }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp)).dpadFocus().clickable { onPick(st) }, contentAlignment = Alignment.Center) {
                             if (img != null) Image(img, st.body, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit)
                         }
                     }
@@ -233,8 +233,8 @@ fun PollSheet(onCreate: (String, List<String>, Int, Boolean) -> Unit, onDismiss:
                 }
             }
             if (options.size < 10) TextButton(onClick = { options.add("") }) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add option") }
-            Row(Modifier.fillMaxWidth().clickable { multiple = !multiple }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { Text("Allow multiple answers", Modifier.weight(1f)); Switch(multiple, { multiple = it }) }
-            Row(Modifier.fillMaxWidth().clickable { hidden = !hidden }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { Text("Hide results until the poll ends", Modifier.weight(1f)); Switch(hidden, { hidden = it }) }
+            Row(Modifier.fillMaxWidth().dpadFocus().clickable { multiple = !multiple }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { Text("Allow multiple answers", Modifier.weight(1f)); Switch(multiple, { multiple = it }) }
+            Row(Modifier.fillMaxWidth().dpadFocus().clickable { hidden = !hidden }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) { Text("Hide results until the poll ends", Modifier.weight(1f)); Switch(hidden, { hidden = it }) }
             Button(onClick = { val a = options.map { it.trim() }.filter { it.isNotEmpty() }; onCreate(question.trim(), a, if (multiple) a.size else 1, !hidden) }, enabled = valid, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(50.dp)) { Text("Send poll") }
             Text("Polls work in Matrix and on networks whose bridge supports them (WhatsApp does).", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
         }
@@ -251,8 +251,8 @@ fun ActionsSheet(
 ) {
     Sheet(onDismiss) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            quick.forEach { e -> Box(Modifier.size(46.dp).clip(CircleShape).clickable { onReact(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 26.sp) } }
-            Box(Modifier.size(42.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable(onClick = onMore), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, "More reactions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            quick.forEach { e -> Box(Modifier.size(46.dp).clip(CircleShape).dpadFocus().clickable { onReact(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 26.sp) } }
+            Box(Modifier.size(42.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable(onClick = onMore), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, "More reactions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         SheetItem(Icons.AutoMirrored.Rounded.Reply, "Reply", onReply)
         SheetItem(Icons.AutoMirrored.Rounded.Forward, "Forward", onForward)

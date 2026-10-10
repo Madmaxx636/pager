@@ -68,6 +68,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.isShiftPressed
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.border
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -168,6 +174,12 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
     var replyTo by remember(roomId) { mutableStateOf<Msg?>(null) }
     var editing by remember(roomId) { mutableStateOf<Msg?>(null) }
     var actions by remember { mutableStateOf<Msg?>(null) }
+    // Keypad phones: the d-pad picks a message (Up/Down), the center key opens its actions, and typing starts at once.
+    val keypad = LocalKeypad.current
+    var selId by remember(roomId) { mutableStateOf<String?>(null) }
+    val composerFocus = remember { FocusRequester() }
+    LaunchedEffect(roomId, keypad) { if (keypad) { kotlinx.coroutines.delay(400); runCatching { composerFocus.requestFocus() } } }
+    BackHandler(enabled = selId != null) { selId = null }
     var selectable by remember { mutableStateOf<Msg?>(null) }
     var details by remember { mutableStateOf<Msg?>(null) }
     var viewerId by remember { mutableStateOf<String?>(null) }
@@ -250,7 +262,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
             // Header
             Row(Modifier.fillMaxWidth().background(scheme.surface).padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 BackButton(onBack)
-                Row(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClick = onInfo).padding(vertical = 2.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).dpadFocus().clickable(onClick = onInfo).padding(vertical = 2.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     val name = chat?.let { SyncReducer.displayName(it, me) } ?: "Opening…"
                     if (s.showAvatars) Avatar(name, if (s.showNetworkBadges) chat?.network else null, 40.dp, chat?.avatarMxc)
                     Column(Modifier.padding(start = 12.dp)) {
@@ -286,7 +298,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                                 Text("  New messages  ", style = MaterialTheme.typography.labelMedium, color = scheme.primary, fontWeight = FontWeight.SemiBold)
                                 Box(Modifier.weight(1f).height(1.dp).background(scheme.primary.dim(0.4f)))
                             }
-                            is Item.M -> MessageRow(
+                            is Item.M -> Box(if (selId == item.msg.id) Modifier.border(3.dp, scheme.primary, RoundedCornerShape(16.dp)) else Modifier) { MessageRow(
                                 chat = chat, msg = item.msg, me = me, group = group, first = item.first, last = item.last, dark = dark,
                                 reply = item.msg.replyTo?.let { byId[it] }, read = item.index <= readIndex, delivered = item.index <= deliveredIndex, starred = stars.any { it.eventId == item.msg.id },
                                 onLong = { actions = item.msg },
@@ -306,13 +318,13 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                                         m.type == "m.file" || m.type == "m.video" -> scope.launch { store.media.open(m.mxc, m.body.ifEmpty { "file" }, m.mime?.let { mt -> if (mt.contains("vcard")) "text/x-vcard" else mt }) }
                                     }
                                 },
-                            )
+                            ) }
                         }
                     }
                 }
                 if (showJump) {
                     Box(
-                        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 12.dp).size(44.dp).clip(CircleShape).background(scheme.surface).clickable { scope.launch { list.animateScrollToItem(0) } },
+                        Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 12.dp).size(44.dp).clip(CircleShape).background(scheme.surface).dpadFocus().clickable { scope.launch { list.animateScrollToItem(0) } },
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Rounded.KeyboardArrowDown, "Jump to latest", tint = scheme.onSurface) }
                 }
@@ -327,7 +339,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                 val people = chat?.members?.filterKeys { it != me }?.filterValues { it.contains(token, ignoreCase = true) }?.entries?.take(12).orEmpty()
                 if (people.isNotEmpty()) LazyRow(Modifier.fillMaxWidth().background(scheme.surface).padding(vertical = 6.dp), contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(people.toList()) { (id, name) ->
-                        Row(Modifier.clip(CircleShape).background(scheme.surfaceVariant).clickable { text = text.dropLast(token.length + 1) + "@$name "; mentionIds[name] = id }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.clip(CircleShape).background(scheme.surfaceVariant).dpadFocus().clickable { text = text.dropLast(token.length + 1) + "@$name "; mentionIds[name] = id }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(name, null, 22.dp); Spacer(Modifier.width(6.dp)); Text(name, style = MaterialTheme.typography.labelLarge)
                         }
                     }
@@ -341,7 +353,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                         IconBtn(Icons.Rounded.Delete, "Cancel recording", { recorder.cancel(); recording = false }, tint = scheme.error)
                         Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFEF4444)))
                         Text("  Recording  %d:%02d".format(recordedMs / 60000, (recordedMs / 1000) % 60), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        Box(Modifier.size(48.dp).clip(CircleShape).background(scheme.primary).clickable { recorder.stop()?.let { (f, ms) -> store.sendVoice(roomId, f, ms) }; recording = false }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(48.dp).clip(CircleShape).background(scheme.primary).dpadFocus().clickable { recorder.stop()?.let { (f, ms) -> store.sendVoice(roomId, f, ms) }; recording = false }, contentAlignment = Alignment.Center) {
                             Icon(Icons.AutoMirrored.Rounded.Send, "Send voice message", tint = scheme.onPrimary)
                         }
                     }
@@ -354,7 +366,21 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                                 BasicTextField(
                                     text, { text = it }, maxLines = 6, textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface), cursorBrush = SolidColor(scheme.primary),
                                     keyboardOptions = KeyboardOptions(imeAction = if (s.enterSends) ImeAction.Send else ImeAction.Default), keyboardActions = KeyboardActions(onSend = { send() }),
-                                    modifier = Modifier.fillMaxWidth().onPreviewKeyEvent { e ->
+                                    modifier = Modifier.fillMaxWidth().focusRequester(composerFocus).onPreviewKeyEvent { e ->
+                                        if (keypad && e.type == KeyEventType.KeyDown && text.isEmpty()) {
+                                            val ids = messages.map { it.id }
+                                            val at = ids.indexOf(selId)
+                                            fun pick(id: String?) {
+                                                selId = id
+                                                if (id == null) scope.launch { list.animateScrollToItem(0) }
+                                                else scope.launch { val i = items.indexOfFirst { it is Item.M && it.msg.id == id }; if (i >= 0) list.animateScrollToItem(i + (if (typingNow) 1 else 0)) }
+                                            }
+                                            when (e.key) {
+                                                Key.DirectionUp -> { if (ids.isNotEmpty()) pick(if (at < 0) ids.last() else ids[maxOf(0, at - 1)]); return@onPreviewKeyEvent true }
+                                                Key.DirectionDown -> { if (selId != null) pick(if (at < 0 || at >= ids.lastIndex) null else ids[at + 1]); return@onPreviewKeyEvent selId != null || at >= 0 }
+                                                Key.DirectionCenter, Key.Enter -> if (selId != null) { messages.firstOrNull { it.id == selId }?.let { actions = it }; return@onPreviewKeyEvent true }
+                                            }
+                                        }
                                         // Hardware keyboards: Enter sends, Shift+Enter adds a new line.
                                         if (s.enterSends && e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.Enter && !e.isShiftPressed) { if (text.isNotBlank()) send(); true } else false
                                     },
@@ -366,7 +392,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                         val hasText = text.isNotBlank()
                         Box(
                             Modifier.padding(bottom = 2.dp).size(48.dp).clip(CircleShape).background(scheme.primary)
-                                .combinedClick(
+                                .dpadFocus().combinedClick(
                                     onClick = {
                                         if (hasText) send()
                                         else if (hasPermission(context, Manifest.permission.RECORD_AUDIO)) recording = recorder.start() else micPermission.launch(Manifest.permission.RECORD_AUDIO)

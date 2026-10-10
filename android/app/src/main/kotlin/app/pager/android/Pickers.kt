@@ -108,7 +108,7 @@ fun LabelSheet(roomIds: List<String>, onDismiss: () -> Unit) {
     Sheet(onDismiss) {
         SheetTitle("Labels")
         labels.forEach { label ->
-            Row(Modifier.fillMaxWidth().clickable { roomIds.forEach { id -> if (has(label)) store.removeLabel(id, label) else store.addLabel(id, label) } }.padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().dpadFocus().clickable { roomIds.forEach { id -> if (has(label)) store.removeLabel(id, label) else store.addLabel(id, label) } }.padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.AutoMirrored.Rounded.Label, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(20.dp))
                 Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)

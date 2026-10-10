@@ -154,7 +154,7 @@ fun NewChatScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                         }
                     }
                     if (!hasPhone) item("perm") {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable { askContacts.launch(android.Manifest.permission.READ_CONTACTS) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { askContacts.launch(android.Manifest.permission.READ_CONTACTS) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text("Use my phone contacts", style = MaterialTheme.typography.titleSmall)
                                 Text("Shows names instead of phone numbers everywhere in Pager, and syncs them to your account.", style = MaterialTheme.typography.bodySmall, color = muted)
@@ -163,14 +163,14 @@ fun NewChatScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                         }
                     }
                     if (q.isNotEmpty()) item("raw") {
-                        Row(Modifier.fillMaxWidth().clickable(enabled = !busy) { choose = "Message “$q”" to networks!!.map { Way(it, it.logins.firstOrNull()?.id, q, null) } }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().dpadFocus().clickable(enabled = !busy) { choose = "Message “$q”" to networks!!.map { Way(it, it.logins.firstOrNull()?.id, q, null) } }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             IconTile(Icons.Rounded.PersonAdd, MaterialTheme.colorScheme.primary, 44)
                             Spacer(Modifier.width(14.dp))
                             Text("Message “$q”", style = MaterialTheme.typography.titleMedium)
                         }
                     }
                     items(shown, key = { it.key }) { p ->
-                        Row(Modifier.fillMaxWidth().clickable(enabled = !busy) { pick(p) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().dpadFocus().clickable(enabled = !busy) { pick(p) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Avatar(p.name, null, 46.dp)
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) { Text(p.name, style = MaterialTheme.typography.titleMedium); p.detail?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = muted) } }
@@ -195,7 +195,7 @@ fun NewChatScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
             Text("How do you want to message them?", color = muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp))
             val first = usual[title.lowercase()]
             ways.forEach { w ->
-                Row(Modifier.fillMaxWidth().clickable { start(w) }.padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().dpadFocus().clickable { start(w) }.padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(12.dp).clip(CircleShape).background(networkMeta(w.net.id).color))
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) { Text(w.net.name, style = MaterialTheme.typography.bodyLarge); w.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) } }

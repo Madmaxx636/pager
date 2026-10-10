@@ -49,6 +49,15 @@ class MainActivity : FragmentActivity() {
     private var stoppedAt = 0L
     private val store get() = (application as PagerApp).store
 
+    /** Flip phones have two soft keys under the screen: right goes back, left acts as the Menu key (the list and message menus). */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) when (event.keyCode) {
+            android.view.KeyEvent.KEYCODE_SOFT_RIGHT -> { onBackPressedDispatcher.onBackPressed(); return true }
+            android.view.KeyEvent.KEYCODE_SOFT_LEFT -> return super.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MENU))
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
