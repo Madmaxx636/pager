@@ -1,6 +1,6 @@
 // Updates from your own server. It publishes /updates/latest.json (with a signature file next to it) and the .deb. This checks the signature
 // with the public key that ships inside the app, so a file on the server cannot be swapped for a different one without the release key.
-// Installing a .deb needs root, so the system asks for your password (pkexec). AppImage builds don't update themselves.
+// On Windows the installer runs quietly for your user and reopens Pager. Installing a .deb needs root, so the system asks for your password (pkexec). AppImage builds don't update themselves.
 const { app, dialog, shell } = require("electron");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -41,7 +41,8 @@ let busy = false;
 /** Looks for a newer version; asks before installing. [quiet] false also says "you're up to date" and shows errors. */
 async function checkForUpdates({ server, win, quiet }) {
   if (busy || !server) return;
-  if (process.platform !== "linux" || process.env.APPIMAGE || !app.isPackaged) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: "This copy of Pager doesn't update itself. Install the .deb from your server to get automatic updates." }); return; }
+  const win32 = process.platform === "win32";
+  if (!(win32 || process.platform === "linux") || process.env.APPIMAGE || !app.isPackaged) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: "This copy of Pager doesn't update itself. Install the .deb from your server to get automatic updates." }); return; }
   busy = true;
   try {
     const base = server.replace(/\/+$/, "") + "/updates/";
@@ -49,15 +50,16 @@ async function checkForUpdates({ server, win, quiet }) {
     const sig = man && (await get(base + "latest.json.sig", { maxBytes: 4096 }));
     if (!man) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: "Your server doesn't publish updates yet." }); return; }
     if (!sig || !verify(man.body, sig.body, PUBLIC_KEY())) throw new Error("the update information isn't signed by the Pager release key, so it was ignored");
-    const d = JSON.parse(man.body.toString("utf8")).desktop;
+    const all = JSON.parse(man.body.toString("utf8")); const d = win32 ? all.windows : all.desktop;
     if (!d || !d.version || !d.file || !/^[0-9a-f]{64}$/.test(String(d.sha256).toLowerCase()) || /[\/\\]/.test(d.file)) throw new Error("the update information is incomplete");
     if (!newer(d.version, app.getVersion())) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: `You're up to date (${app.getVersion()}).` }); return; }
-    const asked = await dialog.showMessageBox(win ?? undefined, { type: "info", message: `Pager ${d.version} is available`, detail: (d.notes || "") + "\n\nYour computer will ask for your password to install it.", buttons: ["Update now", "Later"], defaultId: 0, cancelId: 1 });
+    const asked = await dialog.showMessageBox(win ?? undefined, { type: "info", message: `Pager ${d.version} is available`, detail: (d.notes || "") + (win32 ? "\n\nPager will close, update and reopen." : "\n\nYour computer will ask for your password to install it."), buttons: ["Update now", "Later"], defaultId: 0, cancelId: 1 });
     if (asked.response !== 0) return;
     const dir = path.join(app.getPath("userData"), "updates"); fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, d.file);
     const got = await get(base + d.file, { toFile: file });
     if (!got || got.sha256 !== String(d.sha256).toLowerCase()) { fs.rmSync(file, { force: true }); throw new Error("the download doesn't match its checksum, so it was not installed"); }
+    if (win32) { spawn(file, ["/S", "--force-run"], { detached: true, stdio: "ignore" }).unref(); app.exit(0); return; } // the installer replaces the app and starts it again
     await install(file);
     app.relaunch(); app.exit(0);
   } catch (e) { if (!quiet) dialog.showErrorBox("Update failed", e.message || String(e)); else console.warn("update check failed:", e.message); }
