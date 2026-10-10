@@ -528,15 +528,16 @@ function EncryptionGroup() {
   );
 }
 
-function RecoveryKeyDialog({ onClose }: { onClose: () => void }) {
+export function RecoveryKeyDialog({ onClose, first }: { onClose: () => void; first?: boolean }) {
   const [key, setKey] = useState<string>();
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(false);
   useEffect(() => { createRecoveryKey().then(setKey).catch((e) => setErr(e.message)); }, []);
   return (
-    <Modal title="Your recovery key" onClose={() => { if (!key || saved) onClose(); }}>
+    <Modal title={first ? "Save your recovery key" : "Your recovery key"} onClose={() => { if (!key || saved) onClose(); }}>
       {err ? <p className="error">{err}</p> : !key ? <p className="muted">Making your key…</p> : (
         <>
+          {first && <p>This is the one thing to keep. It opens your private messages on any new phone or computer.</p>}
           <p className="muted">Save this somewhere safe, like a password manager. Anyone with it can read your history, and without it lost devices mean lost history.</p>
           <pre className="recovery-key">{key}</pre>
           <div className="row-end"><button className="link" onClick={() => void navigator.clipboard.writeText(key)}>Copy</button>
@@ -549,13 +550,13 @@ function RecoveryKeyDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function RestoreDialog({ onClose, onLost }: { onClose: () => void; onLost: () => void }) {
+export function RestoreDialog({ onClose, onLost, first }: { onClose: () => void; onLost: () => void; first?: boolean }) {
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<number>();
   return (
-    <Modal title="Enter your recovery key" onClose={onClose}>
+    <Modal title={first ? "Welcome back. Enter your recovery key" : "Enter your recovery key"} onClose={onClose}>
       {done != null ? <p>Restored {done} message keys. Older messages in your encrypted pages can be read now.</p> : (
         <>
           <textarea rows={3} autoFocus placeholder="EsTc 4xYz …" value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />

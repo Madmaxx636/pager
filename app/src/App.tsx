@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Mascot } from "./ui/Mascot";
 import { applyTheme, getSettings, setSystemTheme, useSettings, type SystemTheme } from "./core/settings";
 import { forward, getState, requestNotifications, restoreSession, setOpenRoom, useStore } from "./core/store";
+import { KeySetup } from "./ui/KeySetup";
 import { Auth } from "./ui/Auth";
 import { Sidebar } from "./ui/Sidebar";
 import { Chat } from "./ui/Chat";
@@ -116,6 +117,7 @@ export function App() {
     <div className={"shell" + (route !== "home" ? " pane-open" : "")} style={{ ["--sidebar-w" as string]: `${st.sidebarWidth}px` }}>
       <Sidebar selected={roomId} onSelect={(id) => nav(`chat:${id}`)} nav={nav} onAccounts={() => setAccounts(true)} />
       <main className="main">{main}</main>
+      <KeySetup />
       {accounts && <AccountsModal onClose={() => setAccounts(false)} />}
       {palette && <Palette nav={nav} current={roomId ?? undefined} onClose={() => setPalette(false)} onSnooze={setSnoozing} />}
       {snoozing && <WhenModal title="Snooze until" onPick={(at) => { snooze(snoozing, at); setSnoozing(undefined); }} onClose={() => setSnoozing(undefined)} />}

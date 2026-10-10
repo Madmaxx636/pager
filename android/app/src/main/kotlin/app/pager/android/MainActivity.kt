@@ -139,6 +139,7 @@ class MainActivity : FragmentActivity() {
         LaunchedEffect(shared, session != null) { if (shared != null && session != null) screen = "share" }
 
         if (session == null) { AuthScreen(store); return }
+        KeySetupGate()
 
         val calm = LocalSettings.current.reduceMotion
         // Screens slide and fade into each other; everything stays put with "Reduce motion" (and in E-ink mode).

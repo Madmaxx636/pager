@@ -897,58 +897,86 @@ private fun EncryptionGroup() {
             dismissButton = { if (done == null) TextButton(onClick = { dialog = null }) { Text("Cancel") } },
         )
     }
-    if (dialog == "create") {
-        var key by remember { mutableStateOf<String?>(null) }
-        var err by remember { mutableStateOf("") }
-        var saved by remember { mutableStateOf(false) }
-        val clipboard = LocalClipboardManager.current
-        LaunchedEffect(Unit) { runCatching { store.createRecoveryKey() }.onSuccess { key = it }.onFailure { err = it.message ?: "Couldn't make a key" } }
-        AlertDialog(
-            onDismissRequest = { if (key == null || saved) dialog = null }, title = { Text("Your recovery key") },
-            text = {
-                Column {
-                    when {
-                        err.isNotEmpty() -> Text(err, color = MaterialTheme.colorScheme.error)
-                        key == null -> Text("Making your key…")
-                        else -> {
-                            Text("Save this somewhere safe, like a password manager. Anyone with it can read your history, and without it lost devices mean lost history.")
-                            Spacer(Modifier.height(10.dp))
-                            androidx.compose.foundation.text.selection.SelectionContainer { Text(key!!, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.SemiBold, modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp)) }
-                            TextButton(onClick = { clipboard.setText(AnnotatedString(key!!)) }) { Text("Copy") }
-                            Row(verticalAlignment = Alignment.CenterVertically) { androidx.compose.material3.Checkbox(saved, { saved = it }); Text("I saved my recovery key") }
-                        }
+    if (dialog == "create") RecoveryKeyDialog(first = false, onDone = { dialog = null })
+    if (dialog == "restore") RestoreKeyDialog(first = false, onDone = { dialog = null }, onFresh = { dialog = "create" })
+}
+
+/** Makes the recovery key and shows it once. [first] is the screen a brand-new account sees right after signing up. */
+@Composable
+fun RecoveryKeyDialog(first: Boolean, onDone: () -> Unit) {
+    val store = LocalStore.current
+    var key by remember { mutableStateOf<String?>(null) }
+    var err by remember { mutableStateOf("") }
+    var saved by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+    LaunchedEffect(Unit) { runCatching { store.createRecoveryKey() }.onSuccess { key = it }.onFailure { err = it.message ?: "Couldn't make a key" } }
+    AlertDialog(
+        onDismissRequest = { if (key == null || saved) onDone() }, title = { Text(if (first) "Save your recovery key" else "Your recovery key") },
+        text = {
+            Column {
+                when {
+                    err.isNotEmpty() -> Text(err, color = MaterialTheme.colorScheme.error)
+                    key == null -> Text("Making your key…")
+                    else -> {
+                        if (first) { Text("This is the one thing to keep. It opens your private messages on any new phone or computer."); Spacer(Modifier.height(6.dp)) }
+                        Text("Save this somewhere safe, like a password manager. Anyone with it can read your history, and without it lost devices mean lost history.")
+                        Spacer(Modifier.height(10.dp))
+                        androidx.compose.foundation.text.selection.SelectionContainer { Text(key!!, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.SemiBold, modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp)) }
+                        TextButton(onClick = { clipboard.setText(AnnotatedString(key!!)) }) { Text("Copy") }
+                        Row(verticalAlignment = Alignment.CenterVertically) { androidx.compose.material3.Checkbox(saved, { saved = it }); Text("I saved my recovery key") }
                     }
                 }
-            },
-            confirmButton = { TextButton(enabled = key == null || saved, onClick = { dialog = null }) { Text(if (key != null) "Done" else "Close") } },
-        )
-    }
-    if (dialog == "restore") {
-        var text by remember { mutableStateOf("") }
-        var err by remember { mutableStateOf("") }
-        var busy by remember { mutableStateOf(false) }
-        var done by remember { mutableStateOf<Int?>(null) }
-        AlertDialog(
-            onDismissRequest = { dialog = null }, title = { Text("Enter your recovery key") },
-            text = {
-                Column {
-                    if (done != null) Text("Restored $done message keys. Older messages in your encrypted pages can be read now.")
-                    else {
-                        androidx.compose.material3.OutlinedTextField(text, { text = it }, placeholder = { Text("EsTc 4xYz …") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-                        Text("Lost it? A key file (Restore keys from a file) or another signed-in device can still get your history back. If you have neither, you can start fresh with a new key: new messages work, but older encrypted ones stay unreadable.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-                        TextButton(onClick = { dialog = "create" }) { Text("Start fresh with a new key") }
-                        if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
-                    }
+            }
+        },
+        confirmButton = { TextButton(enabled = key == null || saved, onClick = onDone) { Text(if (key != null) "Done" else "Close") } },
+    )
+}
+
+/** Enters the recovery key to read older messages on this device. [first] is the welcome-back screen of a new device. */
+@Composable
+fun RestoreKeyDialog(first: Boolean, onDone: () -> Unit, onFresh: () -> Unit) {
+    val store = LocalStore.current
+    val scope = rememberCoroutineScope()
+    var text by remember { mutableStateOf("") }
+    var err by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf<Int?>(null) }
+    AlertDialog(
+        onDismissRequest = onDone, title = { Text(if (first) "Welcome back. Enter your recovery key" else "Enter your recovery key") },
+        text = {
+            Column {
+                if (done != null) Text("Restored $done message keys. Older messages in your encrypted pages can be read now.")
+                else {
+                    androidx.compose.material3.OutlinedTextField(text, { text = it }, placeholder = { Text("EsTc 4xYz …") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                    Text("Lost it? A key file (Restore keys from a file) or another signed-in device can still get your history back. If you have neither, you can start fresh with a new key: new messages work, but older encrypted ones stay unreadable.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                    TextButton(onClick = onFresh) { Text("Start fresh with a new key") }
+                    if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
                 }
-            },
-            confirmButton = {
-                if (done != null) TextButton(onClick = { dialog = null }) { Text("Close") }
-                else TextButton(enabled = !busy && text.isNotBlank(), onClick = {
-                    busy = true; err = ""
-                    scope.launch { runCatching { store.restoreWithRecoveryKey(text) }.onSuccess { done = it }.onFailure { err = it.message ?: "That didn't work" }; busy = false }
-                }) { Text(if (busy) "Restoring…" else "Restore") }
-            },
-            dismissButton = { if (done == null) TextButton(onClick = { dialog = null }) { Text("Cancel") } },
-        )
-    }
+            }
+        },
+        confirmButton = {
+            if (done != null) TextButton(onClick = onDone) { Text("Close") }
+            else TextButton(enabled = !busy && text.isNotBlank(), onClick = {
+                busy = true; err = ""
+                scope.launch { runCatching { store.restoreWithRecoveryKey(text) }.onSuccess { done = it }.onFailure { err = it.message ?: "That didn't work" }; busy = false }
+            }) { Text(if (busy) "Restoring…" else "Restore") }
+        },
+        dismissButton = { if (done == null) TextButton(onClick = onDone) { Text(if (first) "Not now" else "Cancel") } },
+    )
+}
+
+/** Right after signing in: a new account saves its recovery key, a new device on an existing account enters it. One screen, one job. */
+@Composable
+fun KeySetupGate() {
+    val store = LocalStore.current
+    val e by store.encryption.collectAsState()
+    val prefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("pager.keysetup", android.content.Context.MODE_PRIVATE)
+    val flag = "done." + e.deviceId
+    var dismissed by remember(e.deviceId) { mutableStateOf(prefs.getBoolean(flag, false)) }
+    var fresh by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { store.refreshEncryptionStatus() }
+    if (!e.ready || e.backupHere || dismissed) return
+    val finish = { prefs.edit().putBoolean(flag, true).apply(); dismissed = true }
+    if (e.backupOnServer && !fresh) RestoreKeyDialog(first = true, onDone = finish, onFresh = { fresh = true })
+    else RecoveryKeyDialog(first = true, onDone = finish)
 }
