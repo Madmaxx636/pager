@@ -119,7 +119,7 @@ make_admin() { # name password
       .then(async r=>{ if(r.status===201) process.exit(0); const b=await r.json().catch(()=>({})); console.error(b.error||("status "+r.status)); process.exit(1); })
       .catch(e=>{console.error(e.message);process.exit(1)})'
 }
-URL="$(case "${PAGER_ADDRESS:-}" in http://*) echo "http://$PAGER_DOMAIN:${HTTP_PORT:-80}";; *) echo "https://$PAGER_DOMAIN";; esac)"
+URL="$(if [[ "$PAGER_DOMAIN" =~ ^(localhost|[0-9.]+|.*\.local)$ ]]; then echo "http://$PAGER_DOMAIN:${HTTP_PORT##*:}"; else echo "https://$PAGER_DOMAIN"; fi)"
 made=""
 if [ "$NO_ADMIN" = 0 ] && ! docker compose exec -T postgres psql -U pager -d synapse -Atc "select 1 from users where admin=1 limit 1" 2>/dev/null | grep -q 1; then
   echo; bold "Create your account (it will be the administrator)"

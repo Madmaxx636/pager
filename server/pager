@@ -11,7 +11,9 @@ die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 # Temporary files are removed when the command ends, however it ends. (Not with a RETURN trap: sourcing .env would fire it early.)
 TMPD=""; trap '[ -n "$TMPD" ] && rm -rf "$TMPD"' EXIT
 wipe() { docker run --rm -v "$1:/w" docker.io/library/postgres:16-alpine sh -c 'rm -rf /w/* /w/.[!.]* 2>/dev/null; true'; }
-url() { case "${PAGER_ADDRESS:-}" in http://*) echo "http://${PAGER_DOMAIN}:${HTTP_PORT:-80}";; *) echo "https://${PAGER_DOMAIN}";; esac; }
+url() { # a real domain is reached over HTTPS (possibly through another proxy in front); an address on this network over plain HTTP
+  if [[ "${PAGER_DOMAIN:-}" =~ ^(localhost|[0-9.]+|.*\.local)$ ]]; then echo "http://${PAGER_DOMAIN}:${HTTP_PORT##*:}"; else echo "https://${PAGER_DOMAIN}"; fi
+}
 
 waitfor() { # waitfor <service> [seconds]  (healthy, or running when the service has no health check)
   local s="$1" t="${2:-180}" i=0
