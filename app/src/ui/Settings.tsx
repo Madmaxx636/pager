@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { RowAction, ACCENTS, accentTones, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
+import { Tour } from "./Tour";
 import { addStickers, cancelReminder, createRecoveryKey, retryEncryptionStart, enableEncryptionForAll, exportKeyFile, importKeyFile, restoreWithRecoveryKey, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
@@ -111,6 +112,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
   const s = useRawSettings();
   const u = updateSettings;
   const [deleting, setDeleting] = useState(false);
+  const [touring, setTouring] = useState(false);
   switch (page) {
     case "appearance": return <Appearance />;
     case "layout": return (
@@ -197,9 +199,10 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
     );
     case "about": return (
       <>
-        <Group title="Pager"><Row title={`Version ${import.meta.env.VITE_APP_VERSION ?? "0.3.0"}`} hint={window.pagerDesktop ? `Desktop app (${window.pagerDesktop.platform})` : "Web app"} /><Row title="An open-source, self-hosted unified messenger." /></Group>
+        <Group title="Pager"><Row title={`Version ${import.meta.env.VITE_APP_VERSION ?? "0.3.0"}`} hint={window.pagerDesktop ? `Desktop app (${window.pagerDesktop.platform})` : "Web app"} /><Row title="An open-source, self-hosted unified messenger." /><Row title="Show the welcome tour again" hint="The mascot walks you through Pager" onClick={() => setTouring(true)} chevron /></Group>
         <Group title="Account"><Row title={me()} hint={http.base || window.location.origin} /><Row title="Sign out" onClick={() => signOut()}><span className="danger">Sign out</span></Row><Row title="Delete my profile" hint="Removes your account and everything on this server. This can't be undone" onClick={() => setDeleting(true)}><span className="danger">Delete</span></Row></Group>
         {deleting && <DeleteProfile onClose={() => setDeleting(false)} />}
+        {touring && <Tour nav={nav} forceOpen onClose={() => setTouring(false)} />}
       </>
     );
     default: return null;

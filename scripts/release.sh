@@ -6,7 +6,7 @@
 # ~/.config/pager/update-signing.pem: back it up. Without it, installed desktop apps will refuse your updates.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PUBLISH_ONLY=0; [ "${1:-}" = "--publish-only" ] && { PUBLISH_ONLY=1; shift; }   # re-send what a previous run built (e.g. the server was not reachable)
+PUBLISH_ONLY=0; BUILD_ONLY=0; [ "${1:-}" = "--publish-only" ] && { PUBLISH_ONLY=1; shift; }; [ "${1:-}" = "--build-only" ] && { BUILD_ONLY=1; shift; }   # --build-only: build and sign everything but do not upload yet   # re-send what a previous run built (e.g. the server was not reachable)
 V="${1:?Usage: $0 [--publish-only] <version like 0.4.1> \"notes\"}"; NOTES="${2:-}"
 [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must look like 0.4.1" >&2; exit 1; }
 SERVER="${SERVER:-lane@192.168.1.126}"; SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519_pager_server}"; REMOTE_DIR="${REMOTE_DIR:-pager/server/updates}"
@@ -37,6 +37,7 @@ fs.writeFileSync("release-out/latest.json",JSON.stringify({released:new Date().t
 openssl pkeyutl -sign -inkey "$KEY" -rawin -in "$OUT/latest.json" -out "$OUT/latest.json.sig"
 fi
 
+[ "$BUILD_ONLY" = 1 ] && { echo "Built and signed in $OUT/. Upload later with: scripts/release.sh --publish-only $V \"$NOTES\""; exit 0; }
 echo "== Publishing to $SERVER"
 ssh_ "mkdir -p ~/$REMOTE_DIR"
 # Files first, the signed information last: an app never sees a version whose files are not there yet.

@@ -733,7 +733,10 @@ private fun AboutSettings(navigate: (String) -> Unit) {
             NavRow("Check for updates", updMsg ?: when (updStage) { Updater.Stage.CHECKING -> "Checking…"; Updater.Stage.DOWNLOADING -> "Downloading…"; Updater.Stage.INSTALLING -> "Installing…"; else -> "Updates come from your own server" }, Icons.Rounded.Refresh) {
                 val server = session?.baseUrl; if (server != null) updScope.launch { Updater.check(ctx, server, force = true) }
             }; GroupDivider()
-            Text("An open-source, self-hosted unified messenger.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("An open-source, self-hosted unified messenger.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant); GroupDivider()
+            var touring by remember { mutableStateOf(false) }
+            NavRow("Show the welcome tour again", "The mascot walks you through Pager", Icons.Rounded.Help) { touring = true }
+            if (touring) TourGate(onGo = navigate.let { n -> { to: String -> n(to.removePrefix("settings/")) } }, forceOpen = true, onClose = { touring = false })
         }
         SettingsGroup("Account") {
             Text(session?.userId ?: "", Modifier.padding(16.dp)); GroupDivider()
@@ -971,6 +974,9 @@ fun RestoreKeyDialog(first: Boolean, onDone: () -> Unit, onFresh: () -> Unit) {
     )
 }
 
+/** Lets other screens (the welcome tour) notice that the recovery-key step was finished or skipped. */
+object KeySetupState { var finished by androidx.compose.runtime.mutableIntStateOf(0) }
+
 /** Right after signing in: a new account saves its recovery key, a new device on an existing account enters it. One screen, one job. */
 @Composable
 fun KeySetupGate() {
@@ -982,7 +988,7 @@ fun KeySetupGate() {
     var fresh by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { store.refreshEncryptionStatus() }
     if (!e.ready || e.backupHere || dismissed) return
-    val finish = { prefs.edit().putBoolean(flag, true).apply(); dismissed = true }
+    val finish = { prefs.edit().putBoolean(flag, true).apply(); dismissed = true; KeySetupState.finished++; Unit }
     if (e.backupOnServer && !fresh) RestoreKeyDialog(first = true, onDone = finish, onFresh = { fresh = true })
     else RecoveryKeyDialog(first = true, onDone = finish)
 }
