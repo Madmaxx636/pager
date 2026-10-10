@@ -56,6 +56,7 @@ cmd_update() {
 }
 
 cmd_doctor() { # read-only checks, safe to run any time and to paste when asking for help
+  set +e +o pipefail   # a check that finds nothing must not stop the rest
   echo "--- pager $(cat ../VERSION 2>/dev/null)   $(date -u +%FT%TZ)   $(uptime -p)"
   echo "--- containers not running or unhealthy"
   compose ps --format '{{.Service}} {{.Status}}' | grep -vE ' Up .*(healthy)?$' | grep -v 'Up' || echo "(all up)"
@@ -66,7 +67,7 @@ cmd_doctor() { # read-only checks, safe to run any time and to paste when asking
   compose exec -T postgres psql -U pager -d synapse -Atc "select as_id||': '||count(*) from application_services_txns group by as_id order by 1;" 2>/dev/null | tr '\n' ';'; echo
   echo "--- recent bridge problems (last 15 min)"
   for b in $(compose config --services | grep -vE '^(postgres|bridgedb|synapse|caddy|api|duckdns)$'); do
-    echo "[$b]"; compose logs --since 15m "$b" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -E 'ERR|FTL|WRN' | grep -v 'not invited to this room' | tail -3 | cut -c1-260
+    echo "[$b]"; compose logs --since 15m "$b" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -E 'ERR|FTL|WRN' | grep -v 'not invited to this room' | tail -3 | cut -c1-260 || true
   done
   echo "--- bridge bot encryption devices"
   compose exec -T postgres psql -U pager -d synapse -Atc "select user_id||' '||device_id from e2e_device_keys_json where user_id like '@%bot:%' order by 1;" 2>/dev/null
