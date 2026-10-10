@@ -6,7 +6,8 @@
 # ~/.config/pager/update-signing.pem: back it up. Without it, installed desktop apps will refuse your updates.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-V="${1:?Usage: $0 <version like 0.4.1> \"notes\"}"; NOTES="${2:-}"
+PUBLISH_ONLY=0; [ "${1:-}" = "--publish-only" ] && { PUBLISH_ONLY=1; shift; }   # re-send what a previous run built (e.g. the server was not reachable)
+V="${1:?Usage: $0 [--publish-only] <version like 0.4.1> \"notes\"}"; NOTES="${2:-}"
 [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must look like 0.4.1" >&2; exit 1; }
 SERVER="${SERVER:-lane@192.168.1.126}"; SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519_pager_server}"; REMOTE_DIR="${REMOTE_DIR:-pager/server/updates}"
 KEY="$HOME/.config/pager/update-signing.pem"
@@ -14,6 +15,7 @@ KEY="$HOME/.config/pager/update-signing.pem"
 cmp -s <(openssl pkey -in "$KEY" -pubout) desktop/update-pubkey.pem || { echo "The release key doesn't match desktop/update-pubkey.pem, installed apps would reject this release" >&2; exit 1; }
 ssh_() { ssh -i "$SSH_KEY" -o IdentitiesOnly=yes "$SERVER" "$@"; }
 
+if [ "$PUBLISH_ONLY" = 0 ]; then
 echo "$V" > VERSION
 (cd desktop && node -e 'const f="package.json",p=JSON.parse(require("fs").readFileSync(f));p.version=process.argv[1];require("fs").writeFileSync(f,JSON.stringify(p,null,2)+"\n")' "$V")
 OUT=release-out; rm -rf "$OUT"; mkdir -p "$OUT"
@@ -33,6 +35,7 @@ const a=`pager-android-${v}.apk`,d=`pager-desktop_${v}_amd64.deb`,w=`pager-deskt
 fs.writeFileSync("release-out/latest.json",JSON.stringify({released:new Date().toISOString(),android:{version:v,code:+code,file:a,sha256:sha(a),notes},desktop:{version:v,file:d,sha256:sha(d),notes},windows:{version:v,file:w,sha256:sha(w),notes}},null,2));
 ' "$V" "$CODE" "$NOTES"
 openssl pkeyutl -sign -inkey "$KEY" -rawin -in "$OUT/latest.json" -out "$OUT/latest.json.sig"
+fi
 
 echo "== Publishing to $SERVER"
 ssh_ "mkdir -p ~/$REMOTE_DIR"
