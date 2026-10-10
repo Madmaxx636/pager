@@ -70,6 +70,23 @@ export function createApp(cfg: Config) {
     try { return !!(await synapseAdmin(cfg, token, "GET", `/_synapse/admin/v2/users/${encodeURIComponent(userId)}`)).admin; } catch { return false; }
   }
 
+  /** Makes sure [userId] is in [room]. Best effort: if anything is missing the chat simply opens as before. */
+  async function bringBack(token: string, userId: string, room: string, bridge: { id: string; name: string }) {
+    const api = (path: string, init: RequestInit = {}) => fetch(`${cfg.synapseUrl}/_matrix/client/v3${path}`, init);
+    try {
+      const mine = await api(`/rooms/${encodeURIComponent(room)}/joined_members`, { headers: { authorization: `Bearer ${token}` } });
+      if (mine.ok) return; // already in it
+      const reg = cfg.bridgesDir ? readRegistration(cfg.bridgesDir, bridge.id) : undefined;
+      if (!reg) return;
+      const bot = `@${bridge.id}bot:${cfg.domain}`;
+      await api(`/rooms/${encodeURIComponent(room)}/invite?user_id=${encodeURIComponent(bot)}`, {
+        method: "POST", headers: { authorization: `Bearer ${reg.asToken}`, "content-type": "application/json" }, body: JSON.stringify({ user_id: userId }),
+      });
+      const joined = await api(`/join/${encodeURIComponent(room)}`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: "{}" });
+      if (joined.ok) console.log(`[rooms] ${userId} was brought back into ${room} (via ${bridge.id})`);
+    } catch { /* leave it to the app */ }
+  }
+
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? "/", "http://x");
     const parts = url.pathname.replace(/^\/api\//, "").split("/").filter(Boolean);
@@ -331,7 +348,11 @@ export function createApp(cfg: Config) {
         (method === "POST" && /^\/create_dm\/[^/]+$/.test(rest));
       if (!allowed) throw new HttpError(404, "Not found");
       const body = method === "POST" ? await readJson(req) : undefined;
-      return send(res, 200, await bridgeRequest(cfg, bridge, userId, method, rest, body, url.searchParams));
+      const result = await bridgeRequest(cfg, bridge, userId, method, rest, body, url.searchParams);
+      // Starting a chat that already exists returns its old room. If the person left it (deleting a page leaves the room), the
+      // bridge does not invite them back and the app waits forever. Bring them back in: the bridge's bot invites, they join.
+      if (method === "POST" && /^\/create_dm\//.test(rest) && typeof result?.dm_room_mxid === "string") await bringBack(tokenOf(req), userId, result.dm_room_mxid, bridge);
+      return send(res, 200, result);
     }
 
     throw new HttpError(404, "Not found");
