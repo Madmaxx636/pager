@@ -72,8 +72,10 @@ if [ ! -f data/synapse/homeserver.yaml ]; then
 fi
 # The API needs Synapse's registration secret to create users.
 if ! grep -q '^REGISTRATION_SECRET=' .env; then
-  echo "REGISTRATION_SECRET=$(yq '.registration_shared_secret' synapse/homeserver.yaml)" >> .env
+  echo "REGISTRATION_SECRET='$(yq '.registration_shared_secret' synapse/homeserver.yaml)'" >> .env
 fi
+# It holds characters the shell treats specially: keep it quoted (older installs wrote it bare).
+sed -i -E "s/^REGISTRATION_SECRET=([^'].*)$/REGISTRATION_SECRET='\1'/" .env
 
 # --- Bridges ---------------------------------------------------------------
 yq -i '.app_service_config_files = []' synapse/homeserver.yaml
