@@ -22,20 +22,22 @@ echo "== Android"; (cd android && ./gradlew :app:testDebugUnitTest :app:assemble
 cp android/app/build/outputs/apk/release/*.apk "$OUT/pager-android-$V.apk"
 echo "== Desktop"; (cd desktop && npm test --silent && npm run dist >/dev/null)
 cp "desktop/release/pager-desktop_${V}_amd64.deb" "$OUT/"
+echo "== Windows"; (cd desktop && npx electron-builder --win --x64 >/dev/null)
+cp "desktop/release/pager-desktop-setup-${V}.exe" "$OUT/"
 
 CODE=$(awk -F. '{print $1*10000+$2*100+$3}' <<<"$V")
 node -e '
 const fs=require("fs"),c=require("crypto");const [v,code,notes]=process.argv.slice(1);
 const sha=f=>c.createHash("sha256").update(fs.readFileSync("release-out/"+f)).digest("hex");
-const a=`pager-android-${v}.apk`,d=`pager-desktop_${v}_amd64.deb`;
-fs.writeFileSync("release-out/latest.json",JSON.stringify({released:new Date().toISOString(),android:{version:v,code:+code,file:a,sha256:sha(a),notes},desktop:{version:v,file:d,sha256:sha(d),notes}},null,2));
+const a=`pager-android-${v}.apk`,d=`pager-desktop_${v}_amd64.deb`,w=`pager-desktop-setup-${v}.exe`;
+fs.writeFileSync("release-out/latest.json",JSON.stringify({released:new Date().toISOString(),android:{version:v,code:+code,file:a,sha256:sha(a),notes},desktop:{version:v,file:d,sha256:sha(d),notes},windows:{version:v,file:w,sha256:sha(w),notes}},null,2));
 ' "$V" "$CODE" "$NOTES"
 openssl pkeyutl -sign -inkey "$KEY" -rawin -in "$OUT/latest.json" -out "$OUT/latest.json.sig"
 
 echo "== Publishing to $SERVER"
 ssh_ "mkdir -p ~/$REMOTE_DIR"
 # Files first, the signed information last: an app never sees a version whose files are not there yet.
-scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$OUT/pager-android-$V.apk" "$OUT/pager-desktop_${V}_amd64.deb" "$SERVER:$REMOTE_DIR/"
+scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$OUT/pager-android-$V.apk" "$OUT/pager-desktop_${V}_amd64.deb" "$OUT/pager-desktop-setup-${V}.exe" "$SERVER:$REMOTE_DIR/"
 scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$OUT/latest.json" "$OUT/latest.json.sig" "$SERVER:$REMOTE_DIR/"
-ssh_ "cd ~/$REMOTE_DIR && ls -t pager-android-*.apk | tail -n +4 | xargs -r rm -f; ls -t pager-desktop_*.deb | tail -n +4 | xargs -r rm -f"
+ssh_ "cd ~/$REMOTE_DIR && ls -t pager-android-*.apk | tail -n +4 | xargs -r rm -f; ls -t pager-desktop_*.deb | tail -n +4 | xargs -r rm -f; ls -t pager-desktop-setup-*.exe | tail -n +4 | xargs -r rm -f"
 echo "Published $V. Remember to commit VERSION and desktop/package.json."
