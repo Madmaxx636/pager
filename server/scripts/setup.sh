@@ -145,6 +145,46 @@ YML
   enabled+=("$name")
 done
 
+# --- GroupMe: Pager's own bridge (built from bridges/groupme; nothing to download, no keys needed) -------------
+gid=groupme; gdir="data/bridges/$gid"; mkdir -p "$gdir"
+if [ ! -f "$gdir/registration.yaml" ]; then
+  gre="${PAGER_DOMAIN//./\\.}"
+  cat > "$gdir/registration.yaml" <<YML
+id: $gid
+url: http://$gid:29318
+as_token: $(rand)
+hs_token: $(rand)
+sender_localpart: groupmebot
+rate_limited: false
+namespaces:
+  users:
+    - regex: '^@groupmebot:$gre\$'
+      exclusive: true
+    - regex: '^@groupme_.*:$gre\$'
+      exclusive: true
+    - regex: '^@.*:$gre\$'
+      exclusive: false
+YML
+  chmod 600 "$gdir/registration.yaml"
+fi
+cp "$gdir/registration.yaml" "data/synapse/appservice-$gid.yaml"
+yq -i ".app_service_config_files += [\"/data/appservice-$gid.yaml\"]" synapse/homeserver.yaml
+yq -i ". += [{\"id\":\"$gid\",\"name\":\"GroupMe\",\"url\":\"http://$gid:29318\"}]" bridges.json -o=json
+cat >> data/bridges.compose.yml <<YML
+  $gid:
+    build: ../bridges/groupme
+    restart: unless-stopped
+    user: "\${BRIDGE_UID:-1000}:\${BRIDGE_GID:-1000}"
+    environment:
+      PAGER_DOMAIN: \${PAGER_DOMAIN}
+      PROVISIONING_SECRET: \${PROVISIONING_SECRET}
+      DATA_DIR: /data
+      HOME: /tmp
+    volumes: ["./data/bridges/$gid:/data"]
+    networks: [pager]
+YML
+enabled+=("GroupMe")
+
 # Bridges act as your real user (sent-from-phone messages show as yours, reading on your phone clears unread in Pager).
 ./scripts/double-puppet.sh --no-restart >/dev/null
 # Download as much history as the networks offer; bridge read/delivery state and typing.

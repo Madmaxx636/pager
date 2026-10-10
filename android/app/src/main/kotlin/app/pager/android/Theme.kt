@@ -6,6 +6,7 @@ import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Sms
 import androidx.compose.material.icons.Icons
 import android.app.Activity
@@ -51,6 +52,7 @@ private val networks = mapOf(
     "instagram" to NetworkMeta("Instagram", Color(0xFFE1306C), "I"),
     "messenger" to NetworkMeta("Messenger", Color(0xFF0A7CFF), "M"),
     "gmessages" to NetworkMeta("Messages", Color(0xFF1A73E8), "G"),
+    "groupme" to NetworkMeta("GroupMe", Color(0xFF00AFF0), "G"),
     "matrix" to NetworkMeta("Matrix", Color(0xFF8A94A6), "#"),
 )
 
@@ -63,6 +65,7 @@ fun networkIcon(id: String): androidx.compose.ui.graphics.vector.ImageVector? = 
     "instagram" -> Icons.Rounded.PhotoCamera
     "messenger" -> Icons.Rounded.Forum
     "gmessages" -> Icons.Rounded.Sms
+    "groupme" -> Icons.Rounded.Groups
     else -> null
 }
 
