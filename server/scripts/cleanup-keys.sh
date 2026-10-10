@@ -17,7 +17,7 @@ psql_ -c "select '  '||device_id||'  '||coalesce(display_name,'')||'  '||coalesc
 echo "Recovery-key backups that will be REMOVED:"
 psql_ -c "select '  version '||version from e2e_room_keys_versions where user_id='$USER_ID' order by version::int;"
 echo
-read -r -p "Type YES to continue: " ok; [ "$ok" = "YES" ] || { echo "Cancelled. Nothing changed."; exit 0; }
+read -r -p "Type yes to continue: " ok; [ "${ok,,}" = "yes" ] || { echo "Cancelled. Nothing changed."; exit 0; }
 
 OUT="$HOME/cleanup-backup-$(date +%s).sql"
 docker compose exec -T postgres pg_dump -U pager -d synapse --data-only -t e2e_room_keys -t e2e_room_keys_versions -t devices -t e2e_device_keys_json -t e2e_one_time_keys_json -t e2e_fallback_keys_json > "$OUT"
