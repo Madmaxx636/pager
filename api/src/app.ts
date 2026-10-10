@@ -76,7 +76,9 @@ export function createApp(cfg: Config) {
     try {
       const mine = await api(`/rooms/${encodeURIComponent(room)}/joined_members`, { headers: { authorization: `Bearer ${token}` } });
       if (mine.ok) return; // already in it
-      const reg = cfg.bridgesDir ? readRegistration(cfg.bridgesDir, bridge.id) : undefined;
+      const regDir = cfg.registrationsDir ?? cfg.bridgesDir;
+      const reg = regDir ? readRegistration(regDir, bridge.id) : undefined;
+      if (!reg) console.log(`[rooms] cannot bring ${userId} back into ${room}: no registration for ${bridge.id}`);
       if (!reg) return;
       const bot = `@${bridge.id}bot:${cfg.domain}`;
       await api(`/rooms/${encodeURIComponent(room)}/invite?user_id=${encodeURIComponent(bot)}`, {
@@ -141,8 +143,9 @@ export function createApp(cfg: Config) {
       // The bot that is in the page (the registration's own sender name is a different, hidden user).
       const botId = bridge ? ids.find((u) => u.startsWith(`@${bridge.id}bot:`)) : undefined;
       if (!bridge || !botId) throw new HttpError(400, "This page doesn't come from a connected app");
-      if (!cfg.bridgesDir) throw new HttpError(409, "Server control isn't turned on, so the server can't switch this page for you");
-      const reg = readRegistration(cfg.bridgesDir, bridge.id);
+      const regDir = cfg.registrationsDir ?? cfg.bridgesDir;
+      if (!regDir) throw new HttpError(409, "The server can't read the apps' registration files, so it can't switch this page for you");
+      const reg = readRegistration(regDir, bridge.id);
       if (!reg) throw new HttpError(500, `Can't read ${bridge.name}'s registration`);
       const already = await api(`/rooms/${encodeURIComponent(roomId)}/state/m.room.encryption`, { headers: { authorization: `Bearer ${token}` } });
       if (already.ok) return send(res, 200, { ok: true, already: true });
