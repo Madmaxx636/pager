@@ -12,6 +12,8 @@ yq() { local v=""; [ -L data/bridges ] && v="$(readlink -f data/bridges)"; docke
 rand() { head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40; }
 
 touch .env
+# It holds characters the shell treats specially: keep it quoted (older installs wrote it bare).
+sed -i -E "s/^REGISTRATION_SECRET=([^'].*)$/REGISTRATION_SECRET='\1'/" .env
 # Fill in whatever .env doesn't have yet (so you can pre-seed PAGER_DOMAIN, DUCKDNS_*, etc. and let setup add the secrets).
 need() { grep -q "^$1=." .env; }
 if ! need PAGER_DOMAIN; then read -rp "Public domain for your server (e.g. matrix.example.com): " domain; echo "PAGER_DOMAIN=$domain" >> .env; fi
@@ -74,8 +76,6 @@ fi
 if ! grep -q '^REGISTRATION_SECRET=' .env; then
   echo "REGISTRATION_SECRET='$(yq '.registration_shared_secret' synapse/homeserver.yaml)'" >> .env
 fi
-# It holds characters the shell treats specially: keep it quoted (older installs wrote it bare).
-sed -i -E "s/^REGISTRATION_SECRET=([^'].*)$/REGISTRATION_SECRET='\1'/" .env
 
 # --- Bridges ---------------------------------------------------------------
 yq -i '.app_service_config_files = []' synapse/homeserver.yaml
