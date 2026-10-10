@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 db() { docker compose exec -T postgres psql -U pager -d synapse -v ON_ERROR_STOP=1 -At "$@"; }
 echo "Waiting to be delivered, per bridge:"; db -c "select '  '||as_id||': '||count(*) from application_services_txns group by as_id order by as_id;"
-read -r -p "Clear this queue? Type yes: " ok; [ "${ok,,}" = "yes" ] || { echo "Cancelled. Nothing changed."; exit 0; }
+if [ "${1:-}" = "--yes" ]; then ok=yes; else read -r -p "Clear this queue? Type yes: " ok; fi; [ "${ok,,}" = "yes" ] || { echo "Cancelled. Nothing changed."; exit 0; }
 BR=$(docker compose config --services | grep -vE '^(postgres|bridgedb|synapse|caddy|api|duckdns)$' | tr '\n' ' ')
 docker compose stop $BR synapse
 db -c "delete from application_services_txns;" -c "update application_services_state set state='up';"
