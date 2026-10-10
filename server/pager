@@ -51,7 +51,7 @@ cmd_update() {
 }
 
 cmd_doctor() { # read-only checks, safe to run any time and to paste when asking for help
-  echo "--- pager $(cat ../VERSION 2>/dev/null)   $(date -u +%FT%TZ)   up $(uptime -p)"
+  echo "--- pager $(cat ../VERSION 2>/dev/null)   $(date -u +%FT%TZ)   $(uptime -p)"
   echo "--- containers not running or unhealthy"
   compose ps --format '{{.Service}} {{.Status}}' | grep -vE ' Up .*(healthy)?$' | grep -v 'Up' || echo "(all up)"
   if [ -n "${VAULT_DIR:-}" ]; then echo "--- encrypted vault"; mountpoint "$VAULT_DIR" || echo "VAULT NOT MOUNTED: bridges cannot start"; fi
@@ -85,7 +85,7 @@ cmd_backup() {
   local items=(.env data/synapse data/bridges data/api data/caddy)
   tar -C "$HERE" -czhf "$tmp/files.tar.gz" "${items[@]}" 2>/dev/null || tar -C "$HERE" -czhf "$tmp/files.tar.gz" "${items[@]:0:3}"
   printf 'pager-backup 1\nversion %s\ndate %s\nbridge-db-host %s\n' "$(cat ../VERSION 2>/dev/null)" "$(date -u +%FT%TZ)" "$BRIDGE_DB" > "$tmp/MANIFEST"
-  tar -C "$tmp" -cf "$tmp/all.tar" MANIFEST files.tar.gz ./*.dump
+  (cd "$tmp" && tar -cf all.tar MANIFEST files.tar.gz ./*.dump)
   if [ -n "$pass" ]; then PASS="$pass" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PASS -in "$tmp/all.tar" -out "$out"; else gzip -c "$tmp/all.tar" > "$out"; fi
   chmod 600 "$out"
   say "Backup saved: $out ($(du -h "$out" | cut -f1))"
