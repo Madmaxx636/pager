@@ -15,6 +15,7 @@ services:
         target: /var/lib/postgresql/data
         bind:
           create_host_path: false
+      - ./postgres/init-bridge-databases.sh:/docker-entrypoint-initdb.d/init-bridge-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pager"]
       interval: 5s
