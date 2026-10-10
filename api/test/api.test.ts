@@ -26,6 +26,7 @@ const registered: any[] = [];
 const adminCalls: { method: string; url: string; body: any }[] = [];
 const stateCalls: { url: string; auth?: string; body: any }[] = [];
 const bridgeCalls: { method: string; url: string; auth?: string; body: any }[] = [];
+const roomCalls: { url: string; auth?: string; body: any }[] = [];
 
 before(async () => {
   synapse = createServer(async (req, res) => {
@@ -46,6 +47,12 @@ before(async () => {
     if (decodeURIComponent(req.url!).includes("/rooms/!room:test.local/joined_members")) return req.headers.authorization === "Bearer goodtoken" ? json(res, 200, { joined: { "@alice:test.local": {}, "@whatsappbot:test.local": {} } }) : json(res, 403, { errcode: "M_FORBIDDEN" });
     if (decodeURIComponent(req.url!).includes("/rooms/!plain:test.local/joined_members")) return json(res, 200, { joined: { "@alice:test.local": {}, "@bob:test.local": {} } });
     if (decodeURIComponent(req.url!).includes("/rooms/!newstyleroomidwithoutserver/")) { if (req.url!.includes("joined_members")) return json(res, 200, { joined: { "@alice:test.local": {}, "@whatsappbot:test.local": {} } }); }
+    // A chat alice left: she is not in !left:test.local, the bridge's bot invites her, she joins.
+    if (decodeURIComponent(req.url!).includes("/rooms/!left:test.local/joined_members")) return json(res, 403, { errcode: "M_FORBIDDEN" });
+    if (decodeURIComponent(req.url!).includes("/rooms/!left:test.local/invite") || decodeURIComponent(req.url!).includes("/join/!left:test.local")) {
+      roomCalls.push({ url: decodeURIComponent(req.url!), auth: req.headers.authorization, body: await readBody(req) });
+      return json(res, 200, {});
+    }
     if (req.url!.includes("/state/m.room.encryption")) {
       if (req.method === "GET") return json(res, 404, { errcode: "M_NOT_FOUND" });
       stateCalls.push({ url: req.url!, auth: req.headers.authorization, body: await readBody(req) });
@@ -81,6 +88,8 @@ before(async () => {
     bridgeCalls.push({ method: req.method!, url: req.url!, auth: req.headers.authorization, body: await readBody(req) });
     if (req.url!.startsWith("/_matrix/provision/v3/whoami")) return json(res, 200, { logins: [{ id: "123", name: "+1 555" }] });
     if (req.url!.startsWith("/_matrix/provision/v3/login/flows")) return json(res, 200, { flows: [{ id: "qr", name: "QR" }] });
+    if (req.url!.startsWith("/_matrix/provision/v3/create_dm/left")) return json(res, 200, { dm_room_mxid: "!left:test.local" });
+    if (req.url!.startsWith("/_matrix/provision/v3/create_dm/inroom")) return json(res, 200, { dm_room_mxid: "!room:test.local" });
     json(res, 200, { ok: true });
   });
   const [sp, bp] = [await listen(synapse), await listen(bridge)];
@@ -315,4 +324,21 @@ test("room ids with no server name (newer rooms) are accepted; odd ones are not"
   assert.equal(stateCalls.length, 1);
   assert.equal((await post("/api/rooms/" + encodeURIComponent("not a room") + "/encrypt", {}, "goodtoken")).status, 400);
   assert.equal((await post("/api/rooms/" + encodeURIComponent("!bad id/with space") + "/encrypt", {}, "goodtoken")).status, 400);
+});
+
+test("starting a chat in a room the person left brings them back in: the bridge's bot invites, they join", async () => {
+  roomCalls.length = 0;
+  const r = await post("/api/bridges/whatsapp/create_dm/left", {}, "goodtoken");
+  assert.equal(r.status, 200);
+  assert.equal((await r.json() as any).dm_room_mxid, "!left:test.local");
+  assert.equal(roomCalls.length, 2);
+  assert.equal(roomCalls[0].auth, "Bearer asbridge");
+  assert.ok(roomCalls[0].url.includes("/invite?user_id=@whatsappbot:test.local")); assert.equal(roomCalls[0].body.user_id, "@alice:test.local");
+  assert.equal(roomCalls[1].auth, "Bearer goodtoken"); assert.ok(roomCalls[1].url.includes("/join/!left:test.local"));
+});
+
+test("a chat the person is already in is left alone", async () => {
+  roomCalls.length = 0;
+  const r = await post("/api/bridges/whatsapp/create_dm/inroom", {}, "goodtoken");
+  assert.equal(r.status, 200); assert.equal(roomCalls.length, 0);
 });
