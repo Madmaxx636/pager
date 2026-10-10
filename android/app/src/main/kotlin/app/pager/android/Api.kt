@@ -145,15 +145,21 @@ class PagerApi(private val http: Http) {
         parseContacts(http.request("POST", "/api/bridges/$net/search_users" + loginQuery(loginId), buildJsonObject { put("query", query) }))
 
     /** Opens (or creates) a DM with someone on a network. Returns the Matrix room id. */
-    suspend fun createDm(net: String, loginId: String?, identifier: String): String? =
-        http.request("POST", "/api/bridges/$net/create_dm/${enc(identifier)}" + loginQuery(loginId), JsonObject(emptyMap()))["dm_room_mxid"].str()
+    suspend fun createDm(net: String, loginId: String?, identifier: String, fallback: String? = null): String? {
+        suspend fun open(id: String) = http.request("POST", "/api/bridges/$net/create_dm/${enc(id)}" + loginQuery(loginId), JsonObject(emptyMap()))["dm_room_mxid"].str()
+        return try { open(identifier) } catch (e: ApiException) {
+            // A contact's own id can fail to turn into a phone number on the bridge ("Internal error resolving identifier"); the number itself works.
+            val number = fallback?.let { dialable(it) }.orEmpty()
+            if (number.isNotEmpty() && number != identifier && couldNotResolve(e.message)) open(number) else throw e
+        }
+    }
 
     /** Creates a chat for every contact the bridge knows (networks like Signal never send old chats to a new device). */
     suspend fun syncChats(net: String, loginId: String?, onProgress: (Int, Int) -> Unit = { _, _ -> }): Int {
         val list = contacts(net, loginId)
         var made = 0
         list.forEachIndexed { i, c ->
-            if (runCatching { createDm(net, loginId, c.id) }.getOrNull() != null) made++
+            if (runCatching { createDm(net, loginId, c.id, c.detail) }.getOrNull() != null) made++
             onProgress(i + 1, list.size)
         }
         return made
@@ -345,3 +351,15 @@ class MatrixApi(private val http: Http) {
 
     suspend fun logout() { http.request("POST", "/_matrix/client/v3/logout", JsonObject(emptyMap())) }
 }
+
+/** "+1 (912) 555-0100" -> "+19125550100"; empty when it isn't a phone number. */
+fun dialable(detail: String): String {
+    val d = detail.removePrefix("tel:").filter { it.isDigit() || it == '+' }
+    return if (Regex("^\\+?\\d{6,15}$").matches(d)) d else ""
+}
+
+/** The bridge's way of saying it can't find that person by that id. */
+fun couldNotResolve(message: String?) = Regex("resolv|not known|identifier|not found", RegexOption.IGNORE_CASE).containsMatchIn(message.orEmpty())
+
+/** What to tell the person when a chat can't be started. */
+fun startError(message: String?) = if (couldNotResolve(message)) "Pager couldn't find a number for that contact. Type their phone number in the search box instead." else message ?: "Couldn't start the page"

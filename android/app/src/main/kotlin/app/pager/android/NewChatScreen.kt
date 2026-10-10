@@ -126,9 +126,9 @@ fun NewChatScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
     fun start(w: Way) {
         scope.launch {
             busy = true; error = ""; choose = null
-            runCatching { store.pager.createDm(w.net.id, w.login, w.id) }
+            runCatching { store.pager.createDm(w.net.id, w.login, w.id, w.detail) }
                 .onSuccess { room -> if (room != null) onOpen(room) else error = "Couldn't open that page" }
-                .onFailure { error = it.message ?: "Couldn't start the page" }
+                .onFailure { error = startError(it.message) }
             busy = false
         }
     }

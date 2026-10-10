@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Contact, Network, pager } from "../core/api";
+import { Contact, Network, pager, startError } from "../core/api";
 import { syncContacts, useInbox } from "../core/store";
 import { addToPhonebook, parseVcf, phoneKey, prettyName, stripTag } from "../core/names";
 import { networkMeta } from "../core/emoji";
@@ -76,8 +76,8 @@ export function NewChat({ onBack, onOpen }: { onBack: () => void; onOpen: (roomI
 
   async function start(w: Way) {
     setBusy(true); setError(""); setChoose(undefined);
-    try { const room = await pager.createDm(w.net.id, w.login, w.id); room ? onOpen(room) : setError("Couldn't open that page"); }
-    catch (e) { setError((e as Error).message); }
+    try { const room = await pager.createDm(w.net.id, w.login, w.id, w.detail); room ? onOpen(room) : setError("Couldn't open that page"); }
+    catch (e) { setError(startError(e)); }
     setBusy(false);
   }
   function pick(p: Person) {
