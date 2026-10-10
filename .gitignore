@@ -12,3 +12,8 @@ desktop/app-dist
 desktop/release
 desktop/build
 .kotlin/
+
+# Published releases (made by scripts/release.sh)
+server/updates/*
+!server/updates/.gitkeep
+release-out/

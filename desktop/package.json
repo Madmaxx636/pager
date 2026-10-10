@@ -11,7 +11,8 @@
     "start": "electron .",
     "dist": "node scripts/check-files.mjs && npm run icons && npm run web && electron-builder --linux AppImage deb",
     "dist:mac": "npm run icons && npm run web && electron-builder --mac",
-    "dist:win": "npm run icons && npm run web && electron-builder --win"
+    "dist:win": "npm run icons && npm run web && electron-builder --win",
+    "test": "node --test updater.test.mjs"
   },
   "build": {
     "appId": "app.pager.desktop",
@@ -22,7 +23,9 @@
       "system-theme.js",
       "app-dist/**",
       "build/icon.png",
-      "build/tray.png"
+      "build/tray.png",
+      "updater.js",
+      "update-pubkey.pem"
     ],
     "directories": {
       "output": "release"

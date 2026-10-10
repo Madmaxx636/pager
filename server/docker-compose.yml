@@ -42,6 +42,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy:/data
       - ../app/dist:/srv/app:ro
+      - ./updates:/srv/updates:ro
     depends_on: [synapse]
     networks: [pager]
 

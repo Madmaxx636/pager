@@ -5,6 +5,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const { readSystemTheme, watchSystemTheme } = require("./system-theme.js");
+const { checkForUpdates } = require("./updater.js");
 
 app.commandLine.appendSwitch("ozone-platform-hint", "auto"); // native Wayland when available
 
@@ -60,11 +61,18 @@ function createWindow() {
   win.on("closed", () => { win = null; });
 }
 
+// Which server this app talks to is kept by the web app inside the window; ask it.
+async function serverUrl() {
+  try { const raw = await win.webContents.executeJavaScript('localStorage.getItem("pager.session")'); return raw ? JSON.parse(raw).baseUrl || "" : ""; } catch { return ""; }
+}
+async function updates(quiet) { if (win && !win.isDestroyed()) await checkForUpdates({ server: await serverUrl(), win, quiet }); }
+
 function updateTray() {
   if (!tray) return;
   tray.setToolTip(unread ? `Pager — ${unread} unread` : "Pager");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: unread ? `Open Pager (${unread} unread)` : "Open Pager", click: showWindow },
+    { label: "Check for updates", click: () => void updates(false) },
     { type: "separator" },
     { label: "Quit", click: () => { quitting = true; app.quit(); } },
   ]));
@@ -101,6 +109,8 @@ if (!app.requestSingleInstanceLock()) {
 
     try { tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "build", "tray.png")).resize({ width: 22, height: 22 })); tray.on("click", () => (win && win.isVisible() && win.isFocused() ? win.hide() : showWindow())); updateTray(); } catch { tray = null; }
     createWindow();
+    // Look for a newer version a minute after starting, then every six hours.
+    setTimeout(() => void updates(true), 60_000); setInterval(() => void updates(true), 6 * 3600_000);
     // Bring Pager forward from anywhere (not every Linux desktop allows global shortcuts, so failure is fine).
     try { globalShortcut.register("CommandOrControl+Alt+P", () => (win && win.isVisible() && win.isFocused() ? win.hide() : showWindow())); } catch { /* unsupported */ }
 
