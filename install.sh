@@ -105,8 +105,9 @@ set -a; . ./.env; set +a
 docker compose up -d --build 2>&1 | grep -vE '^\s*$' | tail -3 || true
 
 say "Waiting for the server to be ready…"
-ready=0; for _ in $(seq 1 90); do
-  [ "$(docker compose ps --format '{{.Health}}' synapse 2>/dev/null | head -1)" = healthy ] && docker compose ps --status running api 2>/dev/null | grep -q api && { ready=1; break; }
+ready=0; for _ in $(seq 1 120); do
+  # Ask Synapse directly, from inside the network (works the same with Docker and Podman, and before any certificate exists).
+  docker compose exec -T api node -e 'fetch("http://synapse:8008/health").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))' >/dev/null 2>&1 && { ready=1; break; }
   sleep 2
 done
 [ "$ready" = 1 ] || die "The server didn't become ready. Look with:  cd $DIR/server && ./pager doctor   and   ./pager logs synapse"

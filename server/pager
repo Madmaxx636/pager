@@ -16,7 +16,9 @@ waitfor() { # waitfor <service> [seconds]  (healthy, or running when the service
   while [ $i -lt $t ]; do
     local h; h="$(compose ps --format '{{.Health}}' "$s" 2>/dev/null | head -1)"
     [ "$h" = "healthy" ] && return 0
-    [ -z "$h" ] && compose ps --status running "$s" 2>/dev/null | grep -q "$s" && return 0
+    # Podman reports no health status: for the databases ask them directly.
+    case "$s" in postgres|bridgedb) compose exec -T "$s" pg_isready -U pager >/dev/null 2>&1 && return 0;; esac
+    [ -z "$h" ] && compose ps --status running "$s" 2>/dev/null | grep -q "$s" && [ "$s" != postgres ] && [ "$s" != bridgedb ] && return 0
     sleep 2; i=$((i+2))
   done
   return 1
