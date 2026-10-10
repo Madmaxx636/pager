@@ -119,7 +119,8 @@ data class ChatState(
     fun isBotRoom(me: String): Boolean {
         val others = joined.filter { it != me }
         // Only some members are loaded at a time: a room with more people than that (like Signal's Note to Self: you, the bot and your own account) is not a bot room.
-        return others.size == 1 && BOT.containsMatchIn(others[0]) && (memberCount <= 0 || memberCount <= 2)
+        // A real chat the bridge made (Note to Self with your own account puppeted by you has only you and the bot) carries the bridge's mark and is never a management room.
+        return others.size == 1 && BOT.containsMatchIn(others[0]) && (memberCount <= 0 || memberCount <= 2) && network == "matrix"
     }
 
     companion object { const val LABEL_PREFIX = "u.label."; private val BOT = Regex("^@[a-z]*bot:") }
