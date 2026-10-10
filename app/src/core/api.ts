@@ -59,6 +59,18 @@ export interface AdminSetting { key: string; label: string; hint: string; kind: 
 export interface AdminPerson extends AdminUser { networks: (Network & { error?: string })[] }
 export interface AdminUser { id: string; displayname: string; admin: boolean; deactivated: boolean; created?: number; you: boolean }
 
+/** "+1 (912) 555-0100" -> "+19125550100"; empty when it isn't a phone number. */
+export function dialable(detail: string): string {
+  const d = detail.replace(/^tel:/i, "").replace(/[^\d+]/g, "");
+  return /^\+?\d{6,15}$/.test(d) ? d : "";
+}
+/** The bridge's way of saying it can't find that person by that id. */
+export const couldNotResolve = (e: unknown) => /resolv|not known|identifier|not found/i.test(String((e as Error)?.message ?? e));
+/** What to tell the person when a chat can't be started. */
+export function startError(e: unknown): string {
+  return couldNotResolve(e) ? "Pager couldn't find a number for that contact. Type their phone number in the search box instead." : String((e as Error)?.message ?? e);
+}
+
 export const pager = {
   me: () => call<{ user_id: string; admin: boolean }>("GET", "/api/me"),
   admin: {
@@ -96,14 +108,25 @@ export const pager = {
   logout: (net: string, id: string) => call("POST", `/api/bridges/${net}/logout/${enc(id)}`, {}),
   contacts: async (net: string, login?: string): Promise<Contact[]> => parseContacts(await call("GET", `/api/bridges/${net}/contacts${loginQ(login)}`)),
   searchUsers: async (net: string, login: string | undefined, query: string): Promise<Contact[]> => parseContacts(await call("POST", `/api/bridges/${net}/search_users${loginQ(login)}`, { query })),
-  createDm: async (net: string, login: string | undefined, identifier: string): Promise<string | undefined> =>
-    (await call("POST", `/api/bridges/${net}/create_dm/${enc(identifier)}${loginQ(login)}`, {})).dm_room_mxid,
+  /**
+   * Opens (or makes) a chat. A contact's own id can fail to turn into a phone number on the bridge ("Internal error resolving
+   * identifier"); the contact's actual number [fallback] works, so try that next.
+   */
+  createDm: async (net: string, login: string | undefined, identifier: string, fallback?: string): Promise<string | undefined> => {
+    const open = async (id: string) => (await call("POST", `/api/bridges/${net}/create_dm/${enc(id)}${loginQ(login)}`, {})).dm_room_mxid as string | undefined;
+    try { return await open(identifier); }
+    catch (e) {
+      const number = fallback ? dialable(fallback) : "";
+      if (number && number !== identifier && couldNotResolve(e)) return open(number);
+      throw e;
+    }
+  },
   /** Create a chat for every contact the bridge knows. Networks like Signal never send old chats to a new device. */
   syncChats: async (net: string, login?: string, onProgress?: (done: number, total: number) => void): Promise<number> => {
     const list = await pager.contacts(net, login);
     let made = 0;
     for (let i = 0; i < list.length; i++) {
-      try { if (await pager.createDm(net, login, list[i].id)) made++; } catch { /* skip contacts that can't be reached */ }
+      try { if (await pager.createDm(net, login, list[i].id, list[i].detail)) made++; } catch { /* skip contacts that can't be reached */ }
       onProgress?.(i + 1, list.length);
     }
     return made;
