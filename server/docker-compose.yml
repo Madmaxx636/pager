@@ -57,11 +57,14 @@ services:
       ADMIN_INVITE_CODE: ${ADMIN_INVITE_CODE:-}
       STATE_FILE: /state/settings.json
       BRIDGES_DIR: ${ADMIN_BRIDGES_DIR:-}
+      REGISTRATIONS_DIR: /registrations
       SIGNUP_MODE: ${SIGNUP_MODE:-invite}
       BRIDGES_FILE: /config/bridges.json
     volumes:
       - ./data/bridges.json:/config/bridges.json:ro
       - ./data/api:/state
+      # Read-only: the bridges' registration files, so the server can act as a bridge's bot for two narrow jobs (see api/src/app.ts).
+      - ./data/bridges:/registrations:ro
       # Admin bridge controls (restart, logs, settings). Off unless you run scripts/enable-admin-control.sh: these point at empty placeholders.
       - ${DOCKER_SOCKET:-./data/api/no-docker}:/var/run/docker.sock
       - ${BRIDGES_DIR_HOST:-./data/api/no-bridges}:/bridges

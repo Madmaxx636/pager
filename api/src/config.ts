@@ -16,6 +16,8 @@ export interface Config {
   stateFile?: string;
   /** Where the bridges' config files are mounted (admin bridge settings); empty when not enabled. */
   bridgesDir?: string;
+  /** Where the bridges' registration files can be read (read-only). Lets the server act as a bridge's bot for narrow jobs: switching a page to encrypted, re-inviting you to a chat you left. */
+  registrationsDir?: string;
   bridges: BridgeConfig[];
 }
 
@@ -42,6 +44,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     signup: { mode, inviteCode: env.INVITE_CODE ?? "", adminInviteCode: env.ADMIN_INVITE_CODE ?? "" },
     stateFile: env.STATE_FILE,
     bridgesDir: env.BRIDGES_DIR,
+    registrationsDir: env.REGISTRATIONS_DIR,
     bridges: env.BRIDGES_FILE ? JSON.parse(readFileSync(env.BRIDGES_FILE, "utf8")) : DEFAULT_BRIDGES,
   };
 }
