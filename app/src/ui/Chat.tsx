@@ -130,7 +130,15 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     if (el && typingCount && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTo({ top: el.scrollHeight });
   }, [typingCount]);
 
-  if (!chat) return <section className="chat"><header className="chat-head"><IconButton icon={ArrowLeft} label="Back" onClick={onBack} className="back" /><div>Opening…</div></header></section>;
+  // A page that never arrives (removed, or you left it) must say so instead of waiting forever.
+  const [gaveUp, setGaveUp] = useState(false);
+  useEffect(() => { if (chat) { setGaveUp(false); return; } const t = window.setTimeout(() => setGaveUp(true), 12_000); return () => window.clearTimeout(t); }, [chat, roomId]);
+  if (!chat) return (
+    <section className="chat">
+      <header className="chat-head"><IconButton icon={ArrowLeft} label="Back" onClick={onBack} className="back" /><div>{gaveUp ? "Couldn't open this page" : "Opening…"}</div></header>
+      {gaveUp && <p className="muted pad">This page didn't open. It may have been removed, or you may have left it. Go back and try starting it again.</p>}
+    </section>
+  );
   const name = displayName(chat, user);
   const meta = networkMeta(chat.network);
   const typingNames = chat.typing.map((u) => nameOf(chat, u));
