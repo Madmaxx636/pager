@@ -19,6 +19,7 @@ export const NETWORKS: Record<string, { label: string; color: string; glyph: str
   instagram: { label: "Instagram", color: "#e1306c", glyph: "I" },
   messenger: { label: "Messenger", color: "#0a7cff", glyph: "M" },
   gmessages: { label: "Messages", color: "#1a73e8", glyph: "G" },
+  groupme: { label: "GroupMe", color: "#00aff0", glyph: "G" },
   matrix: { label: "Matrix", color: "#8a94a6", glyph: "#" },
 };
 export const networkMeta = (id: string) => NETWORKS[id] ?? { label: id, color: "#8a94a6", glyph: id.slice(0, 1).toUpperCase() };

@@ -1,0 +1,19 @@
+{
+  "name": "pager-groupme",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A GroupMe bridge for Pager, written from scratch against GroupMe's public API and the Matrix appservice specification",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "test": "tsx --test --test-force-exit --test-timeout=20000 \"test/*.test.ts\""
+  },
+  "engines": { "node": ">=22.18" },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "license": "AGPL-3.0-only",
+  "dependencies": { "yaml": "^2.9.1" }
+}
