@@ -917,7 +917,7 @@ fun RecoveryKeyDialog(first: Boolean, onDone: () -> Unit) {
     AlertDialog(
         onDismissRequest = { if (key == null || saved) onDone() }, title = { Text(if (first) "Save your recovery key" else "Your recovery key") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 when {
                     err.isNotEmpty() -> Text(err, color = MaterialTheme.colorScheme.error)
                     key == null -> Text("Making your key…")
@@ -948,7 +948,7 @@ fun RestoreKeyDialog(first: Boolean, onDone: () -> Unit, onFresh: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDone, title = { Text(if (first) "Welcome back. Enter your recovery key" else "Enter your recovery key") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (done != null) Text("Restored $done message keys. Older messages in your encrypted pages can be read now.")
                 else {
                     androidx.compose.material3.OutlinedTextField(text, { text = it }, placeholder = { Text("EsTc 4xYz …") }, minLines = 2, modifier = Modifier.fillMaxWidth())

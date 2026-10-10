@@ -42,29 +42,10 @@ fun AuthScreen(store: Store) {
     var error by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val shape = RoundedCornerShape(16.dp)
-
-    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(28.dp), verticalArrangement = Arrangement.Center) {
-        PagerMascot(120.dp)
-        Spacer(Modifier.height(20.dp))
-        Text(if (signingUp) "Create your account" else "Welcome to Pager", style = MaterialTheme.typography.headlineMedium)
-        Text("All your pages in one inbox, on your own server.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
-        Spacer(Modifier.height(28.dp))
-
-        OutlinedTextField(server, { server = it }, label = { Text("Server") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, placeholder = { Text("matrix.example.com") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(username, { username = it.lowercase().trim() }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape)
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-        if (signingUp && inviteRequired) {
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(invite, { invite = it }, label = { Text("Invite code") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape)
-        }
-        if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
-        Spacer(Modifier.height(24.dp))
-        Button(
-            enabled = !busy && server.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
-            modifier = Modifier.fillMaxWidth().height(54.dp), shape = shape,
-            onClick = {
+    // A short or narrow screen (a 3 inch phone, or any phone with the keyboard open) gets a tighter sign-in page so the button is in view.
+    val tight = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp < 300 || it.screenHeightDp < 560 }
+    val gap = if (tight) 8.dp else 12.dp
+    val submit: () -> Unit = {
                 busy = true; error = ""
                 scope.launch {
                     try {
@@ -74,7 +55,31 @@ fun AuthScreen(store: Store) {
                     } catch (e: Exception) { error = e.message ?: "Something went wrong" }
                     busy = false
                 }
-            },
+    }
+    val ready = !busy && server.isNotBlank() && username.isNotBlank() && password.isNotEmpty()
+
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(if (tight) 16.dp else 28.dp), verticalArrangement = Arrangement.Center) {
+        val roomy = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp >= 300 && it.screenHeightDp >= 560 }
+        if (roomy) { PagerMascot(120.dp); Spacer(Modifier.height(20.dp)) } else PagerMascot(56.dp)
+        Text(if (signingUp) "Create your account" else "Welcome to Pager", style = if (tight) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineMedium)
+        Text("All your pages in one inbox, on your own server.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+        Spacer(Modifier.height(if (tight) 12.dp else 28.dp))
+
+        OutlinedTextField(server, { server = it }, label = { Text("Server") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, placeholder = { Text("matrix.example.com") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = androidx.compose.ui.text.input.ImeAction.Next))
+        Spacer(Modifier.height(gap))
+        OutlinedTextField(username, { username = it.lowercase().trim() }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next))
+        Spacer(Modifier.height(gap))
+        OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = if (signingUp && inviteRequired) androidx.compose.ui.text.input.ImeAction.Next else androidx.compose.ui.text.input.ImeAction.Done), keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (ready) submit() }))
+        if (signingUp && inviteRequired) {
+            Spacer(Modifier.height(gap))
+            OutlinedTextField(invite, { invite = it }, label = { Text("Invite code") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done), keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (ready) submit() }))
+        }
+        if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
+        Spacer(Modifier.height(if (tight) 14.dp else 24.dp))
+        Button(
+            enabled = ready,
+            modifier = Modifier.fillMaxWidth().height(if (tight) 46.dp else 54.dp), shape = shape,
+            onClick = submit,
         ) { Text(if (busy) "One moment…" else if (signingUp) "Create account" else "Sign in", style = MaterialTheme.typography.titleMedium) }
         TextButton(
             modifier = Modifier.fillMaxWidth().align(Alignment.CenterHorizontally),

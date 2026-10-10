@@ -101,10 +101,13 @@ import java.util.Date
 private val clockFormat = ThreadLocal.withInitial { DateFormat.getTimeInstance(DateFormat.SHORT) }
 private val dayFormat = ThreadLocal.withInitial { DateFormat.getDateInstance(DateFormat.SHORT) }
 
-fun timeLabel(ts: Long): String {
+fun timeLabel(ts: Long, short: Boolean = false): String {
     if (ts == 0L) return ""
-    val fmt = if (System.currentTimeMillis() - ts < 86_400_000L) clockFormat.get()!! else dayFormat.get()!!
-    return fmt.format(Date(ts))
+    val recent = System.currentTimeMillis() - ts < 86_400_000L
+    val fmt = if (recent) clockFormat.get()!! else dayFormat.get()!!
+    // On a narrow screen "12:17 PM" and "10/9/26" become "12:17" and "10/9": the name matters more than the am/pm.
+    val text = fmt.format(Date(ts))
+    return if (!short) text else if (recent) text.replace(Regex("\\s?[AaPp]\\.?[Mm]\\.?$"), "") else text.replace(Regex("[/.\\-]\\d{2,4}$"), "")
 }
 
 private data class Filters(val groups: Boolean = false, val dms: Boolean = false, val drafts: Boolean = false, val unanswered: Boolean = false, val network: String? = null) {
@@ -291,8 +294,9 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             }
         }
         if (!selecting) {
+            val tight = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 300
             Box(
-                Modifier.align(Alignment.BottomEnd).padding(20.dp).size(60.dp).clip(RoundedCornerShape(20.dp))
+                Modifier.align(Alignment.BottomEnd).padding(if (tight) 12.dp else 20.dp).size(if (tight) 48.dp else 60.dp).clip(RoundedCornerShape(if (tight) 16.dp else 20.dp))
                     .background(MaterialTheme.colorScheme.primary).clickable(onClick = onNewChat),
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Rounded.Edit, "Page someone", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(26.dp)) }
@@ -429,6 +433,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
         false // always snap back; the action already happened
     })
     LaunchedEffect(dismiss.targetValue) { if (s.haptics && dismiss.targetValue != SwipeToDismissBoxValue.Settled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+    val narrow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 300
     val vPad = if (s.density == "compact") 6.dp else 10.dp
     val avatar = if (s.density == "compact") 44.dp else 52.dp
 
@@ -460,11 +465,13 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
             if (s.showAvatars) { Avatar(c.name, if (s.showNetworkBadges) c.network else null, avatar, c.avatarMxc); Spacer(Modifier.width(14.dp)) }
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(c.name, style = MaterialTheme.typography.titleMedium, fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (c.muted) Icon(Icons.Rounded.NotificationsOff, "Muted", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp).size(14.dp))
-                    if (c.pinned && !s.showPinsRow) Icon(Icons.Rounded.PushPin, "Pinned", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp).size(14.dp))
-                    Spacer(Modifier.weight(1f))
-                    if (!minimal) Text(remember(c.ts) { timeLabel(c.ts) }, style = MaterialTheme.typography.labelMedium, color = if (unread && !c.muted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    // The name takes everything the time doesn't need (it used to stop at half the row, cutting names short on narrow screens).
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Text(c.name, style = MaterialTheme.typography.titleMedium, fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (c.muted) Icon(Icons.Rounded.NotificationsOff, "Muted", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp).size(14.dp))
+                        if (c.pinned && !s.showPinsRow) Icon(Icons.Rounded.PushPin, "Pinned", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp).size(14.dp))
+                    }
+                    if (!minimal) Text(remember(c.ts, narrow) { timeLabel(c.ts, narrow) }, modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelMedium, color = if (unread && !c.muted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (s.showNetworkNameInRows) Text(networkMeta(c.network).label, style = MaterialTheme.typography.labelMedium, color = networkMeta(c.network).color)
                 if (!minimal) Row(verticalAlignment = Alignment.CenterVertically) {

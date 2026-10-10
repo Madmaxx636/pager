@@ -144,14 +144,6 @@ class Store(private val context: Context) {
     fun chatNow(roomId: String): ChatState? = _chats.value[roomId]
     val me get() = _session.value?.userId ?: ""
 
-    init {
-        val base = prefs.getString("baseUrl", null)
-        val token = prefs.getString("token", null)
-        val user = prefs.getString("userId", null)
-        if (base != null && token != null && user != null) begin(Session(base, token, user))
-        scope.launch { persistLoop() }
-        scope.launch { bridgeLoop() }
-    }
 
     val savedServer get() = prefs.getString("baseUrl", "") ?: ""
 
@@ -1217,4 +1209,15 @@ class Store(private val context: Context) {
 
     fun clearCache() { media.clear() }
     fun cacheSize(): Long = File(context.cacheDir, "media").walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+    // Resumes the saved sign-in. Last on purpose: starting it any earlier let a background thread use fields that were not set up yet,
+    // which crashed the app on slow phones.
+    init {
+        val base = prefs.getString("baseUrl", null)
+        val token = prefs.getString("token", null)
+        val user = prefs.getString("userId", null)
+        if (base != null && token != null && user != null) begin(Session(base, token, user))
+        scope.launch { persistLoop() }
+        scope.launch { bridgeLoop() }
+    }
 }
