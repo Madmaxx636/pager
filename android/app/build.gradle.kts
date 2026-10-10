@@ -12,8 +12,11 @@ android {
         applicationId = "app.pager.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // One version for every app: the VERSION file at the top of the repo (the release script changes only that).
+        val v = rootProject.file("../VERSION").readText().trim()
+        val (major, minor, patch) = v.split(".").map { it.toInt() }
+        versionCode = major * 10000 + minor * 100 + patch
+        versionName = v
         // The encryption library ships a native file for each kind of phone; keep the two that real phones use.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }

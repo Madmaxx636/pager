@@ -140,6 +140,7 @@ class MainActivity : FragmentActivity() {
 
         if (session == null) { AuthScreen(store); return }
         KeySetupGate()
+        UpdateGate()
 
         val calm = LocalSettings.current.reduceMotion
         // Screens slide and fade into each other; everything stays put with "Reduce motion" (and in E-ink mode).
