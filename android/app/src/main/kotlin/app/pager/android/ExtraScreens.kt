@@ -133,7 +133,7 @@ fun StarredScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
         else SettingsGroup {
             stars.sortedByDescending { it.ts }.forEachIndexed { i, st ->
                 if (i > 0) GroupDivider()
-                Column(Modifier.fillMaxWidth().clickable { onOpen(st.roomId) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Column(Modifier.fillMaxWidth().dpadFocus().clickable { onOpen(st.roomId) }.padding(horizontal = 16.dp, vertical = 12.dp)) {
                     Text("${st.sender} · ${st.chat}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Text(st.text, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(st.ts)), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -204,7 +204,7 @@ fun SearchScreen(roomId: String?, onBack: () -> Unit, onOpen: (String) -> Unit) 
             listOf("all" to ("All" to Icons.Rounded.Search), "images" to ("Photos" to Icons.Rounded.Image), "videos" to ("Videos" to Icons.Rounded.Videocam), "links" to ("Links" to Icons.Rounded.Link), "files" to ("Files" to Icons.Rounded.InsertDriveFile)).forEach { (id, v) ->
                 item {
                     val on = kind == id
-                    Row(Modifier.clip(RoundedCornerShape(50)).background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant).clickable { kind = id }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.clip(RoundedCornerShape(50)).background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { kind = id }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(v.second, null, tint = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp)); Text(v.first, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
                     }
@@ -219,7 +219,7 @@ fun SearchScreen(roomId: String?, onBack: () -> Unit, onOpen: (String) -> Unit) 
                 items(list, key = { it.roomId + it.eventId + it.ts }) { h ->
                     val chat = store.chatNow(h.roomId)
                     val name = chat?.let { SyncReducer.displayName(it, store.me) } ?: "Page"
-                    Row(Modifier.fillMaxWidth().clickable { onOpen(h.roomId) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().dpadFocus().clickable { onOpen(h.roomId) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(name, chat?.network, 44.dp, chat?.avatarMxc); Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
                             Text(if (roomId == null) "$name · ${chat?.nameOf(h.sender) ?: h.sender}" else (chat?.nameOf(h.sender) ?: h.sender), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -245,7 +245,7 @@ fun ChatPicker(title: String, onBack: () -> Unit, onPick: (String) -> Unit) {
         SearchPill(q, { q = it }, "Search pages", Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         LazyColumn(Modifier.fillMaxSize()) {
             items(shown, key = { it.id }) { c ->
-                Row(Modifier.fillMaxWidth().clickable { onPick(c.id) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().dpadFocus().clickable { onPick(c.id) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(c.name, c.network, 46.dp, c.avatarMxc)
                     Spacer(Modifier.width(14.dp))
                     Column { Text(c.name, style = MaterialTheme.typography.titleMedium); Text(networkMeta(c.network).label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -301,7 +301,7 @@ fun AdminScreen(onBack: () -> Unit) {
             people?.forEach { p ->
                 val u = p.user
                 SettingsGroup {
-                    Row(Modifier.fillMaxWidth().clickable { if (open == u.id) open = null else { open = u.id; info = null; scope.launch { info = runCatching { store.pager.adminInfo(u.id) }.getOrNull() } } }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().dpadFocus().clickable { if (open == u.id) open = null else { open = u.id; info = null; scope.launch { info = runCatching { store.pager.adminInfo(u.id) }.getOrNull() } } }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(nameOf(p), null, 44.dp)
                         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                             Text(nameOf(p), style = MaterialTheme.typography.titleMedium)

@@ -68,7 +68,7 @@ fun EmojiPickerDialog(recent: List<String>, onPick: (String) -> Unit, onDismiss:
                     tabs.forEachIndexed { i, (icon, _) ->
                         Box(
                             Modifier.clip(CircleShape).background(if (i == tab) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else androidx.compose.ui.graphics.Color.Transparent)
-                                .clickable { tab = i; scope.launch { grid.animateScrollToItem(offsets[i]) } }.padding(6.dp),
+                                .dpadFocus().clickable { tab = i; scope.launch { grid.animateScrollToItem(offsets[i]) } }.padding(6.dp),
                             contentAlignment = Alignment.Center,
                         ) { Text(icon, fontSize = 18.sp) }
                     }
@@ -83,7 +83,7 @@ fun EmojiPickerDialog(recent: List<String>, onPick: (String) -> Unit, onDismiss:
                             )
                         }
                         items(list) { e ->
-                            Box(Modifier.height(44.dp).clip(RoundedCornerShape(10.dp)).clickable { onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 26.sp) }
+                            Box(Modifier.height(44.dp).clip(RoundedCornerShape(10.dp)).dpadFocus().clickable { onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 26.sp) }
                         }
                     }
                 }

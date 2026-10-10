@@ -86,6 +86,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -246,7 +249,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             if (attention.isNotEmpty() && !selecting && tab == "inbox") {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.error.copy(alpha = 0.14f))
-                        .clickable { onSettings("bridges") }.padding(12.dp),
+                        .dpadFocus().clickable { onSettings("bridges") }.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Rounded.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
@@ -297,7 +300,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             val tight = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 300
             Box(
                 Modifier.align(Alignment.BottomEnd).padding(if (tight) 12.dp else 20.dp).size(if (tight) 48.dp else 60.dp).clip(RoundedCornerShape(if (tight) 16.dp else 20.dp))
-                    .background(MaterialTheme.colorScheme.primary).clickable(onClick = onNewChat),
+                    .background(MaterialTheme.colorScheme.primary).dpadFocus().clickable(onClick = onNewChat),
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Rounded.Edit, "Page someone", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(26.dp)) }
         }
@@ -358,7 +361,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
 
 @Composable
 private fun FilterRow(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onChange(!on) }.padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().dpadFocus().clickable { onChange(!on) }.padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         if (on) Icon(Icons.Rounded.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
     }
@@ -369,7 +372,7 @@ private fun Tab(label: String, icon: androidx.compose.ui.graphics.vector.ImageVe
     val bg = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     val eink = LocalSettings.current.eink
-    Row(Modifier.clip(RoundedCornerShape(50)).background(bg).let { if (eink) it.border(2.dp, Color.Black, RoundedCornerShape(50)) else it }.clickable(onClick = click).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(RoundedCornerShape(50)).background(bg).let { if (eink) it.border(2.dp, Color.Black, RoundedCornerShape(50)) else it }.dpadFocus().clickable(onClick = click).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = fg, modifier = Modifier.size(if (eink) 20.dp else 16.dp))
         Spacer(Modifier.width(6.dp))
         Text(label + (badge?.let { "  $it" } ?: ""), color = fg, style = MaterialTheme.typography.labelLarge)
@@ -380,7 +383,7 @@ private fun Tab(label: String, icon: androidx.compose.ui.graphics.vector.ImageVe
 @Composable
 private fun PinnedChip(c: ChatSummary, onOpen: () -> Unit, onLong: () -> Unit) {
     val unread = c.unread > 0 || c.markedUnread
-    Column(Modifier.width(72.dp).combinedClickable(onClick = onOpen, onLongClick = onLong), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.width(72.dp).dpadFocus().combinedClickable(onClick = onOpen, onLongClick = onLong), horizontalAlignment = Alignment.CenterHorizontally) {
         Box {
             Avatar(c.name, LocalSettings.current.let { if (it.showNetworkBadges) c.network else null }, 58.dp, c.avatarMxc)
             if (unread) Box(Modifier.align(Alignment.TopEnd).size(18.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background).padding(2.dp).clip(CircleShape).background(if (c.muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary))
@@ -456,7 +459,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
         Row(
             Modifier.fillMaxWidth().background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = if (s.eink) 0.18f else 0.12f) else MaterialTheme.colorScheme.background)
                 .drawBehind { if (s.eink) drawLine(Color.Black, androidx.compose.ui.geometry.Offset(0f, size.height), androidx.compose.ui.geometry.Offset(size.width, size.height), 1.dp.toPx()) }
-                .combinedClickable(onClick = onClick, onLongClick = onLong).padding(horizontal = 16.dp, vertical = vPad),
+                .onKeyEvent { e -> if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.Menu) { onLong(); true } else false }.dpadFocus().combinedClickable(onClick = onClick, onLongClick = onLong).padding(horizontal = 16.dp, vertical = vPad),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (selecting) {
@@ -525,7 +528,7 @@ private fun PinnedGrid(pins: List<ChatSummary>, onOpen: (String) -> Unit, onMenu
                             .onGloballyPositioned { bounds[c.id] = it.boundsInRoot() }
                             .zIndex(if (dragging) 1f else 0f)
                             .graphicsLayer { if (dragging) { translationX = drag.x; translationY = drag.y; scaleX = 1.1f; scaleY = 1.1f; alpha = 0.92f } }
-                            .clickable { onOpen(c.id) }
+                            .dpadFocus().clickable { onOpen(c.id) }
                             // After the tap handler, so it sees touches first: a hold is ours (menu or drag), a quick tap is left to clickable.
                             .pointerInput(c.id) {
                                 awaitEachGesture {
@@ -572,7 +575,7 @@ private fun PinnedGrid(pins: List<ChatSummary>, onOpen: (String) -> Unit, onMenu
 private fun StoriesRow(c: ChatSummary, onClick: () -> Unit) {
     val fresh = c.unread > 0
     val accent = MaterialTheme.colorScheme.primary
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().dpadFocus().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(48.dp).border(if (fresh) 2.5.dp else 1.5.dp, if (fresh) accent else MaterialTheme.colorScheme.outlineVariant, CircleShape), contentAlignment = Alignment.Center) {
             Icon(Icons.Rounded.AutoAwesome, null, tint = if (fresh) accent else MaterialTheme.colorScheme.onSurfaceVariant)
         }

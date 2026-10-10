@@ -1,6 +1,8 @@
 package app.pager.android
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,7 +42,7 @@ import androidx.compose.ui.unit.sp
 /** A round, 40dp tappable icon, the single button style used across the app. */
 @Composable
 fun IconBtn(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant, size: Int = 40) {
-    Box(modifier.size(size.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(modifier.size(size.dp).clip(CircleShape).dpadFocus().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, description, tint = tint, modifier = Modifier.size((size * 0.55f).dp))
     }
 }
@@ -71,7 +73,7 @@ fun Sheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
 @Composable
 fun SheetItem(icon: ImageVector, label: String, onClick: () -> Unit, danger: Boolean = false, hint: String? = null) {
     val color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().dpadFocus().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = if (danger) color else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(20.dp))
         Column(Modifier.weight(1f)) {
@@ -135,4 +137,17 @@ fun EmptyState(icon: ImageVector, title: String, body: String? = null, action: @
         Spacer(Modifier.height(16.dp))
         action()
     }
+}
+
+/**
+ * On keypad phones, whatever the d-pad is on gets a thick outline. Put it before .dpadFocus().clickable(): it watches the focus of what follows.
+ * On touch phones it does nothing.
+ */
+@Composable
+fun Modifier.dpadFocus(shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp)): Modifier {
+    if (!LocalKeypad.current) return this
+    val focused = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val ring = MaterialTheme.colorScheme.primary
+    return this.onFocusChanged { focused.value = it.hasFocus || it.isFocused }
+        .then(if (focused.value) Modifier.border(3.dp, ring, shape) else Modifier)
 }

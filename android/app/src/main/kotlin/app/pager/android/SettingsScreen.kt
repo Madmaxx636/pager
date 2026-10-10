@@ -110,7 +110,7 @@ fun SectionHeader(text: String) {
 
 @Composable
 fun SwitchRow(title: String, subtitle: String? = null, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().dpadFocus().clickable(enabled = enabled) { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(title, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -121,7 +121,7 @@ fun SwitchRow(title: String, subtitle: String? = null, checked: Boolean, enabled
 
 @Composable
 fun NavRow(title: String, subtitle: String? = null, icon: ImageVector? = null, tint: Color = MaterialTheme.colorScheme.primary, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().dpadFocus().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) { IconTile(icon, tint); Spacer(Modifier.width(14.dp)) }
         Column(Modifier.weight(1f)) {
             Text(title)
@@ -134,7 +134,7 @@ fun NavRow(title: String, subtitle: String? = null, icon: ImageVector? = null, t
 @Composable
 fun ChoiceRow(title: String, options: List<Pair<String, String>>, current: String, enabled: Boolean = true, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { open = true }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().dpadFocus().clickable(enabled = enabled) { open = true }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.weight(1f), color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
         Text(options.firstOrNull { it.first == current }?.second ?: current, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.width(2.dp)); ChevronEnd()
@@ -142,7 +142,7 @@ fun ChoiceRow(title: String, options: List<Pair<String, String>>, current: Strin
     if (open) Sheet(onDismiss = { open = false }) {
         SheetTitle(title)
         options.forEach { (value, label) ->
-            Row(Modifier.fillMaxWidth().clickable { onPick(value); open = false }.padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().dpadFocus().clickable { onPick(value); open = false }.padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                 if (value == current) Icon(Icons.Rounded.Check, null, tint = MaterialTheme.colorScheme.primary)
             }
@@ -174,7 +174,7 @@ fun TextFieldRow(title: String, value: String, placeholder: String, secret: Bool
 @Composable
 fun ButtonRow(label: String, danger: Boolean = false, onClick: () -> Unit) {
     Text(label, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp))
+        modifier = Modifier.fillMaxWidth().dpadFocus().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp))
 }
 
 // ---- Search index (the command-bar style "find a setting") ------------------------------
@@ -187,6 +187,7 @@ val SETTINGS_INDEX = listOf(
     SettingEntry("appearance", "E-ink mode", "Appearance", "eink e-ink epaper boox high contrast black white"),
     SettingEntry("appearance", "Display size", "Appearance", "scale zoom interface bigger smaller screen"),
     SettingEntry("appearance", "Small screen layout", "Appearance", "compact tiny watch"),
+    SettingEntry("appearance", "Keypad mode", "Appearance", "d-pad flip phone keys keyboard navigation focus cat s22"),
     SettingEntry("appearance", "Text size", "Appearance", "font zoom bigger smaller accessibility"),
     SettingEntry("appearance", "Bubble style", "Appearance", "rounded square"),
     SettingEntry("appearance", "Page wallpaper", "Appearance", "background"),
@@ -417,6 +418,7 @@ private fun AppearancePage() {
         SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }; GroupDivider()
         ChoiceRow("Display size", listOf("auto" to "Automatic (from this screen)", "manual" to "Manual"), s.scaleMode) { v -> set { copy(scaleMode = v) } }
         if (s.scaleMode == "manual") { GroupDivider(); SliderRow("Size", s.uiScale, 0.6f..1.8f, "${(s.uiScale * 100).toInt()}%") { v -> set { copy(uiScale = Math.round(v * 40) / 40f) } } }
+        GroupDivider(); ChoiceRow("Keypad mode (d-pad phones)", listOf("auto" to "Automatic", "on" to "Always", "off" to "Never"), s.keypad) { v -> set { copy(keypad = v) } }
         GroupDivider(); ChoiceRow("Small screen layout", listOf("auto" to "Automatic", "on" to "Always", "off" to "Never"), s.smallScreen) { v -> set { copy(smallScreen = v) } }
     }
     var pickingColor by remember { mutableStateOf(false) }
@@ -429,17 +431,17 @@ private fun AppearancePage() {
             Spacer(Modifier.height(10.dp))
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ACCENTS.forEach { (name, c) ->
-                    Box(Modifier.size(38.dp).clip(CircleShape).background(c[0]).clickable { set { copy(accent = name) } }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(38.dp).clip(CircleShape).background(c[0]).dpadFocus().clickable { set { copy(accent = name) } }, contentAlignment = Alignment.Center) {
                         if (s.accent == name) Icon(Icons.Rounded.Check, null, tint = c[2], modifier = Modifier.size(20.dp))
                     }
                 }
                 val customColor = parseHex(s.accentCustom) ?: Color(0xFF0D9488)
                 Box(
                     Modifier.size(38.dp).clip(CircleShape).background(if (s.accent == "custom") Brush.linearGradient(listOf(customColor, customColor)) else Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)))
-                        .clickable { pickingColor = true },
+                        .dpadFocus().clickable { pickingColor = true },
                     contentAlignment = Alignment.Center,
                 ) { if (s.accent == "custom") Icon(Icons.Rounded.Check, "Your colour", tint = if (customColor.luminance() > 0.45f) Color.Black else Color.White, modifier = Modifier.size(20.dp)) else Icon(Icons.Rounded.Palette, "Make your own", tint = Color.White, modifier = Modifier.size(18.dp)) }
-                if (Build.VERSION.SDK_INT >= 31) Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable { set { copy(accent = "dynamic") } }, contentAlignment = Alignment.Center) {
+                if (Build.VERSION.SDK_INT >= 31) Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { set { copy(accent = "dynamic") } }, contentAlignment = Alignment.Center) {
                     Icon(if (s.accent == "dynamic") Icons.Rounded.Check else Icons.Rounded.Palette, "Material You", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 }
             }
@@ -466,7 +468,7 @@ private fun AppearancePage() {
         NavRow("Triple-tap reaction", s.tripleTapEmoji) { tapPicking = "triple" }; GroupDivider()
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             s.quickReactions.forEachIndexed { i, e ->
-                Box(Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable { editing = i }, contentAlignment = Alignment.Center) { Text(e, fontSize = 24.sp) }
+                Box(Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { editing = i }, contentAlignment = Alignment.Center) { Text(e, fontSize = 24.sp) }
             }
         }
         GroupDivider()
@@ -512,7 +514,7 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
         SettingsGroup("Keywords", footer = "A message with one of these words always notifies you, even in a muted page. Whole words only.") {
             if (s.notifKeywords.isNotEmpty()) FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 s.notifKeywords.forEach { k ->
-                    Row(Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable { set { copy(notifKeywords = notifKeywords - k) } }.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { set { copy(notifKeywords = notifKeywords - k) } }.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(k, style = MaterialTheme.typography.labelLarge); Spacer(Modifier.width(4.dp)); Icon(Icons.Rounded.Close, "Remove $k", Modifier.size(16.dp))
                     }
                 }
@@ -615,7 +617,7 @@ fun notifSummary(p: ChatNotifPrefs?): String {
 @Composable
 private fun TimeRow(label: String, minutes: Int, onClick: () -> Unit) {
     val h = minutes / 60; val m = minutes % 60
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp)) {
+    Row(Modifier.fillMaxWidth().dpadFocus().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp)) {
         Text(label, Modifier.weight(1f))
         Text("%d:%02d %s".format(if (h % 12 == 0) 12 else h % 12, m, if (h < 12) "AM" else "PM"), color = MaterialTheme.colorScheme.primary)
     }

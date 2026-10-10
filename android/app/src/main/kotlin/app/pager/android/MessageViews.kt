@@ -377,7 +377,7 @@ fun MessageRow(
                     Row(
                         Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }.clip(CircleShape).background(if (minePicked) scheme.primary.copy(alpha = if (s.eink) 0.18f else 0.22f) else scheme.surface)
                             .let { if (s.eink) it.border(if (minePicked) 3.dp else 2.dp, Color.Black, CircleShape) else it }
-                            .combinedClickable(onClick = { onReact(key) }, onLongClick = { onWho(key) }).padding(horizontal = 9.dp, vertical = 3.dp),
+                            .dpadFocus().combinedClickable(onClick = { onReact(key) }, onLongClick = { onWho(key) }).padding(horizontal = 9.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) { Text(key, fontSize = if (s.eink) 16.sp else 14.sp); if (who.size > 1) Text(" ${who.size}", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant) }
                 }
@@ -400,7 +400,7 @@ private fun ImageContent(msg: Msg, allowAuto: Boolean, autoPlay: Boolean) {
     Box(
         Modifier.widthIn(max = width).fillMaxWidth().aspectRatio(ratio).clip(shape)
             .background(if (msg.sticker) Color.Transparent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-            .let { if (!enabled) it.clickable { tapped = true } else it },
+            .let { if (!enabled) it.dpadFocus().clickable { tapped = true } else it },
         contentAlignment = Alignment.Center,
     ) {
         val animated by produceState<File?>(null, msg.mxc, enabled, isGif && autoPlay && Build.VERSION.SDK_INT >= 28) {
@@ -508,7 +508,7 @@ private fun LinkPreviewCard(url: String, fg: Color) {
     val uri = LocalUriHandler.current
     val p by produceState<LinkPreview?>(null, url) { value = store.preview(url) }
     val card = p ?: return
-    Column(Modifier.padding(top = 6.dp).clip(RoundedCornerShape(12.dp)).background(fg.copy(alpha = 0.08f)).clickable { runCatching { uri.openUri(url) } }.padding(10.dp)) {
+    Column(Modifier.padding(top = 6.dp).clip(RoundedCornerShape(12.dp)).background(fg.copy(alpha = 0.08f)).dpadFocus().clickable { runCatching { uri.openUri(url) } }.padding(10.dp)) {
         card.site?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = fg.dim(0.6f)) }
         card.title?.let { Text(it, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, color = fg) }
         card.description?.let { Text(it, style = MaterialTheme.typography.labelMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, color = fg.dim(0.75f)) }
@@ -535,7 +535,7 @@ private fun PollCard(msg: Msg, chat: ChatState?, me: String, fg: Color, onVote: 
             val frac = if (total > 0 && showCounts) count.toFloat() / total else 0f
             Box(
                 Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(10.dp)).background(fg.copy(alpha = 0.08f))
-                    .clickable(enabled = !ended && msg.status == STATUS_SENT) {
+                    .dpadFocus().clickable(enabled = !ended && msg.status == STATUS_SENT) {
                         onVote(when {
                             poll.maxSelections == 1 -> if (selected) emptyList() else listOf(a.id)
                             selected -> mine - a.id

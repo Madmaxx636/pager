@@ -117,7 +117,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 listOf("photos" to "Photos ${photos.size}", "links" to "Links ${links.size}", "files" to "Files ${files.size}").forEach { (id, label) ->
                     val on = tab == id
                     Text(label, style = MaterialTheme.typography.labelLarge, color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant).clickable { tab = id }.padding(horizontal = 14.dp, vertical = 8.dp))
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { tab = id }.padding(horizontal = 14.dp, vertical = 8.dp))
                 }
             }
             when (tab) {
@@ -127,7 +127,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             row.forEach { m ->
                                 val img = rememberMxcImage(m.mxc, 300)
-                                Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable { viewer = m.id }) { if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+                                Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { viewer = m.id }) { if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
                             }
                             repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                         }
@@ -217,7 +217,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
 
 @Composable
 private fun QuickAction(icon: ImageVector, label: String, active: Boolean = false, onClick: () -> Unit) {
-    Column(Modifier.width(76.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.width(76.dp).clip(RoundedCornerShape(16.dp)).dpadFocus().clickable(onClick = onClick).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(52.dp).clip(CircleShape).background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
             Icon(icon, label, tint = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
         }

@@ -98,7 +98,7 @@ fun GreetingOverlay() {
     }
     AnimatedVisibility(visible, enter = fadeIn() + scaleIn(initialScale = 0.9f), exit = fadeOut()) {
         Box(
-            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { visible = false },
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).dpadFocus().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { visible = false },
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(32.dp)) {
