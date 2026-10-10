@@ -112,7 +112,8 @@ for row in "${BRIDGE_TABLE[@]}"; do
       | .backfill.enabled = true
       | .encryption.allow = true
       | .encryption.default = true
-      | .encryption.require = false${patch:+ | $patch}" "bridges/$id/config.yaml"
+      | .encryption.require = false
+      | .appservice.async_transactions = true${patch:+ | $patch}" "bridges/$id/config.yaml"
   fi
   if [ ! -f "$dir/config.yaml" ]; then echo "Skipping $name (its image could not be started)"; continue; fi
   if [ ! -f "$dir/registration.yaml" ]; then
