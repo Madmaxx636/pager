@@ -47,8 +47,11 @@ cmd_update() {
   say "Getting the newest Pager…"
   git -C .. pull --ff-only
   ./scripts/build-web.sh
+  local before; before="$(cat data/synapse/homeserver.yaml 2>/dev/null | md5sum)"
   ./scripts/setup.sh >/dev/null
   compose up -d --build
+  # A bridge added by this update is only known to Synapse after it restarts.
+  [ "$(cat data/synapse/homeserver.yaml 2>/dev/null | md5sum)" != "$before" ] && { say "Restarting Synapse to pick up a new bridge…"; compose restart synapse >/dev/null; }
   say "Updated to $(cat ../VERSION). Run 'pager status' to check everything is up."
 }
 

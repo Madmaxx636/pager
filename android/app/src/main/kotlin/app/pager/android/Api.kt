@@ -244,6 +244,11 @@ class MatrixApi(private val http: Http) {
         if (on) http.request("PUT", path, if (order != null) buildJsonObject { put("order", order) } else JsonObject(emptyMap())) else http.request("DELETE", path)
     }
 
+    /** One piece of the account's own data; null when it was never saved (the server says 404). */
+    suspend fun accountData(me: String, type: String): JsonObject? = try {
+        http.request("GET", "/_matrix/client/v3/user/${enc(me)}/account_data/${enc(type)}")
+    } catch (e: ApiException) { if (e.status == 404) null else throw e }
+
     suspend fun putAccountData(me: String, type: String, content: JsonObject) {
         http.request("PUT", "/_matrix/client/v3/user/${enc(me)}/account_data/${enc(type)}", content)
     }
