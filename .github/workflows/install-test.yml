@@ -1,0 +1,29 @@
+name: install from scratch
+# Runs the one-command installer on a clean machine and checks the server answers, with every bridge up and the admin able to sign in.
+on:
+  workflow_dispatch:
+  schedule: [{ cron: "0 6 * * 1" }]
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: |
+          echo 'ci-test-password-1' > /tmp/pw
+          ./install.sh --yes --local --admin ciadmin --admin-password-file /tmp/pw
+      - name: Check
+        run: |
+          set -e
+          TOK=$(curl -sf -X POST http://127.0.0.1:8080/_matrix/client/v3/login -H 'content-type: application/json' \
+            -d '{"type":"m.login.password","identifier":{"type":"m.id.user","user":"ciadmin"},"password":"ci-test-password-1"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+          curl -sf http://127.0.0.1:8080/api/me -H "authorization: Bearer $TOK" | grep -q '"admin":true'
+          curl -sf http://127.0.0.1:8080/api/bridges -H "authorization: Bearer $TOK" | python3 -c '
+          import sys,json
+          bad=[n["id"] for n in json.load(sys.stdin)["networks"] if "error" in n]
+          assert not bad, bad'
+      - name: Logs on failure
+        if: failure()
+        run: cd server && docker compose ps && docker compose logs --tail 60

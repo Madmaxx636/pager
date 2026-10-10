@@ -263,7 +263,10 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
             Row(Modifier.fillMaxWidth().background(scheme.surface).padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 BackButton(onBack)
                 Row(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).dpadFocus().clickable(onClick = onInfo).padding(vertical = 2.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val name = chat?.let { SyncReducer.displayName(it, me) } ?: "Opening…"
+                    // A page that never arrives (removed, or you left it) must say so instead of waiting forever.
+                    var gaveUp by remember(roomId) { mutableStateOf(false) }
+                    LaunchedEffect(roomId, chat == null) { gaveUp = false; if (chat == null) { kotlinx.coroutines.delay(12_000); gaveUp = true } }
+                    val name = chat?.let { SyncReducer.displayName(it, me) } ?: if (gaveUp) "Couldn't open this page" else "Opening…"
                     if (s.showAvatars) Avatar(name, if (s.showNetworkBadges) chat?.network else null, 40.dp, chat?.avatarMxc)
                     Column(Modifier.padding(start = 12.dp)) {
                         Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)

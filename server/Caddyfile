@@ -1,6 +1,14 @@
 {$PAGER_ADDRESS} {
 	encode zstd gzip
 
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Frame-Options SAMEORIGIN
+		Strict-Transport-Security "max-age=15552000"
+		-Server
+	}
+
 	handle /_matrix/* {
 		reverse_proxy synapse:8008
 	}
