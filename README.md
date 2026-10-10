@@ -3,9 +3,19 @@
 An open-source, self-hostable unified messenger. One account, all your chats (WhatsApp, Signal, Telegram,
 Instagram, Messenger, Discord, SMS/RCS…), running on your own Matrix server with bridges. Think Beeper, but yours.
 
-**Status:** early but working end to end. The server stack has been run against the real Synapse and mautrix images (rootless
-Podman): setup, signup, bridge login flows for WhatsApp / Signal / Google Messages / Messenger, link previews and scheduled send all
-pass. No real chat account has been linked yet, and the apps are tested against a mock backend plus unit tests.
+**Status: beta.** It runs end to end on the author's own server with WhatsApp, Signal and Google Messages linked, end-to-end encryption
+between your devices, and apps for Android, Linux and the web (Windows is built but untested). Expect rough edges. Please read
+the [disclaimer](#disclaimer) before you trust it with anything important.
+
+## Install it (one command)
+On a Linux machine with Docker (or Podman) and about 4 GB of memory free:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Madmaxx636/pager/master/install.sh | bash
+```
+It asks how people will reach your server (home network, your own domain, or a free DuckDNS name), creates your administrator
+account, and starts everything: WhatsApp, Signal, Google Messages, Messenger, Slack, X, Bluesky, LinkedIn and GroupMe, with end-to-end
+encryption switched on. The first time you sign in, the mascot walks you through it. After that, `pager status | logs | update | backup | doctor`.
+Telegram needs your own key from my.telegram.org; see below.
 
 ## What's here
 | Folder | What it is |
@@ -45,8 +55,8 @@ Not built yet: iOS, push through Google/UnifiedPush, cross-signing and device ve
 
 See [DEPLOY.md](DEPLOY.md) for a full server walkthrough.
 
-## Run your own server
-Requires Docker (or rootless Podman with `docker-compose`) and, for a real deployment, a domain pointing at the host.
+## Run your own server (by hand)
+The installer does the following for you. Requires Docker (or rootless Podman with `docker-compose`) and, for a real deployment, a domain pointing at the host.
 ```bash
 (cd app && npm ci && npm run build)
 cd server
@@ -107,3 +117,15 @@ The mock accepts any username and password.
 
 ## License
 AGPL-3.0. See [LICENSE](LICENSE). If you run a modified Pager as a service for others, you must share your changes.
+
+## Disclaimer
+- **Not affiliated.** Pager is an independent project. It is not made, endorsed or supported by Beeper, WhatsApp, Meta, Signal, Google,
+  Microsoft (GroupMe), Slack, X, Bluesky, LinkedIn, Telegram or Discord. Those names belong to their owners.
+- **Unofficial connections.** Most bridges log in to those services the way a linked device would, which their terms may not allow.
+  A service can restrict or ban an account that uses an unofficial client. Use accounts you can afford to lose access to.
+- **No warranty.** It is provided as is, under the AGPL-3.0 licence. Keep your own backups (`pager backup`) and your recovery key.
+- **What encryption does and doesn't do.** Messages between your Pager devices are end-to-end encrypted. A bridge must read a message to
+  pass it to another network, so protection on the bridged leg is only as strong as that network, and GroupMe pages are not
+  encrypted end to end. See [SECURITY.md](SECURITY.md).
+
+See also: [PRIVACY.md](PRIVACY.md), [CONTRIBUTING.md](CONTRIBUTING.md), [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
