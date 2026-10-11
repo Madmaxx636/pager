@@ -189,7 +189,11 @@ class Store(private val context: Context) {
         return if (t.startsWith("http://") || t.startsWith("https://")) t else "https://$t"
     }
 
-    suspend fun signIn(server: String, username: String, password: String) {
+    /** A recovery key typed on the sign-in page: used as soon as encryption is ready, so the history opens without another step. */
+    @Volatile private var pendingKey = ""
+
+    suspend fun signIn(server: String, username: String, password: String, recoveryKey: String = "") {
+        pendingKey = recoveryKey.trim()
         http.baseUrl = normalizeServer(server)
         http.token = null
         val (token, userId, _) = matrix.login(username, password)
@@ -305,6 +309,10 @@ class Store(private val context: Context) {
             c.onKeys = { rooms -> scope.launch { retryWaiting(rooms) } }
             e2ee = c
             kotlinx.coroutines.withTimeoutOrNull(15_000) { c.pump() } // upload this device's keys (it keeps trying in the background if slow)
+            if (pendingKey.isNotEmpty()) {
+                val key = pendingKey; pendingKey = ""
+                runCatching { c.restoreBackup(key) } // a wrong key: the key step opens and asks again
+            }
             val ks = c.serverKeyMatches(); keyMismatch = ks == false; keyMissing = ks == null
             scope.launch { retryWaiting() } // messages saved while waiting for a key may have their key now
             retryJob?.cancel()

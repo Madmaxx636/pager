@@ -36,6 +36,7 @@ fun AuthScreen(store: Store) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var invite by remember { mutableStateOf("") }
+    var recoveryKey by remember { mutableStateOf("") }
     var signingUp by remember { mutableStateOf(false) }
     var inviteRequired by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
@@ -51,7 +52,7 @@ fun AuthScreen(store: Store) {
                     try {
                         store.http.baseUrl = store.normalizeServer(server)
                         if (signingUp) store.pager.signup(username, password, invite.trim())
-                        store.signIn(server, username, password)
+                        store.signIn(server, username, password, if (signingUp) "" else recoveryKey)
                     } catch (e: Exception) { error = e.message ?: "Something went wrong" }
                     busy = false
                 }
@@ -70,6 +71,10 @@ fun AuthScreen(store: Store) {
         OutlinedTextField(username, { username = it.lowercase().trim() }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next))
         Spacer(Modifier.height(gap))
         OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = if (signingUp && inviteRequired) androidx.compose.ui.text.input.ImeAction.Next else androidx.compose.ui.text.input.ImeAction.Done), keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (ready) submit() }))
+        if (!signingUp) {
+            Spacer(Modifier.height(gap))
+            OutlinedTextField(recoveryKey, { recoveryKey = it }, label = { Text("Recovery key (optional)") }, supportingText = { Text("Opens your message history on this phone") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, imeAction = androidx.compose.ui.text.input.ImeAction.Done), keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (ready) submit() }))
+        }
         if (signingUp && inviteRequired) {
             Spacer(Modifier.height(gap))
             OutlinedTextField(invite, { invite = it }, label = { Text("Invite code") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = shape, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done), keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { if (ready) submit() }))
