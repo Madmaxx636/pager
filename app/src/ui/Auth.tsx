@@ -13,6 +13,7 @@ export function Auth() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [invite, setInvite] = useState("");
+  const [recoveryKey, setRecoveryKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const remote = needsServerField();
@@ -32,7 +33,7 @@ export function Auth() {
       const name = username.trim().toLowerCase();
       if (mode === "up") await pager.signup(name, password, invite.trim());
       if (remote) localStorage.setItem("pager.server", server.trim());
-      await signIn(remote ? server : window.location.origin, name, password);
+      await signIn(remote ? server : window.location.origin, name, password, mode === "in" ? recoveryKey : "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setBusy(false);
@@ -49,6 +50,7 @@ export function Auth() {
         <label>Username<input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus={!remote} autoCapitalize="none" required />
           {cfg && <small>@{username.trim().toLowerCase() || "you"}:{cfg.domain}</small>}</label>
         <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={mode === "up" ? 8 : undefined} /></label>
+        {mode === "in" && <label>Recovery key <small>(optional: opens your message history)</small><input value={recoveryKey} onChange={(e) => setRecoveryKey(e.target.value)} autoCapitalize="none" autoComplete="off" spellCheck={false} placeholder="EsTc 7x2f …" /></label>}
         {mode === "up" && cfg?.inviteRequired && <label>Invite code<input value={invite} onChange={(e) => setInvite(e.target.value)} required /></label>}
         {error && <div className="error">{error}</div>}
         <button className="primary" disabled={busy}>{busy ? "One moment…" : mode === "in" ? "Sign in" : "Create account"}</button>

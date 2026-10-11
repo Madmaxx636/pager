@@ -164,7 +164,10 @@ export async function restoreSession(): Promise<boolean> {
   return true;
 }
 
-export async function signIn(server: string, username: string, password: string) {
+/** A recovery key typed on the sign-in page: used as soon as encryption is ready, so the history opens without another step. */
+let pendingKey = "";
+export async function signIn(server: string, username: string, password: string, recoveryKey = "") {
+  pendingKey = recoveryKey.trim();
   http.base = normalizeServer(server); http.token = "";
   const r = await matrix.login(username, password);
   const s: Session = { baseUrl: http.base, token: r.access_token, userId: r.user_id, deviceId: r.device_id };
@@ -238,6 +241,11 @@ async function startCrypto(s: Session) {
     c.onKeys = (rooms) => void retryWaiting(rooms);
     e2ee = c;
     await withTimeout(c.pump(), 15000, "Uploading encryption keys").catch(() => { /* it keeps trying in the background */ });
+    if (pendingKey) {
+      const key = pendingKey; pendingKey = "";
+      try { await c.restoreBackup(key); }
+      catch { /* a wrong key: the key step opens and asks again */ }
+    }
     keyMismatch = (await serverKeyMatches(s.userId, deviceId, c.machine.identityKeys.ed25519.toBase64())) === false;
     void retryWaiting(); // messages saved while waiting for a key may have their key now
     window.clearInterval(retryTimer); retryTimer = window.setInterval(() => { void c.pump().catch(() => {}); void retryWaiting(); }, 45_000); // and keys can turn up later, from the backup
