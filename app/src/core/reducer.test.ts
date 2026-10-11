@@ -114,6 +114,12 @@ describe("applySync", () => {
     const removed = applySync(withR, join([{ type: "m.room.redaction", event_id: "$x", sender: me, redacts: "$r2", content: {} }]), me, false).chats;
     expect(removed["!a:x"].reactions["$1"]["👍"]).toEqual([mom]);
   });
+  it("alerts when someone reacts to your message, but not to theirs or when you react", () => {
+    const react = (id: string, sender: string, target: string) => ({ type: "m.reaction", event_id: id, sender, content: { "m.relates_to": { rel_type: "m.annotation", event_id: target, key: "❤️" } } });
+    const r = applySync(base(), join([react("$r1", mom, "$2"), react("$r2", mom, "$1"), react("$r3", me, "$2")]), me, false);
+    expect(r.incoming.map((i) => i.text)).toEqual(["reacted ❤️ to “Yes!”"]);
+    expect(r.incoming[0].replyToMe).toBe(true);
+  });
   it("applies edits only from the original sender", () => {
     const msgs = applySync(base(), join([
       { type: "m.room.message", event_id: "$e1", sender: mom, origin_server_ts: 5000, content: { msgtype: "m.text", body: "* Saturday?", "m.new_content": { msgtype: "m.text", body: "Saturday?" }, "m.relates_to": { rel_type: "m.replace", event_id: "$1" } } },

@@ -15,10 +15,9 @@ let prefs = readPrefs();
 const savePrefs = () => { try { fs.mkdirSync(path.dirname(prefsFile), { recursive: true }); fs.writeFileSync(prefsFile, JSON.stringify(prefs)); } catch { /* read-only profile */ } };
 
 // Memory: the graphics process costs about 30 MB and a scrolling chat list does not need it, so it is off unless you switch on "Smooth
-// graphics" in Settings. The disk cache for downloaded pictures is capped, and the audio service runs inside the main process.
+// graphics" in Settings. The disk cache for downloaded pictures is capped.
 if (!prefs.smoothGraphics) app.disableHardwareAcceleration();
 app.commandLine.appendSwitch("disk-cache-size", String(64 * 1024 * 1024));
-app.commandLine.appendSwitch("disable-features", "AudioServiceOutOfProcess");
 
 let win = null, tray = null, quitting = false, unread = 0;
 const hidden = process.argv.includes("--hidden");

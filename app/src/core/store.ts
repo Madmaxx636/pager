@@ -1,6 +1,7 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { BlobCache } from "./lru";
+import { shrinkImage } from "./shrink";
 import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity } from "./reducer";
 import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
@@ -442,7 +443,7 @@ async function signOutLocal() {
   try { localStorage.removeItem("pager.identity2"); } catch { /* ignore */ }
   await dbDel("cache");
   http.token = ""; since = undefined;
-  blobCache.clear();
+  blobCache.clear(); void diskSweep(true);
   set({ session: undefined, chats: {}, synced: false, muted: [], bridges: [], isAdmin: false });
 }
 
@@ -797,7 +798,23 @@ window.setInterval(() => { if (document.visibilityState === "visible") void refr
 // ---- Media (Synapse requires auth for downloads) ------------------------------------------------
 
 // Only about 40 MB of downloaded pictures stay in memory; older ones are let go and fetched again if needed (see lru.ts).
-const blobCache = new BlobCache(40 * 1024 * 1024);
+const blobCache = new BlobCache(12 * 1024 * 1024);
+// Pictures wait on disk (the browser's Cache Storage) instead, and are cleared after a few hours, so they do not sit in memory.
+const DISK_NAME = "pager-media", DISK_HOURS = 6;
+const diskKey = (key: string) => `https://media.pager.invalid/${encodeURIComponent(key)}`;
+const diskOpen = () => (typeof caches === "undefined" ? Promise.resolve(undefined) : caches.open(DISK_NAME).catch(() => undefined));
+async function diskGet(key: string): Promise<Blob | undefined> { try { const r = await (await diskOpen())?.match(diskKey(key)); return r ? await r.blob() : undefined; } catch { return undefined; } }
+async function diskPut(key: string, blob: Blob) { try { await (await diskOpen())?.put(diskKey(key), new Response(blob, { headers: { "x-saved": String(Date.now()), "content-type": blob.type } })); } catch { /* disk full or private mode: memory only */ } }
+async function diskSweep(all = false) {
+  try {
+    const c = await diskOpen(); if (!c) return;
+    for (const req of await c.keys()) {
+      const saved = Number((await c.match(req))?.headers.get("x-saved") ?? 0);
+      if (all || Date.now() - saved > DISK_HOURS * 3600_000) await c.delete(req);
+    }
+  } catch { /* ignore */ }
+}
+void diskSweep(); window.setInterval(() => void diskSweep(), 30 * 60_000);
 const inflight = new Map<string, Promise<string | undefined>>();
 /** Already-downloaded media, available synchronously (avoids flashing placeholders). */
 export const cachedMedia = (mxc: string, thumb = 0) => blobCache.get(`${mxc}|${thumb}`);
@@ -809,12 +826,15 @@ export function mediaUrl(mxc: string, thumb = 0): Promise<string | undefined> {
   if (!m) return Promise.resolve(undefined);
   const secret = encryptedInfo(mxc); // end-to-end encrypted attachment: the server holds only scrambled bytes, so no thumbnails
   const path = thumb && !secret ? `thumbnail/${m[1]}/${m[2]}?width=${thumb}&height=${thumb}&method=scale` : `download/${m[1]}/${m[2]}`;
-  const p = fetch(url(`/_matrix/client/v1/media/${path}`), { headers: { authorization: `Bearer ${http.token}` } })
+  const p = diskGet(key).then((saved) => saved ? URL.createObjectURL(saved) : undefined).then((u) => u ? (blobCache.set(key, u, 1), u) : undefined).then((u) => u ? u : fetch(url(`/_matrix/client/v1/media/${path}`), { headers: { authorization: `Bearer ${http.token}` } })
     .then(async (r) => {
       if (!r.ok) return undefined;
       const blob = secret ? new Blob([await decryptAttachment(await r.arrayBuffer(), secret)], { type: secret.mime ?? "application/octet-stream" }) : await r.blob();
-      const u = URL.createObjectURL(blob); blobCache.set(key, u, blob.size); return u;
-    })
+      // A preview of a big picture is scaled down once and only that small copy is kept (see shrink.ts).
+      const shown = thumb > 0 ? await shrinkImage(blob, thumb) : blob;
+      void diskPut(key, shown);
+      const u = URL.createObjectURL(shown); blobCache.set(key, u, shown.size); return u;
+    }))
     .catch(() => undefined).finally(() => inflight.delete(key));
   inflight.set(key, p);
   return p;

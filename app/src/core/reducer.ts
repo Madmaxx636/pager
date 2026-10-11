@@ -66,6 +66,10 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
         const mentioned = m.mentions.includes(me) || m.body.toLowerCase().includes(`@${mine}`.toLowerCase());
         incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: isGroup(pre), mentioned, ts: m.ts, replyToMe: parentSender === me });
       }
+    }, (sender, key, target) => {
+      // Someone reacted to something you wrote: that is about you, so it alerts like a reply.
+      if (!initial && sender !== me && target?.sender === me)
+        incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, sender), text: `reacted ${key} to “${previewOf(target).slice(0, 60)}”`, network: pre.network, isGroup: isGroup(pre), mentioned: false, ts: Date.now(), replyToMe: true });
     });
 
     for (const e of arr(obj(room.ephemeral).events)) chat = applyEphemeral(chat, obj(e), me);
@@ -100,7 +104,7 @@ export function applyHistory(chat: ChatState, chunk: J[], end: string | undefine
   return { ...next, prevBatch: end ?? null, reachedStart: end == null };
 }
 
-function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m: Msg, parentSender?: string) => void): ChatState {
+function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m: Msg, parentSender?: string) => void, onReaction?: (sender: string, key: string, target?: Msg) => void): ChatState {
   if (!events.length) return start;
   let chat = start;
   let msgs = [...start.messages];
@@ -165,7 +169,7 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
         if (rel.rel_type === "m.annotation" && id && target && key && sender && !(id in refs)) {
           refs[id] = { target, key, sender };
           const list = ((reactions[target] ??= {})[key] ??= []);
-          if (!list.includes(sender)) list.push(sender);
+          if (!list.includes(sender)) { list.push(sender); onReaction?.(sender, key, msgs.find((m) => m.id === target)); }
         }
         break;
       }
