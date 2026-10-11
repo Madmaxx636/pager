@@ -4,6 +4,11 @@ import { tourSteps, typedLength } from "./tour";
 describe("the welcome tour", () => {
   const f = { admin: false, hasKey: true, server: "https://chat.example.com" };
 
+  it("the desktop app also hears about looks, and the phone and web do not", () => {
+    expect(tourSteps({ ...f, desktop: true }).find((x) => x.id === "looks")!.action!.go).toBe("settings/appearance");
+    expect(tourSteps(f).some((x) => x.id === "looks")).toBe(false);
+  });
+
   it("starts with hello and ends with the goodbye", () => {
     const s = tourSteps(f);
     expect(s[0].id).toBe("hello"); expect(s.at(-1)!.id).toBe("done");

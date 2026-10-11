@@ -39,7 +39,7 @@ export function Tour({ nav, forceOpen, onClose }: { nav: (to: string) => void; f
     return () => { live = false; };
   }, [user, synced, enc.ready, enc.error, enc.backupHere, enc.deviceId, forceOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const steps = tourSteps({ admin: isAdmin, hasKey: enc.backupHere, server: session?.baseUrl || window.location.origin });
+  const steps = tourSteps({ admin: isAdmin, hasKey: enc.backupHere, server: session?.baseUrl || window.location.origin, desktop: !!window.pagerDesktop });
   const step = steps[Math.min(i, steps.length - 1)];
 
   // Type the words out, one letter at a time (all at once when motion is reduced).

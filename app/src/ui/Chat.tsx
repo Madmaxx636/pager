@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
+  AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
   Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon,
 } from "lucide-react";
-import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot, isBotRoom } from "../core/types";
+import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot, isBotRoom, realPeople } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import { getSettings, useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
   edit, enableEncryption, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
-  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory,
+  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory, setAlias,
 } from "../core/store";
 import { addLink, groupOf, suggestLinks, unlink } from "../core/links";
+import { aliasOf } from "../core/types";
 import { SOUNDS, playSound } from "../core/sounds";
 import { Avatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
 import { MessageRow } from "./Message";
@@ -48,10 +49,18 @@ const fullTime = (ts: number) => new Date(ts).toLocaleString([], { weekday: "sho
 export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBack: () => void; nav: Nav; onForward: (m: Msg) => void }) {
   const chat = useStore((s) => s.chats[roomId]);
   const stars = useStore((s) => s.stars);
+  useStore((s) => s.aliases); // a name you gave this chat
+  const dsk = !!window.pagerDesktop; // the desktop app has its own header and info panel
   const st = useSettings();
   const user = me();
   const scroller = useRef<HTMLDivElement>(null);
   const [infoOpen, setInfoOpen] = useState(false); // the info panel stays out of the way until you ask for it
+  // Desktop: clicking anywhere outside the info panel closes it again.
+  useEffect(() => {
+    if (!dsk || !infoOpen) return;
+    const away = (e: MouseEvent) => { const t = e.target as HTMLElement; if (!t.closest(".info, .info-toggle, .modal, .menu, .overlay, [role=dialog]")) setInfoOpen(false); };
+    document.addEventListener("mousedown", away); return () => document.removeEventListener("mousedown", away);
+  }, [dsk, infoOpen]);
   const [menu, setMenu] = useState<{ msg: Msg; x: number; y: number }>();
   const [viewer, setViewer] = useState<string>();
   const [picker, setPicker] = useState<Msg>();
@@ -153,15 +162,16 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
         <Effects key={chat.id} messages={messages} />
         <header className="chat-head">
           <IconButton icon={ArrowLeft} label="Back" onClick={onBack} className="back" />
+          {dsk ? <DesktopHead chat={chat} name={name} st={st} nav={nav} /> : (
           <button className="head-id" onClick={() => setInfoOpen(!infoOpen)}>
             {st.showAvatars && <Avatar name={name} mxc={chat.avatarMxc} size={40} network={st.showNetworkBadges ? chat.network : undefined} />}
             <div>
               <div className="chat-title">{name}</div>
               {<div className="chat-sub"><i style={{ background: meta.color }} />{meta.label}{chat.encrypted ? <span className="enc-badge" title="End-to-end encrypted"> · <Lock size={11} /> Encrypted</span> : null}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</div>}
             </div>
-          </button>
+          </button>)}
           <IconButton icon={Search} label="Search in page (Ctrl+F)" onClick={() => nav(`search:${roomId}`)} />
-          <IconButton icon={Info} label="Page info" onClick={() => setInfoOpen(!infoOpen)} active={infoOpen} />
+          <IconButton icon={Info} label="Page info" onClick={() => setInfoOpen(!infoOpen)} active={infoOpen} className="info-toggle" />
         </header>
 
         <LinkedBar chat={chat} nav={nav} />
@@ -450,6 +460,7 @@ function ImageViewer({ images, startId, chat, onClose }: { images: Msg[]; startI
 
 function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: Nav; onClose: () => void; onViewImage: (id: string) => void }) {
   const user = me();
+  const dsk = !!window.pagerDesktop;
   const muted = useStore((s) => s.muted.includes(chat.id));
   const [list, setList] = useState<Record<string, string>>();
   const [muteDlg, setMuteDlg] = useState(false);
@@ -464,6 +475,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
   const st = useSettings();
   const [tab, setTab] = useState<"photos" | "links" | "files">("photos");
   useEffect(() => { void members(chat.id).then(setList); }, [chat.id]);
+  const people = useMemo(() => realPeople(list ?? chat.members), [list, chat.members]);
   const name = displayName(chat, user);
   const photos = useMemo(() => chat.messages.filter((m) => m.type === "m.image" && m.mxc && !m.sticker).reverse(), [chat.messages]);
   const links = useMemo(() => chat.messages.flatMap((m) => { const u = firstUrl(m.body); return u ? [{ m, u }] : []; }).reverse(), [chat.messages]);
@@ -474,8 +486,9 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
     <aside className="info">
       <header><b>Page info</b><IconButton icon={X} label="Close" onClick={onClose} /></header>
       <div className="info-body">
-        <div className="info-id"><Avatar name={name} mxc={chat.avatarMxc} size={88} network={chat.network} /><h3>{name}</h3><small>{networkMeta(chat.network).label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</small>
-          {isGroup(chat) && <button className="link" onClick={() => { const n = prompt("Rename group", chat.name); if (n?.trim()) rename(chat.id, n.trim()); }}>Rename group</button>}</div>
+        <div className="info-id"><Avatar name={name} mxc={chat.avatarMxc} size={88} network={chat.network} /><h3>{name}</h3>{!dsk && <small>{networkMeta(chat.network).label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</small>}{dsk && isGroup(chat) && <small>{people.length || peopleCount(chat)} people</small>}
+          {dsk ? <RenameForMe chat={chat} name={name} /> : isGroup(chat) && <button className="link" onClick={() => { const n = prompt("Rename group", chat.name); if (n?.trim()) rename(chat.id, n.trim()); }}>Rename group</button>}</div>
+        {dsk && <div className="info-net"><span className="dot" style={{ background: networkMeta(chat.network).color }} />{networkMeta(chat.network).label}</div>}
         {!isGroup(chat) && <LinkControls chat={chat} />}
         <div className="pad"><button className="link" disabled={!!hist && !hist.done} onClick={() => { setHist({ n: chat.messages.length }); void loadWholeHistory(chat.id, (n) => setHist({ n })).then((done) => setHist((h) => ({ n: h?.n ?? 0, done: true, ...(done ? {} : {}) }))); }}>{hist && !hist.done ? `Loading everything… ${hist.n} messages` : hist?.done ? `Done: ${hist.n} messages on this device` : "Load this page's full history"}</button></div>
         <div className="quick-actions">
@@ -500,8 +513,9 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
         {tab === "links" && (links.length ? <ul className="plain">{links.slice(0, 40).map(({ m, u }) => <li key={m.id}><a className="list-btn col" href={u} target="_blank" rel="noreferrer noopener"><span className="clip"><Link2 size={14} /> {u}</span><small>{nameOf(chat, m.sender)} · {new Date(m.ts).toLocaleDateString()}</small></a></li>)}</ul> : <p className="muted pad">No links shared.</p>)}
         {tab === "files" && (files.length ? <ul className="plain">{files.slice(0, 40).map((m) => <li key={m.id}><button className="list-btn col" onClick={() => void download(m)}><span className="clip"><FileText size={14} /> {m.body || previewOf(m)}</span><small>{nameOf(chat, m.sender)}{m.size ? ` · ${humanSize(m.size)}` : ""}</small></button></li>)}</ul> : <p className="muted pad">No files shared.</p>)}
         <SheetItem icon={LogOut} label="Delete page" danger onClick={() => setConfirmLeave(true)} />
-        <h4>Members{list ? ` (${Object.keys(list).length})` : ""}</h4>
-        <ul className="plain">{Object.entries(list ?? chat.members).sort((a, b) => a[1].localeCompare(b[1])).map(([id, n]) => <li key={id} className="member"><Avatar name={n} size={34} /><div>{id === user ? `${n} (you)` : n}<small>{id}</small></div></li>)}</ul>
+        {(!dsk || isGroup(chat)) && <>
+        <h4>{dsk ? `${people.length || peopleCount(chat)} people` : `Members${list ? ` (${Object.keys(list).length})` : ""}`}</h4>
+        <ul className="plain">{(dsk ? people : Object.entries(list ?? chat.members).sort((a, b) => a[1].localeCompare(b[1]))).map(([id, n]) => <li key={id} className="member"><Avatar name={n} size={34} /><div>{id === user ? `${n} (you)` : n}{!dsk && <small>{id}</small>}</div></li>)}</ul></>}
       </div>
       {muteDlg && <Modal title={`Mute ${name}`} onClose={() => setMuteDlg(false)}><div className="stack">{([["For 1 hour", 3.6e6], ["For 8 hours", 8 * 3.6e6], ["For 1 week", 7 * 864e5], ["Until I turn it back on", undefined]] as [string, number | undefined][]).map(([l, ms]) => <button key={l} className="row-btn" onClick={() => { setMuted(chat.id, true, ms); setMuteDlg(false); }}><b>{l}</b></button>)}</div></Modal>}
       {when && <WhenModal title={when === "snooze" ? "Snooze until" : `Remind me about ${name}`} onPick={(at) => { if (when === "snooze") snooze(chat.id, at); else remind(chat.id, at); setWhen(undefined); }} onClose={() => setWhen(undefined)} />}
@@ -594,4 +608,56 @@ function LinkControls({ chat }: { chat: ChatState }) {
       </Modal>}
     </div>
   );
+}
+
+/** Desktop header: the picture(s), the name with a small arrow that opens the network switcher, and just "Encrypted" underneath. */
+function DesktopHead({ chat, name, st, nav }: { chat: ChatState; name: string; st: AppSettings; nav: Nav }) {
+  const links = useStore((s) => s.links), chats = useStore((s) => s.chats);
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState<Record<string, string>>();
+  const user = me();
+  const group = isGroup(chat);
+  useEffect(() => { if (group) void members(chat.id).then(setList); }, [chat.id, group]);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest(".nav-drop, .head-id")) setOpen(false); };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away); document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const people = useMemo(() => realPeople(list ?? chat.members), [list, chat.members]);
+  const others = people.filter(([id]) => id !== user).slice(0, 3);
+  const count = people.length || peopleCount(chat);
+  const nets = (groupOf(links, chat.id) ?? [chat.id]).filter((id) => chats[id]);
+  return (
+    <div className="head-wrap">
+      <button className="head-id" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}>
+        {st.showAvatars && (group && others.length > 1
+          ? <span className="cluster">{others.map(([id, n]) => <Avatar key={id} name={n} size={30} />)}{count > others.length + 1 && <span className="more">+{count - others.length - 1}</span>}</span>
+          : <Avatar name={name} mxc={chat.avatarMxc} size={40} />)}
+        <div>
+          <div className="chat-title">{name}<ChevronDown size={15} className="chev" /></div>
+          <div className="chat-sub">{group ? `${count} people` : ""}{group && chat.encrypted ? " · " : ""}{chat.encrypted ? <span className="enc-badge" title="End-to-end encrypted"><Lock size={11} /> Encrypted</span> : null}</div>
+        </div>
+      </button>
+      {open && (
+        <div className="nav-drop" role="menu">
+          <small>{nets.length > 1 ? "Switch network" : "Network"}</small>
+          {nets.map((id) => { const c = chats[id], m = networkMeta(c.network); return (
+            <button key={id} role="menuitem" onClick={() => { setOpen(false); if (id !== chat.id) nav(`chat:${id}`); }}><i style={{ background: m.color }} />{m.label}{id === chat.id ? <Check size={15} className="tick" /> : c.unread > 0 ? <b>{c.unread}</b> : null}</button>
+          ); })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Desktop: a name only you see for this chat. The chat keeps its real name for everyone else. */
+function RenameForMe({ chat, name }: { chat: ChatState; name: string }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(name);
+  const custom = aliasOf(chat.id);
+  const done = (save: boolean) => { if (save) setAlias(chat.id, v); setEditing(false); };
+  if (editing) return <div className="rename-me"><input autoFocus value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") done(true); if (e.key === "Escape") done(false); }} onBlur={() => done(true)} aria-label="Name for you" /></div>;
+  return <div className="rename-me"><button className="link" onClick={() => { setV(name); setEditing(true); }}>Rename for me</button>{custom && <button className="link" onClick={() => setAlias(chat.id, "")}>Use the real name</button>}<small className="muted">Only you see this name.</small></div>;
 }

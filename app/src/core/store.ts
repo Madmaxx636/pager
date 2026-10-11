@@ -13,6 +13,7 @@ import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings, ap
 import {
   ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isStoriesRoom, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
   labelsOf, lastPreview, lastTs, nameOf, previewOf,
+  setAliases,
 } from "./types";
 import { markdownToHtml } from "./format";
 import { addToPhonebook, onPhonebookChange, ownContacts } from "./names";
@@ -40,6 +41,8 @@ interface State {
   favoriteGifs: Gif[];
   /** Chats shown as one (see links.ts). */
   links: Links;
+  /** Names you gave chats, for yourself only (desktop app). */
+  aliases: Record<string, string>;
 }
 
 const SESSION_KEY = "pager.session";
@@ -49,8 +52,9 @@ const lsSet = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.st
 let state: State = {
   chats: {}, synced: false, muted: [],
   drafts: lsGet("pager.drafts", {}), stars: lsGet("pager.stars", []), scheduled: lsGet("pager.scheduled", []),
-  reminders: lsGet("pager.reminders", []), bridges: [], isAdmin: false, favoriteGifs: lsGet<Gif[]>("pager.favoriteGifs", []), links: lsGet<Links>("pager.links", []), userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
+  reminders: lsGet("pager.reminders", []), bridges: [], isAdmin: false, favoriteGifs: lsGet<Gif[]>("pager.favoriteGifs", []), links: lsGet<Links>("pager.links", []), aliases: lsGet<Record<string, string>>("pager.aliases", {}), userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
 };
+if (window.pagerDesktop) setAliases(state.aliases);
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 function set(patch: Partial<State>) { state = { ...state, ...patch }; emit(); }
@@ -94,8 +98,8 @@ export function useChatsRaw(): Record<string, ChatState> { return useStore((s) =
 
 export function useInbox(): ChatSummary[] {
   const st = useSettings();
-  const chats = useStore((s) => s.chats), muted = useStore((s) => s.muted), drafts = useStore((s) => s.drafts), session = useStore((s) => s.session), links = useStore((s) => s.links);
-  return useMemo(() => buildInbox({ ...state, chats, muted, drafts, session, links }, st), [chats, muted, drafts, session, links, st.hiddenNetworks]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chats = useStore((s) => s.chats), muted = useStore((s) => s.muted), drafts = useStore((s) => s.drafts), session = useStore((s) => s.session), links = useStore((s) => s.links), aliases = useStore((s) => s.aliases);
+  return useMemo(() => buildInbox({ ...state, chats, muted, drafts, session, links, aliases }, st), [chats, muted, drafts, session, links, aliases, st.hiddenNetworks]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 // ---- Session & cache -------------------------------------------------------------------
@@ -418,6 +422,8 @@ async function syncLoop(s: Session, signal: AbortSignal) {
         addToPhonebook(rows.map(([number, name]) => ({ number, name })), true, true);
         if (typeof c.chunks === "number") contactChunks = Math.max(contactChunks, c.chunks);
       }
+      const al = r.accountData?.["app.pager.aliases"]?.names;
+      if (al && typeof al === "object" && !Array.isArray(al)) { const names = Object.fromEntries(Object.entries(al as Record<string, unknown>).filter(([, v]) => typeof v === "string")) as Record<string, string>; set({ aliases: names }); lsSet("pager.aliases", names); if (window.pagerDesktop) setAliases(names); }
       const lk = r.accountData?.["app.pager.links"]?.groups;
       if (Array.isArray(lk)) { const groups = (lk as unknown[]).filter((g): g is string[] => Array.isArray(g) && g.every((x) => typeof x === "string")); set({ links: groups }); lsSet("pager.links", groups); }
       const fav = r.accountData?.["app.pager.favorite_gifs"]?.gifs;
@@ -856,6 +862,13 @@ async function loadPhonebook(nets: Network[]) {
   }
 }
 window.setInterval(() => { if (document.visibilityState === "visible") void refreshBridges(); }, 120_000);
+
+/** Gives a chat a name only you see (empty puts the real name back). Saved in your account. */
+export function setAlias(roomId: string, name: string) {
+  const next = { ...state.aliases }; if (name.trim()) next[roomId] = name.trim(); else delete next[roomId];
+  setAliases(next); set({ aliases: next }); lsSet("pager.aliases", next);
+  void matrix.putAccountData(me(), "app.pager.aliases", { names: next }).catch(() => {});
+}
 
 /** Show chats with the same person on different networks as one row, or split them again. Saved in your account. */
 export function setLinks(next: Links) {

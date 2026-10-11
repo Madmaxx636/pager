@@ -65,6 +65,12 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
   const [tab, setTab] = useState(st.defaultTab === "unread" ? "unread" : "inbox");
   const [filters, setFilters] = useState<Filters>(noFilters);
   const [menu, setMenu] = useState(false);
+  // Desktop: the menu stays open until you click somewhere else.
+  useEffect(() => {
+    if (!menu || !window.pagerDesktop) return;
+    const away = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest(".menu-wrap")) setMenu(false); };
+    document.addEventListener("mousedown", away); return () => document.removeEventListener("mousedown", away);
+  }, [menu]);
   const [ctx, setCtx] = useState<{ c: ChatSummary; x: number; y: number }>();
   const [filterModal, setFilterModal] = useState(false);
   const [muteFor, setMuteFor] = useState<string[]>();
@@ -128,7 +134,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
             <div className="menu-wrap">
               <IconButton icon={MoreVertical} label="Menu" onClick={() => setMenu(!menu)} />
               {menu && (
-                <div className="menu" onMouseLeave={() => setMenu(false)} onClick={() => setMenu(false)}>
+                <div className="menu" onMouseLeave={window.pagerDesktop ? undefined : () => setMenu(false)} onClick={() => setMenu(false)}>
                   <div className="menu-id">{me()}</div>
                   <button onClick={onAccounts}><UserRoundCog size={18} />Accounts</button>
                   <button onClick={markAllRead}><CheckCheck size={18} />Mark all as read</button>

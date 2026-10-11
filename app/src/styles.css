@@ -421,3 +421,84 @@ body { font-family: var(--font, "Inter Variable", Inter, system-ui, -apple-syste
 .chat-net.linked { display: flex; gap: 10px; font-size: .72rem; font-weight: 600; }
 .audio-box { display: grid; gap: 4px; } .words { font-size: .9rem; line-height: 1.35; white-space: pre-wrap; opacity: .92; padding: 2px 4px 0; } .words-btn { justify-self: start; padding: 2px 4px; font-size: .82rem; }
 .check-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+
+/* ---- Skins (desktop looks): off unless the desktop app sets data-skin. The default look never reaches any of this. ---- */
+:root[data-skin] body { font-family: var(--font, system-ui, sans-serif); }
+:root[data-family] {
+  --btn-bg: var(--panel-2); --btn-ink: var(--text); --btn-sh: none; --btn-sh-dn: none; --btn-r: var(--radius);
+  --fld-bg: var(--panel-2); --fld-sh: none; --fld-r: var(--radius);
+  --mine-bg: var(--accent); --mine-sh: none; --bub-r: var(--radius); --bub-sh: none; --bub-bd: transparent;
+}
+/* Pager plastic: soft, clean rubber. A light edge and a little shadow underneath, sinking when pressed. */
+:root[data-family="plastic"] {
+  --btn-bg: linear-gradient(color-mix(in srgb, var(--panel), #fff 60%), var(--panel-2)); --btn-r: 999px;
+  --btn-sh: 0 1px 0 color-mix(in srgb, var(--line), #000 18%), 0 3px 6px rgba(40, 30, 10, .13), inset 0 1px 0 rgba(255, 255, 255, .7); --btn-sh-dn: inset 0 2px 4px rgba(40, 30, 10, .22);
+  --fld-bg: color-mix(in srgb, var(--bg), #000 4%); --fld-sh: inset 0 2px 5px rgba(40, 30, 10, .2), 0 1px 0 rgba(255, 255, 255, .7); --fld-r: 999px;
+  --mine-bg: linear-gradient(color-mix(in srgb, var(--accent), #fff 20%), var(--accent)); --mine-sh: 0 1px 0 color-mix(in srgb, var(--accent), #000 35%), 0 3px 6px rgba(40, 30, 10, .15), inset 0 1px 0 rgba(255, 255, 255, .4); --bub-sh: 0 1px 0 rgba(0, 0, 0, .06), 0 2px 4px rgba(40, 30, 10, .08);
+}
+:root[data-family="plastic"][data-theme="dark"] {
+  --btn-bg: linear-gradient(color-mix(in srgb, var(--panel), #fff 10%), var(--panel)); --btn-sh: 0 1px 0 rgba(0, 0, 0, .7), 0 3px 6px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .13); --btn-sh-dn: inset 0 2px 5px rgba(0, 0, 0, .7);
+  --fld-bg: color-mix(in srgb, var(--bg), #000 35%); --fld-sh: inset 0 3px 7px rgba(0, 0, 0, .8), 0 1px 0 rgba(255, 255, 255, .07);
+  --mine-sh: 0 1px 0 rgba(0, 0, 0, .7), 0 3px 6px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .35); --bub-sh: 0 1px 0 rgba(0, 0, 0, .6), 0 2px 4px rgba(0, 0, 0, .35);
+}
+/* Windows 95 and 98: flat grey with hard bevels. */
+:root[data-family="bevel"] { --btn-bg: #c0c0c0; --btn-r: 0; --btn-sh: inset -1px -1px #000, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf; --btn-sh-dn: inset 1px 1px #000, inset -1px -1px #fff, inset 2px 2px #808080;
+  --fld-bg: #fff; --fld-sh: inset 1px 1px #000, inset -1px -1px #fff, inset 2px 2px #808080; --fld-r: 0; --mine-bg: var(--accent); --mine-sh: inset -1px -1px #000, inset 1px 1px #fff; --bub-r: 0; --bub-sh: inset 1px 1px #808080, inset -1px -1px #dfdfdf; }
+/* Windows XP: glossy white buttons with a blue edge. */
+:root[data-family="luna"] { --btn-bg: linear-gradient(#fff, #ecebe5 80%, #d6d0c0); --btn-r: 3px; --btn-sh: inset 0 0 0 1px #003c74, 0 1px 2px rgba(0, 0, 0, .25); --btn-sh-dn: inset 0 0 0 1px #003c74, inset 0 2px 4px rgba(0, 0, 0, .3);
+  --fld-bg: #fff; --fld-sh: inset 0 0 0 1px #7f9db9, inset 1px 1px 3px rgba(0, 0, 0, .15); --fld-r: 3px; --mine-bg: linear-gradient(#6aa3f7, var(--accent)); --mine-sh: inset 0 0 0 1px #0b3ea8; --bub-r: 7px; --bub-sh: 0 1px 0 rgba(0, 0, 0, .2); }
+/* Windows Vista and 7: glass. */
+:root[data-family="glass"] { --btn-bg: linear-gradient(#f8fbff, #dfe9f5 48%, #c5d6ea 52%, #dbe8f6); --btn-r: 4px; --btn-sh: inset 0 0 0 1px #6e8fb4, inset 0 1px 0 #fff, 0 1px 3px rgba(0, 0, 0, .25); --btn-sh-dn: inset 0 0 0 1px #3c648f, inset 0 3px 5px rgba(0, 0, 0, .3);
+  --fld-bg: #fff; --fld-sh: inset 0 0 0 1px #8aa3c2, inset 0 2px 3px rgba(0, 0, 0, .15); --fld-r: 3px; --mine-bg: linear-gradient(color-mix(in srgb, var(--accent), #fff 45%), var(--accent) 50%, color-mix(in srgb, var(--accent), #000 12%) 51%, color-mix(in srgb, var(--accent), #fff 20%)); --mine-sh: inset 0 0 0 1px color-mix(in srgb, var(--accent), #000 45%), inset 0 1px 0 rgba(255, 255, 255, .6); --bub-r: 7px; --bub-sh: 0 1px 2px rgba(0, 0, 0, .2); }
+/* Windows 8: flat, square, bold outlines. */
+:root[data-family="metro"] { --btn-bg: #d9d9d9; --btn-r: 0; --btn-sh-dn: inset 0 0 0 2px #111; --fld-bg: #fff; --fld-sh: inset 0 0 0 2px #999; --fld-r: 0; --mine-bg: var(--accent); --bub-r: 0; }
+/* Windows 10 and 11: flat Fluent with a coloured bottom edge on fields. */
+:root[data-family="fluent"] { --btn-bg: color-mix(in srgb, var(--panel), var(--text) 4%); --btn-r: 6px; --btn-sh: inset 0 0 0 1px color-mix(in srgb, var(--line), var(--text) 8%), inset 0 -1px 0 color-mix(in srgb, var(--line), var(--text) 18%); --btn-sh-dn: inset 0 0 0 1px var(--line);
+  --fld-bg: var(--panel); --fld-sh: inset 0 0 0 1px var(--line), inset 0 -2px 0 var(--accent); --fld-r: 5px; --mine-bg: var(--accent); --bub-r: 8px; --bub-sh: 0 1px 2px rgba(0, 0, 0, .12); }
+/* OS X Aqua: glossy pills. */
+:root[data-family="aqua"] { --btn-bg: linear-gradient(#fff, #e3e3e3 49%, #cfcfcf 50%, #e9e9e9); --btn-r: 999px; --btn-sh: inset 0 0 0 1px #8a8a8a, 0 1px 2px rgba(0, 0, 0, .3); --btn-sh-dn: inset 0 0 0 1px #6d6d6d, inset 0 2px 4px rgba(0, 0, 0, .35);
+  --fld-bg: #fff; --fld-sh: inset 0 2px 3px rgba(0, 0, 0, .35), 0 1px 0 rgba(255, 255, 255, .8); --fld-r: 6px; --mine-bg: linear-gradient(color-mix(in srgb, var(--accent), #fff 40%), var(--accent) 50%, color-mix(in srgb, var(--accent), #000 12%) 51%, color-mix(in srgb, var(--accent), #fff 22%)); --mine-sh: inset 0 0 0 1px color-mix(in srgb, var(--accent), #000 45%), inset 0 6px 8px rgba(255, 255, 255, .45); --bub-r: 18px; --bub-sh: 0 1px 2px rgba(0, 0, 0, .25); }
+/* macOS since Yosemite: flat, white buttons with a hairline. */
+:root[data-family="mac"] { --btn-bg: var(--panel); --btn-r: 7px; --btn-sh: 0 0 0 .5px rgba(0, 0, 0, .18), 0 1px 2px rgba(0, 0, 0, .14); --btn-sh-dn: inset 0 1px 3px rgba(0, 0, 0, .22);
+  --fld-bg: var(--panel); --fld-sh: 0 0 0 .5px rgba(0, 0, 0, .25); --fld-r: 18px; --mine-bg: var(--accent); --bub-r: 18px; }
+:root[data-family="mac"][data-theme="dark"] { --btn-bg: color-mix(in srgb, var(--panel), #fff 8%); --btn-sh: 0 0 0 .5px rgba(255, 255, 255, .15), 0 1px 2px rgba(0, 0, 0, .4); --fld-sh: 0 0 0 .5px rgba(255, 255, 255, .22); }
+/* KDE Breeze and Oxygen: a faint gradient, a 1 px edge, focus in the accent. */
+:root[data-family="breeze"] { --btn-bg: linear-gradient(color-mix(in srgb, var(--panel), #fff 14%), color-mix(in srgb, var(--panel-2), var(--panel) 40%)); --btn-r: 4px; --btn-sh: inset 0 0 0 1px var(--line); --btn-sh-dn: inset 0 0 0 1px var(--accent), inset 0 2px 3px rgba(0, 0, 0, .18);
+  --fld-bg: var(--panel); --fld-sh: inset 0 0 0 1px var(--line); --fld-r: 4px; --mine-bg: var(--accent); --mine-sh: none; --bub-r: 6px; --bub-sh: 0 0 0 1px var(--line); }
+/* GNOME Adwaita and its cousins: soft flat buttons, no borders, big radius. */
+:root[data-family="adwaita"] { --btn-bg: var(--panel-2); --btn-r: 8px; --btn-sh: none; --btn-sh-dn: inset 0 2px 4px rgba(0, 0, 0, .15); --fld-bg: var(--panel); --fld-sh: inset 0 0 0 1px var(--line); --fld-r: 8px; --mine-bg: var(--accent); --bub-r: 14px; }
+/* Flat palettes (Nord, Dracula, Gruvbox, Catppuccin). */
+:root[data-family="flat"] { --btn-bg: var(--panel-2); --btn-r: 8px; --btn-sh-dn: inset 0 2px 4px rgba(0, 0, 0, .25); --fld-bg: var(--panel); --fld-sh: inset 0 0 0 1px var(--line); --fld-r: 10px; --mine-bg: var(--accent); --bub-r: 14px; }
+
+:root[data-family] .icon, :root[data-family] .pill, :root[data-family] .tab, :root[data-family] .send-more { background: var(--btn-bg); color: var(--btn-ink); box-shadow: var(--btn-sh); border-radius: var(--btn-r); }
+:root[data-family] .icon:hover { transform: none; filter: brightness(1.04); }
+:root[data-family] .icon:active, :root[data-family] .pill:active, :root[data-family] .tab:active { box-shadow: var(--btn-sh-dn); transform: translateY(1px); }
+:root[data-family] .icon.active, :root[data-family] .tab.on, :root[data-family] .pill:hover:not(:disabled) { background: var(--mine-bg); color: var(--accent-ink); box-shadow: var(--mine-sh); }
+:root[data-family] .primary, :root[data-family] .send { background: var(--mine-bg); color: var(--accent-ink); box-shadow: var(--mine-sh); border-radius: var(--btn-r); }
+:root[data-family] .send-group .send { border-radius: var(--btn-r) 0 0 var(--btn-r); } :root[data-family] .send-group .send-more { border-radius: 0 var(--btn-r) var(--btn-r) 0; background: var(--mine-bg); color: var(--accent-ink); }
+:root[data-family] .primary:active, :root[data-family] .send:active { transform: translateY(2px); filter: brightness(.94); }
+:root[data-family] .composer .field { background: var(--fld-bg); box-shadow: var(--fld-sh); border-radius: var(--fld-r); }
+:root[data-family] .bubble:not(.bare):not(.media-bubble) { border-radius: var(--bub-r); box-shadow: var(--bub-sh); }
+:root[data-family] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: var(--mine-bg); box-shadow: var(--mine-sh); color: var(--accent-ink); }
+:root[data-family] .msg.mine .bubble a { color: inherit; }
+:root[data-family="bevel"] .bubble:not(.bare) { color: var(--text); } :root[data-family="bevel"] .msg.mine .bubble:not(.bare) { color: #fff; }
+:root[data-family] .menu, :root[data-family] .modal, :root[data-family] .attach-pop { border-radius: calc(var(--radius) * .7); }
+/* Motion: menus rise, buttons sink, the chat header settles. Turn it off in Settings. */
+@keyframes skin-rise { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes skin-fade { from { opacity: 0; } to { opacity: 1; } }
+:root[data-fx="on"] .menu, :root[data-fx="on"] .attach-pop, :root[data-fx="on"] .nav-drop, :root[data-fx="on"] .modal { animation: skin-rise .22s cubic-bezier(.2, 1.1, .4, 1) both; }
+:root[data-fx="on"] .info { animation: skin-fade .2s ease both; }
+:root[data-fx="on"] .icon, :root[data-fx="on"] .primary, :root[data-fx="on"] .send, :root[data-fx="on"] .pill, :root[data-fx="on"] .tab { transition: transform .12s ease, box-shadow .12s ease, filter .12s ease, background .12s; }
+:root[data-fx="on"] .row-item:hover, :root[data-fx="on"] .chat-row:hover { transform: translateX(2px); }
+:root[data-fx="off"] * { animation: none !important; transition: none !important; }
+.skin-picks { padding: 8px 16px 12px; display: grid; gap: 10px; } .skin-group small { display: block; color: var(--muted); font-size: .75rem; font-weight: 600; margin: 4px 0; text-transform: uppercase; letter-spacing: .05em; } .skin-group > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.skin-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; background: var(--panel-2); font-size: .85rem; border: 1px solid transparent; } .skin-chip i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line); display: block; } .skin-chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--panel-2)); font-weight: 600; }
+.head-wrap { position: relative; min-width: 0; flex: 1; display: flex; } .head-wrap .head-id { flex: 1; min-width: 0; }
+.head-wrap .chat-title { display: flex; align-items: center; gap: 4px; } .head-wrap .chev { opacity: .55; flex: none; transition: transform .18s; } .head-wrap .head-id[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.head-wrap .chat-sub { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: .8rem; } .head-wrap .enc-badge { display: inline-flex; align-items: center; gap: 3px; }
+.head-wrap .cluster { display: inline-flex; flex: none; } .head-wrap .cluster > * { margin-left: -10px; border-radius: 50%; box-shadow: 0 0 0 2px var(--panel); } .head-wrap .cluster > :first-child { margin-left: 0; }
+.head-wrap .cluster .more { width: 30px; height: 30px; display: grid; place-items: center; background: var(--panel-2); color: var(--muted); font-size: .7rem; font-weight: 700; }
+.nav-drop { position: absolute; top: calc(100% + 4px); left: 8px; z-index: 30; min-width: 220px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 6px; } .nav-drop small { display: block; color: var(--muted); font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; padding: 4px 10px; }
+.nav-drop button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; border-radius: 9px; text-align: left; } .nav-drop button:hover { background: var(--panel-2); } .nav-drop i { width: 9px; height: 9px; border-radius: 50%; flex: none; } .nav-drop .tick { margin-left: auto; color: var(--accent); } .nav-drop b { margin-left: auto; background: var(--accent); color: var(--accent-ink); border-radius: 9px; padding: 0 7px; font-size: .72rem; }
+.info-net { display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--muted); font-size: .85rem; margin: -2px 0 6px; } .info-net .dot { width: 8px; height: 8px; border-radius: 50%; }
+.rename-me { display: grid; justify-items: center; gap: 2px; margin-top: 4px; } .rename-me input { width: 100%; max-width: 220px; padding: 6px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); text-align: center; }
