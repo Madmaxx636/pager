@@ -129,9 +129,9 @@ private fun buildItems(messages: List<Msg>, unreadBefore: String?, gapMs: Long):
         if (m.id == unreadBefore) out.add(Item.Unread)
         val prev = messages.getOrNull(i - 1)
         val next = messages.getOrNull(i + 1)
-        val first = prev == null || prev.sender != m.sender || m.ts - prev.ts > gapMs || out.lastOrNull() is Item.Day || out.lastOrNull() is Item.Unread
+        val first = prev == null || prev.sender != m.sender || prev.room != m.room || m.ts - prev.ts > gapMs || out.lastOrNull() is Item.Day || out.lastOrNull() is Item.Unread
         val nextDay = next?.let { Instant.ofEpochMilli(it.ts).atZone(ZoneId.systemDefault()).toLocalDate() }
-        val last = next == null || next.sender != m.sender || next.ts - m.ts > gapMs || nextDay != day || next.id == unreadBefore
+        val last = next == null || next.sender != m.sender || next.room != m.room || next.ts - m.ts > gapMs || nextDay != day || next.id == unreadBefore
         out.add(Item.M(m, i, first, last))
     }
     out.reverse()
@@ -143,7 +143,15 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     val store = LocalStore.current
     val s = LocalSettings.current
     val context = LocalContext.current
-    val chat by remember(roomId) { store.chat(roomId) }.collectAsState(null)
+    val chat by remember(roomId) { store.chatMerged(roomId) }.collectAsState(null)
+    // A person on several networks reads as one conversation: every chat in their group, in time order, unless you picked one network.
+    val links by store.links.collectAsState()
+    val allChats by store.chats.collectAsState()
+    val solo by store.solo.collectAsState()
+    val groupIds = Links.groupOf(links, roomId)?.filter { it in allChats }.orEmpty().ifEmpty { listOf(roomId) }
+    val merged = groupIds.size > 1 && roomId !in solo
+    var via by remember(roomId) { mutableStateOf<String?>(null) }
+    val sendRoom = if (merged) (via?.takeIf { it in groupIds } ?: chat?.messages?.lastOrNull()?.room ?: roomId) else roomId
     val me = store.session.collectAsState().value?.userId ?: ""
     val stars by store.stars.collectAsState()
     val messages = chat?.messages ?: emptyList()
@@ -213,26 +221,26 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     val currentEditing by rememberUpdatedState(editing)
     DisposableEffect(roomId) { onDispose { if (currentEditing == null) store.setDraft(roomId, currentText); store.typing(roomId, false); recorder.cancel() } }
     LaunchedEffect(text) {
-        if (text.isNotBlank()) store.typing(roomId, true) else store.typing(roomId, false)
+        if (text.isNotBlank()) store.typing(sendRoom, true) else store.typing(roomId, false)
         delay(500)
         if (editing == null) store.setDraft(roomId, text)
     }
     LaunchedEffect(recording) { while (recording) { recordedMs = recorder.elapsedMs; delay(200) } }
 
     var onceNext by remember { mutableStateOf(false) } // the next pictures go out as view-once
-    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(8)) { uris: List<Uri> -> val once = onceNext; onceNext = false; uris.forEach { store.sendFile(roomId, it, once) } }
-    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> -> uris.forEach { store.sendFile(roomId, it) } }
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(8)) { uris: List<Uri> -> val once = onceNext; onceNext = false; uris.forEach { store.sendFile(sendRoom, it, once) } }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> -> uris.forEach { store.sendFile(sendRoom, it) } }
     val pickStickerImages = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> -> if (uris.isNotEmpty()) scope.launch { store.addStickers(uris) } }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) cameraUri?.let { store.sendFile(roomId, it) } }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) cameraUri?.let { store.sendFile(sendRoom, it) } }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) recording = recorder.start() }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
-        scope.launch { currentLocation(context)?.let { store.sendLocation(roomId, it.latitude, it.longitude) } }
+        scope.launch { currentLocation(context)?.let { store.sendLocation(sendRoom, it.latitude, it.longitude) } }
     }
     val pickContact = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         val uri = res.data?.data ?: return@rememberLauncherForActivityResult
         context.contentResolver.query(uri, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME), null, null, null)?.use { c ->
-            if (c.moveToFirst()) store.sendContact(roomId, c.getString(1).orEmpty(), c.getString(0).orEmpty())
+            if (c.moveToFirst()) store.sendContact(sendRoom, c.getString(1).orEmpty(), c.getString(0).orEmpty())
         }
     }
 
@@ -250,13 +258,13 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     }
     LaunchedEffect(roomId, chat?.reachedStart) {
         snapshotFlow { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index to list.layoutInfo.totalItemsCount }.collect { (last, total) ->
-            if (last != null && total > 0 && last >= total - 6) store.loadOlder(roomId)
+            if (last != null && total > 0 && last >= total - 6) groupIds.forEach { id -> store.loadOlder(id) }
         }
     }
     // An empty or short chat never scrolls, so the "near the top" check above never fires and its history would stay blank until a message
     // arrived. Ask for older messages directly whenever there are few to show.
     val fewMessages = chat?.let { !it.reachedStart && it.messages.size < 30 } == true
-    LaunchedEffect(roomId, fewMessages, chat?.messages?.size) { if (fewMessages) store.loadOlder(roomId) }
+    LaunchedEffect(roomId, fewMessages, chat?.messages?.size) { if (fewMessages) groupIds.forEach { id -> store.loadOlder(id) } }
     LaunchedEffect(roomId, s.markReadMode) { if (s.markReadMode == "scrolled") snapshotFlow { list.firstVisibleItemIndex <= 1 }.collect { atEnd -> if (atEnd) store.markRead(roomId) } }
     val showJump by remember { derivedStateOf { list.firstVisibleItemIndex > 3 } }
 
@@ -265,7 +273,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
         if (body.isEmpty()) return
         val e = editing
         if (e != null) store.edit(roomId, e.id, body)
-        else store.send(roomId, body, replyTo?.id, mentionIds.filterKeys { body.contains("@$it") }.values.toList())
+        else store.send(sendRoom, body, replyTo?.id, mentionIds.filterKeys { body.contains("@$it") }.values.toList())
         text = ""; replyTo = null; editing = null; mentionIds.clear()
     }
 
@@ -289,7 +297,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                         chat?.let {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(7.dp).clip(CircleShape).background(networkMeta(it.network).color))
-                                Text(" ${networkMeta(it.network).label}${if (it.isGroup) " · ${it.peopleCount} members" else ""}${if (it.encrypted) " · \uD83D\uDD12 Encrypted" else ""}", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                                Text(" ${if (merged) "${groupIds.size} networks together" else networkMeta(it.network).label}${if (it.isGroup) " · ${it.peopleCount} members" else ""}${if (it.encrypted) " · \uD83D\uDD12 Encrypted" else ""}", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -366,6 +374,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                 }
             }
 
+            if (merged) ViaPick(groupIds, sendRoom) { via = it }
             // Composer
             val canHold by rememberUpdatedState(text.isBlank() && !recording && hasPermission(context, Manifest.permission.RECORD_AUDIO))
             Box(Modifier.fillMaxWidth().background(scheme.surface).navigationBarsPadding()
@@ -388,7 +397,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                         }
                         holding = false
                         if (System.currentTimeMillis() - began > 450) {
-                            if (holdCancel) recorder.cancel() else recorder.stop()?.let { (f, ms) -> store.sendVoice(roomId, f, ms) }
+                            if (holdCancel) recorder.cancel() else recorder.stop()?.let { (f, ms) -> store.sendVoice(sendRoom, f, ms) }
                             recording = false; holdCancel = false
                         }
                     }
@@ -398,7 +407,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                         IconBtn(Icons.Rounded.Delete, "Cancel recording", { recorder.cancel(); recording = false }, tint = scheme.error)
                         Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFEF4444)))
                         Text(if (holding && holdCancel) "  Let go to cancel" else "  Recording  %d:%02d".format(recordedMs / 60000, (recordedMs / 1000) % 60) + if (holding) "  ·  let go to send, slide left to cancel" else "", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        Box(Modifier.size(48.dp).clip(CircleShape).background(scheme.primary).dpadFocus().clickable { recorder.stop()?.let { (f, ms) -> store.sendVoice(roomId, f, ms) }; recording = false }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(48.dp).clip(CircleShape).background(scheme.primary).dpadFocus().clickable { recorder.stop()?.let { (f, ms) -> store.sendVoice(sendRoom, f, ms) }; recording = false }, contentAlignment = Alignment.Center) {
                             Icon(Icons.AutoMirrored.Rounded.Send, "Send voice message", tint = scheme.onPrimary)
                         }
                     }
@@ -474,13 +483,13 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
             Attach.CONTACT -> pickContact.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI))
             Attach.LOCATION ->
                 if (hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) || hasPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION))
-                    scope.launch { currentLocation(context)?.let { store.sendLocation(roomId, it.latitude, it.longitude) } }
+                    scope.launch { currentLocation(context)?.let { store.sendLocation(sendRoom, it.latitude, it.longitude) } }
                 else locationPermission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     })
-    if (gifSheet) GifSheet(onPick = { store.sendGif(roomId, it); gifSheet = false }, onSettings = { gifSheet = false; onSettings("media") }, onDismiss = { gifSheet = false })
-    if (stickerSheet) StickerSheet(roomId, onPick = { store.sendSticker(roomId, it); stickerSheet = false }, onAdd = { pickStickerImages.launch("image/*") }, onDismiss = { stickerSheet = false })
-    if (pollSheet) PollSheet(onCreate = { q, a, max, disclosed -> store.sendPoll(roomId, q, a, max, disclosed); pollSheet = false }, onDismiss = { pollSheet = false })
+    if (gifSheet) GifSheet(onPick = { store.sendGif(sendRoom, it); gifSheet = false }, onSettings = { gifSheet = false; onSettings("media") }, onDismiss = { gifSheet = false })
+    if (stickerSheet) StickerSheet(roomId, onPick = { store.sendSticker(sendRoom, it); stickerSheet = false }, onAdd = { pickStickerImages.launch("image/*") }, onDismiss = { stickerSheet = false })
+    if (pollSheet) PollSheet(onCreate = { q, a, max, disclosed -> store.sendPoll(sendRoom, q, a, max, disclosed); pollSheet = false }, onDismiss = { pollSheet = false })
     if (emojiForText) EmojiPickerDialog(s.recentEmoji, onPick = { e -> text += e; emojiForText = false }, onDismiss = { emojiForText = false })
 
     selectable?.let { m ->
@@ -542,7 +551,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
         scheduleDialog = false
         val body = text.trim()
         scope.launch {
-            val err = store.schedule(roomId, body, (at - System.currentTimeMillis()).coerceAtLeast(5_000))
+            val err = store.schedule(sendRoom, body, (at - System.currentTimeMillis()).coerceAtLeast(5_000))
             if (err == null) { text = ""; replyTo = null } else scheduleError = err
         }
     }, { scheduleDialog = false })

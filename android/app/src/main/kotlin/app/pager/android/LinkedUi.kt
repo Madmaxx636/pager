@@ -39,11 +39,16 @@ fun LinkedBar(roomId: String, onOpen: (String) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     var declined by remember { mutableStateOf(setOf<String>()) }
     val group = Links.groupOf(links, roomId)?.filter { it in chats }
+    val solo by store.solo.collectAsState()
     if (group != null && group.size > 1) {
+        val merged = roomId !in solo
         Row(Modifier.fillMaxWidth().background(scheme.surface).horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.clip(CircleShape).background(if (merged) scheme.primary else scheme.surfaceVariant).dpadFocus().clickable { store.setSolo(roomId, false) }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("All", style = MaterialTheme.typography.labelLarge, color = if (merged) scheme.onPrimary else scheme.onSurface)
+            }
             group.forEach { id ->
-                val c = chats.getValue(id); val on = id == roomId; val meta = networkMeta(c.network)
-                Row(Modifier.clip(CircleShape).background(if (on) scheme.primary else scheme.surfaceVariant).dpadFocus().clickable { if (!on) onOpen(id) }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                val c = chats.getValue(id); val on = !merged && id == roomId; val meta = networkMeta(c.network)
+                Row(Modifier.clip(CircleShape).background(if (on) scheme.primary else scheme.surfaceVariant).dpadFocus().clickable { store.setSolo(id, true); if (id != roomId) onOpen(id) }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(if (on) scheme.onPrimary else meta.color))
                     Text(" ${meta.label}", style = MaterialTheme.typography.labelLarge, color = if (on) scheme.onPrimary else scheme.onSurface)
                     if (!on && c.unread > 0) Text("  ${c.unread}", style = MaterialTheme.typography.labelMedium, color = scheme.primary)
@@ -93,5 +98,25 @@ fun LinkControls(roomId: String) {
                 }
             },
         )
+    }
+}
+
+/** Merged view: which network your next message goes out on. It follows the latest message unless you pick one. */
+@Composable
+fun ViaPick(ids: List<String>, current: String, onPick: (String) -> Unit) {
+    val store = LocalStore.current
+    val chats by store.chats.collectAsState()
+    var open by remember { mutableStateOf(false) }
+    val scheme = MaterialTheme.colorScheme
+    val meta = networkMeta(chats[current]?.network ?: "matrix")
+    Row(Modifier.fillMaxWidth().background(scheme.surface).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = { open = true }) {
+            Text("Sending on ", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+            Box(Modifier.size(7.dp).clip(CircleShape).background(meta.color))
+            Text(" ${meta.label} ▾", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+        }
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            ids.forEach { id -> val n = networkMeta(chats[id]?.network ?: "matrix"); androidx.compose.material3.DropdownMenuItem(text = { Text(n.label + if (id == current) "  ✓" else "") }, onClick = { onPick(id); open = false }) }
+        }
     }
 }

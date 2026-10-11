@@ -620,9 +620,9 @@ export function typing(roomId: string, on: boolean) {
   void matrix.typing(me(), roomId, on).catch(() => {});
 }
 
-/** Marks a chat read; chats shown merged with it (desktop) are marked read together. */
+/** Marks a chat read; chats shown merged with it are marked read together. */
 export function markRead(roomId: string) {
-  const ids = window.pagerDesktop && !state.solo.includes(roomId) ? groupOf(state.links, roomId) ?? [roomId] : [roomId];
+  const ids = !state.solo.includes(roomId) ? groupOf(state.links, roomId) ?? [roomId] : [roomId];
   for (const id of ids) markReadOne(id);
 }
 function markReadOne(roomId: string) {
