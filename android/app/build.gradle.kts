@@ -20,7 +20,8 @@ android {
         versionCode = major * 10000 + minor * 100 + patch
         versionName = v
         // The encryption library ships a native file for each kind of phone; keep the two that real phones use.
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        // -Pabis=armeabi-v7a (or arm64-v8a) builds a smaller file for one kind of phone; the default has both.
+        ndk { abiFilters += ((project.findProperty("abis") as String?) ?: "arm64-v8a,armeabi-v7a").split(",") }
     }
 
     buildFeatures { compose = true }
