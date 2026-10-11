@@ -352,13 +352,21 @@ export async function importKeyFile(text: string, passphrase: string): Promise<n
   const n = await e2ee.importKeys(text, passphrase); void retryWaiting(); return n;
 }
 
-sendHook.fn = async (roomId, type, content) => {
-  const chat = state.chats[roomId];
-  if (!chat?.encrypted) return { type, content };
-  if (!e2ee) throw new Error("Encryption is not ready yet. Try again in a moment.");
-  const encrypted = await e2ee.encrypt(roomId, type, content, await roomMembers(roomId));
-  // Relations (edits, replies, reactions) stay visible outside the encryption so the server can group them.
-  return { type: "m.room.encrypted", content: content?.["m.relates_to"] ? { ...encrypted, "m.relates_to": content["m.relates_to"] } : encrypted };
+// Messages to one page go through encryption one after another. The first message in a page is slow (it has to share keys), and a quick
+// second one used to overtake it, so they arrived in the wrong order.
+const sendQueues = new Map<string, Promise<unknown>>();
+sendHook.fn = (roomId, type, content) => {
+  const run = async () => {
+    const chat = state.chats[roomId];
+    if (!chat?.encrypted) return { type, content };
+    if (!e2ee) throw new Error("Encryption is not ready yet. Try again in a moment.");
+    const encrypted = await e2ee.encrypt(roomId, type, content, await roomMembers(roomId));
+    // Relations (edits, replies, reactions) stay visible outside the encryption so the server can group them.
+    return { type: "m.room.encrypted", content: content?.["m.relates_to"] ? { ...encrypted, "m.relates_to": content["m.relates_to"] } : encrypted };
+  };
+  const next = (sendQueues.get(roomId) ?? Promise.resolve()).then(run, run);
+  sendQueues.set(roomId, next.catch(() => {}));
+  return next;
 };
 
 async function syncLoop(s: Session, signal: AbortSignal) {
@@ -665,12 +673,20 @@ export const preview = (u: string) => { if (!previews.has(u)) previews.set(u, ma
 // ---- History & chat management ---------------------------------------------------------------
 
 const loading = new Set<string>();
-export function loadOlder(roomId: string) {
+/** How many messages a page should have before we stop fetching older ones by ourselves. */
+const FILL_MESSAGES = 30;
+export function loadOlder(roomId: string, pages = 0) {
   const c = state.chats[roomId];
   if (!c || c.reachedStart || loading.has(roomId)) return;
   const token = c.prevBatch ?? since; if (!token) return;
   loading.add(roomId);
-  matrix.messages(roomId, token).then(async ({ chunk, end, state: st }) => { const clear = await decryptEvents(roomId, chunk); patchChat(roomId, (x) => applyHistory(x, clear, end, st ?? [], state.session?.userId ?? "")); }).catch(() => {}).finally(() => loading.delete(roomId));
+  matrix.messages(roomId, token).then(async ({ chunk, end, state: st }) => { const clear = await decryptEvents(roomId, chunk); patchChat(roomId, (x) => applyHistory(x, clear, end, st ?? [], state.session?.userId ?? "")); }).catch(() => {}).finally(() => {
+    loading.delete(roomId);
+    // A page can be all bookkeeping (people joining, send statuses) and add nothing to show. The list then doesn't change, so nothing
+    // would ask for the next page and the history would sit there until something else (like sending a message) woke it up.
+    const n = state.chats[roomId];
+    if (n && !n.reachedStart && pages < 8 && n.messages.length < FILL_MESSAGES && (n.prevBatch ?? since) !== token) loadOlder(roomId, pages + 1);
+  });
 }
 export function setTag(roomId: string, tag: string, on: boolean, order?: number) {
   patchChat(roomId, (c) => ({

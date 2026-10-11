@@ -84,7 +84,8 @@ fun TourGate(onGo: (String) -> Unit, forceOpen: Boolean = false, onClose: () -> 
     var open by remember { mutableStateOf(forceOpen) }
     var index by remember { mutableIntStateOf(0) }
     val user = session?.userId.orEmpty()
-    val keyDealtWith = KeySetupState.finished >= 0 && (!enc.ready || enc.backupHere || keyPrefs.getBoolean("done." + enc.deviceId, false))
+    // Encryption still starting: the recovery-key screen may be about to appear and comes first.
+    val keyDealtWith = KeySetupState.finished >= 0 && (if (enc.ready) enc.backupHere || keyPrefs.getBoolean("done." + enc.deviceId, false) else enc.error != null)
 
     LaunchedEffect(user, synced, keyDealtWith) {
         if (forceOpen || open || user.isEmpty() || !synced || !keyDealtWith || prefs.getBoolean("done.$user", false)) return@LaunchedEffect

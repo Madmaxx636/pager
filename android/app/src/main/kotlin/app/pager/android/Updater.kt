@@ -53,7 +53,9 @@ object Updater {
         try {
             val info = withContext(Dispatchers.IO) { fetch(server) }
             prefs.edit().putLong("checked", System.currentTimeMillis()).apply()
-            if (info != null && info.code > currentCode(ctx)) _available.value = info
+            // An update signed with a different key than this app can't be installed over it: don't offer it (say why only when asked).
+            if (info != null && info.signer != null && !sameSigner(signers(ctx), setOf(info.signer))) { if (force && info.code > currentCode(ctx)) _message.value = wrongKey(info) else if (force) _message.value = "You're up to date (${currentName(ctx)})" }
+            else if (info != null && info.code > currentCode(ctx)) _available.value = info
             else if (force) _message.value = "You're up to date (${currentName(ctx)})"
         } catch (e: Exception) { if (force) _message.value = "Couldn't check for updates: ${e.message ?: "server unreachable"}" }
         _stage.value = Stage.IDLE
