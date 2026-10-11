@@ -109,8 +109,8 @@ if (!app.requestSingleInstanceLock()) {
 
     try { tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "build", "tray.png")).resize({ width: 22, height: 22 })); tray.on("click", () => (win && win.isVisible() && win.isFocused() ? win.hide() : showWindow())); updateTray(); } catch { tray = null; }
     createWindow();
-    // Look for a newer version a minute after starting, then every six hours.
-    setTimeout(() => void updates(true), 60_000); setInterval(() => void updates(true), 6 * 3600_000);
+    // Look for a newer version a minute after starting, then every hour.
+    setTimeout(() => void updates(true), 60_000); setInterval(() => void updates(true), 60 * 60_000);
     // Bring Pager forward from anywhere (not every Linux desktop allows global shortcuts, so failure is fine).
     try { globalShortcut.register("CommandOrControl+Alt+P", () => (win && win.isVisible() && win.isFocused() ? win.hide() : showWindow())); } catch { /* unsupported */ }
 
