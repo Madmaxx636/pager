@@ -104,6 +104,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 QuickAction(Icons.Rounded.NotificationsOff, if (isMuted) "Unmute" else "Mute", isMuted) { if (isMuted) store.setMuted(roomId, false) else muteSheet = true }
                 QuickAction(Icons.Rounded.Alarm, "Remind") { remindSheet = true }
             }
+            LinkControls(roomId)
             SettingsGroup {
                 SwitchRow("Low priority", "Quiet, except @mentions and replies", c.lowPriority) { store.setLowPriority(roomId, it) }; GroupDivider()
                 SwitchRow("Archived", checked = c.archived) { store.setTag(roomId, "u.archived", it) }; GroupDivider()

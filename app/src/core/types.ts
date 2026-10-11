@@ -111,6 +111,8 @@ export interface ChatSummary {
   unanswered: boolean;
   lastFromMe: boolean;
   typing: boolean;
+  /** This row stands for several chats with the same person on different networks (the others are listed here, this one included). */
+  linked?: { id: string; network: string }[];
 }
 
 export const emptyChat = (id: string): ChatState => ({

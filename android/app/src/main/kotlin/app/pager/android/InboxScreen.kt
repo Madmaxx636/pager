@@ -476,7 +476,8 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
                     }
                     if (!minimal) Text(remember(c.ts, narrow) { timeLabel(c.ts, narrow) }, modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelMedium, color = if (unread && !c.muted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (s.showNetworkNameInRows) Text(networkMeta(c.network).label, style = MaterialTheme.typography.labelMedium, color = networkMeta(c.network).color)
+                if (c.linked.size > 1) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { c.linked.forEach { (_, n) -> Text("● ${networkMeta(n).label}", style = MaterialTheme.typography.labelMedium, color = networkMeta(n).color) } }
+                else if (s.showNetworkNameInRows) Text(networkMeta(c.network).label, style = MaterialTheme.typography.labelMedium, color = networkMeta(c.network).color)
                 if (!minimal) Row(verticalAlignment = Alignment.CenterVertically) {
                     val muted = MaterialTheme.colorScheme.onSurfaceVariant
                     when {
