@@ -234,20 +234,21 @@ const unreadable = (e: any) => ({ ...e, type: "m.room.message", content: { msgty
 
 /** Replaces m.room.encrypted events with what they say. Unreadable ones become a placeholder and are tried again when keys arrive. */
 async function decryptEvents(roomId: string, events: any[]): Promise<any[]> {
-  if (!e2ee || !events.some((e) => isEncryptedType(e?.type))) return events;
+  if (!events.some((e) => isEncryptedType(e?.type))) return events;
   const out: any[] = [];
   for (const e of events) {
     if (!isEncryptedType(e?.type)) { out.push(e); continue; }
-    const clear = await e2ee.decrypt(roomId, e);
+    // Encryption may not have finished starting yet. The message must NOT be passed on as it is: the app would drop it, and the sync has
+    // already moved past it. Keep it as a locked placeholder; it opens once encryption is ready.
+    const clear = e2ee ? await e2ee.decrypt(roomId, e) : undefined;
     if (clear) out.push(clear);
-    else { out.push(unreadable(e)); window.setTimeout(() => void retryWaiting([roomId]), 4000); }
+    else { out.push(unreadable(e)); if (e2ee) window.setTimeout(() => void retryWaiting([roomId]), 4000); }
   }
   return out;
 }
 
 async function decryptSync(res: any) {
-  if (!e2ee) return;
-  try { await e2ee.receiveSync(res); } catch { await new Promise((r) => setTimeout(r, 500)); await e2ee.receiveSync(res); } // keys in this update must not be dropped
+  if (e2ee) try { await e2ee.receiveSync(res); } catch { await new Promise((r) => setTimeout(r, 500)); await e2ee.receiveSync(res); } // keys in this update must not be dropped
   for (const [roomId, room] of Object.entries<any>(res.rooms?.join ?? {})) {
     const ev = room.timeline?.events;
     if (Array.isArray(ev)) room.timeline.events = await decryptEvents(roomId, ev);

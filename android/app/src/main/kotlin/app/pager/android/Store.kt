@@ -337,17 +337,19 @@ class Store(private val context: Context) {
 
     /** Replaces m.room.encrypted events with what they say. Unreadable ones become a placeholder and are tried again when keys arrive. */
     private suspend fun decryptEvents(roomId: String, events: List<JsonObject>): List<JsonObject> {
-        val e = e2ee ?: return events
         if (events.none { (it["type"] as? JsonPrimitive)?.contentOrNull == "m.room.encrypted" }) return events
+        val e = e2ee
         return events.map { ev ->
             if ((ev["type"] as? JsonPrimitive)?.contentOrNull != "m.room.encrypted") ev
-            else e.decrypt(roomId, ev) ?: unreadable(ev).also { scope.launch { delay(4_000); retryWaiting(listOf(roomId)) } }
+            // Encryption may not have finished starting yet (a slow phone, right after signing in). The message must NOT be passed on as it is:
+            // the app would drop it, and the sync has already moved past it. Keep it as a locked placeholder; it opens once encryption is ready.
+            else (e?.decrypt(roomId, ev)) ?: unreadable(ev).also { if (e != null) scope.launch { delay(4_000); retryWaiting(listOf(roomId)) } }
         }
     }
 
     private suspend fun decryptSync(res: JsonObject): JsonObject {
-        val e = e2ee ?: return res
-        try { e.receiveSync(res) } catch (x: CancellationException) { throw x } catch (_: Throwable) { delay(500); e.receiveSync(res) } // keys in this update must not be dropped
+        val e = e2ee
+        if (e != null) try { e.receiveSync(res) } catch (x: CancellationException) { throw x } catch (_: Throwable) { delay(500); e.receiveSync(res) } // keys in this update must not be dropped
         val rooms = res["rooms"] as? JsonObject ?: return res
         val join = rooms["join"] as? JsonObject ?: return res
         val newJoin = JsonObject(join.mapValues { (roomId, room) ->
