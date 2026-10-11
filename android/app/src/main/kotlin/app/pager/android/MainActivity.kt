@@ -66,7 +66,7 @@ class MainActivity : FragmentActivity() {
         setContent {
             val settings by store.settings.state.collectAsState()
             PagerTheme(settings) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(Modifier.fillMaxSize().einkFilter(settings.eink), color = MaterialTheme.colorScheme.background) {
                     Box(Modifier.safeDrawingPadding()) {
                         CompositionLocalProvider(LocalStore provides store) {
                             if (locked && settings.appLock) LockScreen(onUnlock = { unlock() }) else Root()

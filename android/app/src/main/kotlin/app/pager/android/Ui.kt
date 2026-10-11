@@ -67,7 +67,7 @@ fun Sheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) { Column(Modifier.navigationBarsPadding().padding(bottom = 12.dp), content = content) }
+    ) { Column(Modifier.einkFilter(LocalSettings.current.eink).navigationBarsPadding().padding(bottom = 12.dp), content = content) }
 }
 
 @Composable
