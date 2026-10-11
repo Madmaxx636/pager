@@ -229,14 +229,17 @@ class Store(private val context: Context) {
         settingsPush?.cancel()
         settingsPush = scope.launch {
             kotlinx.coroutines.delay(1500)
+            runCatching { matrix.putAccountData(me, SettingsStore.SHARED_TYPE, settings.sharedPayload()) }
             runCatching { matrix.putAccountData(me, settingsType, settings.payload()) }
         }
     }
 
     /** Runs on every sync: takes newer settings from the account, or uploads ours if the account has none or older ones. */
-    private fun handleSettingsSync(remote: JsonObject?, userId: String) {
+    private fun handleSettingsSync(remote: JsonObject?, userId: String, shared: JsonObject? = null) {
         val first = !settingsChecked
         settingsChecked = true
+        if (shared == null && first) settings.seedSharedStamps()
+        if (shared != null || first) { val (_, ahead) = settings.applyRemoteShared(shared); if (ahead && first) pushSettings() }
         if (remote != null) {
             val applied = settings.applyRemote(remote)
             val remoteAt = (remote["updatedAt"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: 0L
@@ -529,7 +532,7 @@ class Store(private val context: Context) {
                         val empty = r.chats.values.filter { it.messages.isEmpty() && !it.reachedStart }.take(25).map { it.id }
                         if (empty.isNotEmpty()) scope.launch { for (id in empty) { loadOlder(id); delay(150) } }
                     }
-                    handleSettingsSync(r.accountData[settingsType], s.userId)
+                    handleSettingsSync(r.accountData[settingsType], s.userId, r.accountData[SettingsStore.SHARED_TYPE])
                     for ((type, c) in r.accountData) if (type.startsWith("app.pager.contacts.")) {
                         val rows = ((c["rows"] as? JsonArray) ?: JsonArray(emptyList())).mapNotNull { row ->
                             val a = row as? JsonArray

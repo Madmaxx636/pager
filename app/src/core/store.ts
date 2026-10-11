@@ -10,7 +10,7 @@ import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
 import { playSound } from "./sounds";
-import { getSettings, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
+import { SHARED_TYPE, applyRemoteShared, seedSharedStamps, sharedPayload, getSettings, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
 import {
   ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isStoriesRoom, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
   labelsOf, lastPreview, lastTs, nameOf, previewOf,
@@ -204,10 +204,12 @@ function pushSettings(userId: string) {
   window.clearTimeout(settingsPushTimer);
   settingsPushTimer = window.setTimeout(() => { void pager_putSettings(userId); }, 1500);
 }
-function pager_putSettings(userId: string) { return matrix.putAccountData(userId, settingsSyncType(), settingsPayload()).catch(() => {}); }
+function pager_putSettings(userId: string) { void matrix.putAccountData(userId, SHARED_TYPE, sharedPayload()).catch(() => {}); return matrix.putAccountData(userId, settingsSyncType(), settingsPayload()).catch(() => {}); }
 /** Runs on every sync: takes newer settings from the account, or uploads ours if the account has none or older ones. */
-function handleSettingsSync(remote: unknown, userId: string) {
+function handleSettingsSync(remote: unknown, userId: string, shared?: unknown) {
   const first = !settingsChecked;
+  if (shared === undefined && first) seedSharedStamps();
+  if (shared !== undefined || first) { const r = applyRemoteShared(shared); if (r.ahead && first) pushSettings(userId); }
   if (remote !== undefined) {
     const applied = applyRemoteSettings(remote);
     if (!applied && first && getSettingsUpdatedAt() > ((remote as { updatedAt?: number }).updatedAt ?? 0)) pushSettings(userId);
@@ -444,7 +446,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
         // the list shows something to read instead of "No messages yet" until each one is opened.
         if (initial) { const empty = Object.values(r.chats).filter((c) => !c.messages.length && !c.reachedStart).slice(0, 25); empty.forEach((c, i) => window.setTimeout(() => loadOlder(c.id), 150 * i)); }
         if (r.userStickers) lsSet("pager.userStickers", r.userStickers);
-        handleSettingsSync(r.accountData?.[settingsSyncType()], s.userId);
+        handleSettingsSync(r.accountData?.[settingsSyncType()], s.userId, r.accountData?.[SHARED_TYPE]);
         for (const [type, c] of Object.entries(r.accountData ?? {})) if (type.startsWith("app.pager.contacts.")) {
           const rows = Array.isArray(c.rows) ? (c.rows as unknown[]).filter((x): x is [string, string] => Array.isArray(x) && typeof x[0] === "string" && typeof x[1] === "string") : [];
           addToPhonebook(rows.map(([number, name]) => ({ number, name })), true, true);

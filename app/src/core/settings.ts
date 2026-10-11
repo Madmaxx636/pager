@@ -187,6 +187,48 @@ function load(): AppSettings {
 // Each kind of device (web, desktop, phone) keeps its own settings in your Matrix account data, so signing in on a new
 // computer brings your layout back. Things that only make sense on one machine are left out.
 const SYNC_EXCLUDE: (keyof AppSettings)[] = ["gifKey", "sidebarWidth"];
+// Most settings (look, behaviour, notification rules) are the same on every device: each one is saved in your account with the time it last changed,
+// and the newest change wins, so changing a setting anywhere changes it everywhere. What only makes sense on one device stays on it.
+export const SHARED_KEYS: (keyof AppSettings)[] = ["themeMode", "accent", "accentCustom", "fontScale", "fontFamily", "palette", "bubbleStyle", "bubbleFill", "bubbleDepth", "messageAnimation", "screenEffects", "wallpaper", "timeFormat", "colorSenderNames", "avatarShape", "largeEmoji", "quickReactions", "doubleTapReact", "swipeToReply", "reactionStyle", "hideStories", "deleteAtSource", "autoTranscribe", "markdown", "mentionSuggestions", "greetings", "confirmDelete", "openAtUnread", "markReadMode", "groupGapMin", "hiddenNetworks", "inboxStyle", "defaultTab", "showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "gifProvider", "convoSounds", "sendSound", "receiveSound", "reactionSound", "notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin"];
+export const SHARED_TYPE = "app.pager.settings.shared";
+const sharedSet = new Set<string>(SHARED_KEYS);
+const STAMPS_KEY = "pager.settingsStamps";
+let stamps: Record<string, number> = (() => { try { return JSON.parse(localStorage.getItem(STAMPS_KEY) ?? "{}"); } catch { return {}; } })();
+/** What the account held for the shared settings the last time we saw it, so a save never wipes another device's newer choice. */
+let remoteShared: Record<string, { v: unknown; t: number }> = {};
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+export function sharedPayload(): { v: 2; keys: Record<string, { v: unknown; t: number }> } {
+  const keys = { ...remoteShared };
+  for (const k of SHARED_KEYS) if (stamps[k] && stamps[k] >= (keys[k]?.t ?? 0)) keys[k] = { v: raw[k], t: stamps[k] };
+  return { v: 2, keys };
+}
+/** First time on a device that has settings of its own but an account with none shared yet: its non-default choices become the shared ones, dated when they were last changed. */
+export function seedSharedStamps() {
+  if (SHARED_KEYS.some((k) => stamps[k])) return;
+  for (const k of SHARED_KEYS) if (!same(raw[k], DEFAULTS[k])) stamps[k] = updatedAt || Date.now();
+  try { localStorage.setItem(STAMPS_KEY, JSON.stringify(stamps)); } catch { /* storage may be unavailable */ }
+}
+/** Takes newer shared settings from the account. Returns whether anything here changed, and whether we hold something newer than the account. */
+export function applyRemoteShared(content: unknown): { changed: boolean; ahead: boolean } {
+  const keys = (content as { keys?: Record<string, { v: unknown; t: number }> } | undefined)?.keys;
+  if (!keys || typeof keys !== "object") return { changed: false, ahead: SHARED_KEYS.some((k) => stamps[k]) };
+  remoteShared = {};
+  let changed = false;
+  for (const [k, e] of Object.entries(keys)) {
+    if (!sharedSet.has(k) || !e || typeof e.t !== "number") continue;
+    remoteShared[k] = e;
+    if (e.t > (stamps[k] ?? 0)) { if (!same(raw[k as keyof AppSettings], e.v)) { (raw as unknown as Record<string, unknown>)[k] = e.v; changed = true; } stamps[k] = e.t; }
+  }
+  const ahead = SHARED_KEYS.some((k) => (stamps[k] ?? 0) > (remoteShared[k]?.t ?? 0));
+  if (changed) {
+    state = raw;
+    try { localStorage.setItem(KEY, JSON.stringify(raw)); } catch { /* storage may be unavailable */ }
+    listeners.forEach((l) => l());
+  }
+  try { localStorage.setItem(STAMPS_KEY, JSON.stringify(stamps)); } catch { /* storage may be unavailable */ }
+  return { changed, ahead };
+}
+
 const TS_KEY = "pager.settingsUpdatedAt";
 let updatedAt = (() => { try { return Number(localStorage.getItem(TS_KEY) ?? 0) || 0; } catch { return 0; } })();
 const localListeners = new Set<() => void>();
@@ -206,6 +248,7 @@ export const getSettingsUpdatedAt = () => updatedAt;
 export function settingsPayload(): { v: 1; updatedAt: number; settings: Partial<AppSettings> } {
   const s: Partial<AppSettings> = { ...raw };
   for (const k of SYNC_EXCLUDE) delete s[k];
+  for (const k of SHARED_KEYS) delete s[k]; // those travel in the shared settings
   return { v: 1, updatedAt, settings: s };
 }
 /** Applies settings saved in the account if they are newer than ours. Returns whether anything changed. */
@@ -214,6 +257,7 @@ export function applyRemoteSettings(content: unknown): boolean {
   if (!c || typeof c.updatedAt !== "number" || !c.settings || c.updatedAt <= updatedAt) return false;
   const next: Partial<AppSettings> = { ...c.settings };
   for (const k of SYNC_EXCLUDE) delete next[k];
+  for (const k of SHARED_KEYS) delete next[k]; // older versions saved everything here: the shared settings decide those
   raw = { ...raw, ...next };
   state = raw;
   updatedAt = c.updatedAt;
@@ -228,6 +272,9 @@ export const getSettings = () => state;
 /** Your own choices, without E-ink's overrides (this is what gets saved and shown on the settings page). */
 export const getRawSettings = () => raw;
 export function updateSettings(patch: Partial<AppSettings>) {
+  const now = Date.now();
+  for (const k of Object.keys(patch)) if (sharedSet.has(k) && !same(raw[k as keyof AppSettings], patch[k as keyof AppSettings])) stamps[k] = now;
+  try { localStorage.setItem(STAMPS_KEY, JSON.stringify(stamps)); } catch { /* storage may be unavailable */ }
   raw = { ...raw, ...patch };
   state = raw;
   updatedAt = Date.now();
