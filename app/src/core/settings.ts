@@ -1,4 +1,5 @@
 import { FONTS, paletteById } from "./palettes";
+import { skinById } from "./skins";
 import { useSyncExternalStore } from "react";
 
 /** Everything the user can tune. One JSON blob in localStorage. */
@@ -20,6 +21,12 @@ export interface AppSettings {
   fontFamily: string;
   reactionStyle: "filled" | "outline";
   hideStories: boolean;
+  /** Desktop app only: a ready-made look (see skins.ts). "default" is the look Pager always had. */
+  skin: string;
+  /** An accent chosen for that look; empty uses the look's own. */
+  skinAccent: string;
+  /** Extra motion in the desktop looks: menus that slide, buttons that press, bubbles that pop. */
+  fancyMotion: boolean;
   /** Deleting a chat in Pager also deletes it on its own network (Signal, WhatsApp, Google Messages). Off unless you turn it on, because it cannot be undone. */
   deleteAtSource: boolean;
   /** Turn voice messages into text as you see them (needs transcription switched on at your server). */
@@ -135,7 +142,7 @@ export interface AppSettings {
 export const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 export const DEFAULTS: AppSettings = {
-  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
+  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, skin: "default", skinAccent: "", fancyMotion: true, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
@@ -343,4 +350,17 @@ export function applyTheme(s: AppSettings) {
   r.dataset.density = s.density;
   r.dataset.motion = s.reduceMotion ? "reduced" : "full";
   r.dataset.wallpaper = s.wallpaper;
+  // Desktop looks: colours, fonts and a family that restyles buttons, fields and bubbles. "default" removes every trace of them.
+  const skin = window.pagerDesktop && s.skin !== "default" ? skinById(s.skin) : undefined;
+  if (skin) {
+    r.dataset.theme = skin.dark ? "dark" : "light";
+    const accent = s.skinAccent || skin.accent;
+    const ink = s.skinAccent ? (lum(accent) > 0.45 ? "#111418" : "#ffffff") : skin.accentInk ?? (lum(accent) > 0.45 ? "#111418" : "#ffffff");
+    const v: Record<string, string> = { "--bg": skin.bg, "--panel": skin.panel, "--theirs": skin.panel, "--line": skin.line, "--text": skin.text, "--muted": skin.muted, "--accent": accent, "--accent-ink": ink,
+      "--panel-2": `color-mix(in srgb, ${skin.bg}, ${skin.text} 7%)`, "--radius": `${skin.radius ?? 18}px`, "--tight": `${Math.min(8, Math.round((skin.radius ?? 18) / 3))}px` };
+    for (const [k, c] of Object.entries(v)) r.style.setProperty(k, c);
+    if (skin.font) r.style.setProperty("--font", skin.font);
+    r.dataset.skin = skin.id; r.dataset.family = skin.family; r.dataset.fx = s.fancyMotion ? "on" : "off";
+    r.dataset.bubble = "round";
+  } else { delete r.dataset.skin; delete r.dataset.family; delete r.dataset.fx; r.style.removeProperty("--radius"); r.style.removeProperty("--tight"); }
 }

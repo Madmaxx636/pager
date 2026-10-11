@@ -3,7 +3,7 @@ import type { MascotMood } from "../ui/Mascot";
 /** One bubble of the welcome tour: what Pager says, how it looks while saying it, and an optional button that takes you somewhere. */
 export interface TourStep { id: string; text: string; mood: MascotMood; action?: { label: string; go: string } }
 
-export interface TourFacts { admin: boolean; hasKey: boolean; server: string }
+export interface TourFacts { admin: boolean; hasKey: boolean; server: string; /** The desktop app, which has looks to choose from. */ desktop?: boolean }
 
 /** The tour for this person: administrators also hear about inviting people. Short on purpose; every step is one or two sentences. */
 export function tourSteps(f: TourFacts): TourStep[] {
@@ -16,6 +16,7 @@ export function tourSteps(f: TourFacts): TourStep[] {
       : { id: "secure", mood: "idle", text: "Your messages are locked so only your own devices can read them. Make a recovery key now, so a lost phone never means lost history!", action: { label: "Make my key", go: "settings/privacy" } },
   ];
   if (f.admin) steps.push({ id: "people", mood: "ring", text: "You're the boss here! Invite your family and friends from Admin. Share the invite code, never your password.", action: { label: "Open Admin", go: "settings/admin" } });
+  if (f.desktop) steps.push({ id: "looks", mood: "ring", text: "Make me yours! Pick a look: Windows, macOS, KDE, GNOME and more. Round, soft buttons and all. Beep!", action: { label: "Choose a look", go: "settings/appearance" } });
   steps.push(
     { id: "phone", mood: "idle", text: `Take me with you! On your phone, open ${f.server.replace(/^https?:\/\//, "")} to get the app.` },
     { id: "done", mood: "ring", text: "That's everything! Tap Page someone whenever you want to start a chat. I'll be right here!" },

@@ -152,7 +152,19 @@ export function isBotRoom(c: ChatState, me: string): boolean {
   return others.length === 1 && /^@[a-z]*bot:/.test(others[0]) && (!c.memberCount || c.memberCount <= 2) && c.network === "matrix";
 }
 
+/** Names you gave chats for yourself (desktop app). The chat keeps its real name for everyone else. */
+let aliases: Record<string, string> = {};
+export const setAliases = (a: Record<string, string>) => { aliases = a; };
+export const aliasOf = (id: string) => aliases[id];
+export const isBotUser = (id: string) => /^@[a-z0-9_-]*bot:/.test(id);
+/** The real people in a member list: no bridge bots, and no bridge accounts that have no name yet. */
+export function realPeople(list: Record<string, string>): [string, string][] {
+  return Object.entries(list).filter(([id, n]) => !isBotUser(id) && n.trim() && !/^@/.test(n.trim()) && !(/^@(whatsapp|signal|gmessages|messenger|slack|discord|telegram|instagram|twitter|bluesky|linkedin|groupme)_/.test(id) && n.trim() === id.slice(1).split(":")[0]))
+    .sort((a, b) => a[1].localeCompare(b[1]));
+}
+
 export function displayName(c: ChatState, me: string): string {
+  if (aliases[c.id]) return aliases[c.id];
   if (isStoriesRoom(c)) return "Stories";
   if (c.name.trim()) return prettyName(c.name);
   const other = [...c.heroes, ...c.joined].find((u) => u !== me);

@@ -1,4 +1,5 @@
 import { FONTS, PALETTES } from "../core/palettes";
+import { SKINS, SKIN_GROUPS, accentsFor, skinById } from "../core/skins";
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { RowAction, ACCENTS, accentTones, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
@@ -232,6 +233,7 @@ function Appearance() {
   const [editing, setEditing] = useState<number>();
   return (
     <>
+      {window.pagerDesktop && <StyleGroup />}
       <Group title="Theme">
         <Row title="Ready-made looks" hint="A whole colour set for the app. Choose “Mode and accent” to go back to your own mix."><div className="swatches looks">
           <button className={s.palette === "none" ? "on" : ""} style={{ background: "var(--panel-2)" }} onClick={() => updateSettings({ palette: "none" })} aria-label="Mode and accent" title="Mode and accent">{s.palette === "none" ? <Check size={16} /> : null}</button>
@@ -657,5 +659,28 @@ function EncryptAllDialog({ onClose, hasKey }: { onClose: () => void; hasKey: bo
         </>
       )}
     </Modal>
+  );
+}
+
+/** Desktop only: pick a whole look (Windows, macOS, KDE, GNOME and more). "Pager default" is the look Pager has always had. */
+function StyleGroup() {
+  const s = useRawSettings();
+  const skin = skinById(s.skin);
+  const accents = skin ? accentsFor(skin) : [];
+  return (
+    <>
+      <Group title="Style" footer="A whole look for the desktop app: buttons, message field, bubbles, fonts and colours. Pager default keeps the look you know.">
+        <div className="skin-picks">
+          <button className={"skin-chip" + (s.skin === "default" ? " on" : "")} onClick={() => updateSettings({ skin: "default", skinAccent: "" })}>Pager default</button>
+          {SKIN_GROUPS.map((g) => (
+            <div key={g} className="skin-group"><small>{g}</small><div>{SKINS.filter((x) => x.group === g).map((x) => (
+              <button key={x.id} className={"skin-chip" + (s.skin === x.id ? " on" : "")} onClick={() => updateSettings({ skin: x.id, skinAccent: "" })}><i style={{ background: `linear-gradient(135deg, ${x.bg} 50%, ${x.accent} 50%)`, borderColor: x.line }} />{x.name}</button>
+            ))}</div></div>
+          ))}
+        </div>
+        {skin && accents.length > 0 && <Row title="Accent colour" hint={skin.family === "adwaita" ? "GNOME's accent colours" : "Plasma's accent colours"}><div className="swatches">{accents.map(([n, c]) => <button key={c} className={(s.skinAccent || skin.accent) === c ? "on" : ""} style={{ background: c }} title={n} aria-label={n} onClick={() => updateSettings({ skinAccent: c === skin.accent ? "" : c })}>{(s.skinAccent || skin.accent) === c ? <Check size={16} color="#fff" /> : null}</button>)}</div></Row>}
+        {skin && <SwitchRow title="Extra motion" hint="Menus slide in, buttons sink when pressed" checked={s.fancyMotion} onChange={(v) => updateSettings({ fancyMotion: v })} />}
+      </Group>
+    </>
   );
 }
