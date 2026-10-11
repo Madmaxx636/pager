@@ -174,9 +174,11 @@ fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int, k
 }
 
 /** True while E-ink mode is on. Lets plain helpers (no composition access) make faint things solid. */
-object Ink { @Volatile var on = false; @Volatile var bold = 2 }
-/** A line width for E-ink drawings, thicker as you turn up the boldness (the default level gives [base]). */
-fun inkDp(base: Float) = (base * Ink.bold / 2f).dp
+object Ink { @Volatile var on = false; @Volatile var dark = 4 }
+/** The colour of E-ink text and lines: from dark gray to pure black. Darkness is the only thing the setting changes; lines stay thin. */
+fun inkColor(): Color = when (Ink.dark) { 1 -> Color(0xFF5A5A5A); 2 -> Color(0xFF383838); 3 -> Color(0xFF1C1C1C); else -> Color.Black }
+/** A thin line width for E-ink drawings (never more than about 1.5 dp, however dark). */
+fun inkDp(base: Float) = (minOf(base, 2f) * 0.75f).dp
 
 /** Like Color.copy(alpha) for text, icons and lines, but never faint in E-ink mode: faded gray disappears on a fast-refresh screen. */
 fun Color.dim(alpha: Float): Color = if (Ink.on && alpha >= 0.4f) copy(alpha = 1f) else copy(alpha = alpha)
@@ -193,14 +195,14 @@ fun uiScaleFor(s: AppSettings, config: android.content.res.Configuration): Float
 }
 
 /** Pure black on white with light-gray fills: reads well on e-ink and needs no color. */
-private fun einkScheme(): ColorScheme = lightColorScheme(
-    primary = Color.Black, onPrimary = Color.White, primaryContainer = Color.White, onPrimaryContainer = Color.Black,
-    secondary = Color.Black, onSecondary = Color.White, secondaryContainer = Color(0xFFE6E6E6), onSecondaryContainer = Color.Black,
-    background = Color.White, onBackground = Color.Black, surface = Color.White, onSurface = Color.Black,
-    surfaceVariant = Color(0xFFE6E6E6), onSurfaceVariant = Color(0xFF1A1A1A), surfaceContainer = Color.White, surfaceContainerHigh = Color(0xFFF0F0F0),
-    surfaceContainerHighest = Color(0xFFE6E6E6), outline = Color.Black, outlineVariant = Color.Black, error = Color.Black, onError = Color.White,
-    inverseSurface = Color.Black, inverseOnSurface = Color.White, inversePrimary = Color.White, scrim = Color.Black,
-)
+private fun einkScheme(): ColorScheme { val k = inkColor(); return lightColorScheme(
+    primary = k, onPrimary = Color.White, primaryContainer = Color.White, onPrimaryContainer = k,
+    secondary = k, onSecondary = Color.White, secondaryContainer = Color(0xFFE6E6E6), onSecondaryContainer = k,
+    background = Color.White, onBackground = k, surface = Color.White, onSurface = k,
+    surfaceVariant = Color(0xFFE6E6E6), onSurfaceVariant = k, surfaceContainer = Color.White, surfaceContainerHigh = Color(0xFFF0F0F0),
+    surfaceContainerHighest = Color(0xFFE6E6E6), outline = k, outlineVariant = k, error = k, onError = Color.White,
+    inverseSurface = k, inverseOnSurface = Color.White, inversePrimary = Color.White, scrim = Color.Black,
+) }
 
 fun bubbleShape(style: String) = when (style) {
     "square" -> RoundedCornerShape(6.dp)
@@ -238,9 +240,9 @@ private val PagerTypography = Typography(
 )
 
 /** E-ink typography: every style at least semi-bold, titles and labels bold, so thin strokes don't vanish. */
-private fun einkTypography(base: Typography, level: Int) = base.let { t ->
-    // Level 2 is the original look; each step either side moves every style one weight lighter or heavier.
-    fun TextStyle.bold(w: FontWeight) = copy(fontWeight = FontWeight(((w.weight + (level - 2) * 100)).coerceIn(300, 900)))
+private fun einkTypography(base: Typography) = base.let { t ->
+    // Text gets a touch heavier than normal so it stays readable, but never bold: the setting makes it darker, not thicker.
+    fun TextStyle.bold(w: FontWeight) = copy(fontWeight = if (w.weight >= 600) FontWeight.SemiBold else FontWeight.Medium)
     Typography(
         displayLarge = t.displayLarge.bold(FontWeight.Bold), displayMedium = t.displayMedium.bold(FontWeight.Bold), displaySmall = t.displaySmall.bold(FontWeight.Bold),
         headlineLarge = t.headlineLarge.bold(FontWeight.ExtraBold), headlineMedium = t.headlineMedium.bold(FontWeight.ExtraBold), headlineSmall = t.headlineSmall.bold(FontWeight.Bold),
@@ -258,7 +260,7 @@ private fun typographyFor(s: AppSettings): Typography {
         bodyLarge = t.bodyLarge.copy(fontFamily = f), bodyMedium = t.bodyMedium.copy(fontFamily = f), bodySmall = t.bodySmall.copy(fontFamily = f),
         labelLarge = t.labelLarge.copy(fontFamily = f), labelMedium = t.labelMedium.copy(fontFamily = f), labelSmall = t.labelSmall.copy(fontFamily = f),
     ) } ?: t }
-    return if (s.eink) einkTypography(base, s.einkBold) else base
+    return if (s.eink) einkTypography(base) else base
 }
 
 /** The colours of a ready-made look; the accent you chose still colours buttons and your own messages. */
@@ -288,7 +290,7 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
     val config = androidx.compose.ui.platform.LocalConfiguration.current
     val keypad = rawSettings.keypad == "on" || (rawSettings.keypad == "auto" && keypadDevice(config))
     val settings = effectiveSettings(rawSettings, config.screenWidthDp, config.screenHeightDp, keypad)
-    Ink.on = settings.eink; Ink.bold = settings.einkBold.coerceIn(1, 4)
+    Ink.on = settings.eink; Ink.dark = settings.einkDark.coerceIn(1, 4)
     val dark = isDarkTheme(settings)
     val context = LocalContext.current
     // The app has its own light/dark setting, so the system bars must follow it, not the phone's theme

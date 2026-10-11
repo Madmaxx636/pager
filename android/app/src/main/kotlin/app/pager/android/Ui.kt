@@ -99,7 +99,7 @@ fun SettingsGroup(title: String? = null, footer: String? = null, content: @Compo
 }
 
 @Composable
-fun GroupDivider() = HorizontalDivider(Modifier.padding(start = 16.dp), thickness = if (Ink.on) 2.dp else 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.dim(0.6f))
+fun GroupDivider() = HorizontalDivider(Modifier.padding(start = 16.dp), thickness = if (Ink.on) 1.dp else 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.dim(0.6f))
 
 /** The tinted rounded-square icon used on the settings home and in lists. */
 @Composable
