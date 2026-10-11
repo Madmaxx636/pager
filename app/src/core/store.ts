@@ -390,15 +390,17 @@ sendHook.fn = (roomId, type, content) => {
  * A brand-new device gets no chats until its keys are entered: while the key step is open it receives only what it needs to finish it
  * (keys and account data), then everything. Devices that already have their keys, or have saved chats, start as usual.
  */
+/** Paused while a new account's phone could not read its messages: switch on once the cause is found. */
+const HOLD_NEW_DEVICES = false;
 async function holdUntilKeys(s: Session, signal: AbortSignal) {
-  if (since !== undefined || !e2ee) return;
+  if (!HOLD_NEW_DEVICES || since !== undefined || !e2ee) return;
   const flagKey = `pager.keysetup.${s.userId}.${e2ee.deviceId}`;
   const seenKey = () => { try { return localStorage.getItem(flagKey) === "1"; } catch { return true; } };
   let token: string | undefined;
   while (!signal.aborted && e2ee && !seenKey() && !(await e2ee.backupOn())) {
     try {
       const res = await matrix.syncKeysOnly(token, signal); token = res.next_batch;
-      await e2ee.receiveSync(res);
+      try { await e2ee.receiveSync(res); } catch { await new Promise((r) => setTimeout(r, 500)); await e2ee.receiveSync(res); } // the keys in this update will not be sent again
     } catch { await new Promise((r) => setTimeout(r, 2000)); }
     if (token) await new Promise((r) => setTimeout(r, 800));
   }

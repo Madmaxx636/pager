@@ -459,15 +459,18 @@ class Store(private val context: Context) {
      * A brand-new phone gets no chats until its keys are entered: while the key step is open it receives only what it needs to finish it
      * (keys and account data), then everything. Phones that already have their keys, or saved chats, start as usual.
      */
+    /** Paused while a new account's phone could not read its messages: switch on once the cause is found. */
+    private val holdNewDevices = false
     private suspend fun holdUntilKeys() {
         val e = e2ee ?: return
-        if (since != null) return
+        if (!holdNewDevices || since != null) return
         val keyPrefs = context.getSharedPreferences("pager.keysetup", Context.MODE_PRIVATE)
         var token: String? = null
         while (scope.isActive && !keyPrefs.getBoolean("done." + e.deviceId, false) && !e.backupOn()) {
             try {
                 val res = matrix.syncKeysOnly(token); token = (res["next_batch"] as? JsonPrimitive)?.content
-                e.receiveSync(res)
+                // The keys in this update must not be dropped: it will not be sent again.
+                try { e.receiveSync(res) } catch (c: CancellationException) { throw c } catch (_: Throwable) { delay(500); e.receiveSync(res) }
             } catch (c: CancellationException) { throw c } catch (_: Throwable) { delay(2000) }
             delay(800)
         }
