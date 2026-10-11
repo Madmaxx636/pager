@@ -112,6 +112,8 @@ export interface AppSettings {
   shortcuts: Record<string, string>;
   // Desktop
   closeToTray: boolean;
+  /** Desktop app: use the graphics chip (smoother, about 30 MB more memory). Off by default; applies after a restart. */
+  smoothGraphics: boolean;
   startMinimized: boolean;
   launchAtLogin: boolean;
 }
@@ -129,7 +131,7 @@ export const DEFAULTS: AppSettings = {
   quietHoursEnabled: false, quietStartMin: 22 * 60, quietEndMin: 7 * 60,
   hiddenNetworks: [],
   developerMode: false, shortcuts: {},
-  closeToTray: true, startMinimized: false, launchAtLogin: false,
+  closeToTray: true, smoothGraphics: false, startMinimized: false, launchAtLogin: false,
 };
 
 /** Every shortcut the app understands, with its default keys. Users can rebind them in Settings. */

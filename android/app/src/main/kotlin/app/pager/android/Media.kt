@@ -15,7 +15,8 @@ import java.io.File
 
 /** Loads Matrix media with auth, downsampled and cached in memory. Files are cached on disk. */
 class MediaLoader(private val context: Context, private val http: Http) {
-    private val bitmaps = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 8).toInt().coerceAtLeast(8 shl 20)) {
+    // Pictures kept ready: an eighth of the app's memory, never more than 24 MB.
+    private val bitmaps = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 8).toInt().coerceIn(8 shl 20, 24 shl 20)) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
     private val dir = File(context.cacheDir, "media").apply { mkdirs() }

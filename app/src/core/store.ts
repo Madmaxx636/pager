@@ -1,5 +1,6 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
+import { BlobCache } from "./lru";
 import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity } from "./reducer";
 import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
@@ -441,7 +442,7 @@ async function signOutLocal() {
   try { localStorage.removeItem("pager.identity2"); } catch { /* ignore */ }
   await dbDel("cache");
   http.token = ""; since = undefined;
-  blobCache.forEach((u) => URL.revokeObjectURL(u)); blobCache.clear();
+  blobCache.clear();
   set({ session: undefined, chats: {}, synced: false, muted: [], bridges: [], isAdmin: false });
 }
 
@@ -795,7 +796,8 @@ window.setInterval(() => { if (document.visibilityState === "visible") void refr
 
 // ---- Media (Synapse requires auth for downloads) ------------------------------------------------
 
-const blobCache = new Map<string, string>();
+// Only about 40 MB of downloaded pictures stay in memory; older ones are let go and fetched again if needed (see lru.ts).
+const blobCache = new BlobCache(40 * 1024 * 1024);
 const inflight = new Map<string, Promise<string | undefined>>();
 /** Already-downloaded media, available synchronously (avoids flashing placeholders). */
 export const cachedMedia = (mxc: string, thumb = 0) => blobCache.get(`${mxc}|${thumb}`);
@@ -811,7 +813,7 @@ export function mediaUrl(mxc: string, thumb = 0): Promise<string | undefined> {
     .then(async (r) => {
       if (!r.ok) return undefined;
       const blob = secret ? new Blob([await decryptAttachment(await r.arrayBuffer(), secret)], { type: secret.mime ?? "application/octet-stream" }) : await r.blob();
-      const u = URL.createObjectURL(blob); blobCache.set(key, u); return u;
+      const u = URL.createObjectURL(blob); blobCache.set(key, u, blob.size); return u;
     })
     .catch(() => undefined).finally(() => inflight.delete(key));
   inflight.set(key, p);
@@ -825,7 +827,7 @@ declare global {
     pagerDesktop?: {
       notify(o: { title: string; body: string; roomId?: string; silent?: boolean }): void;
       setBadge(n: number): void;
-      getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean }): void; setZoom(z: number): void;
+      getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean; smoothGraphics?: boolean }): void; setZoom(z: number): void;
       onOpenRoom(cb: (roomId: string) => void): void;
       cookieLogin(spec: unknown): Promise<Record<string, string> | null>;
       platform: string;
