@@ -559,7 +559,17 @@ export function RecoveryKeyDialog({ onClose, first }: { onClose: () => void; fir
   const [key, setKey] = useState<string>();
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(false);
-  useEffect(() => { createRecoveryKey().then(setKey).catch((e) => setErr(e.message)); }, []);
+  // A key already exists for this account: making another one replaces it, and the old one stops working. Ask first.
+  const hasOne = useEncryption().backupOnServer;
+  const [sure, setSure] = useState(!hasOne);
+  useEffect(() => { if (sure) createRecoveryKey().then(setKey).catch((e) => setErr(e.message)); }, [sure]);
+  if (!sure) return (
+    <Modal title="Replace your recovery key?" onClose={onClose}>
+      <p>This account already has a recovery key. A new one <b>replaces it</b>: the old key stops working, including on your other devices' backups.</p>
+      <p className="muted">If you meant to open your history on this device, go back and enter the key you saved, or use a signed-in device's key file instead.</p>
+      <div className="row-end"><button className="link" onClick={onClose}>Go back</button><button className="primary danger" onClick={() => setSure(true)}>Replace my key</button></div>
+    </Modal>
+  );
   return (
     <Modal title={first ? "Save your recovery key" : "Your recovery key"} onClose={() => { if (!key || saved) onClose(); }}>
       {err ? <p className="error">{err}</p> : !key ? <p className="muted">Making your key…</p> : (
