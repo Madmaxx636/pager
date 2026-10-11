@@ -98,7 +98,7 @@ object SyncReducer {
         var userStickers: StickerPack? = null
         val accountData = HashMap<String, JsonObject>()
         for (e in sync["account_data"].obj()["events"].arr()) {
-            e.obj()["type"].str()?.takeIf { it.startsWith("app.pager.settings.") || it.startsWith("app.pager.contacts.") || it == "app.pager.favorite_gifs" }?.let { accountData[it] = e.obj()["content"].obj() }
+            e.obj()["type"].str()?.takeIf { it.startsWith("app.pager.settings.") || it.startsWith("app.pager.contacts.") || it == "app.pager.favorite_gifs" || it == "app.pager.links" }?.let { accountData[it] = e.obj()["content"].obj() }
             when (e.obj()["type"].str()) {
                 "m.push_rules" -> muted = parseMuted(e.obj())
                 "im.ponies.user_emotes" -> userStickers = parseStickerPack("user", "My stickers", e.obj()["content"].obj())

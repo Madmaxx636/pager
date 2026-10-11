@@ -1,6 +1,7 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { BlobCache } from "./lru";
+import { Links, mergeSummaries } from "./links";
 import { shrinkImage } from "./shrink";
 import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity } from "./reducer";
 import { Crypto, isEncryptedType } from "./crypto";
@@ -36,6 +37,8 @@ interface State {
   userStickers?: StickerPack;
   /** GIFs you starred, saved in your account so every device has them. */
   favoriteGifs: Gif[];
+  /** Chats shown as one (see links.ts). */
+  links: Links;
 }
 
 const SESSION_KEY = "pager.session";
@@ -45,7 +48,7 @@ const lsSet = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.st
 let state: State = {
   chats: {}, synced: false, muted: [],
   drafts: lsGet("pager.drafts", {}), stars: lsGet("pager.stars", []), scheduled: lsGet("pager.scheduled", []),
-  reminders: lsGet("pager.reminders", []), bridges: [], isAdmin: false, favoriteGifs: lsGet<Gif[]>("pager.favoriteGifs", []), userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
+  reminders: lsGet("pager.reminders", []), bridges: [], isAdmin: false, favoriteGifs: lsGet<Gif[]>("pager.favoriteGifs", []), links: lsGet<Links>("pager.links", []), userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
 };
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
@@ -68,6 +71,9 @@ export function useStore<T>(select: (s: State) => T): T {
 
 export function buildInbox(s: State, st: AppSettings): ChatSummary[] {
   const user = s.session?.userId ?? "";
+  return mergeSummaries(buildRows(s, st, user), s.links);
+}
+function buildRows(s: State, st: AppSettings, user: string): ChatSummary[] {
   return Object.values(s.chats)
     .filter((c) => !isBotRoom(c, user) && !st.hiddenNetworks.includes(c.network))
     .map((c): ChatSummary => {
@@ -87,8 +93,8 @@ export function useChatsRaw(): Record<string, ChatState> { return useStore((s) =
 
 export function useInbox(): ChatSummary[] {
   const st = useSettings();
-  const chats = useStore((s) => s.chats), muted = useStore((s) => s.muted), drafts = useStore((s) => s.drafts), session = useStore((s) => s.session);
-  return useMemo(() => buildInbox({ ...state, chats, muted, drafts, session }, st), [chats, muted, drafts, session, st.hiddenNetworks]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chats = useStore((s) => s.chats), muted = useStore((s) => s.muted), drafts = useStore((s) => s.drafts), session = useStore((s) => s.session), links = useStore((s) => s.links);
+  return useMemo(() => buildInbox({ ...state, chats, muted, drafts, session, links }, st), [chats, muted, drafts, session, links, st.hiddenNetworks]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 // ---- Session & cache -------------------------------------------------------------------
@@ -392,6 +398,8 @@ async function syncLoop(s: Session, signal: AbortSignal) {
         addToPhonebook(rows.map(([number, name]) => ({ number, name })), true, true);
         if (typeof c.chunks === "number") contactChunks = Math.max(contactChunks, c.chunks);
       }
+      const lk = r.accountData?.["app.pager.links"]?.groups;
+      if (Array.isArray(lk)) { const groups = (lk as unknown[]).filter((g): g is string[] => Array.isArray(g) && g.every((x) => typeof x === "string")); set({ links: groups }); lsSet("pager.links", groups); }
       const fav = r.accountData?.["app.pager.favorite_gifs"]?.gifs;
       if (Array.isArray(fav)) { set({ favoriteGifs: fav as Gif[] }); lsSet("pager.favoriteGifs", fav); }
       r.invites.forEach((id) => void matrix.join(id).catch(() => {}));
@@ -794,6 +802,12 @@ async function loadPhonebook(nets: Network[]) {
   }
 }
 window.setInterval(() => { if (document.visibilityState === "visible") void refreshBridges(); }, 120_000);
+
+/** Show chats with the same person on different networks as one row, or split them again. Saved in your account. */
+export function setLinks(next: Links) {
+  set({ links: next }); lsSet("pager.links", next);
+  void matrix.putAccountData(me(), "app.pager.links", { groups: next }).catch(() => {});
+}
 
 // ---- Media (Synapse requires auth for downloads) ------------------------------------------------
 

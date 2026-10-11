@@ -160,6 +160,8 @@ data class ChatSummary(
     val lastFromMe: Boolean = false,
     val typing: Boolean = false,
     val stories: Boolean = false,
+    /** This row stands for several chats with the same person on different networks (id to network, this one included). */
+    val linked: List<Pair<String, String>> = emptyList(),
 )
 
 /** A message that just arrived from someone else, for notifications. */

@@ -195,7 +195,8 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
                       {st.inboxStyle !== "minimal" && <span className={"chat-time" + (unread && !c.muted ? " hot" : "")}>{timeLabel(c.ts)}</span>}
                       {st.inboxStyle === "minimal" && unread && <span className={"unread" + (c.muted || c.lowPriority ? " muted-badge" : "")}>{c.unread || ""}</span>}
                     </div>
-                    {st.showNetworkNameInRows && <div className="chat-net" style={{ color: networkMeta(c.network).color }}>{networkMeta(c.network).label}</div>}
+                    {c.linked && <div className="chat-net linked">{c.linked.map((l) => <span key={l.id} style={{ color: networkMeta(l.network).color }}>● {networkMeta(l.network).label}</span>)}</div>}
+                    {st.showNetworkNameInRows && !c.linked && <div className="chat-net" style={{ color: networkMeta(c.network).color }}>{networkMeta(c.network).label}</div>}
                     {st.inboxStyle !== "minimal" && (
                       <div className="chat-bottom">
                         {c.typing ? <span className="chat-preview"><TypingDots /></span>

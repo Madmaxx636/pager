@@ -123,7 +123,9 @@ class Store(private val context: Context) {
 
     /** The inbox list, computed off the main thread whenever chats or settings change. */
     private data class InboxInputs(val chats: Map<String, ChatState>, val muted: Set<String>, val s: Session?, val drafts: Map<String, String>, val st: AppSettings)
-    val inbox: StateFlow<List<ChatSummary>> = combine(combine(_chats, _muted, _session, _drafts, settings.state) { a, b, c, d, e -> InboxInputs(a, b, c, d, e) }, Names.version) { (chats, muted, s, drafts, st), _ ->
+    private val _links = MutableStateFlow(readJson("links", kotlinx.serialization.serializer<List<List<String>>>(), emptyList()))
+    val links: StateFlow<List<List<String>>> = _links.asStateFlow()
+    val inbox: StateFlow<List<ChatSummary>> = combine(combine(_chats, _muted, _session, _drafts, settings.state) { a, b, c, d, e -> InboxInputs(a, b, c, d, e) }, Names.version, _links) { (chats, muted, s, drafts, st), _, links ->
         val me = s?.userId ?: ""
         chats.values.filter { !it.isBotRoom(me) && it.network !in st.hiddenNetworks }.map {
             val last = it.messages.lastOrNull()
@@ -133,7 +135,7 @@ class Store(private val context: Context) {
                 lowPriority = it.lowPriority, labels = it.labels, pinOrder = it.pinOrder ?: Double.MAX_VALUE,
                 unanswered = last != null && last.sender != me, lastFromMe = last?.sender == me, typing = it.typing.isNotEmpty(), stories = it.isStories,
             )
-        }.sortedWith(
+        }.let { Links.merge(it, links) }.sortedWith(
             compareByDescending<ChatSummary> { it.pinned }.thenBy { if (it.pinned) it.pinOrder else 0.0 }
                 .thenByDescending { st.sortUnreadFirst && (it.unread > 0 || it.markedUnread) }.thenByDescending { it.ts },
         )
@@ -468,6 +470,10 @@ class Store(private val context: Context) {
                     }
                     Names.add(rows, override = true, mine = true)
                     (c["chunks"] as? JsonPrimitive)?.content?.toIntOrNull()?.let { contactChunks = maxOf(contactChunks, it) }
+                }
+                r.accountData["app.pager.links"]?.let { c ->
+                    val ser = kotlinx.serialization.serializer<List<List<String>>>()
+                    runCatching { json.decodeFromJsonElement(ser, c["groups"] ?: JsonArray(emptyList())) }.onSuccess { _links.value = it; writeJson("links", ser, it) }
                 }
                 r.accountData["app.pager.favorite_gifs"]?.let { c ->
                     runCatching { json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), c["gifs"] ?: JsonArray(emptyList())) }
@@ -1048,6 +1054,14 @@ class Store(private val context: Context) {
                 }
             })
         }
+    }
+
+    /** Show chats with the same person on different networks as one row, or split them again. Saved in your account. */
+    fun setLinks(next: List<List<String>>) {
+        val me = _session.value?.userId ?: return
+        val ser = kotlinx.serialization.serializer<List<List<String>>>()
+        _links.value = next; writeJson("links", ser, next)
+        scope.launch { runCatching { matrix.putAccountData(me, "app.pager.links", buildJsonObject { put("groups", json.encodeToJsonElement(ser, next)) }) } }
     }
 
     /** Stars or un-stars a GIF; the list lives in your Matrix account. */

@@ -63,6 +63,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -134,7 +139,7 @@ private fun buildItems(messages: List<Msg>, unreadBefore: String?, gapMs: Long):
 }
 
 @Composable
-fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward: (Msg) -> Unit, onSearch: () -> Unit, onSettings: (String) -> Unit) {
+fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onInfo: () -> Unit, onForward: (Msg) -> Unit, onSearch: () -> Unit, onSettings: (String) -> Unit) {
     val store = LocalStore.current
     val s = LocalSettings.current
     val context = LocalContext.current
@@ -197,6 +202,12 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
     val recorder = remember { VoiceRecorder(context) }
     var recording by remember { mutableStateOf(false) }
     var recordedMs by remember { mutableStateOf(0L) }
+    // Push to talk: hold the microphone to record and let go to send; slide to the left to cancel. A quick tap keeps recording until you press send.
+    var holding by remember { mutableStateOf(false) }
+    var holdCancel by remember { mutableStateOf(false) }
+    var lastGesture by remember { mutableStateOf(0L) }
+    var composerCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    var micCoords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
 
     val currentText by rememberUpdatedState(text)
     val currentEditing by rememberUpdatedState(editing)
@@ -285,6 +296,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                 IconBtn(Icons.Rounded.Search, "Search in page", onSearch)
                 IconBtn(Icons.Rounded.Info, "Page info", onInfo)
             }
+            LinkedBar(roomId, onOpen)
 
             Box(Modifier.weight(1f).fillMaxWidth().let { if (wallpaper != null) it.background(wallpaper) else it }) {
                 LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)) {
@@ -354,12 +366,37 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
             }
 
             // Composer
-            Box(Modifier.fillMaxWidth().background(scheme.surface).navigationBarsPadding()) {
+            val canHold by rememberUpdatedState(text.isBlank() && !recording && hasPermission(context, Manifest.permission.RECORD_AUDIO))
+            Box(Modifier.fillMaxWidth().background(scheme.surface).navigationBarsPadding()
+                .onGloballyPositioned { composerCoords = it }
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        val box = composerCoords?.let { c -> micCoords?.takeIf { it.isAttached }?.let { m -> c.localBoundingBoxOf(m) } }
+                        if (!canHold || box == null || !box.contains(down.position)) return@awaitEachGesture
+                        lastGesture = System.currentTimeMillis()
+                        if (!recorder.start()) return@awaitEachGesture
+                        recording = true; holding = true; holdCancel = false
+                        val began = System.currentTimeMillis()
+                        var dx = 0f
+                        while (true) {
+                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull() ?: break
+                            dx = change.position.x - down.position.x
+                            holdCancel = dx < -80.dp.toPx()
+                            if (!change.pressed) break
+                        }
+                        holding = false
+                        if (System.currentTimeMillis() - began > 450) {
+                            if (holdCancel) recorder.cancel() else recorder.stop()?.let { (f, ms) -> store.sendVoice(roomId, f, ms) }
+                            recording = false; holdCancel = false
+                        }
+                    }
+                }) {
                 if (recording) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconBtn(Icons.Rounded.Delete, "Cancel recording", { recorder.cancel(); recording = false }, tint = scheme.error)
                         Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFEF4444)))
-                        Text("  Recording  %d:%02d".format(recordedMs / 60000, (recordedMs / 1000) % 60), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                        Text(if (holding && holdCancel) "  Let go to cancel" else "  Recording  %d:%02d".format(recordedMs / 60000, (recordedMs / 1000) % 60) + if (holding) "  ·  let go to send, slide left to cancel" else "", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                         Box(Modifier.size(48.dp).clip(CircleShape).background(scheme.primary).dpadFocus().clickable { recorder.stop()?.let { (f, ms) -> store.sendVoice(roomId, f, ms) }; recording = false }, contentAlignment = Alignment.Center) {
                             Icon(Icons.AutoMirrored.Rounded.Send, "Send voice message", tint = scheme.onPrimary)
                         }
@@ -399,9 +436,11 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
                         val hasText = text.isNotBlank()
                         Box(
                             Modifier.padding(bottom = 2.dp).size(48.dp).clip(CircleShape).background(scheme.primary)
+                                .onGloballyPositioned { micCoords = it }
                                 .dpadFocus().combinedClick(
                                     onClick = {
                                         if (hasText) send()
+                                        else if (System.currentTimeMillis() - lastGesture < 1500 && hasPermission(context, Manifest.permission.RECORD_AUDIO)) Unit // the press already started recording
                                         else if (hasPermission(context, Manifest.permission.RECORD_AUDIO)) recording = recorder.start() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
                                     },
                                     onLongClick = { if (hasText && editing == null) scheduleDialog = true },

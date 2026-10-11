@@ -414,3 +414,8 @@ body { font-family: var(--font, "Inter Variable", Inter, system-ui, -apple-syste
 .swatches.looks { max-width: 260px; justify-content: flex-end; }
 :root[data-reactions="outline"] .reactions button { background: transparent; border: 1.5px solid var(--text); color: var(--text); }
 :root[data-reactions="outline"] .reactions button.mine { background: transparent; border-style: double; border-width: 4px; }
+
+.link-tabs { display: flex; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--line); overflow-x: auto; } .link-tabs button { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: var(--panel-2); font-size: .85rem; font-weight: 600; white-space: nowrap; } .link-tabs button i { width: 8px; height: 8px; border-radius: 50%; } .link-tabs button.on { background: var(--accent); color: var(--accent-ink); } .link-tabs button b { background: var(--accent); color: var(--accent-ink); border-radius: 9px; padding: 0 6px; font-size: .72rem; }
+.link-offer { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 6px 14px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: .85rem; } .link-offer span { flex: 1 1 220px; }
+.link-pick { display: grid; gap: 2px; max-height: 50vh; overflow-y: auto; } .link-pick .link { text-align: left; }
+.chat-net.linked { display: flex; gap: 10px; font-size: .72rem; font-weight: 600; }

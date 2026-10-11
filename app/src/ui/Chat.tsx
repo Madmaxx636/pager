@@ -3,13 +3,14 @@ import {
   AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
   Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon,
 } from "lucide-react";
-import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot } from "../core/types";
+import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot, isBotRoom } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import { getSettings, useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
   edit, enableEncryption, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
-  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState,
+  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks,
 } from "../core/store";
+import { addLink, groupOf, suggestLinks, unlink } from "../core/links";
 import { SOUNDS, playSound } from "../core/sounds";
 import { Avatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
 import { MessageRow } from "./Message";
@@ -163,6 +164,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
           <IconButton icon={Info} label="Page info" onClick={() => setInfoOpen(!infoOpen)} active={infoOpen} />
         </header>
 
+        <LinkedBar chat={chat} nav={nav} />
         <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll}>
           {items.map((it) => it.kind === "day" ? <div key={it.key} className="day"><span>{it.label}</span></div>
             : it.kind === "unread" ? <div key={it.key} id="unread-divider" className="unread-divider"><span>New messages</span></div>
@@ -343,6 +345,23 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
     } catch { setError("Couldn't access the microphone."); }
   }
   const stopRec = (cancel: boolean) => { const r = recorder.current; if (!r) return; r.cancel = cancel; r.mr.stop(); };
+  // Push to talk: hold the microphone to record and let go to send, or slide away to the left to cancel. A quick tap keeps recording until you press send.
+  const hold = useRef<{ at: number; x: number; released?: boolean } | undefined>(undefined);
+  const [holdDx, setHoldDx] = useState(0);
+  const pttDown = async (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    hold.current = { at: Date.now(), x: e.clientX }; setHoldDx(0);
+    await startRec();
+    if (hold.current?.released) pttUpNow(hold.current);
+  };
+  const pttMove = (e: React.PointerEvent) => { if (hold.current && !hold.current.released) setHoldDx(Math.min(0, e.clientX - hold.current.x)); };
+  const pttUpNow = (h: { at: number; x: number }) => {
+    const long = Date.now() - h.at > 450, cancel = holdDx < -80;
+    hold.current = undefined; setHoldDx(0);
+    if (long) stopRec(cancel);
+  };
+  const pttUp = () => { const h = hold.current; if (!h) return; if (!recorder.current) { h.released = true; return; } pttUpNow(h); };
 
   const where = () => navigator.geolocation?.getCurrentPosition((p) => sendLocation(roomId, p.coords.latitude, p.coords.longitude), () => setError("Couldn't get your location."), { timeout: 10000 });
   const pick = (k: AttachKind) => {
@@ -367,7 +386,7 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
       {error && <div className="error pad" onClick={() => setError(undefined)}>{error}</div>}
       {input(files)}{input(photos, "image/*,video/*")}{input(camera, "image/*", true)}
       {rec ? (
-        <div className="composer rec"><IconButton icon={Trash2} label="Cancel recording" onClick={() => stopRec(true)} /><i className="rec-dot" /><span className="grow">Recording {Math.floor(rec.ms / 60000)}:{String(Math.floor(rec.ms / 1000) % 60).padStart(2, "0")}</span><button className="send" onClick={() => stopRec(false)} aria-label="Send voice message"><Send size={18} /></button></div>
+        <div className="composer rec"><IconButton icon={Trash2} label="Cancel recording" onClick={() => stopRec(true)} /><i className="rec-dot" /><span className="grow">{hold.current && holdDx < -80 ? "Let go to cancel" : hold.current ? "Let go to send · slide left to cancel · " : ""}Recording {Math.floor(rec.ms / 60000)}:{String(Math.floor(rec.ms / 1000) % 60).padStart(2, "0")}</span><button className="send" onClick={() => stopRec(false)} aria-label="Send voice message"><Send size={18} /></button></div>
       ) : (
         <form className="composer" onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <div className="menu-wrap">
@@ -384,7 +403,7 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
               <button className="send" aria-label="Send"><Send size={18} /></button>
               {!editing && <button type="button" className="send-more" onClick={() => setLater(true)} title="Send later" aria-label="Send later"><ChevronDown size={16} /></button>}
             </div>
-          ) : <button type="button" className="send" onClick={startRec} aria-label="Record voice message" title="Record voice message"><Mic size={18} /></button>}
+          ) : <button type="button" className="send" onPointerDown={pttDown} onPointerMove={pttMove} onPointerUp={pttUp} onPointerCancel={() => { hold.current = undefined; setHoldDx(0); }} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); void startRec(); } }} aria-label="Record voice message: hold to talk, or tap to start" title="Hold to talk, let go to send. Tap to start and stop." style={{ touchAction: "none" }}><Mic size={18} /></button>}
         </form>
       )}
       {emoji && <EmojiPicker recent={st.recentEmoji} onPick={(e) => { setText(text + e); setEmoji(false); ta.current?.focus(); }} onClose={() => setEmoji(false)} />}
@@ -451,6 +470,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
       <div className="info-body">
         <div className="info-id"><Avatar name={name} mxc={chat.avatarMxc} size={88} network={chat.network} /><h3>{name}</h3><small>{networkMeta(chat.network).label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</small>
           {isGroup(chat) && <button className="link" onClick={() => { const n = prompt("Rename group", chat.name); if (n?.trim()) rename(chat.id, n.trim()); }}>Rename group</button>}</div>
+        {!isGroup(chat) && <LinkControls chat={chat} />}
         <div className="quick-actions">
           <button onClick={() => nav(`search:${chat.id}`)}><span><Search size={20} /></span>Search</button>
           <button className={isPinned(chat) ? "on" : ""} onClick={() => pin(chat.id, !isPinned(chat))}><span><Pin size={20} /></span>{isPinned(chat) ? "Unpin" : "Pin"}</button>
@@ -517,5 +537,51 @@ function EnableEncryptionDialog({ roomId, onClose }: { roomId: string; onClose: 
       <div className="row-end"><button className="link" onClick={onClose}>Cancel</button>
         <button className="primary" disabled={busy} onClick={() => { setBusy(true); setErr(""); enableEncryption(roomId).then(onClose).catch((e) => { setErr(e.message); setBusy(false); }); }}>{busy ? "Turning on…" : "Turn on encryption"}</button></div>
     </Modal>
+  );
+}
+
+/** One person on several networks: tabs to move between their chats, and an offer to join two that look like the same person. */
+function LinkedBar({ chat, nav }: { chat: ChatState; nav: Nav }) {
+  const links = useStore((s) => s.links), chats = useStore((s) => s.chats);
+  const [no, setNo] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("pager.linkNo") ?? "[]"); } catch { return []; } });
+  const group = groupOf(links, chat.id)?.filter((id) => chats[id]);
+  const user = me();
+  const offer = useMemo(() => {
+    if (isGroup(chat) || (group && group.length > 1)) return undefined;
+    const cands = Object.values(chats).filter((c) => !isBotRoom(c, user)).map((c) => ({ id: c.id, name: displayName(c, user), network: c.network, isGroup: isGroup(c) }));
+    return suggestLinks(cands, links).find(([a, b]) => (a === chat.id || b === chat.id) && !no.includes([a, b].sort().join("|")));
+  }, [chats, links, chat.id, no]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (group && group.length > 1) return (
+    <div className="link-tabs" role="tablist" aria-label="This person on other networks">
+      {group.map((id) => <button key={id} role="tab" aria-selected={id === chat.id} className={id === chat.id ? "on" : ""} onClick={() => nav(`chat:${id}`)}><i style={{ background: networkMeta(chats[id].network).color }} />{networkMeta(chats[id].network).label}{chats[id].unread > 0 && id !== chat.id ? <b>{chats[id].unread}</b> : null}</button>)}
+    </div>
+  );
+  if (!offer) return null;
+  const other = chats[offer[0] === chat.id ? offer[1] : offer[0]];
+  return (
+    <div className="link-offer">
+      <span>Is this the same person as {displayName(other, user)} on {networkMeta(other.network).label}? Show them as one chat.</span>
+      <button className="link" onClick={() => setLinks(addLink(links, offer[0], offer[1]))}>Show as one</button>
+      <button className="link" onClick={() => { const n = [...no, [...offer].sort().join("|")]; setNo(n); try { localStorage.setItem("pager.linkNo", JSON.stringify(n)); } catch { /* ignore */ } }}>Not the same</button>
+    </div>
+  );
+}
+
+function LinkControls({ chat }: { chat: ChatState }) {
+  const links = useStore((s) => s.links), chats = useStore((s) => s.chats);
+  const [open, setOpen] = useState(false);
+  const user = me();
+  const group = groupOf(links, chat.id);
+  const options = Object.values(chats).filter((c) => c.id !== chat.id && !isGroup(c) && !isBotRoom(c, user) && c.network !== "matrix" && !(group && group.includes(c.id)))
+    .sort((a, b) => Number(displayName(b, user).toLowerCase() === displayName(chat, user).toLowerCase()) - Number(displayName(a, user).toLowerCase() === displayName(chat, user).toLowerCase()) || displayName(a, user).localeCompare(displayName(b, user)));
+  return (
+    <div className="pad">
+      {group && group.length > 1 ? <button className="link" onClick={() => setLinks(unlink(links, chat.id))}>Stop showing with other networks</button>
+        : <button className="link" onClick={() => setOpen(true)}>Show with the same person on another network…</button>}
+      {open && <Modal title="Same person, another network" onClose={() => setOpen(false)}>
+        <p className="muted">Pick their chat on another network. Both show as one in your list, and a tab at the top of the chat switches between them.</p>
+        <div className="link-pick">{options.slice(0, 80).map((c) => <button key={c.id} className="link" onClick={() => { setLinks(addLink(links, chat.id, c.id)); setOpen(false); }}>{displayName(c, user)} · {networkMeta(c.network).label}</button>)}</div>
+      </Modal>}
+    </div>
   );
 }
