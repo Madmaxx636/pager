@@ -5,6 +5,7 @@ package app.pager.android
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -106,7 +107,8 @@ fun AttachSheet(onPick: (Attach) -> Unit, onDismiss: () -> Unit) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     row.forEach { a ->
                         Column(Modifier.width(88.dp).clip(RoundedCornerShape(16.dp)).dpadFocus().clickable { onPick(a) }.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(Modifier.size(60.dp).clip(CircleShape).background(a.color), contentAlignment = Alignment.Center) { Icon(a.icon, a.label, tint = Color.White, modifier = Modifier.size(28.dp)) }
+                            val ink = LocalSettings.current.eink
+                            Box(Modifier.size(60.dp).clip(CircleShape).background(if (ink) Color.White else a.color).let { if (ink) it.border(inkDp(2f), inkColor(), CircleShape) else it }, contentAlignment = Alignment.Center) { Icon(a.icon, a.label, tint = if (ink) inkColor() else Color.White, modifier = Modifier.size(28.dp)) }
                             Text(a.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
                         }
                     }
@@ -251,7 +253,7 @@ fun ActionsSheet(
 ) {
     Sheet(onDismiss) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            quick.forEach { e -> Box(Modifier.size(46.dp).clip(CircleShape).dpadFocus().clickable { onReact(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 26.sp) } }
+            quick.forEach { e -> Box(Modifier.size(46.dp).clip(CircleShape).dpadFocus().clickable { onReact(e) }, contentAlignment = Alignment.Center) { EmojiGlyph(e, 26f) } }
             Box(Modifier.size(42.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable(onClick = onMore), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, "More reactions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         SheetItem(Icons.AutoMirrored.Rounded.Reply, "Reply", onReply)

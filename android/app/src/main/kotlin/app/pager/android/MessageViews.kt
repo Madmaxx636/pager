@@ -380,7 +380,7 @@ fun MessageRow(
                             .let { if (s.eink) it.border(inkDp(2f), inkColor(), CircleShape) else if (s.reactionStyle == "outline") it.border(if (minePicked) 3.dp else 1.5.dp, if (minePicked) scheme.primary else scheme.onSurface, CircleShape) else it }
                             .dpadFocus().combinedClickable(onClick = { onReact(key) }, onLongClick = { onWho(key) }).padding(horizontal = if (s.eink) 12.dp else 9.dp, vertical = if (s.eink) 6.dp else 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                    ) { Text(key, fontSize = if (s.eink) 24.sp else 14.sp); if (s.eink && minePicked) Text(" ●", fontSize = 9.sp, color = inkColor()); if (who.size > 1) Text(" ${who.size}", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant) }
+                    ) { EmojiGlyph(key, if (s.eink) 24f else 14f); if (s.eink && minePicked) Text(" ●", fontSize = 9.sp, color = inkColor()); if (who.size > 1) Text(" ${who.size}", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant) }
                 }
             }
         }

@@ -62,7 +62,7 @@ fun EmojiPickerDialog(recent: List<String>, onPick: (String) -> Unit, onDismiss:
     val offsets = remember(tabs) { var at = 0; tabs.map { (_, list) -> at.also { at += 1 + list.size } } }
 
     Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+        Surface(Modifier.einkFilter(LocalSettings.current.eink), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.height(420.dp)) {
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     tabs.forEachIndexed { i, (icon, _) ->
