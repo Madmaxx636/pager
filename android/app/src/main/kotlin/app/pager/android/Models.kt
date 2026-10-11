@@ -49,6 +49,8 @@ data class Msg(
     val enc: EncFile? = null,
     /** A message we could not read yet: the encrypted original (JSON), kept so it can be opened when its key arrives, even after a restart. */
     val sealed: String? = null,
+    /** In a merged view: the chat (on its own network) this message really belongs to. Never saved. */
+    @Transient val room: String? = null,
 )
 
 @Serializable

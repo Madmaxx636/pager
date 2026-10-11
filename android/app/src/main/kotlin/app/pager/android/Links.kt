@@ -57,4 +57,21 @@ object Links {
         }
         return out
     }
+
+    /** One chat made of every chat in the person's linked group, oldest message first, for the merged view. Null when there is nothing to merge. */
+    fun buildMerged(chats: Map<String, ChatState>, links: List<List<String>>, roomId: String): ChatState? {
+        val ids = groupOf(links, roomId)?.filter { it in chats }.orEmpty()
+        val prim = chats[roomId]
+        if (ids.size < 2 || prim == null) return null
+        val all = ids.mapNotNull { chats[it] }
+        val seen = HashSet<String>()
+        val messages = all.flatMap { c -> c.messages.map { it.copy(room = c.id) } }.filter { seen.add(it.id) }.sortedBy { it.ts }
+        return prim.copy(
+            messages = messages, unread = all.sumOf { it.unread }, markedUnread = all.any { it.markedUnread },
+            reactions = all.fold(emptyMap()) { a, c -> a + c.reactions }, reactionRefs = all.fold(emptyMap()) { a, c -> a + c.reactionRefs },
+            pollVotes = all.fold(emptyMap()) { a, c -> a + c.pollVotes }, pollEnded = all.flatMap { it.pollEnded }.toSet(),
+            receipts = all.fold(emptyMap()) { a, c -> a + c.receipts }, members = all.fold(emptyMap()) { a, c -> a + c.members },
+            typing = all.flatMap { it.typing }.toSet(), encrypted = all.all { it.encrypted }, reachedStart = all.all { it.reachedStart },
+        )
+    }
 }

@@ -126,6 +126,20 @@ class Store(private val context: Context) {
     private data class InboxInputs(val chats: Map<String, ChatState>, val muted: Set<String>, val s: Session?, val drafts: Map<String, String>, val st: AppSettings)
     private val _links = MutableStateFlow(readJson("links", kotlinx.serialization.serializer<List<List<String>>>(), emptyList()))
     val links: StateFlow<List<List<String>>> = _links.asStateFlow()
+    /** Linked chats you chose to look at one network at a time (not saved): the rest show merged. */
+    private val _solo = MutableStateFlow(setOf<String>())
+    val solo: StateFlow<Set<String>> = _solo.asStateFlow()
+    fun setSolo(roomId: String, on: Boolean) {
+        val group = Links.groupOf(_links.value, roomId) ?: listOf(roomId)
+        _solo.value = if (on) _solo.value + roomId else _solo.value - group.toSet()
+    }
+    /** The chat as the screen shows it: a person on several networks reads as one conversation, unless you picked a single network. */
+    fun chatMerged(roomId: String): Flow<ChatState?> = combine(_chats, _links, _solo) { chats, links, solo -> if (roomId in solo) chats[roomId] else Links.buildMerged(chats, links, roomId) ?: chats[roomId] }.distinctUntilChanged()
+    /** In a merged view a message may belong to another chat of the same person: find the chat that has it. */
+    fun roomFor(roomId: String, eventId: String): String {
+        if (_chats.value[roomId]?.messages?.any { it.id == eventId } == true) return roomId
+        return Links.groupOf(_links.value, roomId)?.firstOrNull { id -> _chats.value[id]?.messages?.any { it.id == eventId } == true } ?: roomId
+    }
     val inbox: StateFlow<List<ChatSummary>> = combine(combine(_chats, _muted, _session, _drafts, settings.state) { a, b, c, d, e -> InboxInputs(a, b, c, d, e) }, Names.version, _links) { (chats, muted, s, drafts, st), _, links ->
         val me = s?.userId ?: ""
         chats.values.filter { !it.isBotRoom(me) && it.network !in st.hiddenNetworks }.map {
@@ -580,14 +594,16 @@ class Store(private val context: Context) {
         }
     }
 
-    fun retry(roomId: String, msg: Msg) {
+    fun retry(roomId0: String, msg: Msg) {
+        val roomId = roomFor(roomId0, msg.id)
         update(roomId) { c -> c.copy(messages = c.messages.filter { it.id != msg.id }) }
         send(roomId, msg.body, msg.replyTo, msg.mentions)
     }
 
     fun discard(roomId: String, msg: Msg) = update(roomId) { c -> c.copy(messages = c.messages.filter { it.id != msg.id }) }
 
-    fun edit(roomId: String, eventId: String, newText: String) {
+    fun edit(roomId0: String, eventId: String, newText: String) {
+        val roomId = roomFor(roomId0, eventId)
         update(roomId) { c -> c.copy(messages = c.messages.map { if (it.id == eventId) it.copy(body = newText, edited = true) else it }) }
         scope.launch {
             runCatching {
@@ -600,14 +616,16 @@ class Store(private val context: Context) {
         }
     }
 
-    fun delete(roomId: String, eventId: String) {
+    fun delete(roomId0: String, eventId: String) {
+        val roomId = roomFor(roomId0, eventId)
         update(roomId) { c -> c.copy(messages = c.messages.filter { it.id != eventId }) }
         _stars.update { l -> l.filterNot { it.eventId == eventId } }.also { writeJson("stars", ListSerializer(Star.serializer()), _stars.value) }
         scope.launch { runCatching { matrix.redact(roomId, eventId, UUID.randomUUID().toString()) } }
     }
 
     /** Adds your reaction, or removes it if you already used that emoji. */
-    fun react(roomId: String, eventId: String, key: String) {
+    fun react(roomId0: String, eventId: String, key: String) {
+        val roomId = roomFor(roomId0, eventId)
         val me = _session.value?.userId ?: return
         val chat = _chats.value[roomId] ?: return
         rememberEmoji(key)
@@ -676,7 +694,12 @@ class Store(private val context: Context) {
         scope.launch { runCatching { matrix.typing(me, roomId, on) } }
     }
 
+    /** Marks a chat read; chats shown merged with it are marked read together. */
     fun markRead(roomId: String) {
+        val ids = if (roomId in _solo.value) listOf(roomId) else Links.groupOf(_links.value, roomId) ?: listOf(roomId)
+        ids.forEach { markReadOne(it) }
+    }
+    private fun markReadOne(roomId: String) {
         val c = _chats.value[roomId] ?: return
         val last = c.messages.lastOrNull { it.status == STATUS_SENT } ?: return
         val me = _session.value?.userId ?: return
@@ -837,7 +860,8 @@ class Store(private val context: Context) {
 
     fun draftFor(roomId: String) = _drafts.value[roomId].orEmpty()
 
-    fun toggleStar(roomId: String, msg: Msg) {
+    fun toggleStar(roomId0: String, msg: Msg) {
+        val roomId = roomFor(roomId0, msg.id)
         val chat = _chats.value[roomId]
         _stars.update { l ->
             if (l.any { it.eventId == msg.id }) l.filterNot { it.eventId == msg.id }
@@ -978,7 +1002,8 @@ class Store(private val context: Context) {
         }
     }
 
-    fun votePoll(roomId: String, pollId: String, answerIds: List<String>) {
+    fun votePoll(roomId0: String, pollId: String, answerIds: List<String>) {
+        val roomId = roomFor(roomId0, pollId)
         val me = _session.value?.userId ?: return
         update(roomId) { c -> c.copy(pollVotes = c.pollVotes + (pollId to ((c.pollVotes[pollId] ?: emptyMap()) + (me to answerIds)))) }
         scope.launch {
@@ -991,7 +1016,8 @@ class Store(private val context: Context) {
         }
     }
 
-    fun endPoll(roomId: String, pollId: String) {
+    fun endPoll(roomId0: String, pollId: String) {
+        val roomId = roomFor(roomId0, pollId)
         update(roomId) { it.copy(pollEnded = it.pollEnded + pollId) }
         scope.launch {
             runCatching {

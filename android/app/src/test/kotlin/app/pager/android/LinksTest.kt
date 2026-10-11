@@ -33,4 +33,14 @@ class LinksTest {
         assertEquals(setOf("gmessages", "signal"), rows[0].linked.map { it.second }.toSet())
         assertNull(Links.merge(listOf(sum("a", "signal", 1)), listOf(listOf("a", "b")))[0].linked.firstOrNull())
     }
+
+    @Test fun mergesChatsInTimeOrderRemembersWhereEachBelongsAndAddsUpUnread() {
+        fun msg(id: String, ts: Long) = Msg(id, "@a:x", ts, "m.text", id)
+        val chats = mapOf("s" to ChatState("s", network = "signal", unread = 1, messages = listOf(msg("1", 10), msg("3", 30))), "g" to ChatState("g", network = "gmessages", unread = 2, messages = listOf(msg("2", 20), msg("3", 30))))
+        val m = Links.buildMerged(chats, listOf(listOf("s", "g")), "s")!!
+        assertEquals(listOf("1", "2", "3"), m.messages.map { it.id })
+        assertEquals(listOf("s", "g", "s"), m.messages.map { it.room })
+        assertEquals(3, m.unread); assertEquals("s", m.id)
+        assertNull(Links.buildMerged(chats, emptyList(), "s"))
+    }
 }

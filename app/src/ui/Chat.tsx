@@ -50,9 +50,9 @@ const NO_CHATS: Record<string, ChatState> = {};
 export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBack: () => void; nav: Nav; onForward: (m: Msg) => void }) {
   const dsk = !!window.pagerDesktop; // the desktop app has its own header, info panel and merged view
   const raw = useStore((s) => s.chats[roomId]);
-  const allChats = useStore((s) => (dsk ? s.chats : NO_CHATS)), links = useStore((s) => s.links), solo = useStore((s) => s.solo);
-  // A person on several networks reads as one conversation (desktop): every chat in their group, in time order.
-  const merged = useMemo(() => (dsk && !solo.includes(roomId) ? buildMerged(allChats, links, roomId) : undefined), [dsk, solo, roomId, allChats, links]);
+  const allChats = useStore((s) => s.chats), links = useStore((s) => s.links), solo = useStore((s) => s.solo);
+  // A person on several networks reads as one conversation: every chat in their group, in time order.
+  const merged = useMemo(() => (!solo.includes(roomId) ? buildMerged(allChats, links, roomId) : undefined), [solo, roomId, allChats, links]);
   const chat = merged ?? raw;
   const groupIds = merged ? (groupOf(links, roomId) ?? [roomId]).filter((id) => allChats[id]) : [roomId];
   const [via, setVia] = useState<string>();
@@ -175,14 +175,14 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
             {st.showAvatars && <Avatar name={name} mxc={chat.avatarMxc} size={40} network={st.showNetworkBadges ? chat.network : undefined} />}
             <div>
               <div className="chat-title">{name}</div>
-              {<div className="chat-sub"><i style={{ background: meta.color }} />{meta.label}{chat.encrypted ? <span className="enc-badge" title="End-to-end encrypted"> · <Lock size={11} /> Encrypted</span> : null}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</div>}
+              {<div className="chat-sub"><i style={{ background: merged ? "var(--accent)" : meta.color }} />{merged ? `${groupIds.length} networks together` : meta.label}{chat.encrypted ? <span className="enc-badge" title="End-to-end encrypted"> · <Lock size={11} /> Encrypted</span> : null}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</div>}
             </div>
           </button>)}
           <IconButton icon={Search} label="Search in page (Ctrl+F)" onClick={() => nav(`search:${roomId}`)} />
           <IconButton icon={Info} label="Page info" onClick={() => setInfoOpen(!infoOpen)} active={infoOpen} className="info-toggle" />
         </header>
 
-        <LinkedBar chat={chat} nav={nav} />
+        <LinkedBar chat={chat} nav={nav} roomId={roomId} merged={!!merged} />
         <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll}>
           {items.map((it) => it.kind === "day" ? <div key={it.key} className="day"><span>{it.label}</span></div>
             : it.kind === "unread" ? <div key={it.key} id="unread-divider" className="unread-divider"><span>New messages</span></div>
@@ -575,7 +575,7 @@ function EnableEncryptionDialog({ roomId, onClose }: { roomId: string; onClose: 
 }
 
 /** One person on several networks: tabs to move between their chats, and an offer to join two that look like the same person. */
-function LinkedBar({ chat, nav }: { chat: ChatState; nav: Nav }) {
+function LinkedBar({ chat, nav, roomId, merged }: { chat: ChatState; nav: Nav; roomId: string; merged: boolean }) {
   const links = useStore((s) => s.links), chats = useStore((s) => s.chats);
   const [no, setNo] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("pager.linkNo") ?? "[]"); } catch { return []; } });
   const group = groupOf(links, chat.id)?.filter((id) => chats[id]);
@@ -589,7 +589,8 @@ function LinkedBar({ chat, nav }: { chat: ChatState; nav: Nav }) {
   if (dsk && group && group.length > 1) return null; // the header's network switcher does this
   if (group && group.length > 1) return (
     <div className="link-tabs" role="tablist" aria-label="This person on other networks">
-      {group.map((id) => <button key={id} role="tab" aria-selected={id === chat.id} className={id === chat.id ? "on" : ""} onClick={() => nav(`chat:${id}`)}><i style={{ background: networkMeta(chats[id].network).color }} />{networkMeta(chats[id].network).label}{chats[id].unread > 0 && id !== chat.id ? <b>{chats[id].unread}</b> : null}</button>)}
+      <button role="tab" aria-selected={merged} className={merged ? "on" : ""} onClick={() => setSolo(roomId, false)}><i className="all-dot" />All</button>
+      {group.map((id) => <button key={id} role="tab" aria-selected={!merged && id === chat.id} className={!merged && id === chat.id ? "on" : ""} onClick={() => { setSolo(id, true); if (id !== roomId) nav(`chat:${id}`); }}><i style={{ background: networkMeta(chats[id].network).color }} />{networkMeta(chats[id].network).label}{chats[id].unread > 0 && !(id === chat.id && !merged) ? <b>{chats[id].unread}</b> : null}</button>)}
     </div>
   );
   if (!offer) return null;
