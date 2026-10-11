@@ -331,7 +331,7 @@ class Store(private val context: Context) {
 
     private fun unreadable(e: JsonObject) = JsonObject(e + mapOf(
         "type" to JsonPrimitive("m.room.message"),
-        "content" to buildJsonObject { put("msgtype", "m.text"); put("body", "\uD83D\uDD12 Waiting for the key to read this message…"); put("pagerWaiting", true); put("pagerRaw", e) },
+        "content" to buildJsonObject { put("msgtype", "m.text"); put("body", SyncReducer.WAITING_TEXT); put("pagerWaiting", true); put("pagerRaw", e) },
     ))
 
     /** Replaces m.room.encrypted events with what they say. Unreadable ones become a placeholder and are tried again when keys arrive. */
@@ -372,6 +372,7 @@ class Store(private val context: Context) {
                 val clear = e.decrypt(roomId, raw) ?: continue
                 update(roomId) { SyncReducer.replaceDecrypted(it, clear) }
             }
+            update(roomId) { SyncReducer.relabelUnreadable(it, System.currentTimeMillis()) }
         }
     }
 

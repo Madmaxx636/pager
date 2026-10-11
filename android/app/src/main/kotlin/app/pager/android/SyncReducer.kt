@@ -388,6 +388,17 @@ object SyncReducer {
     }
 
     /** Puts a message that could not be read before (it was waiting for its key) in place of its placeholder. */
+    /** What an unreadable message says: first it is waiting for its key; if none has come after a while, it is probably from before this device was added. */
+    const val WAITING_TEXT = "\uD83D\uDD12 Waiting for the key to read this message…"
+    const val STUCK_TEXT = "\uD83D\uDD12 Can't be read on this device. It was probably sent before this device was added."
+    private const val STUCK_AFTER_MS = 10 * 60_000L
+
+    /** Messages still waiting for a key after ten minutes get the honest wording. Returns the same chat when nothing changed. */
+    fun relabelUnreadable(chat: ChatState, now: Long): ChatState {
+        if (chat.messages.none { it.sealed != null && it.body == WAITING_TEXT && now - it.ts >= STUCK_AFTER_MS }) return chat
+        return chat.copy(messages = chat.messages.map { if (it.sealed != null && it.body == WAITING_TEXT && now - it.ts >= STUCK_AFTER_MS) it.copy(body = STUCK_TEXT) else it })
+    }
+
     fun replaceDecrypted(chat: ChatState, clear: JsonObject): ChatState {
         val msg = toMsg(clear) ?: return chat
         if (chat.messages.none { it.id == msg.id }) return chat

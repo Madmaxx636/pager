@@ -351,6 +351,21 @@ export function toMsg(e: J): Msg | undefined {
   };
 }
 
+/** What an unreadable message says: first it is waiting for its key; if no key has come after a while, it is probably from before this device was added. */
+export const WAITING_TEXT = "🔒 Waiting for the key to read this message…";
+export const STUCK_TEXT = "🔒 Can't be read on this device. It was probably sent before this device was added.";
+const STUCK_AFTER_MS = 10 * 60_000;
+
+/** Messages still waiting for a key after ten minutes get the honest wording. Returns the same chat when nothing changed. */
+export function relabelUnreadable(chat: ChatState, now: number): ChatState {
+  let changed = false;
+  const messages = chat.messages.map((m) => {
+    if (!m.sealed || m.body !== WAITING_TEXT || now - m.ts < STUCK_AFTER_MS) return m;
+    changed = true; return { ...m, body: STUCK_TEXT };
+  });
+  return changed ? { ...chat, messages } : chat;
+}
+
 /** Puts a message that could not be read before (it was waiting for its key) in place of its placeholder. */
 export function replaceDecrypted(chat: ChatState, clear: J): ChatState {
   const msg = toMsg(clear);
