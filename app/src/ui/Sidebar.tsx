@@ -111,6 +111,15 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
 
   return (
     <aside className="sidebar" style={{ width: st.sidebarWidth }}>
+      <div className="sidebar-grip" role="separator" aria-orientation="vertical" aria-label="Resize the page list (drag, or use the arrow keys)" tabIndex={0} title="Drag to resize. Double-click to reset."
+        onPointerDown={(e) => {
+          e.preventDefault(); const el = e.currentTarget, startX = e.clientX, startW = st.sidebarWidth; el.setPointerCapture(e.pointerId); document.body.classList.add("resizing");
+          const move = (m: PointerEvent) => updateSettings({ sidebarWidth: Math.max(240, Math.min(640, Math.round(startW + m.clientX - startX))) });
+          const up = () => { el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); document.body.classList.remove("resizing"); };
+          el.addEventListener("pointermove", move); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+        }}
+        onDoubleClick={() => updateSettings({ sidebarWidth: 360 })}
+        onKeyDown={(e) => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); updateSettings({ sidebarWidth: Math.max(240, Math.min(640, st.sidebarWidth + (e.key === "ArrowRight" ? 20 : -20))) }); } }} />
       {selecting ? (
         <header className="side-head sel">
           <IconButton icon={X} label="Cancel selection" onClick={() => setPicked([])} />
