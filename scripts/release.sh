@@ -35,7 +35,7 @@ cp "desktop/release/pager-desktop-setup-${V}.exe" "$OUT/"
 
 CODE=$(awk -F. '{print $1*10000+$2*100+$3}' <<<"$V")
 # The key the Android app is signed with: phones refuse an update signed by any other key, so the apps compare this before downloading.
-SIGNER=$(~/android-sdk/build-tools/*/apksigner verify --print-certs "$OUT/pager-android-$V.apk" 2>/dev/null | awk '/certificate SHA-256 digest/ {print $NF; exit}')
+SIGNER=$("$(ls -d $HOME/android-sdk/build-tools/*/ | sort -V | tail -1)apksigner" verify --print-certs "$OUT/pager-android-$V.apk" 2>/dev/null | awk '/certificate SHA-256 digest/ {print $NF; exit}')
 PREV=""; [ "$KEEP_ANDROID" = 1 ] && PREV="$(ssh_ "cat ~/$REMOTE_DIR/latest.json")"
 PREV="$PREV" SIGNER="$SIGNER" node -e '
 const fs=require("fs"),c=require("crypto");const [v,code,notes]=process.argv.slice(1);
