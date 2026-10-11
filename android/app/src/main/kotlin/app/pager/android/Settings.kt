@@ -175,13 +175,68 @@ class SettingsStore(context: Context) {
     private val excluded = setOf("appLock", "lockAfterSec", "hideInRecents", "gifKey")
     var updatedAt: Long = prefs.getLong("updatedAt", 0L)
         private set
+
+    // Most settings (look, behaviour, notification rules) are the same on every device: each one is saved in your account with the time it last
+    // changed, and the newest change wins, so changing a setting anywhere changes it everywhere. What only makes sense on one device stays on it.
+    companion object {
+        val SHARED_KEYS = setOf("themeMode", "accent", "accentCustom", "fontScale", "fontFamily", "palette", "bubbleStyle", "bubbleFill", "bubbleDepth", "messageAnimation", "screenEffects", "wallpaper", "timeFormat", "colorSenderNames", "avatarShape", "largeEmoji", "quickReactions", "doubleTapReact", "swipeToReply", "reactionStyle", "hideStories", "deleteAtSource", "autoTranscribe", "markdown", "mentionSuggestions", "greetings", "confirmDelete", "openAtUnread", "markReadMode", "groupGapMin", "hiddenNetworks", "inboxStyle", "defaultTab", "showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "gifProvider", "convoSounds", "sendSound", "receiveSound", "reactionSound", "notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin")
+        const val SHARED_TYPE = "app.pager.settings.shared"
+    }
+    private val stamps: MutableMap<String, Long> = (runCatching { json.parseToJsonElement(prefs.getString("stamps", "{}") ?: "{}").jsonObject.mapNotNull { (k, v) -> (v as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull?.let { k to it } }.toMap() }.getOrNull() ?: emptyMap()).toMutableMap()
+    /** What the account held for the shared settings the last time we saw it, so a save never wipes another device's newer choice. */
+    private var remoteShared: Map<String, Pair<kotlinx.serialization.json.JsonElement, Long>> = emptyMap()
+    private fun saveStamps() { prefs.edit().putString("stamps", kotlinx.serialization.json.JsonObject(stamps.mapValues { kotlinx.serialization.json.JsonPrimitive(it.value) }).toString()).apply() }
+    private fun asObject(s: AppSettings) = full.encodeToJsonElement(AppSettings.serializer(), s).jsonObject
+
+    fun sharedPayload(): kotlinx.serialization.json.JsonObject {
+        val mine = asObject(_state.value)
+        val out = LinkedHashMap<String, Pair<kotlinx.serialization.json.JsonElement, Long>>(remoteShared)
+        for (k in SHARED_KEYS) { val t = stamps[k] ?: continue; val v = mine[k] ?: continue; if (t >= (out[k]?.second ?: 0L)) out[k] = v to t }
+        return kotlinx.serialization.json.buildJsonObject {
+            put("v", 2)
+            put("keys", kotlinx.serialization.json.JsonObject(out.mapValues { (_, e) -> kotlinx.serialization.json.buildJsonObject { put("v", e.first); put("t", e.second) } }))
+        }
+    }
+
+    /** First time on a device with choices of its own and an account with none shared yet: its non-default choices become the shared ones, dated when they were last changed. */
+    fun seedSharedStamps() {
+        if (SHARED_KEYS.any { stamps.containsKey(it) }) return
+        val mine = asObject(_state.value); val defaults = asObject(AppSettings())
+        for (k in SHARED_KEYS) if (mine[k] != defaults[k]) stamps[k] = if (updatedAt > 0) updatedAt else System.currentTimeMillis()
+        saveStamps()
+    }
+
+    /** Takes newer shared settings from the account. Returns (something changed here, we hold something newer than the account). */
+    fun applyRemoteShared(content: kotlinx.serialization.json.JsonObject?): Pair<Boolean, Boolean> {
+        val keys = content?.get("keys") as? kotlinx.serialization.json.JsonObject ?: return false to SHARED_KEYS.any { stamps.containsKey(it) }
+        val remote = HashMap<String, Pair<kotlinx.serialization.json.JsonElement, Long>>()
+        var next = _state.value
+        var changed = false
+        for ((k, e) in keys) {
+            val o = e as? kotlinx.serialization.json.JsonObject ?: continue
+            val t = (o["t"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: continue
+            val v = o["v"] ?: continue
+            if (k !in SHARED_KEYS) continue
+            remote[k] = v to t
+            if (t > (stamps[k] ?: 0L)) {
+                // A value of the wrong kind (another app's idea of this setting) is skipped, not fatal.
+                val candidate = runCatching { full.decodeFromJsonElement(AppSettings.serializer(), kotlinx.serialization.json.JsonObject(asObject(next) + (k to v))) }.getOrNull()
+                if (candidate != null) { if (candidate != next) changed = true; next = candidate; stamps[k] = t }
+            }
+        }
+        remoteShared = remote
+        val ahead = SHARED_KEYS.any { (stamps[it] ?: 0L) > (remote[it]?.second ?: 0L) }
+        if (changed) { _state.value = next; prefs.edit().putString("json", json.encodeToString(AppSettings.serializer(), next)).apply() }
+        saveStamps()
+        return changed to ahead
+    }
     /** Called after the user changes a setting here (not when settings arrive from the account). */
     var onLocalChange: (() -> Unit)? = null
 
     fun payload(): kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.buildJsonObject {
         put("v", 1)
         put("updatedAt", updatedAt)
-        put("settings", kotlinx.serialization.json.JsonObject(full.encodeToJsonElement(AppSettings.serializer(), _state.value).jsonObject.filterKeys { it !in excluded }))
+        put("settings", kotlinx.serialization.json.JsonObject(full.encodeToJsonElement(AppSettings.serializer(), _state.value).jsonObject.filterKeys { it !in excluded && it !in SHARED_KEYS }))
     }
 
     /** Applies settings saved in the account if they are newer than ours. Returns whether anything changed. */
@@ -189,7 +244,7 @@ class SettingsStore(context: Context) {
         val at = (content["updatedAt"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: return false
         if (at <= updatedAt) return false
         val remote = content["settings"] as? kotlinx.serialization.json.JsonObject ?: return false
-        val merged = kotlinx.serialization.json.JsonObject(full.encodeToJsonElement(AppSettings.serializer(), _state.value).jsonObject + remote.filterKeys { it !in excluded })
+        val merged = kotlinx.serialization.json.JsonObject(full.encodeToJsonElement(AppSettings.serializer(), _state.value).jsonObject + remote.filterKeys { it !in excluded && it !in SHARED_KEYS })
         val next = runCatching { full.decodeFromJsonElement(AppSettings.serializer(), merged) }.getOrNull() ?: return false
         _state.value = next
         updatedAt = at
@@ -199,6 +254,9 @@ class SettingsStore(context: Context) {
 
     fun update(f: AppSettings.() -> AppSettings) {
         val next = _state.value.f()
+        val before = asObject(_state.value); val after = asObject(next); val now = System.currentTimeMillis()
+        for (k in SHARED_KEYS) if (before[k] != after[k]) stamps[k] = now
+        saveStamps()
         _state.value = next
         updatedAt = System.currentTimeMillis()
         prefs.edit().putString("json", json.encodeToString(AppSettings.serializer(), next)).putLong("updatedAt", updatedAt).apply()

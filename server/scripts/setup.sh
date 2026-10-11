@@ -70,6 +70,7 @@ if [ ! -f data/synapse/homeserver.yaml ]; then
     | .url_preview_enabled = true
     | .url_preview_ip_range_blacklist = [\"127.0.0.0/8\",\"10.0.0.0/8\",\"172.16.0.0/12\",\"192.168.0.0/16\",\"100.64.0.0/10\",\"169.254.0.0/16\",\"::1/128\",\"fe80::/10\",\"fc00::/7\"]
     | .max_event_delay_duration = \"7d\"
+    | .delete_stale_devices_after = \"30d\"
     | .experimental_features.msc4140_enabled = true" synapse/homeserver.yaml
 fi
 # The API needs Synapse's registration secret to create users.
