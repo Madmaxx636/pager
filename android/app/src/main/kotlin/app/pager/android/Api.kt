@@ -226,6 +226,13 @@ class MatrixApi(private val http: Http) {
         return http.request("GET", q)
     }
 
+    /** A sync that carries no chats at all, only what a device needs to get its keys (to-device messages and account data). */
+    suspend fun syncKeysOnly(since: String?): JsonObject {
+        val filter = enc("""{"presence":{"types":[]},"room":{"rooms":[]},"account_data":{"types":["m.secret_storage.*","m.cross_signing.*","m.megolm_backup.v1","m.org.matrix.custom.backup_disabled"]}}""")
+        val q = "/_matrix/client/v3/sync?set_presence=offline&filter=$filter" + if (since != null) "&since=${enc(since)}&timeout=5000" else "&timeout=0"
+        return http.request("GET", q)
+    }
+
     /** One page of older events. Returns (events newest-first, next token or null at the start of the room). */
     suspend fun messages(roomId: String, from: String): Triple<List<JsonObject>, String?, List<JsonObject>> {
         val filter = enc("""{"lazy_load_members":true}""")

@@ -7,6 +7,7 @@ import { ChatSummary } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import {
   addLabel, markAllRead, markRead, markUnread, me, movePin, pin, remind, removeLabel, setLowPriority, setMuted, setTag, snooze, leave, useInbox, useLabels, useStore, useChatsRaw,
+  getState,
 } from "../core/store";
 import { RowAction, updateSettings, useSettings } from "../core/settings";
 import { Avatar, IconButton, Modal, SheetItem, TypingDots, WhenModal, EmptyState } from "./common";
@@ -53,6 +54,7 @@ function rowAction(a: RowAction, c: ChatSummary, setUndo: (u?: { label: string; 
 
 export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: string | null; onSelect: (id: string) => void; nav: Nav; onAccounts: () => void }) {
   const st = useSettings();
+  const srcOn = st.deleteAtSource;
   const everything = useInbox();
   const stories = st.hideStories ? undefined : everything.find((c) => c.stories);
   const all = everything.filter((c) => !c.stories);
@@ -235,8 +237,9 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
         onMute={() => setMuteFor([ctx.c.id])} onLabels={() => setLabelFor([ctx.c.id])} onWhen={(kind) => setWhenFor({ ids: [ctx.c.id], kind })} onSelect={() => toggle(ctx.c.id)} onDelete={() => setDeleteFor([ctx.c.id])} />}
       {deleteFor && (
         <Modal title={deleteFor.length === 1 ? "Delete this page?" : `Delete ${deleteFor.length} pages?`} onClose={() => setDeleteFor(undefined)}>
-          <p className="muted">They will be removed from Pager. The conversations on the other apps aren't deleted, and a page comes back if someone writes again.</p>
-          <div className="row-end"><button className="link" onClick={() => setDeleteFor(undefined)}>Cancel</button><button className="primary danger" onClick={() => { deleteFor.forEach(leave); setDeleteFor(undefined); setPicked([]); }}>Delete</button></div>
+          <p className="muted">{srcOn ? "They will be removed from Pager and deleted on Signal, WhatsApp or Google Messages too (other networks keep theirs). This can't be undone." : "They will be removed from Pager. The conversations on the other apps aren't deleted, and a page comes back if someone writes again."}</p>
+          <label className="check-row"><input type="checkbox" checked={srcOn} onChange={(e) => updateSettings({ deleteAtSource: e.target.checked })} /> Also delete on Signal, WhatsApp and Google Messages</label>
+          <div className="row-end"><button className="link" onClick={() => setDeleteFor(undefined)}>Cancel</button><button className="primary danger" onClick={() => { deleteFor.forEach((id) => leave(id, srcOn && ["signal", "whatsapp", "gmessages"].includes(getState().chats[id]?.network ?? ""))); setDeleteFor(undefined); setPicked([]); }}>Delete</button></div>
         </Modal>
       )}
       {muteFor && (

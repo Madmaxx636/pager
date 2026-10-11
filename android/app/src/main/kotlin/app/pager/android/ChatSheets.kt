@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Poll
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Code
@@ -87,6 +88,7 @@ import kotlinx.coroutines.launch
 
 /** What the + button offers, in a Google/Apple-Messages-style tile grid. */
 enum class Attach(val label: String, val icon: ImageVector, val color: Color) {
+    VIEWONCE("View once", Icons.Rounded.VisibilityOff, Color(0xFF475569)),
     PHOTOS("Photos", Icons.Rounded.PhotoLibrary, Color(0xFF3B82F6)),
     CAMERA("Camera", Icons.Rounded.PhotoCamera, Color(0xFF6B7280)),
     GIF("GIF", Icons.Rounded.Gif, Color(0xFFEC4899)),
@@ -99,9 +101,9 @@ enum class Attach(val label: String, val icon: ImageVector, val color: Color) {
 }
 
 @Composable
-fun AttachSheet(onPick: (Attach) -> Unit, onDismiss: () -> Unit) {
+fun AttachSheet(canViewOnce: Boolean = false, onPick: (Attach) -> Unit, onDismiss: () -> Unit) {
     Sheet(onDismiss) {
-        val rows = Attach.entries.chunked(3)
+        val rows = Attach.entries.filter { it != Attach.VIEWONCE || canViewOnce }.chunked(3)
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             rows.forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {

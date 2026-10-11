@@ -1,21 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, ContactRound, File as FileIcon, Image as ImageIcon, MapPin, Plus, Smile, Sticker as StickerIcon, X, Camera } from "lucide-react";
+import { EyeOff, BarChart3, ContactRound, File as FileIcon, Image as ImageIcon, MapPin, Plus, Smile, Sticker as StickerIcon, X, Camera } from "lucide-react";
 import { Gif, searchGifs } from "../core/gifs";
 import { Sticker } from "../core/types";
 import { addStickers, stickerPacks, toggleFavoriteGif, useStore } from "../core/store";
 import { useSettings } from "../core/settings";
 import { EmptyState, Modal, useMxc } from "./common";
 
-export type AttachKind = "photos" | "camera" | "gif" | "stickers" | "emoji" | "file" | "poll" | "contact" | "location";
+export type AttachKind = "viewonce" | "photos" | "camera" | "gif" | "stickers" | "emoji" | "file" | "poll" | "contact" | "location";
 
 const ITEMS: [AttachKind, string, React.ComponentType<{ size?: number; color?: string }> | "gif", string][] = [
   ["photos", "Photos", ImageIcon, "#3b82f6"], ["camera", "Camera", Camera, "#6b7280"], ["gif", "GIF", "gif", "#ec4899"],
   ["stickers", "Stickers", StickerIcon, "#f59e0b"], ["emoji", "Emoji", Smile, "#eab308"], ["file", "File", FileIcon, "#14b8a6"],
-  ["poll", "Poll", BarChart3, "#8b5cf6"], ["contact", "Contact", ContactRound, "#0ea5e9"], ["location", "Location", MapPin, "#ef4444"],
+  ["viewonce", "View once", EyeOff, "#475569"], ["poll", "Poll", BarChart3, "#8b5cf6"], ["contact", "Contact", ContactRound, "#0ea5e9"], ["location", "Location", MapPin, "#ef4444"],
 ];
 
 /** The + menu: a grid of everything you can add to a message. */
-export function AttachMenu({ onPick, onClose }: { onPick: (k: AttachKind) => void; onClose: () => void }) {
+export function AttachMenu({ onPick, onClose, canViewOnce }: { onPick: (k: AttachKind) => void; onClose: () => void; canViewOnce?: boolean }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     const click = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest(".attach-pop, .plus")) onClose(); };
@@ -25,7 +25,7 @@ export function AttachMenu({ onPick, onClose }: { onPick: (k: AttachKind) => voi
   const hasCamera = typeof navigator !== "undefined" && !!navigator.mediaDevices;
   return (
     <div className="attach-pop">
-      {ITEMS.filter(([k]) => k !== "camera" || hasCamera).map(([k, label, Icon, color]) => (
+      {ITEMS.filter(([k]) => (k !== "camera" || hasCamera) && (k !== "viewonce" || canViewOnce)).map(([k, label, Icon, color]) => (
         <button key={k} onClick={() => onPick(k)}>
           <span style={{ background: color }}>{Icon === "gif" ? <b>GIF</b> : <Icon size={22} color="#fff" />}</span>{label}
         </button>

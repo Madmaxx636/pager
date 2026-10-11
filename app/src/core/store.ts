@@ -379,7 +379,26 @@ sendHook.fn = (roomId, type, content) => {
   return next;
 };
 
+/**
+ * A brand-new device gets no chats until its keys are entered: while the key step is open it receives only what it needs to finish it
+ * (keys and account data), then everything. Devices that already have their keys, or have saved chats, start as usual.
+ */
+async function holdUntilKeys(s: Session, signal: AbortSignal) {
+  if (since !== undefined || !e2ee) return;
+  const flagKey = `pager.keysetup.${s.userId}.${e2ee.deviceId}`;
+  const seenKey = () => { try { return localStorage.getItem(flagKey) === "1"; } catch { return true; } };
+  let token: string | undefined;
+  while (!signal.aborted && e2ee && !seenKey() && !(await e2ee.backupOn())) {
+    try {
+      const res = await matrix.syncKeysOnly(token, signal); token = res.next_batch;
+      await e2ee.receiveSync(res);
+    } catch { await new Promise((r) => setTimeout(r, 2000)); }
+    if (token) await new Promise((r) => setTimeout(r, 800));
+  }
+}
+
 async function syncLoop(s: Session, signal: AbortSignal) {
+  await holdUntilKeys(s, signal).catch(() => {});
   let backoff = 1000;
   while (!signal.aborted) {
     try {
@@ -589,11 +608,12 @@ export function markRead(roomId: string) {
 export function markUnread(roomId: string, unread: boolean) { patchChat(roomId, (c) => ({ ...c, markedUnread: unread })); void matrix.setMarkedUnread(me(), roomId, unread).catch(() => {}); updateBadge(); }
 export function markAllRead() { Object.values(state.chats).filter((c) => c.unread > 0 || c.markedUnread).forEach((c) => markRead(c.id)); }
 
-export function sendFile(roomId: string, file: File | Blob, name = (file as File).name || "file", extra: Partial<Msg> = {}) {
+/** [viewOnce]: Signal shows the picture or video once and then it is gone (the bridge turns this into Signal's own view-once). */
+export function sendFile(roomId: string, file: File | Blob, name = (file as File).name || "file", extra: Partial<Msg> & { viewOnce?: boolean } = {}) {
   const mime = file.type || "application/octet-stream";
   const type = mime.startsWith("image/") ? "m.image" : mime.startsWith("video/") ? "m.video" : mime.startsWith("audio/") ? "m.audio" : "m.file";
   const txn = uuid(), localId = `local-${txn}`;
-  addLocal(roomId, localMsg(localId, type, name, { mime, size: file.size, txn, ...extra }));
+  addLocal(roomId, localMsg(localId, type, name, { mime, size: file.size, txn, ...extra, viewOnce: undefined } as Partial<Msg>));
   void (async () => {
     try {
       let w = extra.w, h = extra.h;
@@ -604,6 +624,7 @@ export function sendFile(roomId: string, file: File | Blob, name = (file as File
       const info: Record<string, unknown> = { mimetype: mime, size: file.size, ...(w ? { w, h } : {}), ...(extra.durationMs ? { duration: extra.durationMs } : {}) };
       const id = await matrix.send(roomId, "m.room.message", txn, {
         msgtype: type, body: name, ...(sealed ? { file: { url: mxc, ...sealed.file } } : { url: mxc }), info,
+        ...(extra.viewOnce && (type === "m.image" || type === "m.video") ? { "com.beeper.view_limited": { type: "count", count: 1 } } : {}),
         ...(extra.voice ? { "org.matrix.msc3245.voice": {}, "org.matrix.msc1767.audio": { duration: extra.durationMs ?? 0 } } : {}),
       });
       setStatus(roomId, localId, STATUS_SENT, id);
@@ -757,7 +778,39 @@ export const muteLeft = (roomId: string) => (muteUntil[roomId] ? muteUntil[roomI
 
 export const members = (roomId: string) => matrix.joinedMembers(roomId).catch(() => ({} as Record<string, string>));
 export function rename(roomId: string, name: string) { patchChat(roomId, (c) => ({ ...c, name })); void matrix.rename(roomId, name).catch(() => {}); }
-export function leave(roomId: string) { const { [roomId]: _gone, ...rest } = state.chats; set({ chats: rest }); void matrix.leave(roomId).catch(() => {}); }
+/** Takes a page out of Pager. With [atSource], the bridge is first asked to delete the conversation on its own network too (Signal, WhatsApp, Google Messages). */
+export function leave(roomId: string, atSource = false) {
+  const { [roomId]: _gone, ...rest } = state.chats; set({ chats: rest });
+  void (async () => {
+    if (atSource) {
+      try { await matrix.send(roomId, "com.beeper.delete_chat", uuid(), { delete_for_everyone: false }); await new Promise((r) => setTimeout(r, 2500)); } catch { /* still leave the room below */ }
+    }
+    await matrix.leave(roomId).catch(() => {});
+  })();
+}
+
+/** Loads the whole history of every page onto this device, one page at a time. [onProgress] gets (pages finished, pages in all). */
+export async function loadEveryHistory(onProgress: (done: number, total: number) => void, signal?: AbortSignal) {
+  const ids = Object.values(state.chats).filter((c) => !c.reachedStart).sort((a, b) => lastTs(b) - lastTs(a)).map((c) => c.id);
+  for (let i = 0; i < ids.length && !signal?.aborted; i++) { onProgress(i, ids.length); await loadWholeHistory(ids[i], undefined, signal); }
+  onProgress(ids.length, ids.length);
+}
+
+/** Loads every older message of a page onto this device (as far back as the server has them). Resolves true when the start was reached. */
+export async function loadWholeHistory(roomId: string, onProgress?: (loaded: number) => void, signal?: AbortSignal): Promise<boolean> {
+  for (let i = 0; i < 600 && !signal?.aborted; i++) {
+    const c = state.chats[roomId]; if (!c || c.reachedStart) break;
+    const token = c.prevBatch ?? since; if (!token) break;
+    try {
+      const { chunk, end, state: st } = await matrix.messages(roomId, token);
+      const clear = await decryptEvents(roomId, chunk);
+      patchChat(roomId, (x) => applyHistory(x, clear, end, st ?? [], state.session?.userId ?? ""));
+    } catch { break; }
+    const n = state.chats[roomId]; onProgress?.(n?.messages.length ?? 0);
+    if (n && (n.prevBatch ?? since) === token) break;
+  }
+  return !!state.chats[roomId]?.reachedStart;
+}
 
 /** localpart escaping used by the bridges for ghost user ids (uppercase and odd characters are escaped). */
 const escLocalpart = (s: string) => [...s].map((c) => (/[a-z0-9\-./=]/.test(c) ? c : c === "_" ? "__" : /[A-Z]/.test(c) ? "_" + c.toLowerCase() : "=" + c.charCodeAt(0).toString(16).padStart(2, "0"))).join("");

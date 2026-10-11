@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { RowAction, ACCENTS, accentTones, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
 import { Tour } from "./Tour";
-import { addStickers, cancelReminder, createRecoveryKey, retryEncryptionStart, enableEncryptionForAll, exportKeyFile, importKeyFile, restoreWithRecoveryKey, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore } from "../core/store";
+import { addStickers, cancelReminder, createRecoveryKey, retryEncryptionStart, enableEncryptionForAll, exportKeyFile, importKeyFile, restoreWithRecoveryKey, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore, loadEveryHistory } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
@@ -247,6 +247,7 @@ function Appearance() {
       </Group>
       <Group title="Text & messages">
         <Select title="Reactions" value={s.reactionStyle} options={[["filled", "Filled"], ["outline", "Outline"]]} onChange={(v) => updateSettings({ reactionStyle: v })} />
+        <SwitchRow title="Delete on the other network too" hint="When you delete a chat in Pager, also delete it on Signal, WhatsApp or Google Messages. It can't be undone, so you are asked each time" checked={s.deleteAtSource} onChange={(v) => updateSettings({ deleteAtSource: v })} />
         <SwitchRow title="Hide Stories" hint="Removes the Stories row (WhatsApp status updates) from the list" checked={s.hideStories} onChange={(v) => updateSettings({ hideStories: v })} />
         <Row title="Text size" hint={`${Math.round(s.fontScale * 100)}%`}><input type="range" min="0.85" max="1.4" step="0.05" value={s.fontScale} onChange={(e) => updateSettings({ fontScale: Number(e.target.value) })} /></Row>
         <Select title="Bubble style" value={s.bubbleStyle} options={[["round", "Rounded"], ["soft", "Extra round"], ["square", "Square"], ["tail", "Tail"], ["outline", "Outline"], ["plain", "No bubbles"]]} onChange={(v) => updateSettings({ bubbleStyle: v })} />
@@ -379,6 +380,7 @@ function Labels() {
 
 function Media() {
   const s = useRawSettings();
+  const [bulk, setBulk] = useState<{ done: number; total: number }>();
   const pack = useStore((x) => x.userStickers);
   const input = useState<HTMLInputElement | null>(null);
   return (
@@ -386,6 +388,9 @@ function Media() {
       <Group title="GIF search" footer="GIF search uses your own free API key from Giphy (developers.giphy.com) or Tenor. Pager doesn't ship a shared key.">
         <Select title="Provider" value={s.gifProvider} options={[["giphy", "Giphy"], ["tenor", "Tenor"]]} onChange={(v) => updateSettings({ gifProvider: v })} />
         <Row title="API key"><input type="password" placeholder="Paste your key" value={s.gifKey} onChange={(e) => updateSettings({ gifKey: e.target.value.trim() })} /></Row>
+      </Group>
+      <Group title="History" footer="Pager loads older messages as you scroll. This fetches all of them now, so they are on this device. It can take a while and uses data.">
+        <Row title={bulk ? (bulk.done >= bulk.total ? `Done: ${bulk.total} pages loaded` : `Loading… ${bulk.done} of ${bulk.total} pages`) : "Load every page's full history"} onClick={() => { if (bulk && bulk.done < bulk.total) return; setBulk({ done: 0, total: 1 }); void loadEveryHistory((done, total) => setBulk({ done, total })); }} />
       </Group>
       <Group title="Voice messages" footer="Needs transcription switched on at your server (scripts/enable-transcription.sh). The words are made on your own server and kept on this device.">
         <SwitchRow title="Write out voice messages automatically" hint="Otherwise use “Write it out” under a message" checked={s.autoTranscribe} onChange={(v) => updateSettings({ autoTranscribe: v })} />
