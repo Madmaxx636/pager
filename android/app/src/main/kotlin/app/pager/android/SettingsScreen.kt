@@ -418,7 +418,7 @@ private fun AppearancePage() {
         SwitchRow("Silly hello", "The pager says something goofy when you open the app", s.greetings) { v -> set { copy(greetings = v) } }; GroupDivider()
         SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }
         if (s.eink) {
-            GroupDivider(); SliderRow("Boldness", s.einkBold.toFloat(), 1f..4f, listOf("", "Light", "Normal", "Bold", "Extra bold")[s.einkBold.coerceIn(1, 4)]) { v -> set { copy(einkBold = Math.round(v).coerceIn(1, 4)) } }
+            GroupDivider(); SliderRow("Darkness", s.einkDark.toFloat(), 1f..4f, listOf("", "Dark gray", "Darker", "Very dark", "Black")[s.einkDark.coerceIn(1, 4)]) { v -> set { copy(einkDark = Math.round(v).coerceIn(1, 4)) } }
             GroupDivider(); ChoiceRow("Screen clean", listOf("off" to "Off", "chats" to "When opening or leaving a chat", "timed" to "Every few seconds"), s.screenClean) { v -> set { copy(screenClean = v) } }
             if (s.screenClean == "timed") { GroupDivider(); SliderRow("Every", s.screenCleanSec.toFloat(), 5f..120f, "${s.screenCleanSec} seconds") { v -> set { copy(screenCleanSec = (Math.round(v / 5f) * 5).coerceIn(5, 120)) } } }
         }

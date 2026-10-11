@@ -59,8 +59,8 @@ data class AppSettings(
     val reduceMotion: Boolean = false,
     /** E-ink mode: black on white, no color, no animation, thick lines. */
     val eink: Boolean = false,
-    /** How bold E-ink text and lines are: 1 (light) to 4 (extra bold). */
-    val einkBold: Int = 2,
+    /** How dark E-ink text and lines are, from 1 (dark gray) to 4 (pure black). Darker, never thicker. */
+    val einkDark: Int = 4,
     /** A quick white flash that clears ghosting on e-ink: off | chats (when opening or leaving a chat) | timed. */
     val screenClean: String = "off",
     val screenCleanSec: Int = 20,

@@ -372,7 +372,7 @@ private fun Tab(label: String, icon: androidx.compose.ui.graphics.vector.ImageVe
     val bg = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     val eink = LocalSettings.current.eink
-    Row(Modifier.clip(RoundedCornerShape(50)).background(bg).let { if (eink) it.border(inkDp(2f), Color.Black, RoundedCornerShape(50)) else it }.dpadFocus().clickable(onClick = click).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(RoundedCornerShape(50)).background(bg).let { if (eink) it.border(inkDp(2f), inkColor(), RoundedCornerShape(50)) else it }.dpadFocus().clickable(onClick = click).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = fg, modifier = Modifier.size(if (eink) 20.dp else 16.dp))
         Spacer(Modifier.width(6.dp))
         Text(label + (badge?.let { "  $it" } ?: ""), color = fg, style = MaterialTheme.typography.labelLarge)
@@ -458,7 +458,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
     ) {
         Row(
             Modifier.fillMaxWidth().background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = if (s.eink) 0.18f else 0.12f) else MaterialTheme.colorScheme.background)
-                .drawBehind { if (s.eink) drawLine(Color.Black, androidx.compose.ui.geometry.Offset(0f, size.height), androidx.compose.ui.geometry.Offset(size.width, size.height), inkDp(1f).toPx()) }
+                .drawBehind { if (s.eink) drawLine(inkColor(), androidx.compose.ui.geometry.Offset(0f, size.height), androidx.compose.ui.geometry.Offset(size.width, size.height), inkDp(1f).toPx()) }
                 .onKeyEvent { e -> if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.Menu) { onLong(); true } else false }.dpadFocus().combinedClickable(onClick = onClick, onLongClick = onLong).padding(horizontal = 16.dp, vertical = vPad),
             verticalAlignment = Alignment.CenterVertically,
         ) {
