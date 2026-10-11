@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useEncryption, useStore } from "../core/store";
-import { RecoveryKeyDialog, RestoreDialog } from "./Settings";
+import { RecoveryKeyDialog, RestoreDialog } from "./KeyDialogs";
 
 const flag = (user: string, device: string) => `pager.keysetup.${user}.${device}`;
 const seen = (k: string) => { try { return localStorage.getItem(k) === "1"; } catch { return false; } };

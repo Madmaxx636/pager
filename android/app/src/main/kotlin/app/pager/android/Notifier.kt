@@ -118,7 +118,7 @@ object Notifier {
         out.append("Message channel: ").append(nm.getNotificationChannel(CH_ALL)?.importance?.let { if (it >= NotificationManager.IMPORTANCE_DEFAULT) "ok" else "set too low (raise it to High)" } ?: "not created yet").append('\n')
         out.append("Bubbles: ").append(
             if (sdk >= 31) when (nm.bubblePreference) { NotificationManager.BUBBLE_PREFERENCE_ALL -> "allowed for all conversations"; NotificationManager.BUBBLE_PREFERENCE_SELECTED -> "allowed for selected conversations"; else -> "OFF for Pager (Settings → Apps → Pager → Notifications → Bubbles)" }
-            else if (nm.areBubblesAllowed()) "allowed" else "OFF for Pager (Settings → Apps → Pager → Notifications → Bubbles)",
+            else if (@Suppress("DEPRECATION") nm.areBubblesAllowed()) "allowed" else "OFF for Pager (Settings → Apps → Pager → Notifications → Bubbles)",
         ).append('\n')
         val shortcuts = runCatching { ShortcutManagerCompat.getDynamicShortcuts(context).size }.getOrDefault(-1)
         out.append("Conversation shortcuts: ").append(if (shortcuts > 0) "$shortcuts ready" else "none yet. They are made when a page sends you a notification. Use \"Send a test notification\" first").append("\n\n")

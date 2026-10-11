@@ -1,21 +1,21 @@
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { Mascot } from "./ui/Mascot";
 import { applyTheme, getSettings, setSystemTheme, useSettings, type SystemTheme } from "./core/settings";
 import { forward, getState, requestNotifications, restoreSession, roomFor, setOpenRoom, useStore } from "./core/store";
 import { KeySetup } from "./ui/KeySetup";
-import { Tour } from "./ui/Tour";
+const Tour = lazy(() => import("./ui/Tour").then((m) => ({ default: m.Tour })));
 import { Auth } from "./ui/Auth";
 import { Sidebar } from "./ui/Sidebar";
 import { Chat } from "./ui/Chat";
-import { Settings } from "./ui/Settings";
-import { NewChat } from "./ui/NewChat";
-import { Search } from "./ui/Search";
-import { ChatPicker } from "./ui/ChatPicker";
-import { AccountsModal } from "./ui/Accounts";
-import { Palette } from "./ui/Palette";
+const Settings = lazy(() => import("./ui/Settings").then((m) => ({ default: m.Settings })));
+const NewChat = lazy(() => import("./ui/NewChat").then((m) => ({ default: m.NewChat })));
+const Search = lazy(() => import("./ui/Search").then((m) => ({ default: m.Search })));
+const ChatPicker = lazy(() => import("./ui/ChatPicker").then((m) => ({ default: m.ChatPicker })));
+const AccountsModal = lazy(() => import("./ui/Accounts").then((m) => ({ default: m.AccountsModal })));
+const Palette = lazy(() => import("./ui/Palette").then((m) => ({ default: m.Palette })));
 import { SHORTCUTS } from "./core/settings";
-import { comboOf } from "./ui/Settings";
+import { comboOf } from "./core/combo";
 import { markUnread, pin, setMuted, setTag, snooze, useInbox } from "./core/store";
 import { WhenModal } from "./ui/common";
 
@@ -115,6 +115,7 @@ export function App() {
   } else main = <div className="blank"><Mascot size={170} mood={synced ? "idle" : "ring"} /><p>{synced ? "Pick a page to start." : "Syncing…"}</p></div>;
 
   return (
+    <Suspense fallback={null}>
     <div className={"shell" + (route !== "home" ? " pane-open" : "")} style={{ ["--sidebar-w" as string]: `${st.sidebarWidth}px` }}>
       <Sidebar selected={roomId} onSelect={(id) => nav(`chat:${id}`)} nav={nav} onAccounts={() => setAccounts(true)} />
       <main className="main">{main}</main>
@@ -124,5 +125,6 @@ export function App() {
       {palette && <Palette nav={nav} current={roomId ?? undefined} onClose={() => setPalette(false)} onSnooze={setSnoozing} />}
       {snoozing && <WhenModal title="Snooze until" onPick={(at) => { snooze(snoozing, at); setSnoozing(undefined); }} onClose={() => setSnoozing(undefined)} />}
     </div>
+    </Suspense>
   );
 }

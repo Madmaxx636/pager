@@ -37,7 +37,7 @@ export function spawn(effect: Effect, w: number, h: number): Particle[] {
 }
 
 /** Advances particles one frame; returns whether anything is still visible. */
-export function step(ps: Particle[], effect: Effect, w: number, h: number): boolean {
+export function step(ps: Particle[], effect: Effect, _w: number, h: number): boolean {
   let alive = false;
   for (const p of ps) {
     p.wobble += 0.06;

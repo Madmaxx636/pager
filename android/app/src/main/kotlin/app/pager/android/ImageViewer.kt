@@ -21,7 +21,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -79,7 +79,7 @@ fun ImageViewer(images: List<Msg>, startId: String, senderName: (String) -> Stri
                             Toast.makeText(context, if (ok) "Saved to Pictures/Pager" else "Couldn't save this photo", Toast.LENGTH_SHORT).show()
                         }
                     }, tint = Color.White)
-                    IconBtn(Icons.Rounded.OpenInNew, "Open in another app", { scope.launch { current.mxc?.let { store.media.open(it, current.body.ifEmpty { "image" }, current.mime) } } }, tint = Color.White)
+                    IconBtn(Icons.AutoMirrored.Rounded.OpenInNew, "Open in another app", { scope.launch { current.mxc?.let { store.media.open(it, current.body.ifEmpty { "image" }, current.mime) } } }, tint = Color.White)
                 }
             }
         }
