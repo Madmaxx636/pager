@@ -84,6 +84,24 @@ fun BridgesScreen(onBack: () -> Unit) {
     var adding by remember { mutableStateOf(false) }
     var syncing by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf("") }
+    var askSync by remember { mutableStateOf<Pair<Network, Login>?>(null) }
+    askSync?.let { (n, l) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { askSync = null }, title = { Text("Start chats with every ${n.name} contact?") },
+            text = { Text("This opens a new, empty chat with each contact on ${n.name}, which can be hundreds. It won't bring old messages in. Chats you already have are untouched.\n\nTo message just one person, use Page someone instead.") },
+            confirmButton = { TextButton(onClick = {
+                askSync = null
+                scope.launch {
+                    syncing = l.id; note = ""
+                    runCatching { store.pager.syncChats(n.id, l.id) { d, tot -> note = "Starting chats $d/$tot" } }
+                        .onSuccess { note = "Started $it chats. Old history isn't available from every network; new messages appear as they arrive." }
+                        .onFailure { note = it.message ?: "Couldn't start the chats" }
+                    syncing = null
+                }
+            }) { Text("Start them all") } },
+            dismissButton = { TextButton(onClick = { askSync = null }) { Text("Cancel") } },
+        )
+    }
     LaunchedEffect(Unit) { store.refreshBridges() }
 
     SettingsPage("Bridges & accounts", onBack) {
@@ -101,15 +119,8 @@ fun BridgesScreen(onBack: () -> Unit) {
                         Box(Modifier.size(10.dp).clip(CircleShape).background(color))
                         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) { Text(l.name); Text(label, style = MaterialTheme.typography.labelMedium, color = color) }
                         if (needsAttention(l.state)) TextButton(onClick = { relogin = n }) { Text("Sign in") }
-                        TextButton(enabled = syncing == null, onClick = {
-                            scope.launch {
-                                syncing = l.id; note = ""
-                                runCatching { store.pager.syncChats(n.id, l.id) { d, tot -> note = "Syncing pages $d/$tot" } }
-                                    .onSuccess { note = "Synced $it pages. Old history isn't available from every network; new messages appear as they arrive." }
-                                    .onFailure { note = it.message ?: "Sync failed" }
-                                syncing = null
-                            }
-                        }) { Text("Sync pages") }
+                        // Google Messages would get an empty conversation on your phone for every contact, so it is not offered there.
+                        if (n.id != "gmessages") TextButton(enabled = syncing == null, onClick = { askSync = n to l }) { Text("Start chats") }
                         TextButton(onClick = { scope.launch { runCatching { store.pager.logout(n.id, l.id) }; store.refreshBridges() } }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
                     }
                     GroupDivider()

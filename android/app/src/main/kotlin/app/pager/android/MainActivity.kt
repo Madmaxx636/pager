@@ -105,6 +105,7 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         store.appInForeground = true
+        store.ensureSyncing()
         val s = store.settings.value
         if (s.appLock && stoppedAt > 0 && System.currentTimeMillis() - stoppedAt >= s.lockAfterSec * 1000L) locked = true
     }
@@ -150,6 +151,7 @@ class MainActivity : FragmentActivity() {
 
         if (session == null) { AuthScreen(store); return }
         KeySetupGate()
+        BatteryPrompt()
         UpdateGate()
         TourGate(onGo = { go(it) })
 

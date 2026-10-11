@@ -32,6 +32,8 @@ class SyncService : Service() {
         startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
 
         val store = (application as PagerApp).store
+        Watchdog.schedule(this)
+        store.ensureSyncing()
         scope.launch {
             store.incoming.collect { m ->
                 if (!store.appInForeground) Notifier.show(this@SyncService, store, m)
@@ -41,6 +43,7 @@ class SyncService : Service() {
     }
 
     override fun onDestroy() {
+        // The system may have stopped the service; the watchdog starts it again.
         scope.cancel()
         super.onDestroy()
     }
