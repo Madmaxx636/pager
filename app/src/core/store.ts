@@ -428,40 +428,44 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       const initial = since === undefined;
       const r = applySync(state.chats, res, s.userId, initial);
       set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}), ...(r.userStickers ? { userStickers: r.userStickers } : {}) });
-      // Pages whose newest events were all bookkeeping arrive with no messages: fetch a few older messages for the first of them now, so
-      // the list shows something to read instead of "No messages yet" until each one is opened.
-      if (initial) { const empty = Object.values(r.chats).filter((c) => !c.messages.length && !c.reachedStart).slice(0, 25); empty.forEach((c, i) => window.setTimeout(() => loadOlder(c.id), 150 * i)); }
-      if (r.userStickers) lsSet("pager.userStickers", r.userStickers);
-      handleSettingsSync(r.accountData?.[settingsSyncType()], s.userId);
-      for (const [type, c] of Object.entries(r.accountData ?? {})) if (type.startsWith("app.pager.contacts.")) {
-        const rows = Array.isArray(c.rows) ? (c.rows as unknown[]).filter((x): x is [string, string] => Array.isArray(x) && typeof x[0] === "string" && typeof x[1] === "string") : [];
-        addToPhonebook(rows.map(([number, name]) => ({ number, name })), true, true);
-        if (typeof c.chunks === "number") contactChunks = Math.max(contactChunks, c.chunks);
-      }
-      const al = r.accountData?.["app.pager.aliases"]?.names;
-      if (al && typeof al === "object" && !Array.isArray(al)) { const names = Object.fromEntries(Object.entries(al as Record<string, unknown>).filter(([, v]) => typeof v === "string")) as Record<string, string>; set({ aliases: names }); lsSet("pager.aliases", names); setAliases(names); }
-      const lk = r.accountData?.["app.pager.links"]?.groups;
-      if (Array.isArray(lk)) { const groups = (lk as unknown[]).filter((g): g is string[] => Array.isArray(g) && g.every((x) => typeof x === "string")); set({ links: groups }); lsSet("pager.links", groups); }
-      const fav = r.accountData?.["app.pager.favorite_gifs"]?.gifs;
-      if (Array.isArray(fav)) { set({ favoriteGifs: fav as Gif[] }); lsSet("pager.favoriteGifs", fav); }
-      r.invites.forEach((id) => void matrix.join(id).catch(() => {}));
-      const muted = state.muted, st = getSettings();
-      const when = new Date();
-      for (const m of r.incoming) {
-        const c = r.chats[m.roomId];
-        if (st.convoSounds && looking(m.roomId) && document.hasFocus()) { playSound(m.reaction ? st.reactionSound : st.receiveSound, st.convoSoundVolume); continue; }
-        const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text,
-          quiet: muted.includes(m.roomId) || (c ? isLowPriority(c) : false), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
-        if (!d.show) continue;
-        // Optionally wait, and drop the alert if you read the chat somewhere else in the meantime.
-        if (st.notifDelaySec > 0) window.setTimeout(() => { const cc = state.chats[m.roomId]; if (cc && (cc.unread > 0 || cc.markedUnread)) notify(m, d); }, st.notifDelaySec * 1000);
-        else notify(m, d);
-      }
-      if (getSettings().unarchiveOnMessage) {
-        for (const id of new Set(r.incoming.map((m) => m.roomId))) if (!muted.includes(id) && state.chats[id] && isArchived(state.chats[id])) setTag(id, "u.archived", false);
-      }
-      expireMutes();
+      // The update is in: move on to the next one now, whatever the notifications and bookkeeping below do. One failure there must never make
+      // this device read the same update again forever (that left it out of step with your other devices).
       since = typeof res.next_batch === "string" ? res.next_batch : since;
+      try {
+        // Pages whose newest events were all bookkeeping arrive with no messages: fetch a few older messages for the first of them now, so
+        // the list shows something to read instead of "No messages yet" until each one is opened.
+        if (initial) { const empty = Object.values(r.chats).filter((c) => !c.messages.length && !c.reachedStart).slice(0, 25); empty.forEach((c, i) => window.setTimeout(() => loadOlder(c.id), 150 * i)); }
+        if (r.userStickers) lsSet("pager.userStickers", r.userStickers);
+        handleSettingsSync(r.accountData?.[settingsSyncType()], s.userId);
+        for (const [type, c] of Object.entries(r.accountData ?? {})) if (type.startsWith("app.pager.contacts.")) {
+          const rows = Array.isArray(c.rows) ? (c.rows as unknown[]).filter((x): x is [string, string] => Array.isArray(x) && typeof x[0] === "string" && typeof x[1] === "string") : [];
+          addToPhonebook(rows.map(([number, name]) => ({ number, name })), true, true);
+          if (typeof c.chunks === "number") contactChunks = Math.max(contactChunks, c.chunks);
+        }
+        const al = r.accountData?.["app.pager.aliases"]?.names;
+        if (al && typeof al === "object" && !Array.isArray(al)) { const names = Object.fromEntries(Object.entries(al as Record<string, unknown>).filter(([, v]) => typeof v === "string")) as Record<string, string>; set({ aliases: names }); lsSet("pager.aliases", names); setAliases(names); }
+        const lk = r.accountData?.["app.pager.links"]?.groups;
+        if (Array.isArray(lk)) { const groups = (lk as unknown[]).filter((g): g is string[] => Array.isArray(g) && g.every((x) => typeof x === "string")); set({ links: groups }); lsSet("pager.links", groups); }
+        const fav = r.accountData?.["app.pager.favorite_gifs"]?.gifs;
+        if (Array.isArray(fav)) { set({ favoriteGifs: fav as Gif[] }); lsSet("pager.favoriteGifs", fav); }
+        r.invites.forEach((id) => void matrix.join(id).catch(() => {}));
+        const muted = state.muted, st = getSettings();
+        const when = new Date();
+        for (const m of r.incoming) {
+          const c = r.chats[m.roomId];
+          if (st.convoSounds && looking(m.roomId) && document.hasFocus()) { playSound(m.reaction ? st.reactionSound : st.receiveSound, st.convoSoundVolume); continue; }
+          const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text,
+            quiet: muted.includes(m.roomId) || (c ? isLowPriority(c) : false), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
+          if (!d.show) continue;
+          // Optionally wait, and drop the alert if you read the chat somewhere else in the meantime.
+          if (st.notifDelaySec > 0) window.setTimeout(() => { const cc = state.chats[m.roomId]; if (cc && (cc.unread > 0 || cc.markedUnread)) notify(m, d); }, st.notifDelaySec * 1000);
+          else notify(m, d);
+        }
+        if (getSettings().unarchiveOnMessage) {
+          for (const id of new Set(r.incoming.map((m) => m.roomId))) if (!muted.includes(id) && state.chats[id] && isArchived(state.chats[id])) setTag(id, "u.archived", false);
+        }
+        expireMutes();
+      } catch (e) { console.warn("problem after an update", e); }
       scheduleSave(); updateBadge();
       backoff = 1000;
     } catch (e) {

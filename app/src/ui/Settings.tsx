@@ -154,7 +154,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
         </Group>
         <Group title="Reading">
           <Select title="Mark as read when" value={s.markReadMode} options={[["open", "I open the page"], ["scrolled", "I reach the newest message"], ["manual", "I do it myself"]]} onChange={(v) => u({ markReadMode: v })} />
-          <SwitchRow title="Open at first unread" hint="Jump to the 'New messages' line" checked={s.openAtFirstUnread} onChange={(v) => u({ openAtFirstUnread: v })} />
+          <SwitchRow title="Open at first unread" hint="Jump to the 'New messages' line" checked={s.openAtUnread} onChange={(v) => u({ openAtUnread: v })} />
           <Select title="Message grouping" value={String(s.groupGapMin)} options={[["1", "Within 1 minute"], ["5", "Within 5 minutes"], ["15", "Within 15 minutes"], ["60", "Within an hour"]]} onChange={(v) => u({ groupGapMin: Number(v) })} />
           <SwitchRow title="Large emoji" hint="Emoji-only messages are shown big" checked={s.largeEmoji} onChange={(v) => u({ largeEmoji: v })} />
         </Group>

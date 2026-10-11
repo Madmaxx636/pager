@@ -49,39 +49,42 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
   const invites = Object.keys(obj(rooms.invite));
 
   for (const [roomId, roomEl] of Object.entries(obj(rooms.join))) {
-    const room = obj(roomEl);
-    let chat = chats[roomId] ?? emptyChat(roomId);
-    for (const e of arr(obj(room.state).events)) chat = applyState(chat, obj(e));
+    // One chat with something unreadable in it must not stop every other chat from updating.
+    try {
+      const room = obj(roomEl);
+      let chat = chats[roomId] ?? emptyChat(roomId);
+      for (const e of arr(obj(room.state).events)) chat = applyState(chat, obj(e));
 
-    const tl = obj(room.timeline);
-    const limited = tl.limited === true;
-    const prev = str(tl.prev_batch);
-    if (limited && chat.messages.length && !initial) chat = { ...chat, messages: [], prevBatch: prev, reachedStart: false };
-    else if (chat.prevBatch == null && chat.messages.length === 0 && prev != null) chat = { ...chat, prevBatch: prev };
+      const tl = obj(room.timeline);
+      const limited = tl.limited === true;
+      const prev = str(tl.prev_batch);
+      if (limited && chat.messages.length && !initial) chat = { ...chat, messages: [], prevBatch: prev, reachedStart: false };
+      else if (chat.prevBatch == null && chat.messages.length === 0 && prev != null) chat = { ...chat, prevBatch: prev };
 
-    const pre = chat;
-    chat = process(chat, claimOwn(arr(tl.events).map(obj), ownGhosts(chat, me), me), true, (m, parentSender) => {
-      if (!initial && m.sender !== me) {
-        const mine = pre.members[me] ?? me.replace(/^@/, "").split(":")[0];
-        const mentioned = m.mentions.includes(me) || m.body.toLowerCase().includes(`@${mine}`.toLowerCase());
-        incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: isGroup(pre), mentioned, ts: m.ts, replyToMe: parentSender === me });
-      }
-    }, (sender, key, target) => {
-      // Someone reacted to something you wrote: that is about you, so it alerts like a reply. In a one-to-one chat, or when the message is not loaded
-      // to check, it counts too: bridged messages do not always say clearly that they are yours.
-      if (!initial && sender !== me && (target?.sender === me || !target || !isGroup(pre)))
-        incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, sender), text: target ? `reacted ${key} to “${previewOf(target).slice(0, 60)}”` : `reacted ${key}`, network: pre.network, isGroup: isGroup(pre), mentioned: false, ts: Date.now(), replyToMe: true, reaction: true });
-    });
+      const pre = chat;
+      chat = process(chat, claimOwn(arr(tl.events).map(obj), ownGhosts(chat, me), me), true, (m, parentSender) => {
+        if (!initial && m.sender !== me) {
+          const mine = pre.members[me] ?? me.replace(/^@/, "").split(":")[0];
+          const mentioned = m.mentions.includes(me) || m.body.toLowerCase().includes(`@${mine}`.toLowerCase());
+          incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: isGroup(pre), mentioned, ts: m.ts, replyToMe: parentSender === me });
+        }
+      }, (sender, key, target) => {
+        // Someone reacted to something you wrote: that is about you, so it alerts like a reply. In a one-to-one chat, or when the message is not loaded
+        // to check, it counts too: bridged messages do not always say clearly that they are yours.
+        if (!initial && sender !== me && (target?.sender === me || !target || !isGroup(pre)))
+          incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, sender), text: target ? `reacted ${key} to “${previewOf(target).slice(0, 60)}”` : `reacted ${key}`, network: pre.network, isGroup: isGroup(pre), mentioned: false, ts: Date.now(), replyToMe: true, reaction: true });
+      });
 
-    for (const e of arr(obj(room.ephemeral).events)) chat = applyEphemeral(chat, obj(e), me);
-    for (const e of arr(obj(room.account_data).events)) chat = applyRoomAccountData(chat, obj(e));
+      for (const e of arr(obj(room.ephemeral).events)) chat = applyEphemeral(chat, obj(e), me);
+      for (const e of arr(obj(room.account_data).events)) chat = applyRoomAccountData(chat, obj(e));
 
-    const heroes = arr(obj(room.summary)["m.heroes"]).filter((h) => typeof h === "string");
-    if (heroes.length) chat = { ...chat, heroes };
-    const joinedCount = num(obj(room.summary)["m.joined_member_count"]);
-    if (joinedCount != null) chat = { ...chat, memberCount: joinedCount };
-    const count = num(obj(room.unread_notifications).notification_count);
-    chats[roomId] = { ...chat, unread: count ?? chat.unread };
+      const heroes = arr(obj(room.summary)["m.heroes"]).filter((h) => typeof h === "string");
+      if (heroes.length) chat = { ...chat, heroes };
+      const joinedCount = num(obj(room.summary)["m.joined_member_count"]);
+      if (joinedCount != null) chat = { ...chat, memberCount: joinedCount };
+      const count = num(obj(room.unread_notifications).notification_count);
+      chats[roomId] = { ...chat, unread: count ?? chat.unread };
+    } catch (e) { console.warn("could not read an update for", roomId, e); }
   }
 
   for (const roomId of Object.keys(obj(rooms.leave))) delete chats[roomId];

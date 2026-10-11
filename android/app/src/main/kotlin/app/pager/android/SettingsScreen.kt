@@ -304,7 +304,7 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
             }
             SettingsGroup("Reading") {
                 ChoiceRow("Mark as read when", listOf("open" to "I open the page", "scrolled" to "I reach the newest message", "manual" to "I do it myself"), s.markReadMode) { v -> set { copy(markReadMode = v) } }; GroupDivider()
-                SwitchRow("Open at first unread", "Jump to the 'New messages' line", s.openAtFirstUnread) { v -> set { copy(openAtFirstUnread = v) } }; GroupDivider()
+                SwitchRow("Open at the new-messages line", "Off: chats open at the newest message. On: they open at the 'New messages' line", s.openAtUnread) { v -> set { copy(openAtUnread = v) } }; GroupDivider()
                 ChoiceRow("Message grouping", listOf("1" to "Within 1 minute", "5" to "Within 5 minutes", "15" to "Within 15 minutes", "60" to "Within an hour"), s.groupGapMin.toString()) { v -> set { copy(groupGapMin = v.toInt()) } }; GroupDivider()
                 SwitchRow("Large emoji", "Emoji-only messages are shown big", s.largeEmoji) { v -> set { copy(largeEmoji = v) } }
             }

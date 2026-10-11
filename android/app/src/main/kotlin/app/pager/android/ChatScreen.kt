@@ -251,7 +251,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
         if (!opened) {
             if (chat == null) return@LaunchedEffect
             opened = true
-            val divider = if (s.openAtFirstUnread) items.indexOfFirst { it is Item.Unread } else -1
+            val divider = if (s.openAtUnread) items.indexOfFirst { it is Item.Unread } else -1
             if (divider >= 0) list.scrollToItem(divider) else list.scrollToItem(0)
         // (a day label, a typing row or an unread line can sit above the old newest message, so a few items from the end still counts)
         } else if (newestId != null && (newestMine || list.firstVisibleItemIndex <= 4)) { if (s.reduceMotion) list.scrollToItem(0) else list.animateScrollToItem(0) }
