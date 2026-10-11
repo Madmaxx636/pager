@@ -310,7 +310,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
         val unread = c.unread > 0 || c.markedUnread
         Sheet({ menuFor = null }) {
             Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Avatar(c.name, c.network, 44.dp, c.avatarMxc)
+                ChatAvatar(c.name, c.network, 44.dp, c.avatarMxc, c.faces)
                 Column(Modifier.padding(start = 14.dp)) { Text(c.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(networkMeta(c.network).label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             SheetItem(Icons.Rounded.PushPin, if (c.pinned) "Unpin" else "Pin to top", { menuFor = null; store.pin(c.id, !c.pinned) })
@@ -393,7 +393,7 @@ private fun PinnedChip(c: ChatSummary, onOpen: () -> Unit, onLong: () -> Unit) {
     val unread = c.unread > 0 || c.markedUnread
     Column(Modifier.width(72.dp).dpadFocus().combinedClickable(onClick = onOpen, onLongClick = onLong), horizontalAlignment = Alignment.CenterHorizontally) {
         Box {
-            Avatar(c.name, LocalSettings.current.let { if (it.showNetworkBadges) c.network else null }, 58.dp, c.avatarMxc)
+            ChatAvatar(c.name, LocalSettings.current.let { if (it.showNetworkBadges) c.network else null }, 58.dp, c.avatarMxc, c.faces)
             if (unread) Box(Modifier.align(Alignment.TopEnd).size(18.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background).padding(2.dp).clip(CircleShape).background(if (c.muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary))
         }
         Text(c.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp), fontWeight = if (unread) FontWeight.Bold else FontWeight.Medium)
@@ -473,7 +473,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
             if (selecting) {
                 Icon(if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 12.dp).size(24.dp))
             }
-            if (s.showAvatars) { Avatar(c.name, if (s.showNetworkBadges) c.network else null, avatar, c.avatarMxc); Spacer(Modifier.width(14.dp)) }
+            if (s.showAvatars) { ChatAvatar(c.name, if (s.showNetworkBadges) c.network else null, avatar, c.avatarMxc, c.faces); Spacer(Modifier.width(14.dp)) }
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // The name takes everything the time doesn't need (it used to stop at half the row, cutting names short on narrow screens).
@@ -566,7 +566,7 @@ private fun PinnedGrid(pins: List<ChatSummary>, onOpen: (String) -> Unit, onMenu
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Box {
-                            Avatar(c.name, if (s.showNetworkBadges) c.network else null, 76.dp, c.avatarMxc)
+                            ChatAvatar(c.name, if (s.showNetworkBadges) c.network else null, 76.dp, c.avatarMxc, c.faces)
                             if (unread) Box(Modifier.align(Alignment.TopEnd).size(20.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background).padding(3.dp).clip(CircleShape).background(if (c.muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary))
                             if (c.typing) Box(Modifier.align(Alignment.BottomCenter).offset(y = 6.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface).padding(horizontal = 9.dp, vertical = 5.dp)) { TypingDots(MaterialTheme.colorScheme.primary, 5.dp) }
                         }

@@ -94,7 +94,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
         TopBar("Page info", onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 40.dp)) {
             Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Avatar(name, c.network, 96.dp, c.avatarMxc)
+                ChatAvatar(name, c.network, 96.dp, c.avatarMxc, if (c.isGroup) groupFaces(c, me) else emptyList())
                 Spacer(Modifier.height(12.dp))
                 Text(name, style = MaterialTheme.typography.headlineMedium)
                 Text("${networkMeta(c.network).label}${if (c.isGroup) " · ${c.peopleCount} members" else ""}", color = MaterialTheme.colorScheme.onSurfaceVariant)

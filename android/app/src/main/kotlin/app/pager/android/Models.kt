@@ -91,6 +91,8 @@ data class ChatState(
     val pollVotes: Map<String, Map<String, List<String>>> = emptyMap(),
     val pollEnded: Set<String> = emptySet(),
     val stickerPacks: List<StickerPack> = emptyList(),
+    /** user id -> their picture (mxc://), when they have one */
+    val memberAvatars: Map<String, String> = emptyMap(),
     @Transient val typing: Set<String> = emptySet(),
 ) {
     val lastTs get() = messages.lastOrNull()?.ts ?: 0L
@@ -162,6 +164,8 @@ data class ChatSummary(
     val lastFromMe: Boolean = false,
     val typing: Boolean = false,
     val stories: Boolean = false,
+    /** For a group without a picture of its own: up to four people, drawn as its round picture. */
+    val faces: List<Face> = emptyList(),
     /** This row stands for several chats with the same person on different networks (id to network, this one included). */
     val linked: List<Pair<String, String>> = emptyList(),
 )

@@ -250,6 +250,7 @@ object SyncReducer {
                 val joined = content["membership"].str() == "join"
                 chat.copy(
                     members = if (joined) chat.members + (key to (content["displayname"].str() ?: key.removePrefix("@").substringBefore(':'))) else chat.members,
+                    memberAvatars = if (joined && content["avatar_url"].str() != null) chat.memberAvatars + (key to content["avatar_url"].str()!!) else chat.memberAvatars,
                     joined = if (joined) chat.joined + key else chat.joined - key,
                 )
             }
