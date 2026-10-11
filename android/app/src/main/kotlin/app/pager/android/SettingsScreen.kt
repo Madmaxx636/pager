@@ -950,7 +950,19 @@ fun RecoveryKeyDialog(first: Boolean, onDone: () -> Unit) {
     var err by remember { mutableStateOf("") }
     var saved by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
-    LaunchedEffect(Unit) { runCatching { store.createRecoveryKey() }.onSuccess { key = it }.onFailure { err = it.message ?: "Couldn't make a key" } }
+    // A key already exists for this account: making another one replaces it, and the old one stops working. Ask first.
+    val hasOne = store.encryption.collectAsState().value.backupOnServer
+    var sure by remember { mutableStateOf(!hasOne) }
+    LaunchedEffect(sure) { if (sure) runCatching { store.createRecoveryKey() }.onSuccess { key = it }.onFailure { err = it.message ?: "Couldn't make a key" } }
+    if (!sure) {
+        AlertDialog(
+            onDismissRequest = onDone, title = { Text("Replace your recovery key?") },
+            text = { Text("This account already has a recovery key. A new one replaces it: the old key stops working, including on your other devices' backups.\n\nIf you meant to open your history on this phone, go back and enter the key you saved, or use a signed-in device's key file instead.") },
+            confirmButton = { TextButton(onClick = { sure = true }) { Text("Replace my key", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = onDone) { Text("Go back") } },
+        )
+        return
+    }
     AlertDialog(
         onDismissRequest = { if (key == null || saved) onDone() }, title = { Text(if (first) "Save your recovery key" else "Your recovery key") },
         text = {
