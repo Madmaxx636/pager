@@ -68,6 +68,8 @@ data class AppSettings(
     val fontFamily: String = "system",
     val reactionStyle: String = "filled",      // filled | outline
     val hideStories: Boolean = false,
+    /** Turn voice messages into text as you see them (needs transcription switched on at your server). */
+    val autoTranscribe: Boolean = false,
     val reactionSound: String = "tick",
     /** Scales the whole interface (display size). */
     val keypad: String = "auto",               // d-pad and keypad phones: auto (when the phone has a d-pad or number keys) | on | off

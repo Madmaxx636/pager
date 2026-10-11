@@ -71,6 +71,7 @@ class Store(private val context: Context) {
     val matrix = MatrixApi(http)
     val media = MediaLoader(context, http)
     val audio = AudioController(media)
+    val transcripts = Transcripts(context, http, media)
     val settings = SettingsStore(context).also { s -> s.onLocalChange = { pushSettingsRef?.invoke() } }
     private var pushSettingsRef: (() -> Unit)? = null
     val reminders = Reminders(context)
@@ -1230,7 +1231,7 @@ class Store(private val context: Context) {
 
     private fun signOutLocal() {
         syncJob?.cancel()
-        retryJob?.cancel(); e2ee?.close(); e2ee = null; waiting.clear(); memberCache.clear()
+        retryJob?.cancel(); e2ee?.close(); e2ee = null; waiting.clear(); memberCache.clear(); transcripts.forgetAll()
         runCatching { File(context.filesDir, "e2ee").deleteRecursively() }
         _encryption.value = EncryptionStatus()
         prefs.edit().remove("token").remove("userId").remove("deviceId").remove("identity.key").remove("identity.names").remove("identity.ids").apply()

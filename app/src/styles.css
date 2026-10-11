@@ -419,3 +419,4 @@ body { font-family: var(--font, "Inter Variable", Inter, system-ui, -apple-syste
 .link-offer { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 6px 14px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: .85rem; } .link-offer span { flex: 1 1 220px; }
 .link-pick { display: grid; gap: 2px; max-height: 50vh; overflow-y: auto; } .link-pick .link { text-align: left; }
 .chat-net.linked { display: flex; gap: 10px; font-size: .72rem; font-weight: 600; }
+.audio-box { display: grid; gap: 4px; } .words { font-size: .9rem; line-height: 1.35; white-space: pre-wrap; opacity: .92; padding: 2px 4px 0; } .words-btn { justify-self: start; padding: 2px 4px; font-size: .82rem; }

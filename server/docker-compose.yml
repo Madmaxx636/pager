@@ -60,6 +60,7 @@ services:
       REGISTRATIONS_DIR: /registrations
       SIGNUP_MODE: ${SIGNUP_MODE:-invite}
       BRIDGES_FILE: /config/bridges.json
+      TRANSCRIBE_URL: ${TRANSCRIBE_URL:-}
     volumes:
       - ./data/bridges.json:/config/bridges.json:ro
       - ./data/api:/state
@@ -70,6 +71,17 @@ services:
       - ${BRIDGES_DIR_HOST:-./data/api/no-bridges}:/bridges
     group_add: ["${DOCKER_GID:-65534}"]
     depends_on: [synapse]
+    networks: [pager]
+
+  # Turns voice messages into text, on this machine only. Off unless you run scripts/enable-transcription.sh.
+  whisper:
+    build: ./whisper
+    profiles: ["transcribe"]
+    restart: unless-stopped
+    environment:
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+    volumes:
+      - ./data/whisper:/models
     networks: [pager]
 
   # Keeps a DuckDNS name pointed at your home IP. Enabled by setup.sh when DUCKDNS_TOKEN is in .env.

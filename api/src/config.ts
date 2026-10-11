@@ -18,6 +18,8 @@ export interface Config {
   bridgesDir?: string;
   /** Where the bridges' registration files can be read (read-only). Lets the server act as a bridge's bot for narrow jobs: switching a page to encrypted, re-inviting you to a chat you left. */
   registrationsDir?: string;
+  /** Where the speech-to-text service answers (empty when it is not switched on). */
+  transcribeUrl?: string;
   bridges: BridgeConfig[];
 }
 
@@ -45,6 +47,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     stateFile: env.STATE_FILE,
     bridgesDir: env.BRIDGES_DIR,
     registrationsDir: env.REGISTRATIONS_DIR,
+    transcribeUrl: env.TRANSCRIBE_URL || undefined,
     bridges: env.BRIDGES_FILE ? JSON.parse(readFileSync(env.BRIDGES_FILE, "utf8")) : DEFAULT_BRIDGES,
   };
 }

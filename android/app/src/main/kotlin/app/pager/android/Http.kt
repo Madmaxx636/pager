@@ -14,6 +14,7 @@ import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.source
@@ -65,6 +66,17 @@ class Http(var baseUrl: String, var token: String? = null) {
     suspend fun getRaw(path: String): Response = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(baseUrl.trimEnd('/') + path).apply { token?.let { header("Authorization", "Bearer $it") } }.build()
         client.newCall(req).await()
+    }
+
+    /** Sends a file as the body of a POST and reads the JSON answer. Slow jobs (speech to text) get a long wait. */
+    suspend fun postFile(path: String, contentType: String, file: java.io.File): JsonObject = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url(baseUrl.trimEnd('/') + path).post(file.asRequestBody(contentType.toMediaType())).apply { token?.let { header("Authorization", "Bearer $it") } }.build()
+        client.newBuilder().readTimeout(200, java.util.concurrent.TimeUnit.SECONDS).build().newCall(req).await().use { res ->
+            val text = res.body?.string().orEmpty()
+            val parsed = runCatching { json.parseToJsonElement(text).jsonObject }.getOrDefault(JsonObject(emptyMap()))
+            if (!res.isSuccessful) throw ApiException(res.code, (parsed["error"] as? JsonPrimitive)?.contentOrNull ?: "Request failed (${res.code})")
+            parsed
+        }
     }
 
     suspend fun request(method: String, path: String, body: JsonElement? = null): JsonObject = withContext(Dispatchers.IO) {
