@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Pager's bridge defaults: download as much history as the networks offer, bridge delivery/read state, and bridge typing.
+# Message status events and error notices are off: every bridge sees every message you send (so double puppeting works), and with them on each bridge
+# that does not own the chat tried to join it just to say "no portal", hundreds of refused joins that kept Synapse busy during big syncs.
 # Applies to every bridge (new and existing). Safe to re-run. Restarts the bridges unless called with --no-restart.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -14,7 +16,8 @@ EXPR='
   | .backfill.max_initial_messages = 2000
   | .backfill.max_catchup_messages = 5000
   | (select(.matrix | has("delivery_receipts")) | .matrix.delivery_receipts) = true
-  | (select(.matrix | has("message_status_events")) | .matrix.message_status_events) = true
+  | (select(.matrix | has("message_status_events")) | .matrix.message_status_events) = false
+  | (select(.matrix | has("message_error_notices")) | .matrix.message_error_notices) = false
   | (select(.network | has("send_presence_on_typing")) | .network.send_presence_on_typing) = true
   | (select(.bridge | has("send_presence_on_typing")) | .bridge.send_presence_on_typing) = true
   | (select(.network.history_sync) | .network.history_sync.request_full_sync) = true
