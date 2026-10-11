@@ -506,3 +506,37 @@ body { font-family: var(--font, "Inter Variable", Inter, system-ui, -apple-syste
 .sidebar-grip { position: absolute; top: 0; bottom: 0; right: -4px; width: 9px; cursor: col-resize; z-index: 20; touch-action: none; } .sidebar-grip::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; transition: background .15s; } .sidebar-grip:hover::after, .sidebar-grip:focus-visible::after, body.resizing .sidebar-grip::after { background: var(--accent); }
 body.resizing { cursor: col-resize; user-select: none; } body.resizing * { pointer-events: none; } body.resizing .sidebar-grip { pointer-events: auto; }
 @media (max-width: 760px) { .sidebar-grip { display: none; } }
+.all-dot { background: conic-gradient(#3a76f0, #1a9e5c, #f59e0b, #d4537e, #3a76f0) !important; } .nav-drop .sub { margin-left: auto; color: var(--muted); font-size: .72rem; } .nav-drop button .sub + .tick { margin-left: 8px; }
+.via { padding: 2px 14px 0; position: relative; background: var(--panel); border-top: 1px solid var(--line); } .via > button { display: inline-flex; align-items: center; gap: 5px; font-size: .74rem; color: var(--muted); padding: 2px 6px; border-radius: 8px; } .via > button:hover { background: var(--panel-2); } .via i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.via-menu { position: absolute; bottom: 100%; left: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 5px; min-width: 170px; z-index: 30; } .via-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; border-radius: 8px; font-size: .85rem; text-align: left; } .via-menu button:hover { background: var(--panel-2); } .via-menu .tick { margin-left: auto; color: var(--accent); }
+.net-dot { display: inline-flex; align-items: center; gap: 4px; opacity: .8; } .net-dot i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+/* ---- Small animations (desktop). Gentle on purpose: slides, glides, glows, pops, breathing, fades. ---- */
+@keyframes fx-slide-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes fx-slide-left { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+@keyframes fx-pop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes fx-breathe { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 50% { transform: scale(1.07); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 0%, transparent); } }
+@keyframes fx-glow { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } 50% { box-shadow: 0 0 14px 2px color-mix(in srgb, var(--accent) 40%, transparent); } }
+@keyframes fx-in-row { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+:root[data-fx="on"] .chat-col { animation: fx-slide-up .3s cubic-bezier(.2, .9, .3, 1) both; }
+:root[data-fx="on"] .info { animation: fx-slide-left .28s cubic-bezier(.2, .9, .3, 1) both; }
+:root[data-fx="on"] .chat-row { animation: fx-in-row .35s cubic-bezier(.2, .9, .3, 1) both; } :root[data-fx="on"] .chat-row:nth-child(2) { animation-delay: .03s; } :root[data-fx="on"] .chat-row:nth-child(3) { animation-delay: .06s; } :root[data-fx="on"] .chat-row:nth-child(4) { animation-delay: .09s; } :root[data-fx="on"] .chat-row:nth-child(5) { animation-delay: .12s; } :root[data-fx="on"] .chat-row:nth-child(6) { animation-delay: .15s; } :root[data-fx="on"] .chat-row:nth-child(n+7) { animation-delay: .18s; }
+:root[data-fx="on"] .chat-row { transition: background .18s ease, box-shadow .25s ease, transform .18s ease; } :root[data-fx="on"] .chat-row.sel { box-shadow: inset 3px 0 0 var(--accent); }
+:root[data-fx="on"] .unread:not(.muted-badge):not(:empty) { animation: fx-breathe 3.2s ease-in-out infinite; }
+:root[data-fx="on"] .unread { transition: transform .2s; } :root[data-fx="on"] .pin-dot:not(.muted) { animation: fx-breathe 3.2s ease-in-out infinite; }
+:root[data-fx="on"] .send, :root[data-fx="on"] .primary { transition: transform .15s ease, box-shadow .2s ease, filter .15s; } :root[data-fx="on"] .send:hover, :root[data-fx="on"] .primary:hover:not(:disabled) { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+:root[data-fx="on"] .send:active, :root[data-fx="on"] .primary:active { transform: scale(.94); }
+:root[data-fx="on"] .icon { transition: background .15s, color .15s, transform .15s, box-shadow .2s; } :root[data-fx="on"] .icon:hover { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent); transform: none; } :root[data-fx="on"] .icon:active { transform: scale(.9); }
+:root[data-fx="on"] .composer .field { transition: box-shadow .25s ease; } :root[data-fx="on"] .composer .field:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+:root[data-fx="on"] .day span { animation: fx-slide-up .4s ease both; }
+:root[data-fx="on"] .unread-divider span { animation: fx-glow 2.4s ease-in-out 2; }
+:root[data-fx="on"] .reactions button, :root[data-fx="on"] .rx { animation: fx-pop .38s cubic-bezier(.3, 1.4, .5, 1) both; }
+:root[data-fx="on"] .nav-drop button, :root[data-fx="on"] .menu button, :root[data-fx="on"] .via-menu button { animation: fx-slide-up .22s ease both; transition: background .15s, transform .15s; } :root[data-fx="on"] .nav-drop button:nth-child(3), :root[data-fx="on"] .menu button:nth-child(3) { animation-delay: .03s; } :root[data-fx="on"] .nav-drop button:nth-child(4), :root[data-fx="on"] .menu button:nth-child(4) { animation-delay: .06s; } :root[data-fx="on"] .menu button:nth-child(n+5) { animation-delay: .09s; }
+:root[data-fx="on"] .menu button:hover, :root[data-fx="on"] .nav-drop button:hover { transform: translateX(3px); }
+:root[data-fx="on"] .tab { transition: background .2s, color .2s, transform .15s; } :root[data-fx="on"] .tab:hover { transform: translateY(-1px); }
+:root[data-fx="on"] .avatar, :root[data-fx="on"] .av { transition: transform .2s ease; } :root[data-fx="on"] .chat-row:hover .avatar { transform: scale(1.06); }
+:root[data-fx="on"] .jump { animation: fx-pop .3s ease both; }
+:root[data-fx="on"] .modal, :root[data-fx="on"] .overlay { animation: skin-fade .18s ease both; }
+:root[data-fx="on"] .link-tabs, :root[data-fx="on"] .link-offer { animation: fx-slide-up .3s ease both; }
+:root[data-fx="on"] .via { animation: fx-slide-up .3s ease both; }
+:root[data-fx="on"] .head-wrap .chev { transition: transform .22s cubic-bezier(.3, 1.4, .5, 1); }

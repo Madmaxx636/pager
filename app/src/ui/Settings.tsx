@@ -234,6 +234,7 @@ function Appearance() {
   return (
     <>
       {window.pagerDesktop && <StyleGroup />}
+      {window.pagerDesktop && <Group title="Motion"><SwitchRow title="Small animations" hint="Things slide, glide, glow, pop, breathe and fade a little. Off for none" checked={s.fancyMotion} onChange={(v) => updateSettings({ fancyMotion: v })} /></Group>}
       <Group title="Theme">
         <Row title="Ready-made looks" hint="A whole colour set for the app. Choose “Mode and accent” to go back to your own mix."><div className="swatches looks">
           <button className={s.palette === "none" ? "on" : ""} style={{ background: "var(--panel-2)" }} onClick={() => updateSettings({ palette: "none" })} aria-label="Mode and accent" title="Mode and accent">{s.palette === "none" ? <Check size={16} /> : null}</button>
@@ -679,7 +680,6 @@ function StyleGroup() {
           ))}
         </div>
         {skin && accents.length > 0 && <Row title="Accent colour" hint={skin.family === "adwaita" ? "GNOME's accent colours" : "Plasma's accent colours"}><div className="swatches">{accents.map(([n, c]) => <button key={c} className={(s.skinAccent || skin.accent) === c ? "on" : ""} style={{ background: c }} title={n} aria-label={n} onClick={() => updateSettings({ skinAccent: c === skin.accent ? "" : c })}>{(s.skinAccent || skin.accent) === c ? <Check size={16} color="#fff" /> : null}</button>)}</div></Row>}
-        {skin && <SwitchRow title="Extra motion" hint="Menus slide in, buttons sink when pressed" checked={s.fancyMotion} onChange={(v) => updateSettings({ fancyMotion: v })} />}
       </Group>
     </>
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addLink, groupOf, linkKey, mergeSummaries, suggestLinks, unlink } from "./links";
+import { addLink, buildMerged, groupOf, linkKey, mergeSummaries, suggestLinks, unlink } from "./links";
 import type { ChatSummary } from "./types";
 
 const sum = (id: string, network: string, ts: number, unread = 0, extra: Partial<ChatSummary> = {}): ChatSummary => ({
@@ -38,5 +38,22 @@ describe("one person on two networks", () => {
   it("leaves a group alone when only one of its chats is on screen", () => {
     const rows = mergeSummaries([sum("a", "signal", 100)], [["a", "b"]]);
     expect(rows).toHaveLength(1); expect(rows[0].linked).toBeUndefined();
+  });
+});
+
+import { emptyChat, type Msg } from "./types";
+describe("one chat made of several", () => {
+  const msg = (id: string, ts: number, extra: Partial<Msg> = {}): Msg => ({ id, sender: "@a:x", ts, type: "m.text", body: id, status: 0, mentions: [], ...extra } as Msg);
+  const mk = (id: string, network: string, msgs: Msg[], unread = 0) => ({ ...emptyChat(id), network, messages: msgs, unread });
+  it("puts every message in time order, remembers where each belongs, and adds up what is unread", () => {
+    const chats = { s: mk("s", "signal", [msg("1", 10), msg("3", 30)], 1), g: mk("g", "gmessages", [msg("2", 20), msg("3", 30)], 2) };
+    const m = buildMerged(chats, [["s", "g"]], "s")!;
+    expect(m.messages.map((x) => x.id)).toEqual(["1", "2", "3"]);
+    expect(m.messages.map((x) => x.room)).toEqual(["s", "g", "s"]);
+    expect(m.unread).toBe(3); expect(m.id).toBe("s");
+  });
+  it("has nothing to merge for a chat on its own", () => {
+    expect(buildMerged({ s: mk("s", "signal", []) }, [], "s")).toBeUndefined();
+    expect(buildMerged({ s: mk("s", "signal", []) }, [["s", "g"]], "s")).toBeUndefined();
   });
 });

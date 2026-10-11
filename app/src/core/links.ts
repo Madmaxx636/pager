@@ -1,5 +1,5 @@
 import { phoneKey, stripTag } from "./names";
-import type { ChatSummary } from "./types";
+import type { ChatState, ChatSummary, Msg } from "./types";
 
 /** Chats with the same person on different networks (say Signal and Google Messages) that you chose to show as one. Saved in your account, so every device agrees. */
 export type Links = string[][];
@@ -71,4 +71,22 @@ export function mergeSummaries(items: ChatSummary[], links: Links): ChatSummary[
     });
   }
   return out;
+}
+
+/** One chat made of every chat in the person's linked group, oldest message first, for the desktop's merged view. Undefined when there is nothing to merge. */
+export function buildMerged(chats: Record<string, ChatState>, links: Links, roomId: string): ChatState | undefined {
+  const ids = (groupOf(links, roomId) ?? []).filter((id) => chats[id]);
+  if (ids.length < 2 || !chats[roomId]) return undefined;
+  const all = ids.map((id) => chats[id]);
+  const seen = new Set<string>(); const messages: Msg[] = [];
+  for (const c of all) for (const m of c.messages) if (!seen.has(m.id)) { seen.add(m.id); messages.push({ ...m, room: c.id }); }
+  messages.sort((a, b) => a.ts - b.ts);
+  const prim = chats[roomId];
+  return {
+    ...prim, messages, unread: all.reduce((n, c) => n + c.unread, 0), markedUnread: all.some((c) => c.markedUnread),
+    reactions: Object.assign({}, ...all.map((c) => c.reactions)), reactionRefs: Object.assign({}, ...all.map((c) => c.reactionRefs)),
+    pollVotes: Object.assign({}, ...all.map((c) => c.pollVotes)), pollEnded: all.flatMap((c) => c.pollEnded),
+    receipts: Object.assign({}, ...all.map((c) => c.receipts)), members: Object.assign({}, ...all.map((c) => c.members)),
+    typing: [...new Set(all.flatMap((c) => c.typing))], encrypted: all.every((c) => c.encrypted), reachedStart: all.every((c) => c.reachedStart),
+  };
 }
