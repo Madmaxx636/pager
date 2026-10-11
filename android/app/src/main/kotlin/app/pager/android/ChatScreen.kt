@@ -293,7 +293,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                     var gaveUp by remember(roomId) { mutableStateOf(false) }
                     LaunchedEffect(roomId, chat == null) { gaveUp = false; if (chat == null) { kotlinx.coroutines.delay(12_000); gaveUp = true } }
                     val name = chat?.let { SyncReducer.displayName(it, me) } ?: if (gaveUp) "Couldn't open this page" else "Opening…"
-                    if (s.showAvatars) Avatar(name, if (s.showNetworkBadges) chat?.network else null, 40.dp, chat?.avatarMxc)
+                    if (s.showAvatars) ChatAvatar(name, if (s.showNetworkBadges) chat?.network else null, 40.dp, chat?.avatarMxc, chat?.takeIf { it.isGroup }?.let { groupFaces(it, me) }.orEmpty())
                     Column(Modifier.padding(start = 12.dp)) {
                         Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         chat?.let {
