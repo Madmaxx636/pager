@@ -67,9 +67,10 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
         incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: isGroup(pre), mentioned, ts: m.ts, replyToMe: parentSender === me });
       }
     }, (sender, key, target) => {
-      // Someone reacted to something you wrote: that is about you, so it alerts like a reply.
-      if (!initial && sender !== me && target?.sender === me)
-        incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, sender), text: `reacted ${key} to “${previewOf(target).slice(0, 60)}”`, network: pre.network, isGroup: isGroup(pre), mentioned: false, ts: Date.now(), replyToMe: true });
+      // Someone reacted to something you wrote: that is about you, so it alerts like a reply. In a one-to-one chat, or when the message is not loaded
+      // to check, it counts too: bridged messages do not always say clearly that they are yours.
+      if (!initial && sender !== me && (target?.sender === me || !target || !isGroup(pre)))
+        incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, sender), text: target ? `reacted ${key} to “${previewOf(target).slice(0, 60)}”` : `reacted ${key}`, network: pre.network, isGroup: isGroup(pre), mentioned: false, ts: Date.now(), replyToMe: true });
     });
 
     for (const e of arr(obj(room.ephemeral).events)) chat = applyEphemeral(chat, obj(e), me);

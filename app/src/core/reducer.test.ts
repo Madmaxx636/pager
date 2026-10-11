@@ -114,10 +114,10 @@ describe("applySync", () => {
     const removed = applySync(withR, join([{ type: "m.room.redaction", event_id: "$x", sender: me, redacts: "$r2", content: {} }]), me, false).chats;
     expect(removed["!a:x"].reactions["$1"]["👍"]).toEqual([mom]);
   });
-  it("alerts when someone reacts to your message, but not to theirs or when you react", () => {
+  it("alerts when someone reacts in a one-to-one chat or to your message in a group, never for your own reaction", () => {
     const react = (id: string, sender: string, target: string) => ({ type: "m.reaction", event_id: id, sender, content: { "m.relates_to": { rel_type: "m.annotation", event_id: target, key: "❤️" } } });
     const r = applySync(base(), join([react("$r1", mom, "$2"), react("$r2", mom, "$1"), react("$r3", me, "$2")]), me, false);
-    expect(r.incoming.map((i) => i.text)).toEqual(["reacted ❤️ to “Yes!”"]);
+    expect(r.incoming.map((i) => i.text)).toEqual(["reacted ❤️ to “Yes!”", "reacted ❤️ to “Coming Sunday?”"]); // a 1:1 chat: either side counts
     expect(r.incoming[0].replyToMe).toBe(true);
   });
   it("applies edits only from the original sender", () => {

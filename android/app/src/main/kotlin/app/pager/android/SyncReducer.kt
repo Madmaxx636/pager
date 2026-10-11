@@ -73,8 +73,8 @@ object SyncReducer {
             val pre = chat
             chat = process(chat, claimOwn(tl["events"].arr().map { it.obj() }, ownGhosts(chat, me), me), applyStates = true, onReaction = { sender, key, target ->
                 // Someone reacted to something you wrote: that is about you, so it alerts like a reply.
-                if (!initial && sender != me && target?.sender == me)
-                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(sender), "reacted $key to “${previewOf(target).take(60)}”", pre.network, pre.isGroup, false, System.currentTimeMillis(), replyToMe = true))
+                if (!initial && sender != me && (target?.sender == me || target == null || !pre.isGroup))
+                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(sender), (if (target != null) "reacted $key to “${previewOf(target).take(60)}”" else "reacted $key"), pre.network, pre.isGroup, false, System.currentTimeMillis(), replyToMe = true))
             }, onNew = { m, parentSender ->
                 if (!initial && m.sender != me) {
                     val mine = pre.members[me] ?: me.removePrefix("@").substringBefore(':')
