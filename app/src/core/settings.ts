@@ -360,7 +360,9 @@ export function applyTheme(s: AppSettings) {
       "--panel-2": `color-mix(in srgb, ${skin.bg}, ${skin.text} 7%)`, "--radius": `${skin.radius ?? 18}px`, "--tight": `${Math.min(8, Math.round((skin.radius ?? 18) / 3))}px` };
     for (const [k, c] of Object.entries(v)) r.style.setProperty(k, c);
     if (skin.font) r.style.setProperty("--font", skin.font);
-    r.dataset.skin = skin.id; r.dataset.family = skin.family; r.dataset.fx = s.fancyMotion ? "on" : "off";
+    r.dataset.skin = skin.id; r.dataset.family = skin.family;
     r.dataset.bubble = "round";
-  } else { delete r.dataset.skin; delete r.dataset.family; delete r.dataset.fx; r.style.removeProperty("--radius"); r.style.removeProperty("--tight"); }
+  } else { delete r.dataset.skin; delete r.dataset.family; r.style.removeProperty("--radius"); r.style.removeProperty("--tight"); }
+  // Desktop: small touches of motion (slides, glides, glows, pops, breathing, fades). One switch in Settings turns them all off.
+  if (window.pagerDesktop) r.dataset.fx = s.fancyMotion && !s.reduceMotion ? "on" : "off"; else delete r.dataset.fx;
 }

@@ -8,9 +8,9 @@ import { networkMeta } from "../core/emoji";
 import { getSettings, useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
   edit, enableEncryption, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
-  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory, setAlias,
+  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory, setAlias, setSolo,
 } from "../core/store";
-import { addLink, groupOf, suggestLinks, unlink } from "../core/links";
+import { addLink, buildMerged, groupOf, suggestLinks, unlink } from "../core/links";
 import { aliasOf } from "../core/types";
 import { SOUNDS, playSound } from "../core/sounds";
 import { Avatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
@@ -33,8 +33,8 @@ function buildItems(messages: Msg[], unreadBefore: string | undefined, gapMs: nu
     if (k !== lastDay) { out.push({ kind: "day", key: `day-${k}`, label: dayLabel(d) }); lastDay = k; }
     if (m.id === unreadBefore) out.push({ kind: "unread", key: "unread" });
     const prev = messages[i - 1], next = messages[i + 1], before = out[out.length - 1];
-    const first = !prev || prev.sender !== m.sender || m.ts - prev.ts > gapMs || before.kind !== "msg";
-    const last = !next || next.sender !== m.sender || next.ts - m.ts > gapMs || new Date(next.ts).toDateString() !== k || next.id === unreadBefore;
+    const first = !prev || prev.sender !== m.sender || prev.room !== m.room || m.ts - prev.ts > gapMs || before.kind !== "msg";
+    const last = !next || next.sender !== m.sender || next.room !== m.room || next.ts - m.ts > gapMs || new Date(next.ts).toDateString() !== k || next.id === unreadBefore;
     out.push({ kind: "msg", key: m.id, msg: m, index: i, first, last });
   });
   return out;
@@ -46,11 +46,19 @@ const notifSummary = (p?: ChatNotifPrefs) => !p || ((!p.level || p.level === "de
 const placeholderName = (chat: ChatState) => `${displayName(chat, me()).split(/\s+/)[0] || "chat"} · ${networkMeta(chat.network).label}`;
 const fullTime = (ts: number) => new Date(ts).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
 
+const NO_CHATS: Record<string, ChatState> = {};
 export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBack: () => void; nav: Nav; onForward: (m: Msg) => void }) {
-  const chat = useStore((s) => s.chats[roomId]);
+  const dsk = !!window.pagerDesktop; // the desktop app has its own header, info panel and merged view
+  const raw = useStore((s) => s.chats[roomId]);
+  const allChats = useStore((s) => (dsk ? s.chats : NO_CHATS)), links = useStore((s) => s.links), solo = useStore((s) => s.solo);
+  // A person on several networks reads as one conversation (desktop): every chat in their group, in time order.
+  const merged = useMemo(() => (dsk && !solo.includes(roomId) ? buildMerged(allChats, links, roomId) : undefined), [dsk, solo, roomId, allChats, links]);
+  const chat = merged ?? raw;
+  const groupIds = merged ? (groupOf(links, roomId) ?? [roomId]).filter((id) => allChats[id]) : [roomId];
+  const [via, setVia] = useState<string>();
+  const sendRoom = merged ? (via && groupIds.includes(via) ? via : merged.messages[merged.messages.length - 1]?.room ?? roomId) : roomId;
   const stars = useStore((s) => s.stars);
   useStore((s) => s.aliases); // a name you gave this chat
-  const dsk = !!window.pagerDesktop; // the desktop app has its own header and info panel
   const st = useSettings();
   const user = me();
   const scroller = useRef<HTMLDivElement>(null);
@@ -121,11 +129,11 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const el = scroller.current; if (!el) return;
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (stick.current && st.markReadMode === "scrolled") markRead(roomId);
-    if (el.scrollTop < 120) loadOlder(roomId);
+    if (el.scrollTop < 120) groupIds.forEach((id) => loadOlder(id));
   };
   // An empty or short chat never scrolls, so the check above never fires and its history would stay blank until a message arrived:
   // ask for older messages directly whenever there are few to show.
-  useEffect(() => { const el = scroller.current; if (messages.length < 30 || (el && el.scrollHeight <= el.clientHeight + 40)) loadOlder(roomId); }, [roomId, messages.length]);
+  useEffect(() => { const el = scroller.current; if (messages.length < 30 || (el && el.scrollHeight <= el.clientHeight + 40)) groupIds.forEach((id) => loadOlder(id)); }, [roomId, messages.length, groupIds.length]);
   const [showJump, setShowJump] = useState(false);
   useEffect(() => { const el = scroller.current; if (!el) return; const f = () => setShowJump(el.scrollHeight - el.scrollTop - el.clientHeight > 400); el.addEventListener("scroll", f); return () => el.removeEventListener("scroll", f); }, [roomId]);
 
@@ -154,7 +162,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const name = displayName(chat, user);
   const meta = networkMeta(chat.network);
   const typingNames = chat.typing.map((u) => nameOf(chat, u));
-  const attachFiles = (files: FileList | File[], viewOnce = false) => Array.from(files).forEach((f) => sendFile(roomId, f, undefined, { viewOnce }));
+  const attachFiles = (files: FileList | File[], viewOnce = false) => Array.from(files).forEach((f) => sendFile(sendRoom, f, undefined, { viewOnce }));
 
   return (
     <section className={"chat" + (infoOpen ? " with-info" : "")} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); attachFiles(e.dataTransfer.files); }}>
@@ -162,7 +170,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
         <Effects key={chat.id} messages={messages} />
         <header className="chat-head">
           <IconButton icon={ArrowLeft} label="Back" onClick={onBack} className="back" />
-          {dsk ? <DesktopHead chat={chat} name={name} st={st} nav={nav} /> : (
+          {dsk ? <DesktopHead chat={chat} name={name} st={st} nav={nav} roomId={roomId} merged={!!merged} /> : (
           <button className="head-id" onClick={() => setInfoOpen(!infoOpen)}>
             {st.showAvatars && <Avatar name={name} mxc={chat.avatarMxc} size={40} network={st.showNetworkBadges ? chat.network : undefined} />}
             <div>
@@ -191,7 +199,8 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
         </div>
         {showJump && <button className="jump" onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: st.reduceMotion ? "auto" : "smooth" })} aria-label="Jump to latest"><ChevronDown size={20} /></button>}
 
-        <Composer roomId={roomId} chat={chat} replyTo={replyTo} editing={editing} st={st} group={group} nav={nav} onClearReply={() => setReplyTo(undefined)} onClearEdit={() => setEditing(undefined)} onFiles={attachFiles} />
+        {merged && <ViaPick ids={groupIds} current={sendRoom} onPick={setVia} />}
+        <Composer roomId={roomId} sendTo={sendRoom} chat={chat} replyTo={replyTo} editing={editing} st={st} group={group} nav={nav} onClearReply={() => setReplyTo(undefined)} onClearEdit={() => setEditing(undefined)} onFiles={attachFiles} />
         {dragging && <div className="drop-hint">Drop to send</div>}
       </div>
 
@@ -292,8 +301,8 @@ function MenuItems({ roomId, m, mine, starred, dev, close, onReply, onEdit, onFo
 
 // ---- Composer ----------------------------------------------------------------------------------------
 
-function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply, onClearEdit, onFiles }: {
-  roomId: string; chat: ChatState; replyTo?: Msg; editing?: Msg; st: AppSettings; group: boolean; nav: Nav; onClearReply: () => void; onClearEdit: () => void; onFiles: (f: File[], viewOnce?: boolean) => void;
+function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onClearReply, onClearEdit, onFiles }: {
+  roomId: string; sendTo?: string; chat: ChatState; replyTo?: Msg; editing?: Msg; st: AppSettings; group: boolean; nav: Nav; onClearReply: () => void; onClearEdit: () => void; onFiles: (f: File[], viewOnce?: boolean) => void;
 }) {
   const [text, setText] = useState(() => getState().drafts[roomId] ?? "");
   const [attach, setAttach] = useState(false);
@@ -309,6 +318,7 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
   const camera = useRef<HTMLInputElement>(null);
   const recorder = useRef<{ mr: MediaRecorder; stream: MediaStream; cancel?: boolean } | undefined>(undefined);
   const user = me();
+  const target = sendTo ?? roomId;
 
   useEffect(() => { setText(getState().drafts[roomId] ?? ""); mentionIds.current.clear(); }, [roomId]);
   useEffect(() => { if (editing) { setText(editing.body); ta.current?.focus(); } }, [editing]);
@@ -328,7 +338,7 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
   function submit() {
     const body = text.trim(); if (!body) return;
     if (editing) edit(roomId, editing.id, body);
-    else send(roomId, body, replyTo?.id, [...mentionIds.current].filter(([n]) => body.includes(`@${n}`)).map(([, id]) => id));
+    else send(target, body, replyTo?.id, [...mentionIds.current].filter(([n]) => body.includes(`@${n}`)).map(([, id]) => id));
     setText(""); mentionIds.current.clear(); onClearReply(); onClearEdit();
   }
   const sendKey = (e: React.KeyboardEvent) => {
@@ -349,7 +359,7 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
         const ms = Date.now() - start, r = recorder.current; recorder.current = undefined; setRec(null);
         if (!r || r.cancel || ms < 700) return;
         const type = mr.mimeType.split(";")[0] || "audio/webm";
-        sendFile(roomId, new Blob(chunks, { type }), `voice-message.${type.includes("ogg") ? "ogg" : "webm"}`, { voice: true, durationMs: ms });
+        sendFile(target, new Blob(chunks, { type }), `voice-message.${type.includes("ogg") ? "ogg" : "webm"}`, { voice: true, durationMs: ms });
       };
       recorder.current = { mr, stream }; setRec({ ms: 0 }); mr.start();
     } catch { setError("Couldn't access the microphone."); }
@@ -373,7 +383,7 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
   };
   const pttUp = () => { const h = hold.current; if (!h) return; if (!recorder.current) { h.released = true; return; } pttUpNow(h); };
 
-  const where = () => navigator.geolocation?.getCurrentPosition((p) => sendLocation(roomId, p.coords.latitude, p.coords.longitude), () => setError("Couldn't get your location."), { timeout: 10000 });
+  const where = () => navigator.geolocation?.getCurrentPosition((p) => sendLocation(target, p.coords.latitude, p.coords.longitude), () => setError("Couldn't get your location."), { timeout: 10000 });
   const pick = (k: AttachKind) => {
     setAttach(false);
     if (k === "viewonce") { once.current = true; photos.current?.click(); }
@@ -419,11 +429,11 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
         </form>
       )}
       {emoji && <EmojiPicker recent={st.recentEmoji} onPick={(e) => { setText(text + e); setEmoji(false); ta.current?.focus(); }} onClose={() => setEmoji(false)} />}
-      {sheet === "gif" && <GifModal onPick={(g) => { void sendGif(roomId, g).catch((e) => setError(e.message)); setSheet(undefined); }} onSettings={() => { setSheet(undefined); nav("settings/media"); }} onClose={() => setSheet(undefined)} />}
-      {sheet === "stickers" && <StickerModal roomId={roomId} onPick={(s) => { sendSticker(roomId, s); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
-      {sheet === "poll" && <PollModal onCreate={(q, a, max, disclosed) => { sendPoll(roomId, q, a, max, disclosed); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
-      {sheet === "contact" && <ContactModal onSend={(n, p) => { sendContact(roomId, n, p); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
-      {later && <WhenModal title="Send later" onClose={() => setLater(false)} onPick={async (at) => { setLater(false); const err = await schedule(roomId, text.trim(), Math.max(5000, at - Date.now())); if (err) setError(err); else { setText(""); onClearReply(); } }} />}
+      {sheet === "gif" && <GifModal onPick={(g) => { void sendGif(target, g).catch((e) => setError(e.message)); setSheet(undefined); }} onSettings={() => { setSheet(undefined); nav("settings/media"); }} onClose={() => setSheet(undefined)} />}
+      {sheet === "stickers" && <StickerModal roomId={roomId} onPick={(s) => { sendSticker(target, s); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
+      {sheet === "poll" && <PollModal onCreate={(q, a, max, disclosed) => { sendPoll(target, q, a, max, disclosed); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
+      {sheet === "contact" && <ContactModal onSend={(n, p) => { sendContact(target, n, p); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
+      {later && <WhenModal title="Send later" onClose={() => setLater(false)} onPick={async (at) => { setLater(false); const err = await schedule(target, text.trim(), Math.max(5000, at - Date.now())); if (err) setError(err); else { setText(""); onClearReply(); } }} />}
     </div>
   );
 }
@@ -570,11 +580,13 @@ function LinkedBar({ chat, nav }: { chat: ChatState; nav: Nav }) {
   const [no, setNo] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("pager.linkNo") ?? "[]"); } catch { return []; } });
   const group = groupOf(links, chat.id)?.filter((id) => chats[id]);
   const user = me();
+  const dsk = !!window.pagerDesktop;
   const offer = useMemo(() => {
     if (isGroup(chat) || (group && group.length > 1)) return undefined;
     const cands = Object.values(chats).filter((c) => !isBotRoom(c, user)).map((c) => ({ id: c.id, name: displayName(c, user), network: c.network, isGroup: isGroup(c) }));
     return suggestLinks(cands, links).find(([a, b]) => (a === chat.id || b === chat.id) && !no.includes([a, b].sort().join("|")));
   }, [chats, links, chat.id, no]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (dsk && group && group.length > 1) return null; // the header's network switcher does this
   if (group && group.length > 1) return (
     <div className="link-tabs" role="tablist" aria-label="This person on other networks">
       {group.map((id) => <button key={id} role="tab" aria-selected={id === chat.id} className={id === chat.id ? "on" : ""} onClick={() => nav(`chat:${id}`)}><i style={{ background: networkMeta(chats[id].network).color }} />{networkMeta(chats[id].network).label}{chats[id].unread > 0 && id !== chat.id ? <b>{chats[id].unread}</b> : null}</button>)}
@@ -611,7 +623,7 @@ function LinkControls({ chat }: { chat: ChatState }) {
 }
 
 /** Desktop header: the picture(s), the name with a small arrow that opens the network switcher, and just "Encrypted" underneath. */
-function DesktopHead({ chat, name, st, nav }: { chat: ChatState; name: string; st: AppSettings; nav: Nav }) {
+function DesktopHead({ chat, name, st, nav, roomId, merged }: { chat: ChatState; name: string; st: AppSettings; nav: Nav; roomId: string; merged: boolean }) {
   const links = useStore((s) => s.links), chats = useStore((s) => s.chats);
   const [open, setOpen] = useState(false);
   const [list, setList] = useState<Record<string, string>>();
@@ -628,7 +640,7 @@ function DesktopHead({ chat, name, st, nav }: { chat: ChatState; name: string; s
   const people = useMemo(() => realPeople(list ?? chat.members), [list, chat.members]);
   const others = people.filter(([id]) => id !== user).slice(0, 3);
   const count = people.length || peopleCount(chat);
-  const nets = (groupOf(links, chat.id) ?? [chat.id]).filter((id) => chats[id]);
+  const nets = (groupOf(links, roomId) ?? [roomId]).filter((id) => chats[id]);
   return (
     <div className="head-wrap">
       <button className="head-id" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}>
@@ -642,9 +654,10 @@ function DesktopHead({ chat, name, st, nav }: { chat: ChatState; name: string; s
       </button>
       {open && (
         <div className="nav-drop" role="menu">
-          <small>{nets.length > 1 ? "Switch network" : "Network"}</small>
-          {nets.map((id) => { const c = chats[id], m = networkMeta(c.network); return (
-            <button key={id} role="menuitem" onClick={() => { setOpen(false); if (id !== chat.id) nav(`chat:${id}`); }}><i style={{ background: m.color }} />{m.label}{id === chat.id ? <Check size={15} className="tick" /> : c.unread > 0 ? <b>{c.unread}</b> : null}</button>
+          <small>{nets.length > 1 ? "Show" : "Network"}</small>
+          {nets.length > 1 && <button role="menuitem" onClick={() => { setOpen(false); setSolo(roomId, false); }}><i className="all-dot" />All<span className="sub">{nets.length} chats together</span>{merged ? <Check size={15} className="tick" /> : null}</button>}
+          {nets.map((id) => { const c = chats[id], m = networkMeta(c.network), here = nets.length > 1 ? !merged && id === chat.id : id === chat.id; return (
+            <button key={id} role="menuitem" onClick={() => { setOpen(false); if (nets.length > 1) { setSolo(id, true); if (id !== roomId) nav(`chat:${id}`); } else if (id !== chat.id) nav(`chat:${id}`); }}><i style={{ background: m.color }} />{m.label}{here ? <Check size={15} className="tick" /> : c.unread > 0 ? <b>{c.unread}</b> : null}</button>
           ); })}
         </div>
       )}
@@ -660,4 +673,18 @@ function RenameForMe({ chat, name }: { chat: ChatState; name: string }) {
   const done = (save: boolean) => { if (save) setAlias(chat.id, v); setEditing(false); };
   if (editing) return <div className="rename-me"><input autoFocus value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") done(true); if (e.key === "Escape") done(false); }} onBlur={() => done(true)} aria-label="Name for you" /></div>;
   return <div className="rename-me"><button className="link" onClick={() => { setV(name); setEditing(true); }}>Rename for me</button>{custom && <button className="link" onClick={() => setAlias(chat.id, "")}>Use the real name</button>}<small className="muted">Only you see this name.</small></div>;
+}
+
+/** Merged view: which network your next message goes out on. It follows the latest message unless you pick one. */
+function ViaPick({ ids, current, onPick }: { ids: string[]; current: string; onPick: (id: string) => void }) {
+  const chats = useStore((s) => s.chats);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (!open) return; const away = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest(".via")) setOpen(false); }; document.addEventListener("mousedown", away); return () => document.removeEventListener("mousedown", away); }, [open]);
+  const m = networkMeta(chats[current]?.network ?? "matrix");
+  return (
+    <div className="via">
+      <button onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}>Sending on <i style={{ background: m.color }} />{m.label}<ChevronDown size={13} /></button>
+      {open && <div className="via-menu" role="menu">{ids.map((id) => { const n = networkMeta(chats[id].network); return <button key={id} role="menuitem" onClick={() => { onPick(id); setOpen(false); }}><i style={{ background: n.color }} />{n.label}{id === current ? <Check size={14} className="tick" /> : null}</button>; })}</div>}
+    </div>
+  );
 }

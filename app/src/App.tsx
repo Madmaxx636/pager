@@ -2,7 +2,7 @@ import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Mascot } from "./ui/Mascot";
 import { applyTheme, getSettings, setSystemTheme, useSettings, type SystemTheme } from "./core/settings";
-import { forward, getState, requestNotifications, restoreSession, setOpenRoom, useStore } from "./core/store";
+import { forward, getState, requestNotifications, restoreSession, roomFor, setOpenRoom, useStore } from "./core/store";
 import { KeySetup } from "./ui/KeySetup";
 import { Tour } from "./ui/Tour";
 import { Auth } from "./ui/Auth";
@@ -111,7 +111,7 @@ export function App() {
   else if (kind === "search") main = <Search roomId={arg || undefined} onBack={() => nav(arg ? `chat:${arg}` : "home")} onOpen={(id) => nav(`chat:${id}`)} />;
   else if (kind === "forward") {
     const [from, id] = arg.split("|");
-    main = <ChatPicker title="Forward to…" onBack={() => nav(`chat:${from}`)} onPick={(target) => { const m = getState().chats[from]?.messages.find((x) => x.id === id); if (m) forward(m, target); nav(`chat:${target}`); }} />;
+    main = <ChatPicker title="Forward to…" onBack={() => nav(`chat:${from}`)} onPick={(target) => { const m = getState().chats[roomFor(from, id)]?.messages.find((x) => x.id === id); if (m) forward(m, target); nav(`chat:${target}`); }} />;
   } else main = <div className="blank"><Mascot size={170} mood={synced ? "idle" : "ring"} /><p>{synced ? "Pick a page to start." : "Syncing…"}</p></div>;
 
   return (

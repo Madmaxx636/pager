@@ -1,7 +1,7 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { BlobCache } from "./lru";
-import { Links, mergeSummaries } from "./links";
+import { Links, buildMerged, groupOf, mergeSummaries } from "./links";
 import { shrinkImage } from "./shrink";
 import { forgetTranscripts } from "./transcribe";
 import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity } from "./reducer";
@@ -43,6 +43,8 @@ interface State {
   links: Links;
   /** Names you gave chats, for yourself only (desktop app). */
   aliases: Record<string, string>;
+  /** Linked chats you chose to look at one network at a time (not saved): the rest show merged. */
+  solo: string[];
 }
 
 const SESSION_KEY = "pager.session";
@@ -52,7 +54,7 @@ const lsSet = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.st
 let state: State = {
   chats: {}, synced: false, muted: [],
   drafts: lsGet("pager.drafts", {}), stars: lsGet("pager.stars", []), scheduled: lsGet("pager.scheduled", []),
-  reminders: lsGet("pager.reminders", []), bridges: [], isAdmin: false, favoriteGifs: lsGet<Gif[]>("pager.favoriteGifs", []), links: lsGet<Links>("pager.links", []), aliases: lsGet<Record<string, string>>("pager.aliases", {}), userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
+  reminders: lsGet("pager.reminders", []), bridges: [], isAdmin: false, favoriteGifs: lsGet<Gif[]>("pager.favoriteGifs", []), links: lsGet<Links>("pager.links", []), aliases: lsGet<Record<string, string>>("pager.aliases", {}), solo: [], userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
 };
 if (window.pagerDesktop) setAliases(state.aliases);
 const listeners = new Set<() => void>();
@@ -540,14 +542,29 @@ const textContent = (text: string, replyTo?: string, mentions: string[] = [], ht
   ...(mentions.length ? { "m.mentions": { user_ids: mentions } } : {}),
 });
 
-export function retry(roomId: string, m: Msg) { patchChat(roomId, (c) => ({ ...c, messages: c.messages.filter((x) => x.id !== m.id) })); send(roomId, m.body, m.replyTo, m.mentions); }
+/** In a merged view a message may belong to another chat of the same person: find the chat that has it. */
+export function roomFor(roomId: string, eventId: string): string {
+  if (state.chats[roomId]?.messages.some((m) => m.id === eventId)) return roomId;
+  for (const id of groupOf(state.links, roomId) ?? []) if (state.chats[id]?.messages.some((m) => m.id === eventId)) return id;
+  return roomId;
+}
+/** Look at one network of a linked person on its own (true), or all of them together again (false). */
+export function setSolo(roomId: string, on: boolean) {
+  const group = groupOf(state.links, roomId) ?? [roomId];
+  set({ solo: on ? [...new Set([...state.solo, roomId])] : state.solo.filter((id) => !group.includes(id)) });
+}
+
+export function retry(roomId: string, m: Msg) {
+  roomId = roomFor(roomId, m.id); patchChat(roomId, (c) => ({ ...c, messages: c.messages.filter((x) => x.id !== m.id) })); send(roomId, m.body, m.replyTo, m.mentions); }
 
 export function edit(roomId: string, eventId: string, text: string) {
+  roomId = roomFor(roomId, eventId);
   patchChat(roomId, (c) => ({ ...c, messages: c.messages.map((m) => (m.id === eventId ? { ...m, body: text, edited: true } : m)) }));
   void matrix.send(roomId, "m.room.message", uuid(), { msgtype: "m.text", body: `* ${text}`, "m.new_content": { msgtype: "m.text", body: text }, "m.relates_to": { rel_type: "m.replace", event_id: eventId } }).catch(() => {});
 }
 
 export function remove(roomId: string, eventId: string) {
+  roomId = roomFor(roomId, eventId);
   patchChat(roomId, (c) => ({ ...c, messages: c.messages.filter((m) => m.id !== eventId) }));
   set({ stars: state.stars.filter((s) => s.eventId !== eventId) }); lsSet("pager.stars", state.stars);
   void matrix.redact(roomId, eventId, uuid()).catch(() => {});
@@ -555,6 +572,7 @@ export function remove(roomId: string, eventId: string) {
 
 /** Adds your reaction, or removes it if you already used that emoji. */
 export function react(roomId: string, eventId: string, key: string) {
+  roomId = roomFor(roomId, eventId);
   const c = state.chats[roomId]; if (!c) return; const user = me();
   updateSettings({ recentEmoji: [key, ...getSettings().recentEmoji.filter((e) => e !== key)].slice(0, 24) });
   const existing = Object.entries(c.reactionRefs).find(([, r]) => r.target === eventId && r.key === key && r.sender === user);
@@ -602,7 +620,12 @@ export function typing(roomId: string, on: boolean) {
   void matrix.typing(me(), roomId, on).catch(() => {});
 }
 
+/** Marks a chat read; chats shown merged with it (desktop) are marked read together. */
 export function markRead(roomId: string) {
+  const ids = window.pagerDesktop && !state.solo.includes(roomId) ? groupOf(state.links, roomId) ?? [roomId] : [roomId];
+  for (const id of ids) markReadOne(id);
+}
+function markReadOne(roomId: string) {
   const c = state.chats[roomId]; if (!c) return;
   const last = [...c.messages].reverse().find((m) => m.status === STATUS_SENT);
   if (!last || (c.unread === 0 && !c.markedUnread)) return;
@@ -668,6 +691,7 @@ export function setDraft(roomId: string, text: string) {
   set({ drafts }); lsSet("pager.drafts", drafts);
 }
 export function toggleStar(roomId: string, m: Msg) {
+  roomId = roomFor(roomId, m.id);
   const c = state.chats[roomId];
   const stars = state.stars.some((s) => s.eventId === m.id) ? state.stars.filter((s) => s.eventId !== m.id)
     : [...state.stars, { roomId, eventId: m.id, chat: c ? displayName(c, me()) : "", sender: c ? nameOf(c, m.sender) : m.sender, text: previewOf(m), ts: m.ts }];
@@ -961,11 +985,13 @@ export function sendPoll(roomId: string, question: string, answers: string[], ma
 }
 
 export function votePoll(roomId: string, pollId: string, answerIds: string[]) {
+  roomId = roomFor(roomId, pollId);
   patchChat(roomId, (c) => ({ ...c, pollVotes: { ...c.pollVotes, [pollId]: { ...(c.pollVotes[pollId] ?? {}), [me()]: answerIds } } }));
   void matrix.send(roomId, "org.matrix.msc3381.poll.response", uuid(), { "m.relates_to": { rel_type: "m.reference", event_id: pollId }, "org.matrix.msc3381.poll.response": { answers: answerIds } }).catch(() => {});
 }
 
 export function endPoll(roomId: string, pollId: string) {
+  roomId = roomFor(roomId, pollId);
   patchChat(roomId, (c) => ({ ...c, pollEnded: [...c.pollEnded, pollId] }));
   void matrix.send(roomId, "org.matrix.msc3381.poll.end", uuid(), { "m.relates_to": { rel_type: "m.reference", event_id: pollId }, "org.matrix.msc1767.text": "The poll has ended." }).catch(() => {});
 }
@@ -1038,3 +1064,5 @@ export async function addStickers(files: File[]) {
     images: Object.fromEntries(all.map((s) => [s.shortcode, { url: s.url, body: s.body, usage: ["sticker"], info: { mimetype: s.mime, w: s.w, h: s.h } }])),
   }).catch(() => {});
 }
+
+export { buildMerged };

@@ -10,6 +10,8 @@ export interface Sticker { shortcode: string; url: string; body: string; w?: num
 export interface StickerPack { key: string; name: string; stickers: Sticker[] }
 
 export interface Msg {
+  /** In a merged view: the chat (on its own network) this message really belongs to. */
+  room?: string;
   /** A message we could not read yet: the encrypted original, kept so it can be opened when its key arrives (even after a restart). */
   sealed?: unknown;
   /** Set when the attachment is end-to-end encrypted: how to unscramble it. */
