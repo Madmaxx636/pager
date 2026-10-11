@@ -744,6 +744,8 @@ private fun AdvancedSettings(navigate: (String) -> Unit) {
     SettingsPage("Advanced", { navigate("") }) {
         SettingsGroup("Sync") {
             SwitchRow("Background sync", "Keeps a quiet notification so messages arrive when the app is closed", s.backgroundSync) { v -> store.settings.update { copy(backgroundSync = v) } }; GroupDivider()
+            val ok = remember { androidx.compose.runtime.mutableStateOf(Watchdog.exempt(context)) }
+            NavRow("Reliable notifications", if (ok.value) "Allowed: the phone won't stop Pager in the background" else "Not allowed yet: the phone may stop Pager, so messages arrive late. Tap to allow") { Watchdog.requestExemption(context); ok.value = Watchdog.exempt(context) }; GroupDivider()
             ButtonRow("Battery optimization settings") { context.startActivity(Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }
         SettingsGroup("Developer", footer = "Adds a 'View source' action to messages, showing event IDs and raw details.") {
@@ -1035,6 +1037,26 @@ fun KeySetupGate() {
     val finish = { prefs.edit().putBoolean(flag, true).apply(); dismissed = true; KeySetupState.finished++; Unit }
     if (e.backupOnServer && !fresh) RestoreKeyDialog(first = true, onDone = finish, onFresh = { fresh = true })
     else RecoveryKeyDialog(first = true, onDone = finish)
+}
+
+/** Once, after sign-in: asks the phone to let Pager run in the background, so messages and notifications arrive on time. */
+@Composable
+fun BatteryPrompt() {
+    val store = LocalStore.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val e by store.encryption.collectAsState()
+    val synced by store.synced.collectAsState()
+    val prefs = remember { context.getSharedPreferences("pager.keysetup", android.content.Context.MODE_PRIVATE) }
+    var asked by remember { mutableStateOf(prefs.getBoolean("batteryAsked", false)) }
+    val keyDone = e.backupHere || prefs.getBoolean("done." + e.deviceId, false) || e.error != null
+    if (asked || !synced || !keyDone || Watchdog.exempt(context)) return
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { prefs.edit().putBoolean("batteryAsked", true).apply(); asked = true },
+        title = { Text("Get messages on time") },
+        text = { Text("Phones stop apps that sit in the background, so notifications can arrive late or not at all. Allow Pager to keep running and they'll arrive when they should. You can change this later in Settings → Advanced.") },
+        confirmButton = { TextButton(onClick = { prefs.edit().putBoolean("batteryAsked", true).apply(); asked = true; Watchdog.requestExemption(context) }) { Text("Allow") } },
+        dismissButton = { TextButton(onClick = { prefs.edit().putBoolean("batteryAsked", true).apply(); asked = true }) { Text("Not now") } },
+    )
 }
 
 /** Offers a newer version when your server has one. Checks when the app opens, at most every six hours. */

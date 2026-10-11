@@ -110,6 +110,18 @@ class Store(private val context: Context) {
     /** The page you are looking at: sending and receiving make a little sound there (and only there). */
     @Volatile var openRoom: String? = null
     private var syncJob: Job? = null
+    /** When the last update from the server arrived. The long wait for news returns every half minute or so, so a long silence means sync has stopped. */
+    @Volatile private var lastSyncOk = 0L
+
+    /** Called every few minutes by the watchdog (and when the app opens): starts sync again if it has stopped or gone quiet, so notifications keep coming. */
+    fun ensureSyncing() {
+        val s = _session.value ?: return
+        val quiet = lastSyncOk > 0 && System.currentTimeMillis() - lastSyncOk > 150_000
+        if (syncJob?.isActive == true && !quiet) return
+        android.util.Log.i("Pager", "sync was ${if (quiet) "quiet" else "stopped"}: starting it again")
+        syncJob?.cancel()
+        syncJob = scope.launch { if (e2ee == null) kotlinx.coroutines.withTimeoutOrNull(90_000) { startE2ee(s) }; syncLoop(s) }
+    }
     private var since: String? = null
     private val loadingOlder = HashSet<String>()
     private val previews = HashMap<String, LinkPreview?>()
@@ -551,6 +563,7 @@ class Store(private val context: Context) {
                 }
                 expireMutes()
                 since = (res["next_batch"] as? JsonPrimitive)?.content ?: since
+                lastSyncOk = System.currentTimeMillis()
                 _synced.value = true
                 backoff = 1000L
                 if (res === raw) _syncProblem.value = null
@@ -1293,7 +1306,8 @@ class Store(private val context: Context) {
         val s = _session.value ?: return
         syncJob?.cancel()
         since = null; _chats.value = emptyMap(); _synced.value = false; cacheFile.delete()
-        syncJob = scope.launch { kotlinx.coroutines.withTimeoutOrNull(8_000) { startE2ee(s) }; syncLoop(s) } // messages wait a moment for encryption, never for long
+        // Encryption keeps running: stopping it here and cutting its restart short left a phone unable to read anything until the app was reopened.
+        syncJob = scope.launch { if (e2ee == null) kotlinx.coroutines.withTimeoutOrNull(90_000) { startE2ee(s) }; syncLoop(s) }
     }
 
     private suspend fun bridgeLoop() {

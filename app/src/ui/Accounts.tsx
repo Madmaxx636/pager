@@ -199,6 +199,7 @@ export function AccountsModal({ onClose, initial }: { onClose: () => void; initi
 export function BridgesPage() {
   const [note, setNote] = useState("");
   const [syncing, setSyncing] = useState("");
+  const [askSync, setAskSync] = useState<{ n: Network; l: Login }>();
   async function sync(n: Network, l: Login) {
     setSyncing(l.id); setNote("");
     try {
@@ -216,6 +217,11 @@ export function BridgesPage() {
     <>
       <p className="muted pad">Each app you connect is bridged through your own server. Pager shows if a connection needs attention.</p>
       {note && <p className="muted pad">{note}</p>}
+      {askSync && <Modal title={`Start chats with every ${askSync.n.name} contact?`} onClose={() => setAskSync(undefined)}>
+        <p>This opens a new, empty chat with <b>each contact</b> on {askSync.n.name}, which can be hundreds. It won't bring old messages in. Chats you already have are untouched.</p>
+        <p className="muted">To message just one person, use "Page someone" instead.</p>
+        <div className="row-end"><button className="link" onClick={() => setAskSync(undefined)}>Cancel</button><button className="primary" onClick={() => { const a = askSync; setAskSync(undefined); void sync(a.n, a.l); }}>Start them all</button></div>
+      </Modal>}
       {!networks.length && <p className="muted pad">Loading…</p>}
       {networks.length > 0 && !networks.some((n) => n.logins.length) && <p className="muted pad">Nothing connected yet.</p>}
       <div className="pad"><button className="primary" onClick={() => setAdding(true)}>Add account</button></div>
@@ -231,7 +237,7 @@ export function BridgesPage() {
                 <Row key={l.id} title={l.name || l.profile?.name || l.id} hint={label}>
                   <i className="dot" style={{ background: color }} />
                   {needsAttention(l.state_event) && <button className="pill" onClick={() => setRelogin(n)}>Sign in</button>}
-                  <button className="link" disabled={!!syncing} onClick={() => sync(n, l)}>{syncing.startsWith(l.id) ? `Syncing ${syncing.split(":")[1] ?? ""}` : "Sync pages"}</button>
+                  {n.id !== "gmessages" && <button className="link" disabled={!!syncing} onClick={() => setAskSync({ n, l })}>{syncing.startsWith(l.id) ? `Syncing ${syncing.split(":")[1] ?? ""}` : "Start chats with contacts"}</button>}
                   <button className="link danger" onClick={async () => { if (confirm("Disconnect this account?")) { await pager.logout(n.id, l.id).catch(() => {}); void refreshBridges(); } }}>Disconnect</button>
                 </Row>
               );
