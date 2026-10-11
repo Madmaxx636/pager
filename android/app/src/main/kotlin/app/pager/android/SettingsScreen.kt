@@ -1002,7 +1002,14 @@ fun UpdateGate() {
     val info by Updater.available.collectAsState()
     val stage by Updater.stage.collectAsState()
     val scope = rememberCoroutineScope()
-    LaunchedEffect(session?.baseUrl) { session?.baseUrl?.let { Updater.check(ctx, it, force = false) } }
+    // When the app opens, and again each time you come back to it (at most every 20 minutes).
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(owner, session?.baseUrl) {
+        val base = session?.baseUrl
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME && base != null) scope.launch { Updater.check(ctx, base, force = false) } }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
     val i = info ?: return
     AlertDialog(
         onDismissRequest = { if (stage == Updater.Stage.IDLE) Updater.later() },

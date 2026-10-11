@@ -44,10 +44,10 @@ object Updater {
     fun currentCode(ctx: Context): Long = ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
     fun currentName(ctx: Context): String = ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
 
-    /** Asks the server whether a newer version exists. Quietly does nothing when checked recently, unless [force]. */
+    /** Asks the server whether a newer version exists. Quietly does nothing when checked in the last 20 minutes, unless [force]. */
     suspend fun check(ctx: Context, server: String, force: Boolean) {
         val prefs = ctx.getSharedPreferences("pager.updates", Context.MODE_PRIVATE)
-        if (!force && System.currentTimeMillis() - prefs.getLong("checked", 0) < 6 * 3600_000L) return
+        if (!force && System.currentTimeMillis() - prefs.getLong("checked", 0) < 20 * 60_000L) return
         if (_stage.value != Stage.IDLE) return
         _stage.value = Stage.CHECKING
         try {
