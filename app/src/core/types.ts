@@ -50,6 +50,8 @@ export interface ChatState {
   unread: number;
   messages: Msg[];
   members: Record<string, string>;
+  /** user id -> their picture (mxc://), when they have one */
+  memberAvatars?: Record<string, string>;
   joined: string[];
   heroes: string[];
   prevBatch?: string | null;
@@ -113,6 +115,8 @@ export interface ChatSummary {
   unanswered: boolean;
   lastFromMe: boolean;
   typing: boolean;
+  /** For a group without a picture of its own: up to four people, drawn as its round picture. */
+  faces?: { name: string; mxc?: string }[];
   /** This row stands for several chats with the same person on different networks (the others are listed here, this one included). */
   linked?: { id: string; network: string }[];
 }

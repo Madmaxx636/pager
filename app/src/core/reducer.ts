@@ -248,6 +248,7 @@ function applyState(chat: ChatState, e: J): ChatState {
       return {
         ...chat,
         members: joined ? { ...chat.members, [key]: str(content.displayname) ?? key.replace(/^@/, "").split(":")[0] } : chat.members,
+        memberAvatars: joined && str(content.avatar_url) ? { ...chat.memberAvatars, [key]: str(content.avatar_url)! } : chat.memberAvatars,
         joined: joined ? (chat.joined.includes(key) ? chat.joined : [...chat.joined, key]) : chat.joined.filter((u) => u !== key),
       };
     }

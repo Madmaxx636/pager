@@ -40,23 +40,7 @@ fun LinkedBar(roomId: String, onOpen: (String) -> Unit) {
     var declined by remember { mutableStateOf(setOf<String>()) }
     val group = Links.groupOf(links, roomId)?.filter { it in chats }
     val solo by store.solo.collectAsState()
-    if (group != null && group.size > 1) {
-        val merged = roomId !in solo
-        Row(Modifier.fillMaxWidth().background(scheme.surface).horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(Modifier.clip(CircleShape).background(if (merged) scheme.primary else scheme.surfaceVariant).dpadFocus().clickable { store.setSolo(roomId, false) }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("All", style = MaterialTheme.typography.labelLarge, color = if (merged) scheme.onPrimary else scheme.onSurface)
-            }
-            group.forEach { id ->
-                val c = chats.getValue(id); val on = !merged && id == roomId; val meta = networkMeta(c.network)
-                Row(Modifier.clip(CircleShape).background(if (on) scheme.primary else scheme.surfaceVariant).dpadFocus().clickable { store.setSolo(id, true); if (id != roomId) onOpen(id) }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(if (on) scheme.onPrimary else meta.color))
-                    Text(" ${meta.label}", style = MaterialTheme.typography.labelLarge, color = if (on) scheme.onPrimary else scheme.onSurface)
-                    if (!on && c.unread > 0) Text("  ${c.unread}", style = MaterialTheme.typography.labelMedium, color = scheme.primary)
-                }
-            }
-        }
-        return
-    }
+    if (group != null && group.size > 1) return // the name at the top of the chat is the network switcher
     val here = chats[roomId] ?: return
     if (here.isGroup) return
     val offer = remember(chats, links, declined) {

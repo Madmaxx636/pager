@@ -12,8 +12,9 @@ import {
 } from "../core/store";
 import { addLink, buildMerged, groupOf, suggestLinks, unlink } from "../core/links";
 import { aliasOf } from "../core/types";
+import { groupFaces } from "../core/faces";
 import { SOUNDS, playSound } from "../core/sounds";
-import { Avatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
+import { Avatar, GroupAvatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
 import { MessageRow } from "./Message";
 import { Effects } from "./Effects";
 import { AttachKind, AttachMenu, ContactModal, GifModal, PollModal, StickerModal } from "./Attach";
@@ -48,7 +49,7 @@ const fullTime = (ts: number) => new Date(ts).toLocaleString([], { weekday: "sho
 
 const NO_CHATS: Record<string, ChatState> = {};
 export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBack: () => void; nav: Nav; onForward: (m: Msg) => void }) {
-  const dsk = !!window.pagerDesktop; // the desktop app has its own header, info panel and merged view
+  const dsk = true; // one header (name with the network switcher, Encrypted underneath) and one info panel on every screen
   const raw = useStore((s) => s.chats[roomId]);
   const allChats = useStore((s) => s.chats), links = useStore((s) => s.links), solo = useStore((s) => s.solo);
   // A person on several networks reads as one conversation: every chat in their group, in time order.
@@ -470,7 +471,7 @@ function ImageViewer({ images, startId, chat, onClose }: { images: Msg[]; startI
 
 function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: Nav; onClose: () => void; onViewImage: (id: string) => void }) {
   const user = me();
-  const dsk = !!window.pagerDesktop;
+  const dsk = true;
   const muted = useStore((s) => s.muted.includes(chat.id));
   const [list, setList] = useState<Record<string, string>>();
   const [muteDlg, setMuteDlg] = useState(false);
@@ -486,6 +487,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
   const [tab, setTab] = useState<"photos" | "links" | "files">("photos");
   useEffect(() => { void members(chat.id).then(setList); }, [chat.id]);
   const people = useMemo(() => realPeople(list ?? chat.members), [list, chat.members]);
+  const infoFaces = useMemo(() => groupFaces({ ...chat, members: list ?? chat.members }, user), [chat, list, user]);
   const name = displayName(chat, user);
   const photos = useMemo(() => chat.messages.filter((m) => m.type === "m.image" && m.mxc && !m.sticker).reverse(), [chat.messages]);
   const links = useMemo(() => chat.messages.flatMap((m) => { const u = firstUrl(m.body); return u ? [{ m, u }] : []; }).reverse(), [chat.messages]);
@@ -496,7 +498,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
     <aside className="info">
       <header><b>Page info</b><IconButton icon={X} label="Close" onClick={onClose} /></header>
       <div className="info-body">
-        <div className="info-id"><Avatar name={name} mxc={chat.avatarMxc} size={88} network={chat.network} /><h3>{name}</h3>{!dsk && <small>{networkMeta(chat.network).label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</small>}{dsk && isGroup(chat) && <small>{people.length || peopleCount(chat)} people</small>}
+        <div className="info-id">{isGroup(chat) && !chat.avatarMxc && infoFaces.length > 1 ? <GroupAvatar faces={infoFaces} size={88} /> : <Avatar name={name} mxc={chat.avatarMxc} size={88} network={chat.network} />}<h3>{name}</h3>{!dsk && <small>{networkMeta(chat.network).label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</small>}{dsk && isGroup(chat) && <small>{people.length || peopleCount(chat)} people</small>}
           {dsk ? <RenameForMe chat={chat} name={name} /> : isGroup(chat) && <button className="link" onClick={() => { const n = prompt("Rename group", chat.name); if (n?.trim()) rename(chat.id, n.trim()); }}>Rename group</button>}</div>
         {dsk && <div className="info-net"><span className="dot" style={{ background: networkMeta(chat.network).color }} />{networkMeta(chat.network).label}</div>}
         {!isGroup(chat) && <LinkControls chat={chat} />}
@@ -580,13 +582,13 @@ function LinkedBar({ chat, nav, roomId, merged }: { chat: ChatState; nav: Nav; r
   const [no, setNo] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("pager.linkNo") ?? "[]"); } catch { return []; } });
   const group = groupOf(links, chat.id)?.filter((id) => chats[id]);
   const user = me();
-  const dsk = !!window.pagerDesktop;
+  const dsk = true;
   const offer = useMemo(() => {
     if (isGroup(chat) || (group && group.length > 1)) return undefined;
     const cands = Object.values(chats).filter((c) => !isBotRoom(c, user)).map((c) => ({ id: c.id, name: displayName(c, user), network: c.network, isGroup: isGroup(c) }));
     return suggestLinks(cands, links).find(([a, b]) => (a === chat.id || b === chat.id) && !no.includes([a, b].sort().join("|")));
   }, [chats, links, chat.id, no]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (dsk && group && group.length > 1) return null; // the header's network switcher does this
+  if (group && group.length > 1) return null; // the header's drop down is the network switcher
   if (group && group.length > 1) return (
     <div className="link-tabs" role="tablist" aria-label="This person on other networks">
       <button role="tab" aria-selected={merged} className={merged ? "on" : ""} onClick={() => setSolo(roomId, false)}><i className="all-dot" />All</button>
@@ -639,15 +641,13 @@ function DesktopHead({ chat, name, st, nav, roomId, merged }: { chat: ChatState;
     return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
   }, [open]);
   const people = useMemo(() => realPeople(list ?? chat.members), [list, chat.members]);
-  const others = people.filter(([id]) => id !== user).slice(0, 3);
+  const faces = useMemo(() => groupFaces({ ...chat, members: list ?? chat.members }, user), [chat, list, user]);
   const count = people.length || peopleCount(chat);
   const nets = (groupOf(links, roomId) ?? [roomId]).filter((id) => chats[id]);
   return (
     <div className="head-wrap">
       <button className="head-id" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}>
-        {st.showAvatars && (group && others.length > 1
-          ? <span className="cluster">{others.map(([id, n]) => <Avatar key={id} name={n} size={30} />)}{count > others.length + 1 && <span className="more">+{count - others.length - 1}</span>}</span>
-          : <Avatar name={name} mxc={chat.avatarMxc} size={40} />)}
+        {st.showAvatars && (group && !chat.avatarMxc && faces.length > 1 ? <GroupAvatar faces={faces} size={42} /> : <Avatar name={name} mxc={chat.avatarMxc} size={40} />)}
         <div>
           <div className="chat-title">{name}<ChevronDown size={15} className="chev" /></div>
           <div className="chat-sub">{group ? `${count} people` : ""}{group && chat.encrypted ? " · " : ""}{chat.encrypted ? <span className="enc-badge" title="End-to-end encrypted"><Lock size={11} /> Encrypted</span> : null}</div>

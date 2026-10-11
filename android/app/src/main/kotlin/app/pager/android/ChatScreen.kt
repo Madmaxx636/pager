@@ -286,7 +286,9 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
             // Header
             Row(Modifier.fillMaxWidth().background(scheme.surface).padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 BackButton(onBack)
-                Row(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).dpadFocus().clickable(onClick = onInfo).padding(vertical = 2.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                var switcher by remember { mutableStateOf(false) }
+                Box(Modifier.weight(1f)) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).dpadFocus().clickable { if (groupIds.size > 1) switcher = true else onInfo() }.padding(vertical = 2.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     // A page that never arrives (removed, or you left it) must say so instead of waiting forever.
                     var gaveUp by remember(roomId) { mutableStateOf(false) }
                     LaunchedEffect(roomId, chat == null) { gaveUp = false; if (chat == null) { kotlinx.coroutines.delay(12_000); gaveUp = true } }
@@ -301,6 +303,19 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                             }
                         }
                     }
+                }
+                androidx.compose.material3.DropdownMenu(expanded = switcher, onDismissRequest = { switcher = false }) {
+                    Text("Show", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("All, ${groupIds.size} chats together" + if (merged) "  ✓" else "") }, onClick = { store.setSolo(roomId, false); switcher = false })
+                    groupIds.forEach { id ->
+                        val c = allChats[id]; val n = networkMeta(c?.network ?: "matrix"); val here = !merged && id == roomId
+                        androidx.compose.material3.DropdownMenuItem(
+                            leadingIcon = { Box(Modifier.size(9.dp).clip(CircleShape).background(n.color)) },
+                            text = { Text(n.label + if (here) "  ✓" else if ((c?.unread ?: 0) > 0) "  ${c?.unread}" else "") },
+                            onClick = { store.setSolo(id, true); switcher = false; if (id != roomId) onOpen(id) },
+                        )
+                    }
+                }
                 }
                 IconBtn(Icons.Rounded.Search, "Search in page", onSearch)
                 IconBtn(Icons.Rounded.Info, "Page info", onInfo)

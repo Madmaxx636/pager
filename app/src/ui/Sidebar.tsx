@@ -10,7 +10,7 @@ import {
   getState,
 } from "../core/store";
 import { RowAction, updateSettings, useSettings } from "../core/settings";
-import { Avatar, IconButton, Modal, SheetItem, TypingDots, WhenModal, EmptyState } from "./common";
+import { Avatar, GroupAvatar, IconButton, Modal, SheetItem, TypingDots, WhenModal, EmptyState } from "./common";
 import { needsAttention } from "./Accounts";
 import { Mascot } from "./Mascot";
 
@@ -190,7 +190,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
                 onDragStart={() => setDragId(c.id)} onDragEnd={() => setDragId(undefined)}
                 onDragOver={(e) => { e.preventDefault(); }} onDrop={() => { if (dragId && dragId !== c.id) movePin(dragId, i); setDragId(undefined); }}
                 onClick={() => open(c.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }} title={c.name}>
-                <span className="pin-av"><Avatar name={c.name} mxc={c.avatarMxc} size={76} network={st.showNetworkBadges ? c.network : undefined} />{(c.unread > 0 || c.markedUnread) && <i className={"pin-dot" + (c.muted ? " muted" : "")} />}{c.typing && <span className="typing-badge"><TypingDots /></span>}</span>
+                <span className="pin-av">{c.faces && c.faces.length > 1 ? <GroupAvatar faces={c.faces} size={76} /> : <Avatar name={c.name} mxc={c.avatarMxc} size={76} network={st.showNetworkBadges ? c.network : undefined} />}{(c.unread > 0 || c.markedUnread) && <i className={"pin-dot" + (c.muted ? " muted" : "")} />}{c.typing && <span className="typing-badge"><TypingDots /></span>}</span>
                 <span className="pin-name">{c.name}</span>
               </button>
             ))}
@@ -203,7 +203,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
               <li key={c.id} className="chat-li">
                 <button className={"chat-row" + (c.id === selected ? " sel" : "") + (picked.includes(c.id) ? " picked" : "")} onClick={() => open(c.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }}>
                   {selecting && (picked.includes(c.id) ? <CheckCircle2 className="check on" size={22} /> : <Circle className="check" size={22} />)}
-                  {st.showAvatars && <Avatar name={c.name} mxc={c.avatarMxc} network={st.showNetworkBadges ? c.network : undefined} size={st.density === "compact" ? 40 : 50} />}
+                  {st.showAvatars && (c.faces && c.faces.length > 1 ? <GroupAvatar faces={c.faces} size={st.density === "compact" ? 40 : 50} /> : <Avatar name={c.name} mxc={c.avatarMxc} network={st.showNetworkBadges ? c.network : undefined} size={st.density === "compact" ? 40 : 50} />)}
                   <div className="chat-main">
                     <div className="chat-top">
                       <span className={"chat-name" + (unread ? " unread-name" : "")}>{c.name}</span>
