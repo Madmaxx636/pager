@@ -131,7 +131,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
           <Select title="Density" value={s.density} options={[["comfortable", "Comfortable"], ["compact", "Compact"]]} onChange={(v) => u({ density: v })} />
           <Select title="Hover action 1" hint="Quick button when you point at a page" value={s.rowAction1} options={ROW_ACTIONS} onChange={(v) => u({ rowAction1: v })} />
           <Select title="Hover action 2" value={s.rowAction2} options={ROW_ACTIONS} onChange={(v) => u({ rowAction2: v })} />
-          <Row title="Sidebar width" hint={`${s.sidebarWidth}px`}><input type="range" min="280" max="520" step="10" value={s.sidebarWidth} onChange={(e) => u({ sidebarWidth: Number(e.target.value) })} /></Row>
+          <Row title="Sidebar width" hint={`${s.sidebarWidth}px`}><input type="range" min="240" max="640" step="10" value={s.sidebarWidth} onChange={(e) => u({ sidebarWidth: Number(e.target.value) })} /></Row>
           <SwitchRow title="Show avatars" checked={s.showAvatars} onChange={(v) => u({ showAvatars: v })} />
           <SwitchRow title="Show network badges" hint="The small WhatsApp / Signal icon on avatars" checked={s.showNetworkBadges} onChange={(v) => u({ showNetworkBadges: v })} />
           <SwitchRow title="Show network name" hint="Under each page name" checked={s.showNetworkNameInRows} onChange={(v) => u({ showNetworkNameInRows: v })} />
