@@ -4,7 +4,7 @@ An open-source, self-hostable unified messenger. One account, all your chats (Wh
 Instagram, Messenger, Discord, SMS/RCS…), running on your own Matrix server with bridges. Think Beeper, but yours.
 
 **Status: beta.** It runs end to end on the author's own server with WhatsApp, Signal and Google Messages linked, end-to-end encryption
-between your devices, and apps for Android, Linux and the web (Windows is built but untested). Expect rough edges. Please read
+between your devices, and apps for Android, Linux, Windows and the web (macOS is configured but untested). Expect rough edges. Please read
 the [disclaimer](#disclaimer) before you trust it with anything important.
 
 ## Install it (one command)
@@ -23,7 +23,7 @@ Telegram needs your own key from my.telegram.org; see below.
 | `server/` | Synapse + Postgres + Caddy + mautrix bridges (docker compose) and a setup script |
 | `api/` | Signup (invite codes) and in-app bridge login/contacts, proxied to the bridges' provisioning API |
 | `app/` | The web client (React + TypeScript). Also the UI of the desktop app |
-| `desktop/` | Linux desktop app (Electron around the web client). macOS/Windows builds are configured, not yet tested |
+| `desktop/` | Linux and Windows desktop apps (Electron around the web client). A macOS build is configured but not yet tested |
 | `android/` | Native Android app (Kotlin + Jetpack Compose) |
 
 ## Features

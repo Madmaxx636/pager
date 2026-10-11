@@ -14,8 +14,11 @@ issue. Include what you did, what happened, and the version (Settings → About)
   server's disk (`server/scripts/vault-setup.sh`). GroupMe pages are not encrypted end to end.
 - **Your server:** whoever controls your server and its disk can read what the bridges can read, and can read account details and who
   talks to whom (Synapse's database is not in the vault). Protect the machine, keep it updated, and keep `/etc/pager/vault.key` backed up.
-- **Updates:** the desktop app only installs updates whose version information is signed with the project's release key. Android only
-  installs updates signed with the same key as the installed app, and checks each download against its checksum.
+- **Updates:** the desktop apps (Linux and Windows) only install updates whose version information is signed with the project's release
+  key. Android only installs updates signed with the same key as the installed app, and each download is also checked against its checksum.
+- **Verifying the Android app:** release builds are signed with a key whose certificate fingerprint (SHA-256) is
+  `23:F7:19:7A:79:72:6D:E6:97:72:1D:B8:81:D1:4E:98:6A:91:61:1E:12:1E:34:FD:5B:A5:15:E8:02:5E:F7:CE`. Check with
+  `apksigner verify --print-certs pager-android-*.apk`. Earlier 0.5.x builds used a development key and have a different fingerprint.
 
 ## What is not protected or not done yet
 - No device verification or cross-signing: a new device is trusted through the recovery key, not by comparing codes.

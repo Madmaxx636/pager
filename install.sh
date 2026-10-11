@@ -68,7 +68,7 @@ if [ -f .env ] && grep -q '^PAGER_DOMAIN=.' .env; then
 else
   if [ -z "$MODE" ]; then
     echo "How will you and your people connect to this server?"
-    echo "  1) Only from this home network (simplest: no domain, no certificate; the trial Android app only)"
+    echo "  1) Only from this home network (simplest: no domain or certificate. The released Android app needs HTTPS, so on a phone this works only with a trial build)"
     echo "  2) Through my own domain name (secure HTTPS, set up automatically)"
     echo "  3) Through a free DuckDNS name (secure HTTPS; a free name like myfamily.duckdns.org)"
     case "$(ask 'Choose 1, 2 or 3 [3]:' 3)" in 1) MODE=local;; 2) MODE=domain;; *) MODE=duckdns;; esac

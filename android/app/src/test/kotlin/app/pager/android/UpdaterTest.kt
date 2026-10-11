@@ -3,6 +3,7 @@ package app.pager.android
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UpdaterTest {
@@ -20,4 +21,16 @@ class UpdaterTest {
     }
 
     @Test fun needsAChecksum() { assertNull(Updater.parse(json.replace(""","sha256":"ABCDEF"""", ""), "https://s")); assertNotNull(Updater.parse(json, "https://s")) }
+
+    @Test fun installsOnlyOverTheSameKey() {
+        assertTrue(Updater.sameSigner(setOf("aa"), setOf("aa")))
+        assertTrue(Updater.sameSigner(setOf("aa", "bb"), setOf("bb")))
+        org.junit.Assert.assertFalse(Updater.sameSigner(setOf("aa"), setOf("cc")))
+        org.junit.Assert.assertFalse(Updater.sameSigner(emptySet(), emptySet()))
+    }
+
+    @Test fun readsTheSignerFromTheManifest() {
+        val i = Updater.parse(json.replace(""""notes":"Fixes"""", """"notes":"Fixes","signer":"23:F7:19:AB""""), "https://s")!!
+        assertEquals("23f719ab", i.signer)
+    }
 }

@@ -28,7 +28,7 @@ import java.security.MessageDigest
  * installed app, so a swapped file cannot replace Pager.
  */
 object Updater {
-    data class Info(val version: String, val code: Long, val url: String, val sha256: String, val notes: String)
+    data class Info(val version: String, val code: Long, val url: String, val sha256: String, val notes: String, val signer: String? = null)
     enum class Stage { IDLE, CHECKING, DOWNLOADING, INSTALLING }
 
     private val _available = MutableStateFlow<Info?>(null)
@@ -65,7 +65,7 @@ object Updater {
         val code = (a["code"] as? JsonPrimitive)?.longOrNull ?: return null
         val file = s("file") ?: return null
         if (file.contains('/') || file.contains("..")) return null
-        return Info(s("version") ?: code.toString(), code, server.trimEnd('/') + "/updates/" + file, (s("sha256") ?: return null).lowercase(), s("notes") ?: "")
+        return Info(s("version") ?: code.toString(), code, server.trimEnd('/') + "/updates/" + file, (s("sha256") ?: return null).lowercase(), s("notes") ?: "", s("signer")?.lowercase()?.replace(":", ""))
     }
 
     private fun fetch(server: String): Info? {
@@ -75,9 +75,38 @@ object Updater {
         return parse(c.inputStream.bufferedReader().use { it.readText() }, server)
     }
 
+    /** True when an update signed by [theirs] can be installed over an app signed by [mine] (Android refuses anything else). */
+    internal fun sameSigner(mine: Set<String>, theirs: Set<String>) = mine.isNotEmpty() && mine.any { it in theirs }
+
+    private fun sha256Hex(b: ByteArray) = MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
+
+    /** The SHA-256 of each certificate this package (or an APK file) is signed with, lower-case hex. */
+    @Suppress("DEPRECATION")
+    private fun signers(ctx: Context, apkPath: String? = null): Set<String> {
+        val pm = ctx.packageManager
+        return try {
+            if (Build.VERSION.SDK_INT >= 28) {
+                val flag = android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+                val info = if (apkPath == null) pm.getPackageInfo(ctx.packageName, flag) else pm.getPackageArchiveInfo(apkPath, flag)
+                val si = info?.signingInfo ?: return emptySet()
+                // The history includes keys this app was signed with before a rotation, which Android still accepts.
+                (if (si.hasMultipleSigners()) si.apkContentsSigners else si.signingCertificateHistory).map { sha256Hex(it.toByteArray()) }.toSet()
+            } else {
+                val flag = android.content.pm.PackageManager.GET_SIGNATURES
+                val info = if (apkPath == null) pm.getPackageInfo(ctx.packageName, flag) else pm.getPackageArchiveInfo(apkPath, flag)
+                info?.signatures?.map { sha256Hex(it.toByteArray()) }?.toSet().orEmpty()
+            }
+        } catch (_: Exception) { emptySet() }
+    }
+
+    private fun wrongKey(info: Info) = "This update is signed with a different key than the Pager on this phone, so Android won't install it over the top. " +
+        "To switch: make sure you have your recovery key, uninstall Pager, install the new version from ${info.url}, and sign in again."
+
     /** Downloads the APK, checks it matches the checksum on the server, and asks Android to install it. */
     suspend fun install(ctx: Context, info: Info) {
         if (_stage.value != Stage.IDLE) return
+        // If the update is signed with a different key (the move from the trial key to the release key), say so before downloading anything.
+        if (info.signer != null && !sameSigner(signers(ctx), setOf(info.signer))) { _message.value = wrongKey(info); return }
         _stage.value = Stage.DOWNLOADING
         try {
             val file = withContext(Dispatchers.IO) {
@@ -91,6 +120,7 @@ object Updater {
                 if (got != info.sha256) { f.delete(); throw java.io.IOException("The download doesn't match its checksum, so it was not installed") }
                 f
             }
+            if (!sameSigner(signers(ctx), signers(ctx, file.path))) throw java.io.IOException(wrongKey(info))
             _stage.value = Stage.INSTALLING
             withContext(Dispatchers.IO) { commit(ctx, file) }
             _available.value = null
