@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -384,9 +385,12 @@ class Store(private val context: Context) {
     }
 
     init {
+        // Messages to one page are encrypted one after another. The first message in a page is slow (it has to share keys), and a quick
+        // second one used to overtake it, so they arrived in the wrong order.
+        val sendLocks = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
         matrix.sendHook = { roomId, type, content ->
             if (_chats.value[roomId]?.encrypted != true) type to content
-            else {
+            else sendLocks.getOrPut(roomId) { kotlinx.coroutines.sync.Mutex() }.withLock {
                 val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet. Try again in a moment.")
                 val encrypted = e.encrypt(roomId, type, content, roomMembers(roomId))
                 // Relations (edits, replies, reactions) stay visible outside the encryption so the server can group them.
@@ -835,7 +839,10 @@ class Store(private val context: Context) {
 
     // --- History & chat management -----------------------------------------------
 
-    fun loadOlder(roomId: String) {
+    /** How many messages a page should have before we stop fetching older ones by ourselves. */
+    private val FILL_MESSAGES = 30
+
+    fun loadOlder(roomId: String, pages: Int = 0) {
         val chat = _chats.value[roomId] ?: return
         if (chat.reachedStart) return
         // After a restart the saved token may be gone; paginate back from the last sync point instead.
@@ -850,6 +857,10 @@ class Store(private val context: Context) {
             } finally {
                 synchronized(loadingOlder) { loadingOlder.remove(roomId) }
             }
+            // A page can be all bookkeeping (people joining, send statuses) and add nothing to show. The list then doesn't change, so nothing
+            // would ask for the next page and the history would sit there until something else (like sending a message) woke it up.
+            val now = _chats.value[roomId]
+            if (now != null && !now.reachedStart && pages < 8 && now.messages.size < FILL_MESSAGES && (now.prevBatch ?: since) != token) loadOlder(roomId, pages + 1)
         }
     }
 

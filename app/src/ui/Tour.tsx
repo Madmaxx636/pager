@@ -31,12 +31,13 @@ export function Tour({ nav, forceOpen, onClose }: { nav: (to: string) => void; f
   useEffect(() => {
     if (forceOpen) { setOpen(true); setI(0); return; }
     if (!user || !synced || open) return;
+    if (!enc.ready && !enc.error) return; // encryption is still starting: the recovery-key screen may be about to appear, and comes first
     if (enc.ready && !enc.backupHere && !(() => { try { return localStorage.getItem(`pager.keysetup.${user}.${enc.deviceId}`) === "1"; } catch { return true; } })()) return;
     if (seenHere(user)) return;
     let live = true;
     void doneOnServer(user).then((done) => { if (!live) return; if (done) markHere(user); else { setOpen(true); setI(0); } });
     return () => { live = false; };
-  }, [user, synced, enc.ready, enc.backupHere, enc.deviceId, forceOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, synced, enc.ready, enc.error, enc.backupHere, enc.deviceId, forceOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const steps = tourSteps({ admin: isAdmin, hasKey: enc.backupHere, server: session?.baseUrl || window.location.origin });
   const step = steps[Math.min(i, steps.length - 1)];
