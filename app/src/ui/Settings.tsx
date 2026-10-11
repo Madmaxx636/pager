@@ -456,6 +456,7 @@ function Desktop() {
       <Group title="Window">
         <SwitchRow title="Keep running in the tray when closed" hint="Closing the window hides Pager so messages keep arriving" checked={s.closeToTray} onChange={(v) => { updateSettings({ closeToTray: v }); window.pagerDesktop?.setPrefs({ closeToTray: v }); }} />
         <SwitchRow title="Launch at login" checked={auto} onChange={(v) => { setAuto(v); window.pagerDesktop?.setAutostart(v); }} />
+        <SwitchRow title="Smooth graphics" hint="Uses your graphics chip for smoother scrolling and animation, and about 30 MB more memory. Takes effect after you restart Pager" checked={s.smoothGraphics} onChange={(v) => { updateSettings({ smoothGraphics: v }); window.pagerDesktop?.setPrefs({ smoothGraphics: v }); }} />
         <SwitchRow title="Start minimized to tray" checked={s.startMinimized} onChange={(v) => { updateSettings({ startMinimized: v }); window.pagerDesktop?.setPrefs({ startMinimized: v }); }} />
       </Group>
       <Group title="Look" footer="Takes your colors from KDE Plasma, GNOME, Windows or macOS and follows them when you change them.">

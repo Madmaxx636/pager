@@ -37,6 +37,8 @@ import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.decodeFromStream
+import kotlinx.serialization.json.encodeToStream
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -211,7 +213,8 @@ class Store(private val context: Context) {
             // Bump when the way messages are read changes (e.g. pictures that arrive as edits), so old saved chats are read again.
             if (prefs.getInt("cacheV", 0) != 3) { cacheFile.delete(); prefs.edit().putInt("cacheV", 3).apply(); return }
             if (!cacheFile.exists()) return
-            val c = json.decodeFromString(cacheSerializer, cacheFile.readText())
+            // Read straight from the file: building the whole text first needed several times the file's size in memory.
+            val c = cacheFile.inputStream().buffered().use { json.decodeFromStream(cacheSerializer, it) }
             if (c.userId != userId) return
             // Caches from before room types were tracked can't tell DMs from groups: resync from scratch.
             if (c.chats.values.any { it.network != "matrix" && it.roomType == null }) { cacheFile.delete(); return }
@@ -222,9 +225,9 @@ class Store(private val context: Context) {
         }.onFailure { cacheFile.delete() }
     }
 
-    @OptIn(FlowPreview::class)
+    @OptIn(FlowPreview::class, kotlinx.serialization.ExperimentalSerializationApi::class)
     private suspend fun persistLoop() {
-        _chats.debounce(3000).collect { chats ->
+        _chats.debounce(8000).collect { chats ->
             val me = _session.value?.userId ?: return@collect
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -233,7 +236,10 @@ class Store(private val context: Context) {
                         val sent = c.messages.filter { it.status == STATUS_SENT }
                         if (sent.size <= 120) c.copy(messages = sent) else c.copy(messages = sent.takeLast(60), prevBatch = null)
                     }
-                    cacheFile.writeText(json.encodeToString(cacheSerializer, Cache(me, since, trimmed)))
+                    // Written straight to a file (then moved into place), not built as one giant text first.
+                    val tmp = File(cacheFile.path + ".tmp")
+                    tmp.outputStream().buffered().use { json.encodeToStream(cacheSerializer, Cache(me, since, trimmed), it) }
+                    tmp.renameTo(cacheFile)
                 }
             }
         }
