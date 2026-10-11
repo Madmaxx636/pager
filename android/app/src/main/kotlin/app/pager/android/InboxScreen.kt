@@ -335,8 +335,16 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { deleteFor = null },
             title = { Text(if (ids.size == 1) "Delete this page?" else "Delete ${ids.size} pages?") },
-            text = { Text("They will be removed from Pager. The conversations on the other apps aren't deleted, and a page comes back if someone writes again.") },
-            confirmButton = { TextButton(onClick = { ids.forEach { store.leave(it) }; deleteFor = null; selected.clear() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+            text = {
+                val on = LocalSettings.current.deleteAtSource
+                Column {
+                    Text(if (on) "They will be removed from Pager and deleted on Signal, WhatsApp or Google Messages too (other networks keep theirs). This can't be undone." else "They will be removed from Pager. The conversations on the other apps aren't deleted, and a page comes back if someone writes again.")
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp).clickable { store.settings.update { copy(deleteAtSource = !on) } }, verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(checked = on, onCheckedChange = { v -> store.settings.update { copy(deleteAtSource = v) } }); Text("Also delete on Signal, WhatsApp and Google Messages")
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { val src = store.settings.value.deleteAtSource; ids.forEach { store.leave(it, src && store.chatNow(it)?.network in setOf("signal", "whatsapp", "gmessages")) }; deleteFor = null; selected.clear() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("Cancel") } },
         )
     }

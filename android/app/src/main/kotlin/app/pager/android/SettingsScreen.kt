@@ -318,6 +318,13 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
                 SwitchRow("Auto-play GIFs", checked = s.autoPlayGifs) { v -> set { copy(autoPlayGifs = v) } }; GroupDivider()
                 SwitchRow("Write out voice messages", "Needs transcription switched on at your server. The words are made on your own server and kept on this phone", s.autoTranscribe) { v -> set { copy(autoTranscribe = v) } }
             }
+            SettingsGroup("History", footer = "Pager loads older messages as you scroll. This fetches all of them now, so they are on this phone. It can take a while and uses data.") {
+                var bulk by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                NavRow(bulk?.let { (d, t) -> if (d >= t) "Done: $t pages loaded" else "Loading… $d of $t pages" } ?: "Load every page's full history") {
+                    if (bulk == null || bulk!!.first >= bulk!!.second) { bulk = 0 to 1; scope.launch { store.loadEveryHistory { d, t -> bulk = d to t } } }
+                }
+            }
             SettingsGroup("Inbox behavior") {
                 SwitchRow("Unarchive on new message", "Archived pages come back when someone writes (unless muted)", s.unarchiveOnMessage) { v -> set { copy(unarchiveOnMessage = v) } }; GroupDivider()
                 SwitchRow("Confirm before deleting", checked = s.confirmDelete) { v -> set { copy(confirmDelete = v) } }
@@ -471,6 +478,7 @@ private fun AppearancePage() {
         SliderRow("Text size", s.fontScale, 0.85f..1.4f, "${(s.fontScale * 100).toInt()}%") { v -> set { copy(fontScale = (v * 20).toInt() / 20f) } }; GroupDivider()
         ChoiceRow("Font", FONT_CHOICES, s.fontFamily) { v -> set { copy(fontFamily = v) } }; GroupDivider()
         ChoiceRow("Reactions", listOf("filled" to "Filled", "outline" to "Outline"), s.reactionStyle) { v -> set { copy(reactionStyle = v) } }; GroupDivider()
+        SwitchRow("Delete on the other network too", "When you delete a chat in Pager, also delete it on Signal, WhatsApp or Google Messages. It can't be undone, so you are asked each time", s.deleteAtSource) { v -> set { copy(deleteAtSource = v) } }; GroupDivider()
         SwitchRow("Hide Stories", "Removes the Stories row (WhatsApp status updates) from the list", s.hideStories) { v -> set { copy(hideStories = v) } }; GroupDivider()
         ChoiceRow("Bubble style", listOf("round" to "Rounded", "soft" to "Extra round", "square" to "Square", "tail" to "Tail", "outline" to "Outline", "plain" to "No bubbles"), s.bubbleStyle) { v -> set { copy(bubbleStyle = v) } }; GroupDivider()
         ChoiceRow("Bubble fill", listOf("solid" to "Solid", "gradient" to "Gradient", "tinted" to "Soft tint"), s.bubbleFill) { v -> set { copy(bubbleFill = v) } }; GroupDivider()

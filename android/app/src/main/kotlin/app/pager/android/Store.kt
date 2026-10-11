@@ -441,7 +441,26 @@ class Store(private val context: Context) {
         _syncProblem.value = "$what: ${e::class.java.simpleName}: ${e.message ?: ""}".take(300)
     }
 
+    /**
+     * A brand-new phone gets no chats until its keys are entered: while the key step is open it receives only what it needs to finish it
+     * (keys and account data), then everything. Phones that already have their keys, or saved chats, start as usual.
+     */
+    private suspend fun holdUntilKeys() {
+        val e = e2ee ?: return
+        if (since != null) return
+        val keyPrefs = context.getSharedPreferences("pager.keysetup", Context.MODE_PRIVATE)
+        var token: String? = null
+        while (scope.isActive && !keyPrefs.getBoolean("done." + e.deviceId, false) && !e.backupOn()) {
+            try {
+                val res = matrix.syncKeysOnly(token); token = (res["next_batch"] as? JsonPrimitive)?.content
+                e.receiveSync(res)
+            } catch (c: CancellationException) { throw c } catch (_: Throwable) { delay(2000) }
+            delay(800)
+        }
+    }
+
     private suspend fun syncLoop(s: Session) {
+        runCatching { holdUntilKeys() }
         var backoff = 1000L
         while (scope.isActive) {
             try {
@@ -700,19 +719,20 @@ class Store(private val context: Context) {
         return Picked(uri, name, mime, size, w, h)
     }
 
-    fun sendFile(roomId: String, uri: Uri) {
+    /** [viewOnce]: Signal shows the picture or video once and then it is gone (the bridge turns this into Signal's own view-once). */
+    fun sendFile(roomId: String, uri: Uri, viewOnce: Boolean = false) {
         val me = _session.value?.userId ?: return
         val p = describe(uri)
         // "High" quality shrinks big photos (2048px, JPEG) before upload; GIFs, WebP and other files are never touched.
         if (settings.value.imageQuality == "high" && (p.mime == "image/jpeg" || p.mime == "image/png")) {
             scope.launch {
                 val shrunk = runCatching { shrink(uri) }.getOrNull()
-                if (shrunk != null) sendBytes(roomId, shrunk.first, p.name.substringBeforeLast('.') + ".jpg", "image/jpeg", "m.image", shrunk.second, shrunk.third)
-                else sendOriginal(roomId, uri, p)
+                if (shrunk != null) sendBytes(roomId, shrunk.first, p.name.substringBeforeLast('.') + ".jpg", "image/jpeg", "m.image", shrunk.second, shrunk.third, viewOnce)
+                else sendOriginal(roomId, uri, p, viewOnce)
             }
             return
         }
-        sendOriginal(roomId, uri, p)
+        sendOriginal(roomId, uri, p, viewOnce)
     }
 
     private fun shrink(uri: Uri): Triple<ByteArray, Int, Int> {
@@ -726,7 +746,7 @@ class Store(private val context: Context) {
         return Triple(out.toByteArray(), bmp.width, bmp.height)
     }
 
-    private fun sendOriginal(roomId: String, uri: Uri, p: Picked) {
+    private fun sendOriginal(roomId: String, uri: Uri, p: Picked, viewOnce: Boolean = false) {
         val me = _session.value?.userId ?: return
         val type = when { p.mime.startsWith("image/") -> "m.image"; p.mime.startsWith("video/") -> "m.video"; p.mime.startsWith("audio/") -> "m.audio"; else -> "m.file" }
         val txn = UUID.randomUUID().toString()
@@ -737,6 +757,7 @@ class Store(private val context: Context) {
                 val (mxc, enc) = uploadFor(roomId, p.name, p.mime, p.size) { context.contentResolver.openInputStream(uri)!! }
                 matrix.send(roomId, "m.room.message", txn, buildJsonObject {
                     put("msgtype", type); put("body", p.name); putMedia(mxc, enc)
+                    if (viewOnce && (type == "m.image" || type == "m.video")) putJsonObject("com.beeper.view_limited") { put("type", "count"); put("count", 1) }
                     putJsonObject("info") {
                         put("mimetype", p.mime); put("size", p.size)
                         p.w?.let { put("w", it) }; p.h?.let { put("h", it) }
@@ -982,7 +1003,7 @@ class Store(private val context: Context) {
         }
     }
 
-    private fun sendBytes(roomId: String, bytes: ByteArray, name: String, mime: String, type: String, w: Int? = null, h: Int? = null) {
+    private fun sendBytes(roomId: String, bytes: ByteArray, name: String, mime: String, type: String, w: Int? = null, h: Int? = null, viewOnce: Boolean = false) {
         val me = _session.value?.userId ?: return
         val txn = UUID.randomUUID().toString()
         val localId = "local-$txn"
@@ -992,6 +1013,7 @@ class Store(private val context: Context) {
                 val (mxc, enc) = uploadFor(roomId, name, mime, bytes.size.toLong()) { java.io.ByteArrayInputStream(bytes) }
                 matrix.send(roomId, "m.room.message", txn, buildJsonObject {
                     put("msgtype", type); put("body", name); putMedia(mxc, enc)
+                    if (viewOnce && (type == "m.image" || type == "m.video")) putJsonObject("com.beeper.view_limited") { put("type", "count"); put("count", 1) }
                     putJsonObject("info") { put("mimetype", mime); put("size", bytes.size.toLong()); w?.let { put("w", it) }; h?.let { put("h", it) } }
                 })
             }.onSuccess { setStatus(roomId, localId, STATUS_SENT, it) }.onFailure { setStatus(roomId, localId, STATUS_FAILED) }
@@ -1136,9 +1158,40 @@ class Store(private val context: Context) {
         scope.launch { runCatching { matrix.rename(roomId, name) } }
     }
 
-    fun leave(roomId: String) {
+    /** Takes a page out of Pager. With [atSource], the bridge is first asked to delete the conversation on its own network too (Signal, WhatsApp, Google Messages). */
+    fun leave(roomId: String, atSource: Boolean = false) {
         _chats.update { it - roomId }
-        scope.launch { runCatching { matrix.leave(roomId) } }
+        scope.launch {
+            if (atSource) {
+                runCatching { matrix.send(roomId, "com.beeper.delete_chat", UUID.randomUUID().toString(), buildJsonObject { put("delete_for_everyone", false) }) }
+                delay(2500)
+            }
+            runCatching { matrix.leave(roomId) }
+        }
+    }
+
+    /** Loads the whole history of every page onto this phone, one page at a time. [onProgress] gets (pages finished, pages in all). */
+    suspend fun loadEveryHistory(onProgress: (Int, Int) -> Unit) {
+        val ids = _chats.value.values.filter { !it.reachedStart }.sortedByDescending { it.lastTs }.map { it.id }
+        ids.forEachIndexed { i, id -> onProgress(i, ids.size); loadWholeHistory(id) }
+        onProgress(ids.size, ids.size)
+    }
+
+    /** Loads every older message of a page onto this phone (as far back as the server has them). Returns true when the start was reached. */
+    suspend fun loadWholeHistory(roomId: String, onProgress: (Int) -> Unit = {}): Boolean {
+        repeat(600) {
+            val chat = _chats.value[roomId] ?: return false
+            if (chat.reachedStart) return true
+            val token = chat.prevBatch ?: since ?: return false
+            try {
+                val (rawEvents, end, state) = matrix.messages(roomId, token)
+                val events = decryptEvents(roomId, rawEvents)
+                update(roomId) { SyncReducer.applyHistory(it, events, end, state, _session.value?.userId ?: "") }
+            } catch (c: CancellationException) { throw c } catch (_: Exception) { return false }
+            val now = _chats.value[roomId]; onProgress(now?.messages?.size ?: 0)
+            if (now != null && (now.prevBatch ?: since) == token) return now.reachedStart
+        }
+        return _chats.value[roomId]?.reachedStart == true
     }
 
     // --- Bridges -------------------------------------------------------------------

@@ -20,6 +20,8 @@ export interface AppSettings {
   fontFamily: string;
   reactionStyle: "filled" | "outline";
   hideStories: boolean;
+  /** Deleting a chat in Pager also deletes it on its own network (Signal, WhatsApp, Google Messages). Off unless you turn it on, because it cannot be undone. */
+  deleteAtSource: boolean;
   /** Turn voice messages into text as you see them (needs transcription switched on at your server). */
   autoTranscribe: boolean;
   /** Sound when you get a reaction while inside that page. */
@@ -133,7 +135,7 @@ export interface AppSettings {
 export const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 export const DEFAULTS: AppSettings = {
-  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
+  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",

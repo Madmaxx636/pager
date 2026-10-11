@@ -150,6 +150,11 @@ export const matrix = {
     const filter = enc(JSON.stringify({ presence: { types: [] }, room: { timeline: { limit: 20 }, state: { lazy_load_members: true }, ephemeral: { types: ["m.receipt", "m.typing"] } } }));
     return call("GET", `/_matrix/client/v3/sync?set_presence=offline&filter=${filter}${since ? `&since=${enc(since)}&timeout=30000` : "&timeout=0"}`, undefined, signal);
   },
+  /** A sync that carries no chats at all, only what a device needs to get its keys (to-device messages and account data). */
+  syncKeysOnly: (since: string | undefined, signal?: AbortSignal) => {
+    const filter = enc(JSON.stringify({ presence: { types: [] }, room: { rooms: [] }, account_data: { types: ["m.secret_storage.*", "m.cross_signing.*", "m.megolm_backup.v1", "m.org.matrix.custom.backup_disabled"] } }));
+    return call("GET", `/_matrix/client/v3/sync?set_presence=offline&filter=${filter}${since ? `&since=${enc(since)}&timeout=5000` : "&timeout=0"}`, undefined, signal);
+  },
   messages: async (roomId: string, from: string): Promise<{ chunk: any[]; end?: string; state?: any[] }> =>
     call("GET", `/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=40&from=${enc(from)}&filter=${enc('{"lazy_load_members":true}')}`),
   join: (roomId: string) => call("POST", `/_matrix/client/v3/join/${enc(roomId)}`, {}),

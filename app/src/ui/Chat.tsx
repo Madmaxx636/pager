@@ -8,7 +8,7 @@ import { networkMeta } from "../core/emoji";
 import { getSettings, useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
   edit, enableEncryption, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
-  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks,
+  sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory,
 } from "../core/store";
 import { addLink, groupOf, suggestLinks, unlink } from "../core/links";
 import { SOUNDS, playSound } from "../core/sounds";
@@ -145,7 +145,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const name = displayName(chat, user);
   const meta = networkMeta(chat.network);
   const typingNames = chat.typing.map((u) => nameOf(chat, u));
-  const attachFiles = (files: FileList | File[]) => Array.from(files).forEach((f) => sendFile(roomId, f));
+  const attachFiles = (files: FileList | File[], viewOnce = false) => Array.from(files).forEach((f) => sendFile(roomId, f, undefined, { viewOnce }));
 
   return (
     <section className={"chat" + (infoOpen ? " with-info" : "")} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); attachFiles(e.dataTransfer.files); }}>
@@ -283,7 +283,7 @@ function MenuItems({ roomId, m, mine, starred, dev, close, onReply, onEdit, onFo
 // ---- Composer ----------------------------------------------------------------------------------------
 
 function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply, onClearEdit, onFiles }: {
-  roomId: string; chat: ChatState; replyTo?: Msg; editing?: Msg; st: AppSettings; group: boolean; nav: Nav; onClearReply: () => void; onClearEdit: () => void; onFiles: (f: File[]) => void;
+  roomId: string; chat: ChatState; replyTo?: Msg; editing?: Msg; st: AppSettings; group: boolean; nav: Nav; onClearReply: () => void; onClearEdit: () => void; onFiles: (f: File[], viewOnce?: boolean) => void;
 }) {
   const [text, setText] = useState(() => getState().drafts[roomId] ?? "");
   const [attach, setAttach] = useState(false);
@@ -366,16 +366,18 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
   const where = () => navigator.geolocation?.getCurrentPosition((p) => sendLocation(roomId, p.coords.latitude, p.coords.longitude), () => setError("Couldn't get your location."), { timeout: 10000 });
   const pick = (k: AttachKind) => {
     setAttach(false);
-    if (k === "photos") photos.current?.click();
+    if (k === "viewonce") { once.current = true; photos.current?.click(); }
+    else if (k === "photos") photos.current?.click();
     else if (k === "camera") camera.current?.click();
     else if (k === "file") files.current?.click();
     else if (k === "emoji") setEmoji(true);
     else if (k === "location") where();
     else setSheet(k);
   };
+  const once = useRef(false); // the next pictures are sent as view-once
   const hasText = text.trim().length > 0;
   const input = (ref: React.RefObject<HTMLInputElement | null>, accept?: string, capture?: boolean) => (
-    <input ref={ref} type="file" multiple={!capture} accept={accept} {...(capture ? { capture: "environment" } : {})} hidden onChange={(e) => { if (e.target.files) onFiles(Array.from(e.target.files)); e.target.value = ""; }} />
+    <input ref={ref} type="file" multiple={!capture} accept={accept} {...(capture ? { capture: "environment" } : {})} hidden onChange={(e) => { if (e.target.files) onFiles(Array.from(e.target.files), once.current); once.current = false; e.target.value = ""; }} />
   );
 
   return (
@@ -391,7 +393,7 @@ function Composer({ roomId, chat, replyTo, editing, st, group, nav, onClearReply
         <form className="composer" onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <div className="menu-wrap">
             <IconButton icon={Plus} label="Attach" onClick={() => setAttach(!attach)} active={attach} className="plus" />
-            {attach && <AttachMenu onPick={pick} onClose={() => setAttach(false)} />}
+            {attach && <AttachMenu onPick={pick} onClose={() => setAttach(false)} canViewOnce={chat.network === "signal"} />}
           </div>
           <div className="field">
             <textarea ref={ta} rows={1} placeholder={`Message ${placeholderName(chat)}`} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={sendKey} spellCheck
@@ -454,6 +456,10 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
   const [when, setWhen] = useState<"remind" | "snooze">();
   const [encDlg, setEncDlg] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const stg = useSettings();
+  const canSource = (["signal", "whatsapp", "gmessages"].includes(chat.network));
+  const [atSource, setAtSource] = useState(stg.deleteAtSource);
+  const [hist, setHist] = useState<{ n: number; done?: boolean }>();
   const [notifDlg, setNotifDlg] = useState(false);
   const st = useSettings();
   const [tab, setTab] = useState<"photos" | "links" | "files">("photos");
@@ -471,6 +477,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
         <div className="info-id"><Avatar name={name} mxc={chat.avatarMxc} size={88} network={chat.network} /><h3>{name}</h3><small>{networkMeta(chat.network).label}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</small>
           {isGroup(chat) && <button className="link" onClick={() => { const n = prompt("Rename group", chat.name); if (n?.trim()) rename(chat.id, n.trim()); }}>Rename group</button>}</div>
         {!isGroup(chat) && <LinkControls chat={chat} />}
+        <div className="pad"><button className="link" disabled={!!hist && !hist.done} onClick={() => { setHist({ n: chat.messages.length }); void loadWholeHistory(chat.id, (n) => setHist({ n })).then((done) => setHist((h) => ({ n: h?.n ?? 0, done: true, ...(done ? {} : {}) }))); }}>{hist && !hist.done ? `Loading everything… ${hist.n} messages` : hist?.done ? `Done: ${hist.n} messages on this device` : "Load this page's full history"}</button></div>
         <div className="quick-actions">
           <button onClick={() => nav(`search:${chat.id}`)}><span><Search size={20} /></span>Search</button>
           <button className={isPinned(chat) ? "on" : ""} onClick={() => pin(chat.id, !isPinned(chat))}><span><Pin size={20} /></span>{isPinned(chat) ? "Unpin" : "Pin"}</button>
@@ -518,7 +525,10 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
         </Modal>
       )}
       {encDlg && <EnableEncryptionDialog roomId={chat.id} onClose={() => setEncDlg(false)} />}
-      {confirmLeave && <Modal title="Delete this page?" onClose={() => setConfirmLeave(false)}><p className="muted">It will be removed from Pager. The conversation on {networkMeta(chat.network).label} isn't deleted, and it comes back if someone writes again.</p><div className="row-end"><button className="link" onClick={() => setConfirmLeave(false)}>Cancel</button><button className="primary danger" onClick={() => { leave(chat.id); nav("home"); }}>Delete</button></div></Modal>}
+      {confirmLeave && <Modal title="Delete this page?" onClose={() => setConfirmLeave(false)}>
+        <p className="muted">{atSource ? `It will be removed from Pager and deleted on ${networkMeta(chat.network).label} too${isGroup(chat) ? " (you also leave the group)" : ""}. This can't be undone.` : `It will be removed from Pager. The conversation on ${networkMeta(chat.network).label} isn't deleted, and it comes back if someone writes again.`}</p>
+        {canSource && <label className="check-row"><input type="checkbox" checked={atSource} onChange={(e) => setAtSource(e.target.checked)} /> Also delete it on {networkMeta(chat.network).label}</label>}
+        <div className="row-end"><button className="link" onClick={() => setConfirmLeave(false)}>Cancel</button><button className="primary danger" onClick={() => { leave(chat.id, atSource && canSource); nav("home"); }}>Delete</button></div></Modal>}
     </aside>
   );
 }

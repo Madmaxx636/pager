@@ -219,7 +219,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     }
     LaunchedEffect(recording) { while (recording) { recordedMs = recorder.elapsedMs; delay(200) } }
 
-    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(8)) { uris: List<Uri> -> uris.forEach { store.sendFile(roomId, it) } }
+    var onceNext by remember { mutableStateOf(false) } // the next pictures go out as view-once
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(8)) { uris: List<Uri> -> val once = onceNext; onceNext = false; uris.forEach { store.sendFile(roomId, it, once) } }
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> -> uris.forEach { store.sendFile(roomId, it) } }
     val pickStickerImages = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> -> if (uris.isNotEmpty()) scope.launch { store.addStickers(uris) } }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
@@ -455,9 +456,10 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     }
 
     // ---- Sheets & dialogs
-    if (attach) AttachSheet(onDismiss = { attach = false }, onPick = { a ->
+    if (attach) AttachSheet(canViewOnce = chat?.network == "signal", onDismiss = { attach = false }, onPick = { a ->
         attach = false
         when (a) {
+            Attach.VIEWONCE -> { onceNext = true; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
             Attach.PHOTOS -> pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
             Attach.CAMERA -> {
                 val f = File(File(context.cacheDir, "media").apply { mkdirs() }, "camera-${System.currentTimeMillis()}.jpg")

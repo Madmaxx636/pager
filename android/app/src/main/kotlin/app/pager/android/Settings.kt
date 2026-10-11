@@ -68,6 +68,8 @@ data class AppSettings(
     val fontFamily: String = "system",
     val reactionStyle: String = "filled",      // filled | outline
     val hideStories: Boolean = false,
+    /** Deleting a chat in Pager also deletes it on its own network (Signal, WhatsApp, Google Messages). Off unless you turn it on, because it cannot be undone. */
+    val deleteAtSource: Boolean = false,
     /** Turn voice messages into text as you see them (needs transcription switched on at your server). */
     val autoTranscribe: Boolean = false,
     val reactionSound: String = "tick",

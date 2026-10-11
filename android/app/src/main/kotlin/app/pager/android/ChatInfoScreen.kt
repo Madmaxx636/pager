@@ -71,6 +71,8 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
     var members by remember { mutableStateOf<Map<String, String>?>(null) }
     var confirmLeave by remember { mutableStateOf(false) }
     var notifSheet by remember { mutableStateOf(false) }
+    var pendingSource by remember { mutableStateOf(false) }
+    var history by remember { mutableStateOf<String?>(null) }
     var encDialog by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
     var muteSheet by remember { mutableStateOf(false) }
@@ -105,6 +107,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 QuickAction(Icons.Rounded.Alarm, "Remind") { remindSheet = true }
             }
             LinkControls(roomId)
+            TextButton(onClick = { if (history == null || history!!.startsWith("Done") || history!!.startsWith("Stopped")) { history = "Loading everything…"; scope.launch { val done = store.loadWholeHistory(roomId) { n -> history = "Loading everything… $n messages" }; history = (if (done) "Done" else "Stopped") + ": ${store.chatNow(roomId)?.messages?.size ?: 0} messages on this phone" } } }, modifier = Modifier.padding(horizontal = 8.dp)) { Text(history ?: "Load this page's full history") }
             SettingsGroup {
                 SwitchRow("Low priority", "Quiet, except @mentions and replies", c.lowPriority) { store.setLowPriority(roomId, it) }; GroupDivider()
                 SwitchRow("Archived", checked = c.archived) { store.setTag(roomId, "u.archived", it) }; GroupDivider()
@@ -196,8 +199,16 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
     }
     if (confirmLeave) AlertDialog(
         onDismissRequest = { confirmLeave = false }, title = { Text("Delete this page?") },
-        text = { Text("It will be removed from Pager. The conversation on ${networkMeta(c.network).label} isn't deleted, and it comes back if someone writes again.") },
-        confirmButton = { TextButton(onClick = { confirmLeave = false; store.leave(roomId); onLeft() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+        text = {
+            val canSource = c.network in setOf("signal", "whatsapp", "gmessages")
+            var src by remember { mutableStateOf(store.settings.value.deleteAtSource) }
+            Column {
+                Text(if (src && canSource) "It will be removed from Pager and deleted on ${networkMeta(c.network).label} too${if (c.isGroup) " (you also leave the group)" else ""}. This can't be undone." else "It will be removed from Pager. The conversation on ${networkMeta(c.network).label} isn't deleted, and it comes back if someone writes again.")
+                if (canSource) Row(Modifier.fillMaxWidth().padding(top = 8.dp).clickable { src = !src }, verticalAlignment = Alignment.CenterVertically) { androidx.compose.material3.Checkbox(checked = src, onCheckedChange = { src = it }); Text("Also delete it on ${networkMeta(c.network).label}") }
+                androidx.compose.runtime.SideEffect { pendingSource = src && canSource }
+            }
+        },
+        confirmButton = { TextButton(onClick = { confirmLeave = false; store.leave(roomId, pendingSource); onLeft() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Cancel") } },
     )
     if (rename) {
