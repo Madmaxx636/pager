@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { applyHistory, applySync, parseMuted, stripReplyFallback } from "./reducer";
+import { STUCK_TEXT, WAITING_TEXT, applyHistory, applySync, parseMuted, relabelUnreadable, stripReplyFallback } from "./reducer";
 import { encryptedInfo, registerAllEncrypted } from "./mediacrypt";
-import { ChatState, STATUS_SENDING, displayName, isBotRoom, previewOf } from "./types";
+import { ChatState, STATUS_SENDING, displayName, emptyChat, isBotRoom, previewOf } from "./types";
 import { inQuietHours, DEFAULTS } from "./settings";
 
 const me = "@me:pager.test";
@@ -186,5 +186,23 @@ describe("history and helpers", () => {
     const s = { ...DEFAULTS, quietHoursEnabled: true, quietStartMin: 22 * 60, quietEndMin: 7 * 60 };
     expect(inQuietHours(s, 23 * 60)).toBe(true); expect(inQuietHours(s, 3 * 60)).toBe(true); expect(inQuietHours(s, 12 * 60)).toBe(false);
     expect(inQuietHours({ ...s, quietHoursEnabled: false }, 23 * 60)).toBe(false);
+  });
+});
+
+describe("messages that never get their key", () => {
+  const unreadable = (ts: number) => ({ id: "$a", sender: "@x:y", ts, type: "m.text", body: WAITING_TEXT, sealed: { type: "m.room.encrypted" } }) as any;
+  const chatWith = (m: any) => ({ ...emptyChat("!r:x"), messages: [m] }) as ChatState;
+
+  it("start by saying they are waiting, and say so honestly after ten minutes", () => {
+    const fresh = chatWith(unreadable(1_000_000));
+    expect(relabelUnreadable(fresh, 1_000_000 + 5 * 60_000)).toBe(fresh);
+    expect(relabelUnreadable(fresh, 1_000_000 + 11 * 60_000).messages[0].body).toBe(STUCK_TEXT);
+  });
+
+  it("leave readable messages and unrelated text alone", () => {
+    const readable = chatWith({ ...unreadable(0), sealed: undefined, body: WAITING_TEXT });
+    expect(relabelUnreadable(readable, 99_999_999)).toBe(readable);
+    const other = chatWith({ ...unreadable(0), body: "hello" });
+    expect(relabelUnreadable(other, 99_999_999)).toBe(other);
   });
 });

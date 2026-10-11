@@ -1,6 +1,6 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
-import { applyHistory, applySync, replaceDecrypted, setOwnIdentity } from "./reducer";
+import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity } from "./reducer";
 import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
@@ -230,7 +230,7 @@ async function serverKeyMatches(userId: string, deviceId: string, ours: string):
 /** Tries again (from the settings screen) after a failed start. */
 export async function retryEncryptionStart() { if (state.session) await startCrypto(state.session); }
 
-const unreadable = (e: any) => ({ ...e, type: "m.room.message", content: { msgtype: "m.text", body: "🔒 Waiting for the key to read this message…", pagerWaiting: true, pagerRaw: e } });
+const unreadable = (e: any) => ({ ...e, type: "m.room.message", content: { msgtype: "m.text", body: WAITING_TEXT, pagerWaiting: true, pagerRaw: e } });
 
 /** Replaces m.room.encrypted events with what they say. Unreadable ones become a placeholder and are tried again when keys arrive. */
 async function decryptEvents(roomId: string, events: any[]): Promise<any[]> {
@@ -268,6 +268,7 @@ async function retryWaiting(rooms?: string[]) {
       const clear = await e2ee.decrypt(roomId, m.sealed as any);
       if (clear) patchChat(roomId, (c) => replaceDecrypted(c, clear));
     }
+    patchChat(roomId, (c) => relabelUnreadable(c, Date.now()));
   }
 }
 
@@ -459,7 +460,8 @@ function updateBadge() {
 
 function patchChat(roomId: string, f: (c: ChatState) => ChatState) {
   const c = state.chats[roomId]; if (!c) return;
-  set({ chats: { ...state.chats, [roomId]: f(c) } });
+  const next = f(c); if (next === c) return;
+  set({ chats: { ...state.chats, [roomId]: next } });
 }
 // The page you are looking at: sending and receiving make a little sound there (and only there).
 let openRoom: string | null = null;
