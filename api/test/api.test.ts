@@ -20,7 +20,8 @@ const readBody = async (req: any) => {
   return s ? JSON.parse(s) : {};
 };
 
-let synapse: Server, bridge: Server, api: Server;
+let synapse: Server, bridge: Server, api: Server, whisper: Server;
+const heard: { type?: string; bytes: number }[] = [];
 let base: string;
 const registered: any[] = [];
 const adminCalls: { method: string; url: string; body: any }[] = [];
@@ -92,7 +93,12 @@ before(async () => {
     if (req.url!.startsWith("/_matrix/provision/v3/create_dm/inroom")) return json(res, 200, { dm_room_mxid: "!room:test.local" });
     json(res, 200, { ok: true });
   });
-  const [sp, bp] = [await listen(synapse), await listen(bridge)];
+  whisper = createServer(async (req, res) => {
+    const chunks: Buffer[] = []; for await (const c of req) chunks.push(c);
+    heard.push({ type: req.headers["content-type"], bytes: Buffer.concat(chunks).length });
+    json(res, 200, { text: "hello there", language: "en" });
+  });
+  const [sp, bp, wp] = [await listen(synapse), await listen(bridge), await listen(whisper)];
   const cfg: Config = {
     port: 0,
     domain: "test.local",
@@ -101,12 +107,13 @@ before(async () => {
     provisioningSecret: "provsecret",
     signup: { mode: "invite", inviteCode: "family", adminInviteCode: "boss" },
     bridges: [{ id: "whatsapp", name: "WhatsApp", url: `http://127.0.0.1:${bp}` }],
+    transcribeUrl: `http://127.0.0.1:${wp}`,
     bridgesDir: (() => { const d = mkdtempSync(join(tmpdir(), "pager-reg-")); mkdirSync(join(d, "whatsapp")); writeFileSync(join(d, "whatsapp", "registration.yaml"), "id: whatsapp\nas_token: asbridge\nhs_token: x\nsender_localpart: LL4spezRandomSender\n"); return d; })(),
   };
   api = createApp(cfg);
   base = `http://127.0.0.1:${await listen(api)}`;
 });
-after(() => [synapse, bridge, api].forEach((s) => s.close()));
+after(() => [synapse, bridge, api, whisper].forEach((s) => { s.close(); s.closeAllConnections?.(); }));
 
 const post = (path: string, body: unknown, token?: string) =>
   fetch(base + path, {
@@ -341,4 +348,23 @@ test("a chat the person is already in is left alone", async () => {
   roomCalls.length = 0;
   const r = await post("/api/bridges/whatsapp/create_dm/inroom", {}, "goodtoken");
   assert.equal(r.status, 200); assert.equal(roomCalls.length, 0);
+});
+
+test("a voice message is turned into text on the home server, for signed-in people only", async () => {
+  const send = (token?: string) => fetch(`${base}/api/transcribe`, { method: "POST", headers: { "content-type": "audio/ogg", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: new Uint8Array(2000) });
+  assert.equal((await send()).status, 401);
+  heard.length = 0;
+  const r = await send("goodtoken");
+  assert.equal(r.status, 200); assert.deepEqual(await r.json(), { text: "hello there", language: "en" });
+  assert.deepEqual(heard, [{ type: "audio/ogg", bytes: 2000 }]);
+  assert.equal(((await (await fetch(`${base}/api/config`)).json()) as any).transcribe, true);
+});
+
+test("transcription says so when it is not switched on", async () => {
+  const bare = createApp({ port: 0, domain: "test.local", synapseUrl: `http://127.0.0.1:${(synapse.address() as AddressInfo).port}`, registrationSecret: "regsecret", provisioningSecret: "p", signup: { mode: "closed", inviteCode: "", adminInviteCode: "" }, bridges: [] });
+  const port = await listen(bare);
+  const r = await fetch(`http://127.0.0.1:${port}/api/transcribe`, { method: "POST", headers: { authorization: "Bearer goodtoken" }, body: new Uint8Array(10) });
+  assert.equal(r.status, 404);
+  assert.equal(((await (await fetch(`http://127.0.0.1:${port}/api/config`)).json()) as any).transcribe, false);
+  bare.close(); bare.closeAllConnections?.();
 });

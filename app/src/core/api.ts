@@ -28,7 +28,7 @@ async function call<T = any>(method: string, path: string, body?: unknown, signa
 }
 
 // ---- Pager API --------------------------------------------------------------
-export interface ServerConfig { domain: string; signup: "invite" | "open" | "closed"; inviteRequired: boolean }
+export interface ServerConfig { domain: string; signup: "invite" | "open" | "closed"; inviteRequired: boolean; transcribe?: boolean }
 export interface Login { id: string; name?: string; state_event?: string; profile?: { name?: string } }
 export interface Network { id: string; name: string; logins: Login[]; error?: string }
 export interface Contact { id: string; name: string; detail?: string }

@@ -315,7 +315,8 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
             SettingsGroup("Media & links") {
                 SwitchRow("Link previews", "Your server fetches the page to build the preview", s.linkPreviews) { v -> set { copy(linkPreviews = v) } }; GroupDivider()
                 ChoiceRow("Auto-download media", listOf("always" to "Always", "wifi" to "On Wi-Fi only", "never" to "Never (tap to load)"), s.autoDownload) { v -> set { copy(autoDownload = v) } }; GroupDivider()
-                SwitchRow("Auto-play GIFs", checked = s.autoPlayGifs) { v -> set { copy(autoPlayGifs = v) } }
+                SwitchRow("Auto-play GIFs", checked = s.autoPlayGifs) { v -> set { copy(autoPlayGifs = v) } }; GroupDivider()
+                SwitchRow("Write out voice messages", "Needs transcription switched on at your server. The words are made on your own server and kept on this phone", s.autoTranscribe) { v -> set { copy(autoTranscribe = v) } }
             }
             SettingsGroup("Inbox behavior") {
                 SwitchRow("Unarchive on new message", "Archived pages come back when someone writes (unless muted)", s.unarchiveOnMessage) { v -> set { copy(unarchiveOnMessage = v) } }; GroupDivider()

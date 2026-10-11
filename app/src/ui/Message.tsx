@@ -6,6 +6,7 @@ import { AppSettings } from "../core/settings";
 import { LinkPreview } from "../core/api";
 import { me, mediaUrl, preview, retry } from "../core/store";
 import { Avatar, humanSize, useMxc } from "./common";
+import { transcribe, transcriptionAvailable, useTranscript } from "../core/transcribe";
 import { Html, Linkified, firstUrl } from "./rich";
 
 const clock = (ts: number, mode: AppSettings["timeFormat"]) => new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", ...(mode === "system" ? {} : { hour12: mode === "12" }) });
@@ -113,7 +114,7 @@ function Content({ msg, chat, st, big, onOpen, onVote, onEndPoll }: { msg: Msg; 
     case "m.video":
       return media ? <video className="media" src={media} controls preload="metadata" /> : <FileChip icon={Video} title={msg.body || "Video"} sub={msg.size ? `${humanSize(msg.size)} · click to load` : undefined} onClick={() => setTapped(true)} />;
     case "m.audio":
-      return media ? <audio src={media} controls preload="metadata" /> : <FileChip icon={msg.voice ? Mic : Music} title={msg.voice ? "Voice message" : msg.body} sub={msg.durationMs ? `${Math.floor(msg.durationMs / 60000)}:${String(Math.floor(msg.durationMs / 1000) % 60).padStart(2, "0")} · click to load` : "click to load"} onClick={() => setTapped(true)} />;
+      return media ? <div className="audio-box"><audio src={media} controls preload="metadata" />{msg.voice && <Words id={msg.id} media={media} auto={st.autoTranscribe} />}</div> : <FileChip icon={msg.voice ? Mic : Music} title={msg.voice ? "Voice message" : msg.body} sub={msg.durationMs ? `${Math.floor(msg.durationMs / 60000)}:${String(Math.floor(msg.durationMs / 1000) % 60).padStart(2, "0")} · click to load` : "click to load"} onClick={() => setTapped(true)} />;
     case "m.file":
       return msg.mime?.includes("vcard") || msg.body.endsWith(".vcf") ? <ContactCard msg={msg} onOpen={onOpen} /> : <FileChip icon={FileText} title={msg.body || "File"} sub={msg.size ? humanSize(msg.size) : undefined} onClick={onOpen} />;
     case "m.location":
@@ -189,3 +190,15 @@ function PollCard({ msg, chat, onVote, onEnd }: { msg: Msg; chat: ChatState; onV
 }
 
 export { Play, Pause };
+
+/** The words of a voice message, or a button to make them (when your server can). */
+function Words({ id, media, auto }: { id: string; media: string; auto: boolean }) {
+  const { text, state } = useTranscript(id);
+  const [can, setCan] = useState(false);
+  useEffect(() => { void transcriptionAvailable().then(setCan); }, []);
+  useEffect(() => { if (can && auto && state === "idle") void transcribe(id, media); }, [can, auto, state, id, media]);
+  if (text !== undefined) return <div className="words">{text}</div>;
+  if (!can) return null;
+  if (state === "busy") return <div className="words muted">Writing it out…</div>;
+  return <button className="link words-btn" onClick={() => void transcribe(id, media)}>{state === "failed" ? "Couldn't write it out. Try again" : "Write it out"}</button>;
+}

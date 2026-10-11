@@ -387,6 +387,9 @@ function Media() {
         <Select title="Provider" value={s.gifProvider} options={[["giphy", "Giphy"], ["tenor", "Tenor"]]} onChange={(v) => updateSettings({ gifProvider: v })} />
         <Row title="API key"><input type="password" placeholder="Paste your key" value={s.gifKey} onChange={(e) => updateSettings({ gifKey: e.target.value.trim() })} /></Row>
       </Group>
+      <Group title="Voice messages" footer="Needs transcription switched on at your server (scripts/enable-transcription.sh). The words are made on your own server and kept on this device.">
+        <SwitchRow title="Write out voice messages automatically" hint="Otherwise use “Write it out” under a message" checked={s.autoTranscribe} onChange={(v) => updateSettings({ autoTranscribe: v })} />
+      </Group>
       <Group title="My stickers" footer="Stickers are saved to your Matrix account, so they follow you to other devices.">
         <Row title="Add stickers from images…" onClick={() => input[0]?.click()}><Plus size={18} /></Row>
         <Row title={pack?.stickers.length ? `${pack.stickers.length} stickers` : "No stickers yet"} />

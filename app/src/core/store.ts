@@ -3,6 +3,7 @@ import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Netwo
 import { BlobCache } from "./lru";
 import { Links, mergeSummaries } from "./links";
 import { shrinkImage } from "./shrink";
+import { forgetTranscripts } from "./transcribe";
 import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity } from "./reducer";
 import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
@@ -451,7 +452,7 @@ async function signOutLocal() {
   try { localStorage.removeItem("pager.identity2"); } catch { /* ignore */ }
   await dbDel("cache");
   http.token = ""; since = undefined;
-  blobCache.clear(); void diskSweep(true);
+  blobCache.clear(); void diskSweep(true); forgetTranscripts();
   set({ session: undefined, chats: {}, synced: false, muted: [], bridges: [], isAdmin: false });
 }
 

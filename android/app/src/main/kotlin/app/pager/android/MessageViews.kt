@@ -457,12 +457,15 @@ private fun AudioContent(msg: Msg, fg: Color) {
     val store = LocalStore.current
     val playing by store.audio.playing.collectAsState()
     val on = playing == msg.id
+    Column {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(38.dp).clip(CircleShape).background(fg.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) { Icon(if (on) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (on) "Stop" else "Play", tint = fg) }
         Column(Modifier.padding(start = 12.dp)) {
             Text(if (msg.voice) "Voice message" else msg.body, color = fg, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             msg.durationMs?.let { Text("%d:%02d".format(it / 60000, (it / 1000) % 60), style = MaterialTheme.typography.labelMedium, color = fg.dim(0.6f)) }
         }
+    }
+    if (msg.voice && msg.mxc != null) Words(msg.id, msg.mxc, fg)
     }
 }
 

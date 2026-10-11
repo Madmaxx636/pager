@@ -12,6 +12,18 @@ import { readRegistration, readSettings, writeSettings } from "./bridgeconfig.ts
 
 const USERNAME_RE = /^[a-z0-9._-]{3,32}$/;
 
+/** The raw bytes of a request body (a voice message), up to [max]. */
+async function readRaw(req: IncomingMessage, max: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const c of req) {
+    size += c.length;
+    if (size > max) throw new HttpError(413, "That recording is too big to transcribe");
+    chunks.push(c);
+  }
+  return Buffer.concat(chunks);
+}
+
 async function readJson(req: IncomingMessage): Promise<any> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -102,6 +114,7 @@ export function createApp(cfg: Config) {
         signup: cfg.signup.mode,
         inviteRequired: cfg.signup.mode === "invite",
         bridges: cfg.bridges.map(({ id, name }) => ({ id, name })),
+        transcribe: !!cfg.transcribeUrl,
       });
     }
 
@@ -121,6 +134,18 @@ export function createApp(cfg: Config) {
     }
 
     // Everything below requires a signed-in user.
+
+    // Speech to text, on your own server: the app sends a voice message it has already opened, and gets the words back.
+    if (url.pathname === "/api/transcribe" && method === "POST") {
+      await authedUser(req);
+      if (!cfg.transcribeUrl) throw new HttpError(404, "Transcription is not switched on for this server");
+      const audio = await readRaw(req, 25 * 1024 * 1024);
+      if (!audio.length) throw new HttpError(400, "No audio");
+      const r = await fetch(`${cfg.transcribeUrl.replace(/\/$/, "")}/transcribe`, { method: "POST", headers: { "content-type": String(req.headers["content-type"] ?? "application/octet-stream") }, body: audio, signal: AbortSignal.timeout(180_000) })
+        .catch(() => { throw new HttpError(502, "The transcription service is not answering"); });
+      if (!r.ok) throw new HttpError(502, "The transcription service could not read that recording");
+      return send(res, 200, await r.json());
+    }
     if (parts[0] === "me" && method === "GET") {
       const token = tokenOf(req);
       const userId = await whoami(cfg, token);
