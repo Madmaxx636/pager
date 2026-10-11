@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -23,6 +25,21 @@ android {
 
     buildFeatures { compose = true }
 
+    // The release key lives outside the repository: ~/.config/pager/android-signing.properties (or the file named by PAGER_ANDROID_SIGNING).
+    // Lose that key and no phone can ever be updated, so back it up. Without it, release builds are unsigned unless -PdebugSign is given.
+    val signingProps = Properties().apply {
+        val f = file(System.getenv("PAGER_ANDROID_SIGNING") ?: "${System.getProperty("user.home")}/.config/pager/android-signing.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        if (signingProps.isNotEmpty()) create("release") {
+            storeFile = file(signingProps.getProperty("storeFile"))
+            storePassword = signingProps.getProperty("storePassword")
+            keyAlias = signingProps.getProperty("keyAlias")
+            keyPassword = signingProps.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         debug { manifestPlaceholders["cleartext"] = "true" }
         release {
@@ -31,8 +48,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Local trial builds only: ./gradlew assembleRelease -PdebugSign
-            if (project.hasProperty("debugSign")) signingConfig = signingConfigs.getByName("debug")
+            // Local trial builds only (plain HTTP allowed): ./gradlew assembleRelease -PdebugSign. Everything else is signed with the release key.
+            signingConfig = if (project.hasProperty("debugSign")) signingConfigs.getByName("debug") else signingConfigs.findByName("release")
         }
     }
     testOptions { unitTests.isReturnDefaultValues = true }
