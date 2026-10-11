@@ -1,6 +1,7 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { BlobCache } from "./lru";
+import { groupFaces } from "./faces";
 import { Links, buildMerged, groupOf, mergeSummaries } from "./links";
 import { shrinkImage } from "./shrink";
 import { forgetTranscripts } from "./transcribe";
@@ -56,7 +57,7 @@ let state: State = {
   drafts: lsGet("pager.drafts", {}), stars: lsGet("pager.stars", []), scheduled: lsGet("pager.scheduled", []),
   reminders: lsGet("pager.reminders", []), bridges: [], isAdmin: false, favoriteGifs: lsGet<Gif[]>("pager.favoriteGifs", []), links: lsGet<Links>("pager.links", []), aliases: lsGet<Record<string, string>>("pager.aliases", {}), solo: [], userStickers: lsGet<StickerPack | undefined>("pager.userStickers", undefined),
 };
-if (window.pagerDesktop) setAliases(state.aliases);
+setAliases(state.aliases);
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 function set(patch: Partial<State>) { state = { ...state, ...patch }; emit(); }
@@ -87,7 +88,7 @@ function buildRows(s: State, st: AppSettings, user: string): ChatSummary[] {
       const last = c.messages[c.messages.length - 1];
       return {
         id: c.id, name: displayName(c, user), network: c.network, avatarMxc: c.avatarMxc, preview: lastPreview(c), ts: lastTs(c), unread: c.unread,
-        markedUnread: c.markedUnread, pinned: isPinned(c), archived: isArchived(c), muted: s.muted.includes(c.id), isGroup: isGroup(c), draft: s.drafts[c.id]?.trim() || undefined,
+        faces: isGroup(c) && !c.avatarMxc ? groupFaces(c, user) : undefined, markedUnread: c.markedUnread, pinned: isPinned(c), archived: isArchived(c), muted: s.muted.includes(c.id), isGroup: isGroup(c), draft: s.drafts[c.id]?.trim() || undefined,
         lowPriority: isLowPriority(c), stories: isStoriesRoom(c) || undefined, labels: labelsOf(c), pinOrder: c.pinOrder ?? Number.MAX_VALUE,
         unanswered: !!last && last.sender !== user, lastFromMe: last?.sender === user, typing: c.typing.length > 0,
       };
@@ -425,7 +426,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
         if (typeof c.chunks === "number") contactChunks = Math.max(contactChunks, c.chunks);
       }
       const al = r.accountData?.["app.pager.aliases"]?.names;
-      if (al && typeof al === "object" && !Array.isArray(al)) { const names = Object.fromEntries(Object.entries(al as Record<string, unknown>).filter(([, v]) => typeof v === "string")) as Record<string, string>; set({ aliases: names }); lsSet("pager.aliases", names); if (window.pagerDesktop) setAliases(names); }
+      if (al && typeof al === "object" && !Array.isArray(al)) { const names = Object.fromEntries(Object.entries(al as Record<string, unknown>).filter(([, v]) => typeof v === "string")) as Record<string, string>; set({ aliases: names }); lsSet("pager.aliases", names); setAliases(names); }
       const lk = r.accountData?.["app.pager.links"]?.groups;
       if (Array.isArray(lk)) { const groups = (lk as unknown[]).filter((g): g is string[] => Array.isArray(g) && g.every((x) => typeof x === "string")); set({ links: groups }); lsSet("pager.links", groups); }
       const fav = r.accountData?.["app.pager.favorite_gifs"]?.gifs;

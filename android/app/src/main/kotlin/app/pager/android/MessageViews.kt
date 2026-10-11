@@ -344,9 +344,8 @@ fun MessageRow(
                             if (s.linkPreviews) firstUrl(msg.body)?.let { LinkPreviewCard(it, fg) }
                         }
                     }
-                    if (last && !bare && (s.showMessageTimes || (mine && s.showReadTicks) || msg.edited || msg.room != null)) {
+                    if (last && !bare && (s.showMessageTimes || (mine && s.showReadTicks) || msg.edited)) {
                         Row(Modifier.align(Alignment.End).padding(top = 2.dp, end = if (msg.type == "m.image") 6.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
-                            msg.room?.let { r -> val n = remember(r) { store.chatNow(r)?.network }; if (n != null) { Box(Modifier.size(6.dp).clip(CircleShape).background(networkMeta(n).color)); Text(" ${networkMeta(n).label}  ", fontSize = 10.sp, color = fg.dim(0.6f)) } }
                             if (starred) Icon(Icons.Rounded.Star, "Starred", tint = fg.dim(0.6f), modifier = Modifier.size(11.dp).padding(end = 2.dp))
                             if (msg.edited) Text("edited  ", fontSize = 10.sp, fontStyle = FontStyle.Italic, color = fg.dim(0.6f))
                             if (s.showMessageTimes) Text(remember(msg.ts, s.timeFormat) { formatClock(msg.ts, s.timeFormat) }, fontSize = 10.sp, color = fg.dim(0.6f))

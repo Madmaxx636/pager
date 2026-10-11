@@ -23,6 +23,7 @@ export function useMxc(mxc: string | undefined, thumb = 0, enabled = true): stri
   return src;
 }
 
+import { faceLayout } from "../core/faces";
 export function Avatar({ name, mxc, size = 44, network }: { name: string; mxc?: string; size?: number; network?: string }) {
   const src = useMxc(mxc, Math.ceil(size * 2));
   const squircle = useSettings().avatarShape === "squircle";
@@ -32,6 +33,18 @@ export function Avatar({ name, mxc, size = 44, network }: { name: string; mxc?: 
     <div className={"avatar" + (squircle ? " squircle" : "")} style={{ width: size, height: size, fontSize: size * 0.4 }}>
       {src ? <img src={src} alt="" /> : <span style={{ background: `linear-gradient(135deg, hsl(${h} 55% 52%), hsl(${(h + 28) % 360} 62% 38%))` }}>{/^[\d\s+()-]+$/.test(name) ? <User size={size * 0.55} /> : (name.replace(/^[^\p{L}\p{N}]+/u, "")[0] ?? "?").toUpperCase()}</span>}
       {meta && <i className="badge" style={{ background: meta.color, width: size * 0.4, height: size * 0.4, fontSize: size * 0.2 }} title={meta.label}>{NET_ICONS[network!] ? (() => { const I = NET_ICONS[network!]; return <I size={size * 0.24} strokeWidth={2.4} color="#fff" />; })() : meta.glyph}</i>}
+    </div>
+  );
+}
+
+/** A group's round picture when it has none of its own: the faces of its people, one big and the rest smaller, like iMessage. */
+export function GroupAvatar({ faces, size = 44 }: { faces: { name: string; mxc?: string }[]; size?: number }) {
+  const spots = faceLayout(faces.length);
+  return (
+    <div className="group-av" style={{ width: size, height: size }} aria-hidden>
+      {faces.slice(0, spots.length).map((f, i) => (
+        <span key={i} className="face" style={{ left: spots[i].x * size, top: spots[i].y * size, width: spots[i].d * size, height: spots[i].d * size }}><Avatar name={f.name} mxc={f.mxc} size={spots[i].d * size} /></span>
+      ))}
     </div>
   );
 }

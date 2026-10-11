@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Check, CheckCheck, Clock, FileText, MapPin, Music, Pause, Play, Star, Video, UserRound, Mic } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, nameOf, previewOf } from "../core/types";
 import { isEmojiOnly } from "../core/format";
-import { networkMeta } from "../core/emoji";
 import { AppSettings } from "../core/settings";
 import { LinkPreview } from "../core/api";
-import { me, mediaUrl, preview, retry, useStore } from "../core/store";
+import { me, mediaUrl, preview, retry } from "../core/store";
 import { Avatar, humanSize, useMxc } from "./common";
 import { transcribe, transcriptionAvailable, useTranscript } from "../core/transcribe";
 import { Html, Linkified, firstUrl } from "./rich";
@@ -72,9 +71,9 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
           onClick={() => (msg.status === STATUS_FAILED ? retry(chat.id, msg) : undefined)}>
           {msg.replyTo && <div className="quote"><b>{reply ? nameOf(chat, reply.sender) : "Earlier message"}</b><span>{reply ? previewOf(reply) : "…"}</span></div>}
           <Content msg={msg} chat={chat} st={st} big={big} onOpen={onOpen} onVote={onVote} onEndPoll={onEndPoll} />
-          {last && !bare && (st.showMessageTimes || (mine && st.showReadTicks) || msg.edited || msg.room) && (
+          {last && !bare && (st.showMessageTimes || (mine && st.showReadTicks) || msg.edited) && (
             <div className="meta">
-              {msg.room && <NetDot room={msg.room} />}{starred && <Star size={11} />}{msg.edited && <i>edited</i>}{st.showMessageTimes && <span>{clock(msg.ts, st.timeFormat)}</span>}
+              {starred && <Star size={11} />}{msg.edited && <i>edited</i>}{st.showMessageTimes && <span>{clock(msg.ts, st.timeFormat)}</span>}
               {mine && st.showReadTicks && <span className={"ticks" + (read ? " read" : "")}>{tick}</span>}
             </div>
           )}
@@ -202,12 +201,4 @@ function Words({ id, media, auto }: { id: string; media: string; auto: boolean }
   if (!can) return null;
   if (state === "busy") return <div className="words muted">Writing it out…</div>;
   return <button className="link words-btn" onClick={() => void transcribe(id, media)}>{state === "failed" ? "Couldn't write it out. Try again" : "Write it out"}</button>;
-}
-
-/** In a merged chat: a small coloured dot and the network's name, so you can tell which network a message went through. */
-function NetDot({ room }: { room: string }) {
-  const net = useStore((s) => s.chats[room]?.network);
-  if (!net) return null;
-  const m = networkMeta(net);
-  return <span className="net-dot" title={m.label}><i style={{ background: m.color }} />{m.label}</span>;
 }
