@@ -509,61 +509,65 @@ class Store(private val context: Context) {
                     SyncReducer.apply(_chats.value, raw, s.userId, initial)
                 }
                 _chats.value = r.chats
-                r.muted?.let { _muted.value = it }
-                // Pages whose newest events were all bookkeeping arrive with no messages: fetch a few older messages for the first of them now,
-                // so the list shows something to read instead of "No messages yet" until each one is opened.
-                if (initial) {
-                    val empty = r.chats.values.filter { it.messages.isEmpty() && !it.reachedStart }.take(25).map { it.id }
-                    if (empty.isNotEmpty()) scope.launch { for (id in empty) { loadOlder(id); delay(150) } }
-                }
-                handleSettingsSync(r.accountData[settingsType], s.userId)
-                for ((type, c) in r.accountData) if (type.startsWith("app.pager.contacts.")) {
-                    val rows = ((c["rows"] as? JsonArray) ?: JsonArray(emptyList())).mapNotNull { row ->
-                        val a = row as? JsonArray
-                        val n = (a?.getOrNull(0) as? JsonPrimitive)?.takeIf { p -> p.isString }?.content; val nm = (a?.getOrNull(1) as? JsonPrimitive)?.takeIf { p -> p.isString }?.content
-                        if (n != null && nm != null) n to nm else null
-                    }
-                    Names.add(rows, override = true, mine = true)
-                    (c["chunks"] as? JsonPrimitive)?.content?.toIntOrNull()?.let { contactChunks = maxOf(contactChunks, it) }
-                }
-                r.accountData["app.pager.links"]?.let { c ->
-                    val ser = kotlinx.serialization.serializer<List<List<String>>>()
-                    runCatching { json.decodeFromJsonElement(ser, c["groups"] ?: JsonArray(emptyList())) }.onSuccess { _links.value = it; writeJson("links", ser, it) }
-                }
-                r.accountData["app.pager.favorite_gifs"]?.let { c ->
-                    runCatching { json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), c["gifs"] ?: JsonArray(emptyList())) }
-                        .onSuccess { _favoriteGifs.value = it; writeJson("favoriteGifs", kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), it) }
-                }
-                r.userStickers?.let { _userStickers.value = it; writeJson("userStickers", StickerPack.serializer().nullable, it) }
-                r.invites.forEach { id -> scope.launch { runCatching { matrix.join(id) } } }
-                val muted = _muted.value
-                val st = settings.value
-                // Beeper-style: muted and low-priority chats stay quiet except for @mentions and replies to you.
-                val cal = java.util.Calendar.getInstance()
-                val nowMin = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
-                val day = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
-                for (m in r.incoming) {
-                    val c = r.chats[m.roomId]
-                    // Inside that page you get a small sound instead of a notification.
-                    if (st.convoSounds && appInForeground && m.roomId == openRoom) { ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume); continue }
-                    val d = NotifyPolicy.decide(m, quiet = m.roomId in muted || c?.lowPriority == true, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st)
-                    if (!d.show) continue
-                    val out = m.copy(silent = d.silent, preview = d.preview)
-                    if (st.notifDelaySec > 0) {
-                        // Wait, and drop the alert if you read the chat somewhere else in the meantime.
-                        scope.launch {
-                            delay(st.notifDelaySec * 1000L)
-                            val cc = _chats.value[m.roomId]
-                            if (cc != null && (cc.unread > 0 || cc.markedUnread)) _incoming.tryEmit(out)
-                        }
-                    } else _incoming.tryEmit(out)
-                }
-                if (settings.value.unarchiveOnMessage) {
-                    r.incoming.map { it.roomId }.distinct().filter { it !in muted && r.chats[it]?.archived == true }.forEach { setTag(it, "u.archived", false) }
-                }
-                expireMutes()
+                // The update is in: move on to the next one now, whatever the notifications and bookkeeping below do. One failure there must never
+                // make this phone read the same update again forever (that left it out of step with your other devices).
                 since = (res["next_batch"] as? JsonPrimitive)?.content ?: since
                 lastSyncOk = System.currentTimeMillis()
+                try {
+                    r.muted?.let { _muted.value = it }
+                    // Pages whose newest events were all bookkeeping arrive with no messages: fetch a few older messages for the first of them now,
+                    // so the list shows something to read instead of "No messages yet" until each one is opened.
+                    if (initial) {
+                        val empty = r.chats.values.filter { it.messages.isEmpty() && !it.reachedStart }.take(25).map { it.id }
+                        if (empty.isNotEmpty()) scope.launch { for (id in empty) { loadOlder(id); delay(150) } }
+                    }
+                    handleSettingsSync(r.accountData[settingsType], s.userId)
+                    for ((type, c) in r.accountData) if (type.startsWith("app.pager.contacts.")) {
+                        val rows = ((c["rows"] as? JsonArray) ?: JsonArray(emptyList())).mapNotNull { row ->
+                            val a = row as? JsonArray
+                            val n = (a?.getOrNull(0) as? JsonPrimitive)?.takeIf { p -> p.isString }?.content; val nm = (a?.getOrNull(1) as? JsonPrimitive)?.takeIf { p -> p.isString }?.content
+                            if (n != null && nm != null) n to nm else null
+                        }
+                        Names.add(rows, override = true, mine = true)
+                        (c["chunks"] as? JsonPrimitive)?.content?.toIntOrNull()?.let { contactChunks = maxOf(contactChunks, it) }
+                    }
+                    r.accountData["app.pager.links"]?.let { c ->
+                        val ser = kotlinx.serialization.serializer<List<List<String>>>()
+                        runCatching { json.decodeFromJsonElement(ser, c["groups"] ?: JsonArray(emptyList())) }.onSuccess { _links.value = it; writeJson("links", ser, it) }
+                    }
+                    r.accountData["app.pager.favorite_gifs"]?.let { c ->
+                        runCatching { json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), c["gifs"] ?: JsonArray(emptyList())) }
+                            .onSuccess { _favoriteGifs.value = it; writeJson("favoriteGifs", kotlinx.serialization.builtins.ListSerializer(Gif.serializer()), it) }
+                    }
+                    r.userStickers?.let { _userStickers.value = it; writeJson("userStickers", StickerPack.serializer().nullable, it) }
+                    r.invites.forEach { id -> scope.launch { runCatching { matrix.join(id) } } }
+                    val muted = _muted.value
+                    val st = settings.value
+                    // Beeper-style: muted and low-priority chats stay quiet except for @mentions and replies to you.
+                    val cal = java.util.Calendar.getInstance()
+                    val nowMin = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+                    val day = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
+                    for (m in r.incoming) {
+                        val c = r.chats[m.roomId]
+                        // Inside that page you get a small sound instead of a notification.
+                        if (st.convoSounds && appInForeground && m.roomId == openRoom) { ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume); continue }
+                        val d = NotifyPolicy.decide(m, quiet = m.roomId in muted || c?.lowPriority == true, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st)
+                        if (!d.show) continue
+                        val out = m.copy(silent = d.silent, preview = d.preview)
+                        if (st.notifDelaySec > 0) {
+                            // Wait, and drop the alert if you read the chat somewhere else in the meantime.
+                            scope.launch {
+                                delay(st.notifDelaySec * 1000L)
+                                val cc = _chats.value[m.roomId]
+                                if (cc != null && (cc.unread > 0 || cc.markedUnread)) _incoming.tryEmit(out)
+                            }
+                        } else _incoming.tryEmit(out)
+                    }
+                    if (settings.value.unarchiveOnMessage) {
+                        r.incoming.map { it.roomId }.distinct().filter { it !in muted && r.chats[it]?.archived == true }.forEach { setTag(it, "u.archived", false) }
+                    }
+                    expireMutes()
+                } catch (e: CancellationException) { throw e } catch (e: Throwable) { noteSyncProblem("handling an update", e) }
                 _synced.value = true
                 backoff = 1000L
                 if (res === raw) _syncProblem.value = null

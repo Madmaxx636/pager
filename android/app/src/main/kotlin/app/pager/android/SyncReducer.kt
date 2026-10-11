@@ -59,6 +59,8 @@ object SyncReducer {
         val invites = rooms["invite"].obj().keys.toList()
 
         for ((roomId, roomEl) in rooms["join"].obj()) {
+          // One chat with something unreadable in it must not stop every other chat from updating.
+          try {
             val room = roomEl.obj()
             var chat = chats[roomId] ?: ChatState(roomId)
             for (e in room["state"].obj()["events"].arr()) chat = applyState(chat, e.obj())
@@ -90,6 +92,7 @@ object SyncReducer {
             room["summary"].obj()["m.joined_member_count"].int()?.let { chat = chat.copy(memberCount = it) }
             val count = room["unread_notifications"].obj()["notification_count"].int()
             chats[roomId] = chat.copy(unread = count ?: chat.unread)
+          } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Throwable) { android.util.Log.w("Pager", "could not read an update for $roomId", e) }
         }
 
         for (roomId in rooms["leave"].obj().keys) chats.remove(roomId)

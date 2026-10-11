@@ -102,7 +102,8 @@ data class AppSettings(
     val greetings: Boolean = true,            // a silly pager message when the app opens
     val groupGapMin: Int = 5,
     val markReadMode: String = "scrolled",     // open | scrolled | manual
-    val openAtFirstUnread: Boolean = true,
+    /** Open a chat at its 'New messages' line instead of at the newest message. */
+    val openAtUnread: Boolean = false,
     val gifProvider: String = "giphy",         // giphy | tenor
     val gifKey: String = "",
     val quickReactions: List<String> = DEFAULT_QUICK_REACTIONS,

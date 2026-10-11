@@ -113,7 +113,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const el = scroller.current; if (!el || !chat) return;
     if (opened.current !== roomId) {
       opened.current = roomId;
-      const div = st.openAtFirstUnread ? el.querySelector("#unread-divider") : null;
+      const div = st.openAtUnread ? el.querySelector("#unread-divider") : null;
       if (div) { (div as HTMLElement).scrollIntoView({ block: "center" }); stick.current = false; } else { el.scrollTop = el.scrollHeight; stick.current = true; }
     } else if (prevTop.current.first && messages[0]?.id !== prevTop.current.first && !stick.current) {
       el.scrollTop += el.scrollHeight - prevTop.current.height; // older messages were prepended
@@ -123,6 +123,14 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     prevTop.current = { first: messages[0]?.id, height: el.scrollHeight };
   }, [roomId, messages, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { opened.current = ""; stick.current = true; setReplyTo(undefined); setEditing(undefined); }, [roomId]);
+  // Pictures and videos change the chat's height as they load: stay at the newest message while you haven't scrolled up.
+  useEffect(() => {
+    const el = scroller.current; if (!el) return;
+    const pin = () => { if (stick.current) el.scrollTop = el.scrollHeight; };
+    el.addEventListener("load", pin, true); el.addEventListener("loadedmetadata", pin, true);
+    const ro = new ResizeObserver(pin); if (el.firstElementChild) ro.observe(el.firstElementChild); ro.observe(el);
+    return () => { el.removeEventListener("load", pin, true); el.removeEventListener("loadedmetadata", pin, true); ro.disconnect(); };
+  }, [roomId, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
   const mayMark = () => st.markReadMode === "open" || (st.markReadMode === "scrolled" && stick.current && document.hasFocus());
   useEffect(() => { if (mayMark()) markRead(roomId); }, [roomId, messages.length, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const f = () => mayMark() && markRead(roomId); window.addEventListener("focus", f); return () => window.removeEventListener("focus", f); }, [roomId, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
