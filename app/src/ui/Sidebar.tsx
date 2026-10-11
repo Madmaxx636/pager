@@ -54,7 +54,7 @@ function rowAction(a: RowAction, c: ChatSummary, setUndo: (u?: { label: string; 
 export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: string | null; onSelect: (id: string) => void; nav: Nav; onAccounts: () => void }) {
   const st = useSettings();
   const everything = useInbox();
-  const stories = everything.find((c) => c.stories);
+  const stories = st.hideStories ? undefined : everything.find((c) => c.stories);
   const all = everything.filter((c) => !c.stories);
   const synced = useStore((s) => s.synced);
   const bridges = useStore((s) => s.bridges);

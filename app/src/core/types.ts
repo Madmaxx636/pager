@@ -85,6 +85,8 @@ export interface Incoming {
   ts: number;
   /** The message replies to something you wrote. */
   replyToMe?: boolean;
+  /** Someone reacted to a message (the text says how). */
+  reaction?: boolean;
 }
 
 export interface ChatSummary {

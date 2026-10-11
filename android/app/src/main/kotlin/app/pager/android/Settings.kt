@@ -59,6 +59,16 @@ data class AppSettings(
     val reduceMotion: Boolean = false,
     /** E-ink mode: black on white, no color, no animation, thick lines. */
     val eink: Boolean = false,
+    /** How bold E-ink text and lines are: 1 (light) to 4 (extra bold). */
+    val einkBold: Int = 2,
+    /** A quick white flash that clears ghosting on e-ink: off | chats (when opening or leaving a chat) | timed. */
+    val screenClean: String = "off",
+    val screenCleanSec: Int = 20,
+    val palette: String = "none",              // a ready-made look (see Palettes.kt), or none
+    val fontFamily: String = "system",
+    val reactionStyle: String = "filled",      // filled | outline
+    val hideStories: Boolean = false,
+    val reactionSound: String = "tick",
     /** Scales the whole interface (display size). */
     val keypad: String = "auto",               // d-pad and keypad phones: auto (when the phone has a d-pad or number keys) | on | off
     val smallScreen: String = "auto",          // tighter rows: auto (small screens only) | on | off

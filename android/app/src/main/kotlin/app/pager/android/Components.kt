@@ -61,7 +61,7 @@ fun Avatar(name: String, network: String?, size: Dp = 46.dp, mxc: String? = null
         Box(
             Modifier.size(size).clip(shape)
                 .background(if (eink) Brush.linearGradient(listOf(Color.White, Color.White)) else Brush.linearGradient(listOf(Color.hsv(h, 0.55f, 0.78f), Color.hsv((h + 28f) % 360f, 0.65f, 0.58f))))
-                .let { if (eink) it.border(2.dp, Color.Black, shape) else it },
+                .let { if (eink) it.border(inkDp(2f), Color.Black, shape) else it },
             contentAlignment = Alignment.Center,
         ) {
             if (img != null) Image(img, null, Modifier.size(size), contentScale = ContentScale.Crop, colorFilter = if (eink) androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) }) else null)

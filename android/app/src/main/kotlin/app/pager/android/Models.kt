@@ -178,6 +178,8 @@ data class Incoming(
     val silent: Boolean = false,
     /** Set by the notification policy: full | sender | hidden. */
     val preview: String = "full",
+    /** Someone reacted to a message (the text says how). */
+    val reaction: Boolean = false,
 )
 
 /** The bridge's own bot account (e.g. @signalbot:server). It sends a receipt when a message reaches the other network: that means "delivered", not "read". */

@@ -13,7 +13,7 @@ import kotlin.math.sin
 object ChatSounds {
     private class Note(val f: Double, val t: Double, val d: Double, val type: String = "sine", val g: Double = 0.7, val slideTo: Double? = null)
 
-    val choices = listOf("swoosh" to "Swoosh", "chime" to "Chime", "pop" to "Pop", "ding" to "Ding", "knock" to "Knock", "bubble" to "Bubble", "soft" to "Soft", "none" to "None")
+    val choices = listOf("swoosh" to "Swoosh", "chime" to "Chime", "pop" to "Pop", "ding" to "Ding", "knock" to "Knock", "bubble" to "Bubble", "soft" to "Soft", "pager" to "Pager (three beeps)", "beepbeep" to "Beep beep", "trill" to "Trill", "twotone" to "Two tone", "sendblip" to "Blip", "tick" to "Tick", "none" to "None")
 
     private val recipes = mapOf(
         "swoosh" to listOf(Note(380.0, 0.0, 0.16, slideTo = 1100.0)),
@@ -23,6 +23,13 @@ object ChatSounds {
         "knock" to listOf(Note(160.0, 0.0, 0.07, "triangle", 1.0), Note(150.0, 0.12, 0.08, "triangle", 1.0)),
         "bubble" to listOf(Note(400.0, 0.0, 0.16, g = 0.8, slideTo = 900.0)),
         "soft" to listOf(Note(660.0, 0.0, 0.3, g = 0.5), Note(784.0, 0.09, 0.34, g = 0.4)),
+        // The classic pager family: square-wave beeps like a little speaker.
+        "pager" to listOf(0.0, 0.16, 0.32).map { Note(2093.0, it, 0.09, "square", 0.45) },
+        "beepbeep" to listOf(0.0, 0.2).map { Note(1760.0, it, 0.13, "square", 0.45) },
+        "trill" to (0..5).map { Note(if (it % 2 == 1) 2093.0 else 1568.0, it * 0.055, 0.05, "square", 0.4) },
+        "twotone" to listOf(Note(1046.5, 0.0, 0.16, "triangle", 0.8), Note(1568.0, 0.17, 0.26, "triangle", 0.8)),
+        "sendblip" to listOf(Note(1200.0, 0.0, 0.07, "square", 0.35, 1900.0)),
+        "tick" to listOf(Note(2600.0, 0.0, 0.035, "square", 0.35), Note(3300.0, 0.05, 0.035, "square", 0.3)),
     )
 
     private const val RATE = 44100
@@ -41,7 +48,7 @@ object ChatSounds {
                 val x = i.toDouble() / len
                 val freq = if (n.slideTo != null) n.f * Math.pow(n.slideTo / n.f, x) else n.f
                 phase += 2 * PI * freq / RATE
-                val wave = if (n.type == "triangle") 2 / PI * kotlin.math.asin(sin(phase)) else sin(phase)
+                val wave = when (n.type) { "triangle" -> 2 / PI * kotlin.math.asin(sin(phase)); "square" -> if (sin(phase) >= 0) 1.0 else -1.0; else -> sin(phase) }
                 val attack = (i / (0.012 * RATE)).coerceAtMost(1.0)
                 val decay = exp(ln(0.0001) * x) // fade to near silence by the end of the note
                 if (start + i < mix.size) mix[start + i] += wave * attack * decay * n.g * 0.5

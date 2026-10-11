@@ -1,3 +1,4 @@
+import { FONTS, PALETTES } from "../core/palettes";
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { RowAction, ACCENTS, accentTones, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
@@ -232,11 +233,21 @@ function Appearance() {
   return (
     <>
       <Group title="Theme">
+        <Row title="Ready-made looks" hint="A whole colour set for the app. Choose “Mode and accent” to go back to your own mix."><div className="swatches looks">
+          <button className={s.palette === "none" ? "on" : ""} style={{ background: "var(--panel-2)" }} onClick={() => updateSettings({ palette: "none" })} aria-label="Mode and accent" title="Mode and accent">{s.palette === "none" ? <Check size={16} /> : null}</button>
+          {PALETTES.map((p) => <button key={p.id} className={s.palette === p.id ? "on" : ""} style={{ background: `linear-gradient(135deg, ${p.bg} 50%, ${p.accent} 50%)`, border: `2px solid ${p.line}` }} onClick={() => updateSettings({ palette: p.id, accent: "custom", accentCustom: p.accent })} aria-label={p.name} title={p.name}>{s.palette === p.id ? <Check size={16} color={p.text} /> : null}</button>)}
+        </div></Row>
         <Select title="Mode" value={s.themeMode} options={[["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black (AMOLED)"]]} onChange={(v) => updateSettings({ themeMode: v })} />
         <Row title="Accent color"><div className="swatches">{Object.entries(ACCENTS).map(([name, c]) => <button key={name} className={s.accent === name ? "on" : ""} style={{ background: c.dark }} onClick={() => updateSettings({ accent: name })} aria-label={name}>{s.accent === name ? <Check size={16} color={c.onDark} /> : null}</button>)}{window.pagerDesktop && <button className={"swatch-system" + (s.accent === "system" ? " on" : "")} onClick={() => updateSettings({ accent: "system" })} aria-label="Match my system accent" title="Match my system accent"><Monitor size={14} color="#fff" /></button>}<button className={"swatch-custom" + (s.accent === "custom" ? " on" : "")} style={s.accent === "custom" ? { background: s.accentCustom } : undefined} onClick={() => setPicker(true)} aria-label="Make your own">{s.accent === "custom" ? <Check size={16} color={accentTones("custom", s.accentCustom).onDark} /> : <Palette size={15} color="#fff" />}</button></div></Row>
         {picker && <ColorDialog value={s.accent === "custom" ? s.accentCustom : accentTones(s.accent, s.accentCustom).light} onClose={() => setPicker(false)} onPick={(c) => { updateSettings({ accent: "custom", accentCustom: c }); setPicker(false); }} />}
       </Group>
+      <Group title="Size & font">
+        <Select title="App size" hint="Makes everything bigger or smaller, not only the text" value={s.uiScale} options={[["small", "Small"], ["medium", "Medium"], ["large", "Large"]]} onChange={(v) => updateSettings({ uiScale: v })} />
+        <Select title="Font" value={s.fontFamily} options={FONTS.map((f) => [f[0], f[1]] as [string, string])} onChange={(v) => updateSettings({ fontFamily: v })} />
+      </Group>
       <Group title="Text & messages">
+        <Select title="Reactions" value={s.reactionStyle} options={[["filled", "Filled"], ["outline", "Outline"]]} onChange={(v) => updateSettings({ reactionStyle: v })} />
+        <SwitchRow title="Hide Stories" hint="Removes the Stories row (WhatsApp status updates) from the list" checked={s.hideStories} onChange={(v) => updateSettings({ hideStories: v })} />
         <Row title="Text size" hint={`${Math.round(s.fontScale * 100)}%`}><input type="range" min="0.85" max="1.4" step="0.05" value={s.fontScale} onChange={(e) => updateSettings({ fontScale: Number(e.target.value) })} /></Row>
         <Select title="Bubble style" value={s.bubbleStyle} options={[["round", "Rounded"], ["soft", "Extra round"], ["square", "Square"], ["tail", "Tail"], ["outline", "Outline"], ["plain", "No bubbles"]]} onChange={(v) => updateSettings({ bubbleStyle: v })} />
         <Select title="Bubble fill" hint="How your own messages are colored" value={s.bubbleFill} options={[["solid", "Solid"], ["gradient", "Gradient"], ["tinted", "Soft tint"]]} onChange={(v) => updateSettings({ bubbleFill: v })} />
@@ -304,6 +315,7 @@ function Notifications() {
       <Group title="Sounds" footer="Each app and each page can have its own sound. Muted and quiet-hours messages stay silent.">
         <SwitchRow title="Sounds inside a page" hint="A little sound when you send or get a message in the page you have open" checked={s.convoSounds} onChange={(v) => updateSettings({ convoSounds: v })} />
         <Select title="Send sound" value={s.sendSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ sendSound: v }); playSound(v, s.convoSoundVolume); }} />
+        <Select title="Reaction sound" value={s.reactionSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ reactionSound: v }); playSound(v, s.convoSoundVolume); }} />
         <Select title="Receive sound" value={s.receiveSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ receiveSound: v }); playSound(v, s.convoSoundVolume); }} />
         <Row title="Page sound volume" hint={`${Math.round(s.convoSoundVolume * 100)}%`}><input type="range" min="0" max="1" step="0.05" value={s.convoSoundVolume} disabled={!s.convoSounds} onChange={(e) => updateSettings({ convoSoundVolume: Number(e.target.value) })} /></Row>
         <Select title="Alert sound" value={s.notifSoundId} disabled={off} options={SOUNDS} onChange={(v) => { updateSettings({ notifSoundId: v }); playSound(v, s.notifSoundVolume); }} />

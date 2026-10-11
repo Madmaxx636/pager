@@ -291,7 +291,7 @@ fun MessageRow(
                     .let { if (fillBrush != null) it.background(fillBrush) else it.background(fill) }
                     .let {
                         when {
-                            outlined -> it.border(if (s.eink) (if (mine) 3.dp else 2.dp) else 1.5.dp, if (mine) scheme.primary else scheme.outlineVariant, shape)
+                            outlined -> it.border(if (s.eink) inkDp(if (mine) 3f else 2f) else 1.5.dp, if (mine) scheme.primary else scheme.outlineVariant, shape)
                             plain -> it.drawBehind { drawRect(if (mine) scheme.primary else scheme.outlineVariant, Offset.Zero, Size(3.dp.toPx(), size.height)) }
                             else -> it
                         }
@@ -375,8 +375,9 @@ fun MessageRow(
                     val pop = remember(key) { androidx.compose.animation.core.Animatable(if (s.reduceMotion) 1f else 0.4f) }
                     LaunchedEffect(key) { if (!s.reduceMotion) pop.animateTo(1f, androidx.compose.animation.core.spring(androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, androidx.compose.animation.core.Spring.StiffnessMedium)) }
                     Row(
-                        Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }.clip(CircleShape).background(if (minePicked) scheme.primary.copy(alpha = if (s.eink) 0.18f else 0.22f) else scheme.surface)
-                            .let { if (s.eink) it.border(if (minePicked) 3.dp else 2.dp, Color.Black, CircleShape) else it }
+                        Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }.clip(CircleShape)
+                            .let { if (s.eink || s.reactionStyle == "outline") it else it.background(if (minePicked) scheme.primary.copy(alpha = 0.22f) else scheme.surface) }
+                            .let { if (s.eink) it.border(inkDp(if (minePicked) 3f else 2f), Color.Black, CircleShape) else if (s.reactionStyle == "outline") it.border(if (minePicked) 3.dp else 1.5.dp, if (minePicked) scheme.primary else scheme.onSurface, CircleShape) else it }
                             .dpadFocus().combinedClickable(onClick = { onReact(key) }, onLongClick = { onWho(key) }).padding(horizontal = 9.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) { Text(key, fontSize = if (s.eink) 16.sp else 14.sp); if (who.size > 1) Text(" ${who.size}", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant) }
