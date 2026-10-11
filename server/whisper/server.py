@@ -1,6 +1,7 @@
 """A very small speech-to-text service for Pager. POST /transcribe with audio bytes, get {"text", "language"} back.
 Runs on this machine only: nothing is sent anywhere else. The model is downloaded once, then kept in /models."""
-import json, os, tempfile
+import json, os, subprocess
+import numpy as np
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Lock
 from faster_whisper import WhisperModel
@@ -25,14 +26,17 @@ class Handler(BaseHTTPRequestHandler):
         if size <= 0 or size > 25 * 1024 * 1024:
             return self._send(400, {"error": "bad size"})
         audio = self.rfile.read(size)
-        with tempfile.NamedTemporaryFile(suffix=".audio") as f:
-            f.write(audio); f.flush()
-            try:
-                with busy:
-                    segments, info = model.transcribe(f.name, vad_filter=True, beam_size=1)
-                    text = " ".join(s.text.strip() for s in segments).strip()
-            except Exception as e:  # unreadable audio
-                return self._send(422, {"error": str(e)[:200]})
+        try:
+            # ffmpeg reads whatever the phone or browser recorded (ogg/opus, m4a, webm...) and hands back 16 kHz mono samples.
+            pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", "pipe:0", "-f", "s16le", "-ac", "1", "-ar", "16000", "pipe:1"], input=audio, capture_output=True, timeout=120, check=True).stdout
+            samples = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
+            if samples.size == 0:
+                return self._send(422, {"error": "no audio"})
+            with busy:
+                segments, info = model.transcribe(samples, vad_filter=True, beam_size=1)
+                text = " ".join(s.text.strip() for s in segments).strip()
+        except Exception as e:  # unreadable audio
+            return self._send(422, {"error": str(e)[:200]})
         self._send(200, {"text": text, "language": info.language})
 
     def log_message(self, *a):  # do not log anything about what was said
