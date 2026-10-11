@@ -31,7 +31,7 @@ export function Avatar({ name, mxc, size = 44, network }: { name: string; mxc?: 
   const h = hueOf(name);
   return (
     <div className={"avatar" + (squircle ? " squircle" : "")} style={{ width: size, height: size, fontSize: size * 0.4 }}>
-      {src ? <img src={src} alt="" /> : <span style={{ background: `linear-gradient(135deg, hsl(${h} 55% 52%), hsl(${(h + 28) % 360} 62% 38%))` }}>{/^[\d\s+()-]+$/.test(name) ? <User size={size * 0.55} /> : (name.replace(/^[^\p{L}\p{N}]+/u, "")[0] ?? "?").toUpperCase()}</span>}
+      {src ? <img src={src} alt="" loading="lazy" decoding="async" /> : <span style={{ background: `linear-gradient(135deg, hsl(${h} 55% 52%), hsl(${(h + 28) % 360} 62% 38%))` }}>{/^[\d\s+()-]+$/.test(name) ? <User size={size * 0.55} /> : (name.replace(/^[^\p{L}\p{N}]+/u, "")[0] ?? "?").toUpperCase()}</span>}
       {meta && <i className="badge" style={{ background: meta.color, width: size * 0.4, height: size * 0.4, fontSize: size * 0.2 }} title={meta.label}>{NET_ICONS[network!] ? (() => { const I = NET_ICONS[network!]; return <I size={size * 0.24} strokeWidth={2.4} color="#fff" />; })() : meta.glyph}</i>}
     </div>
   );

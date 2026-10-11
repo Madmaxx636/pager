@@ -134,7 +134,12 @@ class Store(private val context: Context) {
         _solo.value = if (on) _solo.value + roomId else _solo.value - group.toSet()
     }
     /** The chat as the screen shows it: a person on several networks reads as one conversation, unless you picked a single network. */
-    fun chatMerged(roomId: String): Flow<ChatState?> = combine(_chats, _links, _solo) { chats, links, solo -> if (roomId in solo) chats[roomId] else Links.buildMerged(chats, links, roomId) ?: chats[roomId] }.distinctUntilChanged()
+    fun chatMerged(roomId: String): Flow<ChatState?> = combine(_chats, _links, _solo) { chats, links, solo ->
+        // Only the chats of this person matter: compare them by identity so a message in some other chat does no work here.
+        val ids = if (roomId in solo) listOf(roomId) else Links.groupOf(links, roomId)?.filter { it in chats } ?: listOf(roomId)
+        Triple(roomId in solo, links, ids.mapNotNull { chats[it] })
+    }.distinctUntilChanged { a, b -> a.first == b.first && a.second === b.second && a.third.size == b.third.size && a.third.indices.all { a.third[it] === b.third[it] } }
+        .map { (solo, links, group) -> if (solo || group.size < 2) group.firstOrNull { it.id == roomId } ?: group.firstOrNull() else Links.buildMerged(group.associateBy { it.id }, links, roomId) ?: group.firstOrNull { it.id == roomId } }
     /** In a merged view a message may belong to another chat of the same person: find the chat that has it. */
     fun roomFor(roomId: String, eventId: String): String {
         if (_chats.value[roomId]?.messages?.any { it.id == eventId } == true) return roomId
@@ -225,6 +230,7 @@ class Store(private val context: Context) {
 
     // --- Cache -------------------------------------------------------------------
 
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private fun loadCache(userId: String) {
         runCatching {
             // Bump when the way messages are read changes (e.g. pictures that arrive as edits), so old saved chats are read again.

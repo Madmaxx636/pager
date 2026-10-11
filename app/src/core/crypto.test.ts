@@ -9,7 +9,7 @@ class FakeServer {
   fallback: Record<string, Record<string, Record<string, any>>> = {};
   inbox: Record<string, Record<string, any[]>> = {};
   tx(user: string, device: string): Transport {
-    return async (method, path, body: any) => {
+    return async (_method, path, body: any) => {
       if (path.endsWith("/keys/upload")) {
         if (body.device_keys) (this.deviceKeys[user] ??= {})[device] = body.device_keys;
         for (const [id, key] of Object.entries(body.one_time_keys ?? {})) ((this.otks[user] ??= {})[device] ??= {})[id] = key;

@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot, isBotRoom, realPeople } from "../core/types";
 import { networkMeta } from "../core/emoji";
-import { getSettings, useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
+import { useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
   edit, enableEncryption, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory, setAlias, setSolo,
@@ -47,11 +47,12 @@ const notifSummary = (p?: ChatNotifPrefs) => !p || ((!p.level || p.level === "de
 const placeholderName = (chat: ChatState) => `${displayName(chat, me()).split(/\s+/)[0] || "chat"} · ${networkMeta(chat.network).label}`;
 const fullTime = (ts: number) => new Date(ts).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
 
-const NO_CHATS: Record<string, ChatState> = {};
 export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBack: () => void; nav: Nav; onForward: (m: Msg) => void }) {
   const dsk = true; // one header (name with the network switcher, Encrypted underneath) and one info panel on every screen
   const raw = useStore((s) => s.chats[roomId]);
-  const allChats = useStore((s) => s.chats), links = useStore((s) => s.links), solo = useStore((s) => s.solo);
+  const links = useStore((s) => s.links), solo = useStore((s) => s.solo);
+  // Only this person's own chats, so a message in some other chat does not redraw this one.
+  const allChats = useStore((s) => Object.fromEntries((groupOf(s.links, roomId) ?? [roomId]).filter((id) => s.chats[id]).map((id) => [id, s.chats[id]])));
   // A person on several networks reads as one conversation: every chat in their group, in time order.
   const merged = useMemo(() => (!solo.includes(roomId) ? buildMerged(allChats, links, roomId) : undefined), [solo, roomId, allChats, links]);
   const chat = merged ?? raw;
@@ -582,7 +583,6 @@ function LinkedBar({ chat, nav, roomId, merged }: { chat: ChatState; nav: Nav; r
   const [no, setNo] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("pager.linkNo") ?? "[]"); } catch { return []; } });
   const group = groupOf(links, chat.id)?.filter((id) => chats[id]);
   const user = me();
-  const dsk = true;
   const offer = useMemo(() => {
     if (isGroup(chat) || (group && group.length > 1)) return undefined;
     const cands = Object.values(chats).filter((c) => !isBotRoom(c, user)).map((c) => ({ id: c.id, name: displayName(c, user), network: c.network, isGroup: isGroup(c) }));

@@ -2,7 +2,7 @@ package app.pager.android
 
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.ChatBubble
-import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Forum
@@ -60,7 +60,7 @@ private val networks = mapOf(
 fun networkIcon(id: String): androidx.compose.ui.graphics.vector.ImageVector? = when (id) {
     "whatsapp" -> Icons.Rounded.Call
     "signal" -> Icons.Rounded.ChatBubble
-    "telegram" -> Icons.Rounded.Send
+    "telegram" -> Icons.AutoMirrored.Rounded.Send
     "discord" -> Icons.Rounded.SportsEsports
     "instagram" -> Icons.Rounded.PhotoCamera
     "messenger" -> Icons.Rounded.Forum

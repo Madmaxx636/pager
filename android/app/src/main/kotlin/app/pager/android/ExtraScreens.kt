@@ -32,7 +32,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.InsertDriveFile
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Star
@@ -201,7 +201,7 @@ fun SearchScreen(roomId: String?, onBack: () -> Unit, onOpen: (String) -> Unit) 
             SearchPill(q, { q = it }, if (roomId == null) "Search all messages" else "Search this page", Modifier.weight(1f))
         }
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("all" to ("All" to Icons.Rounded.Search), "images" to ("Photos" to Icons.Rounded.Image), "videos" to ("Videos" to Icons.Rounded.Videocam), "links" to ("Links" to Icons.Rounded.Link), "files" to ("Files" to Icons.Rounded.InsertDriveFile)).forEach { (id, v) ->
+            listOf("all" to ("All" to Icons.Rounded.Search), "images" to ("Photos" to Icons.Rounded.Image), "videos" to ("Videos" to Icons.Rounded.Videocam), "links" to ("Links" to Icons.Rounded.Link), "files" to ("Files" to Icons.AutoMirrored.Rounded.InsertDriveFile)).forEach { (id, v) ->
                 item {
                     val on = kind == id
                     Row(Modifier.clip(RoundedCornerShape(50)).background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { kind = id }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {

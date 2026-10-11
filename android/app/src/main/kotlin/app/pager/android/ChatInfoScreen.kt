@@ -28,7 +28,7 @@ import androidx.compose.material.icons.automirrored.rounded.Label
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.ExitToApp
-import androidx.compose.material.icons.rounded.InsertDriveFile
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.LowPriority
 import androidx.compose.material.icons.rounded.MarkChatUnread
@@ -140,7 +140,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 "links" -> if (links.isEmpty()) Text("No links shared.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else SettingsGroup { links.take(40).forEachIndexed { i, (m, u) -> if (i > 0) GroupDivider(); NavRow(u, "${c.nameOf(m.sender)} · ${timeLabel(m.ts)}", Icons.Rounded.Link, Color(0xFF0EA5E9)) { runCatching { store.openUrl(android.net.Uri.parse(u)) } } } }
                 else -> if (files.isEmpty()) Text("No files shared.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                else SettingsGroup { files.take(40).forEachIndexed { i, m -> if (i > 0) GroupDivider(); NavRow(m.body.ifEmpty { previewOf(m) }, "${c.nameOf(m.sender)} · ${m.size?.let { humanSize(it) } ?: ""}", Icons.Rounded.InsertDriveFile, Color(0xFF14B8A6)) { m.mxc?.let { x -> scope.launch { store.media.open(x, m.body.ifEmpty { "file" }, m.mime) } } } } }
+                else SettingsGroup { files.take(40).forEachIndexed { i, m -> if (i > 0) GroupDivider(); NavRow(m.body.ifEmpty { previewOf(m) }, "${c.nameOf(m.sender)} · ${m.size?.let { humanSize(it) } ?: ""}", Icons.AutoMirrored.Rounded.InsertDriveFile, Color(0xFF14B8A6)) { m.mxc?.let { x -> scope.launch { store.media.open(x, m.body.ifEmpty { "file" }, m.mime) } } } } }
             }
 
             SettingsGroup("Members${members?.let { " (${it.size})" } ?: ""}") {

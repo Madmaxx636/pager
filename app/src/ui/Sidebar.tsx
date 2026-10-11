@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlarmClock, Archive, ArchiveRestore, BellOff, CheckCheck, CircleDot, Circle, CheckCircle2, Inbox, ListFilter, MailOpen, MessageSquareDot, MoreVertical, Pin,
-  PinOff, Trash2, Search, Settings as SettingsIcon, Hourglass, SquarePen, Star, Tag, TriangleAlert, Users, ArrowDownToLine, ChevronLeft, ChevronRight, UserRoundCog, X, BellRing, ArrowUpToLine,
+  PinOff, Trash2, Search, Settings as SettingsIcon, Hourglass, SquarePen, Star, Tag, TriangleAlert, Users, ArrowDownToLine, ChevronLeft, ChevronRight, UserRoundCog, X,
 } from "lucide-react";
 import { ChatSummary } from "../core/types";
 import { networkMeta } from "../core/emoji";
@@ -10,7 +10,7 @@ import {
   getState,
 } from "../core/store";
 import { RowAction, updateSettings, useSettings } from "../core/settings";
-import { Avatar, GroupAvatar, IconButton, Modal, SheetItem, TypingDots, WhenModal, EmptyState } from "./common";
+import { Avatar, GroupAvatar, IconButton, Modal, TypingDots, WhenModal, EmptyState } from "./common";
 import { needsAttention } from "./Accounts";
 import { Mascot } from "./Mascot";
 

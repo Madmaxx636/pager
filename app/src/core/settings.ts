@@ -311,7 +311,6 @@ export function applyTheme(s: AppSettings) {
   r.style.setProperty("--font-scale", String(s.fontScale));
   // Desktop app: borrow the operating system's colors (KDE Plasma, GNOME, Windows, macOS).
   const sys = s.themeFollowSystem && window.pagerDesktop ? system : undefined;
-  const props = ["--bg", "--panel", "--panel-2", "--line", "--text", "--muted", "--theirs"];
   if (sys?.bg && sys.fg && sys.panel) {
     const isDark = lum(sys.bg) < 0.4;
     r.dataset.theme = isDark ? "dark" : "light";

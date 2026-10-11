@@ -36,7 +36,7 @@ import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.EmojiEmotions
@@ -69,7 +69,7 @@ import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material.icons.rounded.Save
-import androidx.compose.material.icons.rounded.Help
+import androidx.compose.material.icons.automirrored.rounded.Help
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -375,7 +375,7 @@ private fun SettingsHome(navigate: (String) -> Unit, onBack: () -> Unit) {
             SettingsGroup {
                 NavRow("Appearance", "Theme, colors, text size, bubbles", Icons.Rounded.Palette, Color(0xFF8E6CF0)) { navigate("appearance") }; GroupDivider()
                 NavRow("Inbox & layout", "Tabs, pins, swipe actions, density", Icons.Rounded.Tune, Color(0xFF3B82F6)) { navigate("layout") }; GroupDivider()
-                NavRow("Pages", "Sending, reading, privacy, media", Icons.Rounded.Chat, Color(0xFF10B981)) { navigate("chats") }; GroupDivider()
+                NavRow("Pages", "Sending, reading, privacy, media", Icons.AutoMirrored.Rounded.Chat, Color(0xFF10B981)) { navigate("chats") }; GroupDivider()
                 NavRow("Notifications", "Previews, scope, quiet hours", Icons.Rounded.Notifications, Color(0xFFEF4444)) { navigate("notifications") }
             }
             SettingsGroup {
@@ -767,7 +767,7 @@ private fun AboutSettings(navigate: (String) -> Unit) {
             }; GroupDivider()
             Text("An open-source, self-hosted unified messenger.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant); GroupDivider()
             var touring by remember { mutableStateOf(false) }
-            NavRow("Show the welcome tour again", "The mascot walks you through Pager", Icons.Rounded.Help) { touring = true }
+            NavRow("Show the welcome tour again", "The mascot walks you through Pager", Icons.AutoMirrored.Rounded.Help) { touring = true }
             if (touring) TourGate(onGo = navigate.let { n -> { to: String -> n(to.removePrefix("settings/")) } }, forceOpen = true, onClose = { touring = false })
         }
         SettingsGroup("Account") {
@@ -819,13 +819,13 @@ private fun EncryptionGroup() {
     var dialog by remember { mutableStateOf<String?>(null) }
     SettingsGroup("Encryption", footer = "Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.") {
         NavRow("Encryption on this device", if (e.ready) "Ready · device ${e.deviceId}" else if (e.error != null) "Couldn't start: ${e.error}. Tap to try again" else "Starting…", Icons.Rounded.Lock) { if (!e.ready && e.error != null) scope.launch { store.retryEncryptionStart() } }
-        if (e.mismatch) { GroupDivider(); NavRow("This phone's keys don't match your account", "New messages can't be read here. Tap to sign out, then sign in again and enter your recovery key.", Icons.Rounded.Help) { store.signOut() } }
-        if (e.ready && e.missing) { GroupDivider(); NavRow("This phone's keys haven't reached the server", "Apps can't send it messages until they do. Check the connection; Pager keeps trying. If it stays like this, sign out and in again.", Icons.Rounded.Help) {} }
-        problem?.let { GroupDivider(); NavRow("Last problem reading updates", it, Icons.Rounded.Help) {} }
+        if (e.mismatch) { GroupDivider(); NavRow("This phone's keys don't match your account", "New messages can't be read here. Tap to sign out, then sign in again and enter your recovery key.", Icons.AutoMirrored.Rounded.Help) { store.signOut() } }
+        if (e.ready && e.missing) { GroupDivider(); NavRow("This phone's keys haven't reached the server", "Apps can't send it messages until they do. Check the connection; Pager keeps trying. If it stays like this, sign out and in again.", Icons.AutoMirrored.Rounded.Help) {} }
+        problem?.let { GroupDivider(); NavRow("Last problem reading updates", it, Icons.AutoMirrored.Rounded.Help) {} }
         val crashPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("pager.crash", android.content.Context.MODE_PRIVATE)
         var crash by remember { mutableStateOf(crashPrefs.getString("last", null)) }
         val clip = LocalClipboardManager.current
-        crash?.let { c -> GroupDivider(); NavRow("The app closed unexpectedly last time", "Tap to copy the details and send them to me. ${c.lineSequence().drop(1).firstOrNull().orEmpty().take(120)}", Icons.Rounded.Help) { clip.setText(AnnotatedString(c)); crashPrefs.edit().remove("last").apply(); crash = null } }
+        crash?.let { c -> GroupDivider(); NavRow("The app closed unexpectedly last time", "Tap to copy the details and send them to me. ${c.lineSequence().drop(1).firstOrNull().orEmpty().take(120)}", Icons.AutoMirrored.Rounded.Help) { clip.setText(AnnotatedString(c)); crashPrefs.edit().remove("last").apply(); crash = null } }
         if (e.ready) { GroupDivider(); NavRow("Device fingerprint", e.fingerprint.chunked(4).joinToString(" "), Icons.Rounded.Key) {} }
         GroupDivider()
         NavRow(
@@ -835,7 +835,7 @@ private fun EncryptionGroup() {
         if (e.backupOnServer && !e.backupHere) { GroupDivider(); NavRow("Make a new recovery key instead", null, Icons.Rounded.Refresh) { dialog = "create" } }
         if (e.ready) {
             GroupDivider()
-            NavRow("Lost your recovery key?", if (e.backupHere) "This phone still has your keys: choose Recovery key above and replace it" else "Use a key file below, or make a new key. Without either, older encrypted messages can't be read here", Icons.Rounded.Help) {}
+            NavRow("Lost your recovery key?", if (e.backupHere) "This phone still has your keys: choose Recovery key above and replace it" else "Use a key file below, or make a new key. Without either, older encrypted messages can't be read here", Icons.AutoMirrored.Rounded.Help) {}
             GroupDivider(); NavRow("Encrypt all my pages", "Turns on encryption for every page that can take it. Older messages stay readable on your server", Icons.Rounded.Lock) { dialog = "all" }
             GroupDivider(); NavRow("Advanced: save keys to a file", "Not your recovery key. A separate file you protect with a passphrase you choose", Icons.Rounded.Save) { dialog = "export" }
             GroupDivider(); NavRow("Advanced: restore keys from a file", "Only for a file made with the row above. Asks for that file's passphrase", Icons.Rounded.FileOpen) { dialog = "import" }

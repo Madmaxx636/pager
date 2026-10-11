@@ -47,8 +47,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Inbox
-import androidx.compose.material.icons.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.LowPriority
 import androidx.compose.material.icons.rounded.ManageAccounts
 import androidx.compose.material.icons.rounded.MarkChatRead
@@ -317,8 +317,8 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             if (c.pinned) {
                 val order = all.filter { it.pinned && !it.archived }.sortedBy { it.pinOrder }.map { it.id }
                 val at = order.indexOf(c.id)
-                if (at > 0) SheetItem(Icons.Rounded.KeyboardArrowLeft, "Move earlier in pins", { menuFor = null; store.movePin(c.id, at - 1) })
-                if (at in 0 until order.lastIndex) SheetItem(Icons.Rounded.KeyboardArrowRight, "Move later in pins", { menuFor = null; store.movePin(c.id, at + 1) })
+                if (at > 0) SheetItem(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Move earlier in pins", { menuFor = null; store.movePin(c.id, at - 1) })
+                if (at in 0 until order.lastIndex) SheetItem(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Move later in pins", { menuFor = null; store.movePin(c.id, at + 1) })
             }
             SheetItem(if (unread) Icons.Rounded.MarkChatRead else Icons.Rounded.MarkChatUnread, if (unread) "Mark as read" else "Mark as unread", { menuFor = null; act("read", c) })
             SheetItem(Icons.Rounded.NotificationsOff, if (c.muted) "Unmute" else "Mute…", { menuFor = null; act("mute", c) })

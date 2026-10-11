@@ -10,7 +10,7 @@ import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
 import { playSound } from "./sounds";
-import { getSettings, inQuietHours, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
+import { getSettings, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
 import {
   ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isStoriesRoom, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
   labelsOf, lastPreview, lastTs, nameOf, previewOf,
@@ -64,11 +64,22 @@ function set(patch: Partial<State>) { state = { ...state, ...patch }; emit(); }
 export const getState = () => state;
 export const me = () => state.session?.userId ?? "";
 
+function shallowSame(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || typeof b !== "object" || !a || !b) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => Object.is((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+}
+
 export function useStore<T>(select: (s: State) => T): T {
   const cache = useRef<{ s: State; v: T } | undefined>(undefined);
   const get = () => {
     if (cache.current?.s === state) return cache.current.v;
-    const v = select(state);
+    let v = select(state);
+    // A selector that builds a new array or object each time (say, a few chats picked out) would redraw on every update even when nothing it
+    // picked changed. Keep the old one when every item is the same.
+    if (cache.current && shallowSame(cache.current.v, v)) v = cache.current.v;
     cache.current = { s: state, v };
     return v;
   };

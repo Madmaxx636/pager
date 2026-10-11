@@ -109,7 +109,7 @@ function Content({ msg, chat, st, big, onOpen, onVote, onEndPoll }: { msg: Msg; 
   switch (msg.type) {
     case "m.poll": return <PollCard msg={msg} chat={chat} onVote={onVote} onEnd={onEndPoll} />;
     case "m.image":
-      return img ? <div className="img-wrap"><img className={"media" + (msg.sticker ? " sticker" : "")} src={img} alt={msg.body} onClick={onOpen} />{isGif && !st.autoPlayGifs && <span className="gif-tag">GIF</span>}</div>
+      return img ? <div className="img-wrap"><img className={"media" + (msg.sticker ? " sticker" : "")} src={img} alt={msg.body} onClick={onOpen} loading="lazy" decoding="async" />{isGif && !st.autoPlayGifs && <span className="gif-tag">GIF</span>}</div>
         : <div className="media placeholder" style={{ aspectRatio: String(ratio) }} onClick={() => setTapped(true)}>{msg.status === STATUS_SENDING ? "Sending…" : !allowed ? `Click to load${msg.size ? ` · ${humanSize(msg.size)}` : ""}` : ""}</div>;
     case "m.video":
       return media ? <video className="media" src={media} controls preload="metadata" /> : <FileChip icon={Video} title={msg.body || "Video"} sub={msg.size ? `${humanSize(msg.size)} · click to load` : undefined} onClick={() => setTapped(true)} />;

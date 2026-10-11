@@ -36,14 +36,14 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContactPage
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.Gif
-import androidx.compose.material.icons.rounded.InsertDriveFile
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.PhotoCamera
@@ -53,7 +53,7 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.StickyNote2
+import androidx.compose.material.icons.automirrored.rounded.StickyNote2
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -92,9 +92,9 @@ enum class Attach(val label: String, val icon: ImageVector, val color: Color) {
     PHOTOS("Photos", Icons.Rounded.PhotoLibrary, Color(0xFF3B82F6)),
     CAMERA("Camera", Icons.Rounded.PhotoCamera, Color(0xFF6B7280)),
     GIF("GIF", Icons.Rounded.Gif, Color(0xFFEC4899)),
-    STICKERS("Stickers", Icons.Rounded.StickyNote2, Color(0xFFF59E0B)),
+    STICKERS("Stickers", Icons.AutoMirrored.Rounded.StickyNote2, Color(0xFFF59E0B)),
     EMOJI("Emoji", Icons.Rounded.EmojiEmotions, Color(0xFFEAB308)),
-    FILE("File", Icons.Rounded.InsertDriveFile, Color(0xFF14B8A6)),
+    FILE("File", Icons.AutoMirrored.Rounded.InsertDriveFile, Color(0xFF14B8A6)),
     POLL("Poll", Icons.Rounded.Poll, Color(0xFF8B5CF6)),
     CONTACT("Contact", Icons.Rounded.ContactPage, Color(0xFF0EA5E9)),
     LOCATION("Location", Icons.Rounded.LocationOn, Color(0xFFEF4444)),
@@ -191,7 +191,7 @@ fun StickerSheet(roomId: String, onPick: (Sticker) -> Unit, onAdd: () -> Unit, o
     var tab by remember { mutableStateOf(0) }
     Sheet(onDismiss) {
         Column(Modifier.heightIn(min = 380.dp, max = 520.dp)) {
-            if (packs.isEmpty()) EmptyState(Icons.Rounded.StickyNote2, "No stickers yet", "Add images from your photos and they become stickers you can send in any page.") { Button(onClick = onAdd) { Text("Add stickers") } }
+            if (packs.isEmpty()) EmptyState(Icons.AutoMirrored.Rounded.StickyNote2, "No stickers yet", "Add images from your photos and they become stickers you can send in any page.") { Button(onClick = onAdd) { Text("Add stickers") } }
             else {
                 LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(packs.size) { i ->
@@ -266,7 +266,7 @@ fun ActionsSheet(
         if (isText) onSelectText?.let { SheetItem(Icons.Rounded.TextFields, "Select text", it) }
         if (msg.mxc != null && !isText) {
             onSave?.let { SheetItem(Icons.Rounded.Download, if (msg.type == "m.image") "Save to gallery" else "Save to Downloads", it) }
-            onOpen?.let { SheetItem(Icons.Rounded.OpenInNew, "Open", it) }
+            onOpen?.let { SheetItem(Icons.AutoMirrored.Rounded.OpenInNew, "Open", it) }
         }
         onShare?.let { SheetItem(Icons.Rounded.Share, if (isText) "Share text" else "Share", it) }
         SheetItem(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (starred) "Remove star" else "Star", onStar)

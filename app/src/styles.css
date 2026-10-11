@@ -541,3 +541,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-fx="on"] .via { animation: fx-slide-up .3s ease both; }
 :root[data-fx="on"] .head-wrap .chev { transition: transform .22s cubic-bezier(.3, 1.4, .5, 1); }
 .group-av { position: relative; border-radius: 50%; background: color-mix(in srgb, var(--panel-2), var(--text) 6%); flex: none; overflow: hidden; } .group-av .face { position: absolute; border-radius: 50%; box-shadow: 0 0 0 2px var(--panel); overflow: hidden; display: block; } .group-av .face .avatar { width: 100% !important; height: 100% !important; }
+
+/* ---- Efficiency: long lists draw only what is on screen. ---- */
+.chat-row { content-visibility: auto; contain-intrinsic-size: auto 68px; }
+.photo-grid > * , .link-pick > * { content-visibility: auto; contain-intrinsic-size: auto 80px; }

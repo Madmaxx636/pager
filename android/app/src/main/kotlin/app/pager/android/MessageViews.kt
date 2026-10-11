@@ -60,7 +60,7 @@ import androidx.compose.material.icons.rounded.Done
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Gif
-import androidx.compose.material.icons.rounded.InsertDriveFile
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -334,7 +334,7 @@ fun MessageRow(
                         msg.type == "m.video" -> FileChip(Icons.Rounded.Videocam, msg.body.ifEmpty { "Video" }, msg.size, fg)
                         msg.type == "m.audio" -> AudioContent(msg, fg)
                         msg.type == "m.file" && (msg.mime?.contains("vcard") == true || msg.body.endsWith(".vcf")) -> ContactCard(msg, fg)
-                        msg.type == "m.file" -> FileChip(Icons.Rounded.InsertDriveFile, msg.body.ifEmpty { "File" }, msg.size, fg)
+                        msg.type == "m.file" -> FileChip(Icons.AutoMirrored.Rounded.InsertDriveFile, msg.body.ifEmpty { "File" }, msg.size, fg)
                         msg.type == "m.location" -> LocationCard(msg, fg)
                         msg.type == "m.emote" -> Text("* ${chat?.nameOf(msg.sender) ?: ""} ${msg.body}", color = fg, fontStyle = FontStyle.Italic)
                         bigEmoji -> Text(msg.body.trim(), fontSize = 44.sp, lineHeight = 52.sp)
