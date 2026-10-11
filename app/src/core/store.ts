@@ -379,6 +379,9 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       const initial = since === undefined;
       const r = applySync(state.chats, res, s.userId, initial);
       set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}), ...(r.userStickers ? { userStickers: r.userStickers } : {}) });
+      // Pages whose newest events were all bookkeeping arrive with no messages: fetch a few older messages for the first of them now, so
+      // the list shows something to read instead of "No messages yet" until each one is opened.
+      if (initial) { const empty = Object.values(r.chats).filter((c) => !c.messages.length && !c.reachedStart).slice(0, 25); empty.forEach((c, i) => window.setTimeout(() => loadOlder(c.id), 150 * i)); }
       if (r.userStickers) lsSet("pager.userStickers", r.userStickers);
       handleSettingsSync(r.accountData?.[settingsSyncType()], s.userId);
       for (const [type, c] of Object.entries(r.accountData ?? {})) if (type.startsWith("app.pager.contacts.")) {

@@ -113,7 +113,9 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     if (stick.current && st.markReadMode === "scrolled") markRead(roomId);
     if (el.scrollTop < 120) loadOlder(roomId);
   };
-  useEffect(() => { const el = scroller.current; if (el && el.scrollHeight <= el.clientHeight + 40) loadOlder(roomId); }, [roomId, messages.length]);
+  // An empty or short chat never scrolls, so the check above never fires and its history would stay blank until a message arrived:
+  // ask for older messages directly whenever there are few to show.
+  useEffect(() => { const el = scroller.current; if (messages.length < 30 || (el && el.scrollHeight <= el.clientHeight + 40)) loadOlder(roomId); }, [roomId, messages.length]);
   const [showJump, setShowJump] = useState(false);
   useEffect(() => { const el = scroller.current; if (!el) return; const f = () => setShowJump(el.scrollHeight - el.scrollTop - el.clientHeight > 400); el.addEventListener("scroll", f); return () => el.removeEventListener("scroll", f); }, [roomId]);
 

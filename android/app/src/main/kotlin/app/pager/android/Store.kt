@@ -445,6 +445,12 @@ class Store(private val context: Context) {
                 }
                 _chats.value = r.chats
                 r.muted?.let { _muted.value = it }
+                // Pages whose newest events were all bookkeeping arrive with no messages: fetch a few older messages for the first of them now,
+                // so the list shows something to read instead of "No messages yet" until each one is opened.
+                if (initial) {
+                    val empty = r.chats.values.filter { it.messages.isEmpty() && !it.reachedStart }.take(25).map { it.id }
+                    if (empty.isNotEmpty()) scope.launch { for (id in empty) { loadOlder(id); delay(150) } }
+                }
                 handleSettingsSync(r.accountData[settingsType], s.userId)
                 for ((type, c) in r.accountData) if (type.startsWith("app.pager.contacts.")) {
                     val rows = ((c["rows"] as? JsonArray) ?: JsonArray(emptyList())).mapNotNull { row ->

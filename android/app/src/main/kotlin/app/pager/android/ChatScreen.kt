@@ -241,6 +241,10 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onInfo: () -> Unit, onForward
             if (last != null && total > 0 && last >= total - 6) store.loadOlder(roomId)
         }
     }
+    // An empty or short chat never scrolls, so the "near the top" check above never fires and its history would stay blank until a message
+    // arrived. Ask for older messages directly whenever there are few to show.
+    val fewMessages = chat?.let { !it.reachedStart && it.messages.size < 30 } == true
+    LaunchedEffect(roomId, fewMessages, chat?.messages?.size) { if (fewMessages) store.loadOlder(roomId) }
     LaunchedEffect(roomId, s.markReadMode) { if (s.markReadMode == "scrolled") snapshotFlow { list.firstVisibleItemIndex <= 1 }.collect { atEnd -> if (atEnd) store.markRead(roomId) } }
     val showJump by remember { derivedStateOf { list.firstVisibleItemIndex > 3 } }
 
