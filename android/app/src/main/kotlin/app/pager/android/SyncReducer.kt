@@ -71,13 +71,17 @@ object SyncReducer {
             else if (chat.prevBatch == null && chat.messages.isEmpty() && prev != null) chat = chat.copy(prevBatch = prev)
 
             val pre = chat
-            chat = process(chat, claimOwn(tl["events"].arr().map { it.obj() }, ownGhosts(chat, me), me), applyStates = true) { m, parentSender ->
+            chat = process(chat, claimOwn(tl["events"].arr().map { it.obj() }, ownGhosts(chat, me), me), applyStates = true, onReaction = { sender, key, target ->
+                // Someone reacted to something you wrote: that is about you, so it alerts like a reply.
+                if (!initial && sender != me && target?.sender == me)
+                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(sender), "reacted $key to “${previewOf(target).take(60)}”", pre.network, pre.isGroup, false, System.currentTimeMillis(), replyToMe = true))
+            }, onNew = { m, parentSender ->
                 if (!initial && m.sender != me) {
                     val mine = pre.members[me] ?: me.removePrefix("@").substringBefore(':')
                     val mentioned = me in m.mentions || m.body.contains("@$mine", ignoreCase = true)
                     incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.isGroup, mentioned, m.ts, replyToMe = parentSender == me))
                 }
-            }
+            })
 
             for (e in room["ephemeral"].obj()["events"].arr()) chat = applyEphemeral(chat, e.obj(), me)
             for (e in room["account_data"].obj()["events"].arr()) chat = applyRoomAccountData(chat, e.obj())
@@ -112,7 +116,7 @@ object SyncReducer {
     }
 
     /** The core event loop shared by sync and history. */
-    private fun process(start: ChatState, events: List<JsonObject>, applyStates: Boolean, onNew: ((Msg, String?) -> Unit)?): ChatState {
+    private fun process(start: ChatState, events: List<JsonObject>, applyStates: Boolean, onNew: ((Msg, String?) -> Unit)?, onReaction: ((String, String, Msg?) -> Unit)? = null): ChatState {
         if (events.isEmpty()) return start
         var chat = start
         val msgs = start.messages.toMutableList()
@@ -174,7 +178,7 @@ object SyncReducer {
                     if (rel["rel_type"].str() == "m.annotation" && id != null && target != null && key != null && sender != null && id !in refs) {
                         refs[id] = ReactionRef(target, key, sender)
                         val list = reactions.getOrPut(target) { HashMap() }.getOrPut(key) { mutableListOf() }
-                        if (sender !in list) list.add(sender)
+                        if (sender !in list) { list.add(sender); onReaction?.invoke(sender, key, msgs.firstOrNull { it.id == target }) }
                     }
                 }
                 "m.room.redaction" -> {

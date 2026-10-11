@@ -22,6 +22,14 @@ class MediaLoader(private val context: Context, private val http: Http) {
     private val dir = File(context.cacheDir, "media").apply { mkdirs() }
     private val locks = HashMap<String, Mutex>()
 
+    init {
+        // Downloaded pictures live on disk, not in memory, and go after six hours.
+        Thread {
+            val cutoff = System.currentTimeMillis() - 6L * 3600_000
+            dir.walkBottomUp().filter { it.isFile && it.lastModified() < cutoff }.forEach { it.delete() }
+        }.start()
+    }
+
     private fun mxcParts(mxc: String): Pair<String, String>? =
         Regex("^mxc://([^/]+)/(.+)$").find(mxc)?.destructured?.let { it.component1() to it.component2() }
 
