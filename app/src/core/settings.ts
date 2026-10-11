@@ -1,3 +1,4 @@
+import { FONTS, paletteById } from "./palettes";
 import { useSyncExternalStore } from "react";
 
 /** Everything the user can tune. One JSON blob in localStorage. */
@@ -12,6 +13,15 @@ export interface AppSettings {
   /** The colour used when accent is "custom" (#rrggbb). */
   accentCustom: string;
   fontScale: number;
+  /** Size of the whole app, not only text. */
+  uiScale: "small" | "medium" | "large";
+  /** A ready-made look (see palettes.ts), or "none" to use the mode and accent. */
+  palette: string;
+  fontFamily: string;
+  reactionStyle: "filled" | "outline";
+  hideStories: boolean;
+  /** Sound when you get a reaction while inside that page. */
+  reactionSound: string;
   bubbleStyle: "round" | "soft" | "square" | "tail" | "outline" | "plain";
   bubbleFill: "solid" | "gradient" | "tinted";
   bubbleDepth: "flat" | "soft" | "raised";
@@ -121,7 +131,7 @@ export interface AppSettings {
 export const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 export const DEFAULTS: AppSettings = {
-  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
+  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
@@ -311,6 +321,17 @@ export function applyTheme(s: AppSettings) {
     r.style.setProperty("--accent", sys.accent);
     r.style.setProperty("--accent-ink", sys.accentInk ?? (lum(sys.accent) > 0.45 ? "#111418" : "#ffffff"));
   }
+  // A ready-made look replaces the surface colours (and E-ink replaces everything with black and white).
+  const pal = s.palette !== "none" ? paletteById(s.palette) : undefined;
+  if (pal) {
+    r.dataset.theme = pal.dark ? "dark" : "light";
+    const v: Record<string, string> = { "--bg": pal.bg, "--panel": pal.panel, "--panel-2": pal.panel2, "--line": pal.line, "--theirs": pal.theirs, "--text": pal.text, "--muted": pal.muted };
+    for (const [k, c] of Object.entries(v)) r.style.setProperty(k, c);
+  }
+  r.dataset.uiScale = s.uiScale;
+  r.dataset.reactions = s.reactionStyle;
+  const fam = FONTS.find((f) => f[0] === s.fontFamily)?.[2];
+  if (fam) r.style.setProperty("--font", fam); else r.style.removeProperty("--font");
   r.dataset.bubble = s.bubbleStyle;
   r.dataset.fill = s.bubbleFill;
   r.dataset.depth = s.bubbleDepth;

@@ -73,6 +73,7 @@ class MainActivity : FragmentActivity() {
                             GreetingOverlay()
                         }
                     }
+                    if (settings.eink && settings.screenClean != "off") ScreenCleanOverlay(settings.screenClean, settings.screenCleanSec)
                 }
             }
             LaunchedEffect(settings.hideInRecents) {
@@ -144,7 +145,7 @@ class MainActivity : FragmentActivity() {
         }
         LaunchedEffect(openRoom) { openRoom?.let { screen = "chat:$it"; openRoom = null } }
         // Tell the store which page is open, so the in-page sounds know where they belong.
-        SideEffect { store.openRoom = if (screen.startsWith("chat:")) screen.removePrefix("chat:") else null }
+        SideEffect { store.openRoom = if (screen.startsWith("chat:")) screen.removePrefix("chat:") else null; ScreenCleanTrigger.page = screen.substringBefore(':') }
         LaunchedEffect(shared, session != null) { if (shared != null && session != null) screen = "share" }
 
         if (session == null) { AuthScreen(store); return }

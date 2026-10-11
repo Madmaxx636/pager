@@ -484,7 +484,7 @@ class Store(private val context: Context) {
                 for (m in r.incoming) {
                     val c = r.chats[m.roomId]
                     // Inside that page you get a small sound instead of a notification.
-                    if (st.convoSounds && appInForeground && m.roomId == openRoom) { ChatSounds.play(st.receiveSound, st.convoSoundVolume); continue }
+                    if (st.convoSounds && appInForeground && m.roomId == openRoom) { ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume); continue }
                     val d = NotifyPolicy.decide(m, quiet = m.roomId in muted || c?.lowPriority == true, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st)
                     if (!d.show) continue
                     val out = m.copy(silent = d.silent, preview = d.preview)

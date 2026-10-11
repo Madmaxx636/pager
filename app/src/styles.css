@@ -406,3 +406,11 @@ code.copy { display: block; padding: 8px 12px; border-radius: 10px; background: 
 @keyframes tour-blink { 50% { opacity: 0; } }
 :root[data-motion="reduced"] .tour-bubble, :root[data-motion="reduced"] .tour-scrim { animation: none; }
 @media (max-width: 420px) { .tour-bubble { font-size: 16px; } .tour-mascot { width: 120px; height: 120px; } }
+
+/* ---- Look: font, whole-app size, E-ink, outlined reactions ---- */
+body { font-family: var(--font, "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif); }
+:root[data-ui-scale="small"] body { zoom: 0.88; } :root[data-ui-scale="large"] body { zoom: 1.15; }
+:root[data-ui-scale="small"] #root { height: calc(100vh / 0.88); } :root[data-ui-scale="large"] #root { height: calc(100vh / 1.15); }
+.swatches.looks { max-width: 260px; justify-content: flex-end; }
+:root[data-reactions="outline"] .reactions button { background: transparent; border: 1.5px solid var(--text); color: var(--text); }
+:root[data-reactions="outline"] .reactions button.mine { background: transparent; border-style: double; border-width: 4px; }

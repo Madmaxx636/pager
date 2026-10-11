@@ -174,7 +174,9 @@ fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int, k
 }
 
 /** True while E-ink mode is on. Lets plain helpers (no composition access) make faint things solid. */
-object Ink { @Volatile var on = false }
+object Ink { @Volatile var on = false; @Volatile var bold = 2 }
+/** A line width for E-ink drawings, thicker as you turn up the boldness (the default level gives [base]). */
+fun inkDp(base: Float) = (base * Ink.bold / 2f).dp
 
 /** Like Color.copy(alpha) for text, icons and lines, but never faint in E-ink mode: faded gray disappears on a fast-refresh screen. */
 fun Color.dim(alpha: Float): Color = if (Ink.on && alpha >= 0.4f) copy(alpha = 1f) else copy(alpha = alpha)
@@ -185,6 +187,7 @@ fun Color.dim(alpha: Float): Color = if (Ink.on && alpha >= 0.4f) copy(alpha = 1
  * a ~411dp phone. Manual uses your slider.
  */
 fun uiScaleFor(s: AppSettings, config: android.content.res.Configuration): Float {
+    when (s.scaleMode) { "small" -> return 0.88f; "medium" -> return 1f; "large" -> return 1.15f }
     if (s.scaleMode == "auto") return (config.smallestScreenWidthDp / 411f).coerceIn(0.8f, 1.6f)
     return s.uiScale.coerceIn(0.6f, 1.8f)
 }
@@ -215,7 +218,7 @@ fun wallpaperBrush(name: String, dark: Boolean): Brush? = when (name) {
 }
 
 @Composable
-fun isDarkTheme(s: AppSettings) = when (s.themeMode) { "light" -> false; "dark", "black" -> true; else -> isSystemInDarkTheme() }
+fun isDarkTheme(s: AppSettings) = paletteById(s.palette)?.dark ?: when (s.themeMode) { "light" -> false; "dark", "black" -> true; else -> isSystemInDarkTheme() }
 
 private fun Context.findActivity(): Activity? {
     var c = this
@@ -235,14 +238,42 @@ private val PagerTypography = Typography(
 )
 
 /** E-ink typography: every style at least semi-bold, titles and labels bold, so thin strokes don't vanish. */
-private val EinkTypography = PagerTypography.let { t ->
-    fun TextStyle.bold(w: FontWeight) = copy(fontWeight = w)
+private fun einkTypography(base: Typography, level: Int) = base.let { t ->
+    // Level 2 is the original look; each step either side moves every style one weight lighter or heavier.
+    fun TextStyle.bold(w: FontWeight) = copy(fontWeight = FontWeight(((w.weight + (level - 2) * 100)).coerceIn(300, 900)))
     Typography(
         displayLarge = t.displayLarge.bold(FontWeight.Bold), displayMedium = t.displayMedium.bold(FontWeight.Bold), displaySmall = t.displaySmall.bold(FontWeight.Bold),
         headlineLarge = t.headlineLarge.bold(FontWeight.ExtraBold), headlineMedium = t.headlineMedium.bold(FontWeight.ExtraBold), headlineSmall = t.headlineSmall.bold(FontWeight.Bold),
         titleLarge = t.titleLarge.bold(FontWeight.ExtraBold), titleMedium = t.titleMedium.bold(FontWeight.Bold), titleSmall = t.titleSmall.bold(FontWeight.Bold),
         bodyLarge = t.bodyLarge.bold(FontWeight.SemiBold), bodyMedium = t.bodyMedium.bold(FontWeight.SemiBold), bodySmall = t.bodySmall.bold(FontWeight.SemiBold),
         labelLarge = t.labelLarge.bold(FontWeight.Bold), labelMedium = t.labelMedium.bold(FontWeight.Bold), labelSmall = t.labelSmall.bold(FontWeight.Bold),
+    )
+}
+
+private fun typographyFor(s: AppSettings): Typography {
+    val base = PagerTypography.let { t -> fontFamilyFor(s.fontFamily)?.let { f -> t.copy(
+        displayLarge = t.displayLarge.copy(fontFamily = f), displayMedium = t.displayMedium.copy(fontFamily = f), displaySmall = t.displaySmall.copy(fontFamily = f),
+        headlineLarge = t.headlineLarge.copy(fontFamily = f), headlineMedium = t.headlineMedium.copy(fontFamily = f), headlineSmall = t.headlineSmall.copy(fontFamily = f),
+        titleLarge = t.titleLarge.copy(fontFamily = f), titleMedium = t.titleMedium.copy(fontFamily = f), titleSmall = t.titleSmall.copy(fontFamily = f),
+        bodyLarge = t.bodyLarge.copy(fontFamily = f), bodyMedium = t.bodyMedium.copy(fontFamily = f), bodySmall = t.bodySmall.copy(fontFamily = f),
+        labelLarge = t.labelLarge.copy(fontFamily = f), labelMedium = t.labelMedium.copy(fontFamily = f), labelSmall = t.labelSmall.copy(fontFamily = f),
+    ) } ?: t }
+    return if (s.eink) einkTypography(base, s.einkBold) else base
+}
+
+/** The colours of a ready-made look; the accent you chose still colours buttons and your own messages. */
+private fun paletteScheme(p: Palette, primary: Color, on: Color): ColorScheme {
+    val tertiary = hsl(primary).let { (h, s, l) -> fromHsl(h + 40f, s, l) }
+    return if (p.dark) darkColorScheme(
+        primary = primary, onPrimary = on, primaryContainer = primary.copy(alpha = 0.9f), onPrimaryContainer = on, secondary = primary, onSecondary = on,
+        secondaryContainer = p.panel2, onSecondaryContainer = p.text, tertiary = tertiary, onTertiary = onColor(tertiary), surfaceTint = primary,
+        background = p.bg, onBackground = p.text, surface = p.panel, onSurface = p.text, surfaceVariant = p.panel2, onSurfaceVariant = p.muted,
+        outline = p.muted, outlineVariant = p.line, surfaceContainer = p.panel, surfaceContainerHigh = p.panel2, surfaceContainerHighest = p.panel2, error = Color(0xFFFF7B7B),
+    ) else lightColorScheme(
+        primary = primary, onPrimary = on, primaryContainer = primary, onPrimaryContainer = on, secondary = primary, onSecondary = on,
+        secondaryContainer = p.panel2, onSecondaryContainer = p.text, tertiary = tertiary, onTertiary = onColor(tertiary), surfaceTint = primary,
+        background = p.bg, onBackground = p.text, surface = p.panel, onSurface = p.text, surfaceVariant = p.panel2, onSurfaceVariant = p.muted,
+        outline = p.muted, outlineVariant = p.line, surfaceContainer = p.panel, surfaceContainerHigh = p.panel2, surfaceContainerHighest = p.panel2, error = Color(0xFFC62828),
     )
 }
 
@@ -257,7 +288,7 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
     val config = androidx.compose.ui.platform.LocalConfiguration.current
     val keypad = rawSettings.keypad == "on" || (rawSettings.keypad == "auto" && keypadDevice(config))
     val settings = effectiveSettings(rawSettings, config.screenWidthDp, config.screenHeightDp, keypad)
-    Ink.on = settings.eink
+    Ink.on = settings.eink; Ink.bold = settings.einkBold.coerceIn(1, 4)
     val dark = isDarkTheme(settings)
     val context = LocalContext.current
     // The app has its own light/dark setting, so the system bars must follow it, not the phone's theme
@@ -270,7 +301,8 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
         controller.isAppearanceLightNavigationBars = !dark
         window.setWindowAnimations(if (settings.eink) 0 else android.R.style.Animation_Activity)
     }
-    val colors = if (settings.accent == "dynamic" && Build.VERSION.SDK_INT >= 31) {
+    val pal = if (settings.palette != "none") paletteById(settings.palette) else null
+    val colors = if (pal != null) paletteScheme(pal, accentTones(settings.accent, settings.accentCustom).let { if (pal.dark) it[0] else it[1] }, if (pal.dark) accentTones(settings.accent, settings.accentCustom)[2] else accentTones(settings.accent, settings.accentCustom)[3]) else if (settings.accent == "dynamic" && Build.VERSION.SDK_INT >= 31) {
         if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else scheme(dark, settings.themeMode == "black", settings.accent, settings.accentCustom)
     val base = LocalDensity.current
@@ -280,5 +312,5 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
         LocalDensity provides Density(base.density * uiScaleFor(rawSettings, config), base.fontScale * settings.fontScale),
         LocalKeypad provides keypad,
         androidx.compose.material3.LocalRippleConfiguration provides (if (settings.eink) null else if (keypad) androidx.compose.material3.RippleConfiguration(rippleAlpha = androidx.compose.material.ripple.RippleAlpha(draggedAlpha = 0.16f, focusedAlpha = 0.14f, hoveredAlpha = 0.08f, pressedAlpha = 0.3f)) else androidx.compose.material3.LocalRippleConfiguration.current),
-    ) { MaterialTheme(colorScheme = if (settings.eink) einkScheme() else colors, typography = if (settings.eink) EinkTypography else PagerTypography, shapes = PagerShapes, content = content) }
+    ) { MaterialTheme(colorScheme = if (settings.eink) einkScheme() else colors, typography = typographyFor(settings), shapes = PagerShapes, content = content) }
 }

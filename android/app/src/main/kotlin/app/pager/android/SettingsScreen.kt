@@ -12,6 +12,7 @@ import android.provider.Settings as AndroidSettings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -415,8 +416,14 @@ private fun AppearancePage() {
     var tapPicking by remember { mutableStateOf<String?>(null) }
     SettingsGroup("Display") {
         SwitchRow("Silly hello", "The pager says something goofy when you open the app", s.greetings) { v -> set { copy(greetings = v) } }; GroupDivider()
-        SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }; GroupDivider()
-        ChoiceRow("Display size", listOf("auto" to "Automatic (from this screen)", "manual" to "Manual"), s.scaleMode) { v -> set { copy(scaleMode = v) } }
+        SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }
+        if (s.eink) {
+            GroupDivider(); SliderRow("Boldness", s.einkBold.toFloat(), 1f..4f, listOf("", "Light", "Normal", "Bold", "Extra bold")[s.einkBold.coerceIn(1, 4)]) { v -> set { copy(einkBold = Math.round(v).coerceIn(1, 4)) } }
+            GroupDivider(); ChoiceRow("Screen clean", listOf("off" to "Off", "chats" to "When opening or leaving a chat", "timed" to "Every few seconds"), s.screenClean) { v -> set { copy(screenClean = v) } }
+            if (s.screenClean == "timed") { GroupDivider(); SliderRow("Every", s.screenCleanSec.toFloat(), 5f..120f, "${s.screenCleanSec} seconds") { v -> set { copy(screenCleanSec = (Math.round(v / 5f) * 5).coerceIn(5, 120)) } } }
+        }
+        GroupDivider()
+        ChoiceRow("Display size", listOf("auto" to "Automatic (from this screen)", "small" to "Small", "medium" to "Medium", "large" to "Large", "manual" to "Custom"), s.scaleMode) { v -> set { copy(scaleMode = v) } }
         if (s.scaleMode == "manual") { GroupDivider(); SliderRow("Size", s.uiScale, 0.6f..1.8f, "${(s.uiScale * 100).toInt()}%") { v -> set { copy(uiScale = Math.round(v * 40) / 40f) } } }
         GroupDivider(); ChoiceRow("Keypad mode (d-pad phones)", listOf("auto" to "Automatic", "on" to "Always", "off" to "Never"), s.keypad) { v -> set { copy(keypad = v) } }
         GroupDivider(); ChoiceRow("Small screen layout", listOf("auto" to "Automatic", "on" to "Always", "off" to "Never"), s.smallScreen) { v -> set { copy(smallScreen = v) } }
@@ -424,6 +431,18 @@ private fun AppearancePage() {
     var pickingColor by remember { mutableStateOf(false) }
     if (pickingColor) ColorPickerDialog(parseHex(s.accentCustom) ?: Color(0xFF0D9488), { pickingColor = false }) { c -> set { copy(accent = "custom", accentCustom = c.toHex()) }; pickingColor = false }
     SettingsGroup("Theme") {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text("Ready-made looks"); Text("A whole colour set for the app. The first circle goes back to your own mode and accent.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(10.dp))
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { set { copy(palette = "none") } }, contentAlignment = Alignment.Center) { if (s.palette == "none") Icon(Icons.Rounded.Check, "Mode and accent", modifier = Modifier.size(20.dp)) }
+                PALETTES.forEach { p ->
+                    Box(Modifier.size(38.dp).clip(CircleShape).background(Brush.linearGradient(listOf(p.bg, p.bg, p.accent, p.accent))).border(2.dp, p.line, CircleShape).dpadFocus()
+                        .clickable { set { copy(palette = p.id, accent = "custom", accentCustom = p.accent.toHex()) } }, contentAlignment = Alignment.Center) { if (s.palette == p.id) Icon(Icons.Rounded.Check, p.name, tint = p.text, modifier = Modifier.size(20.dp)) }
+                }
+            }
+        }
+        GroupDivider()
         ChoiceRow("Mode", listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark", "black" to "Black (AMOLED)"), s.themeMode) { v -> set { copy(themeMode = v) } }
         GroupDivider()
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -449,6 +468,9 @@ private fun AppearancePage() {
     }
     SettingsGroup("Text & messages") {
         SliderRow("Text size", s.fontScale, 0.85f..1.4f, "${(s.fontScale * 100).toInt()}%") { v -> set { copy(fontScale = (v * 20).toInt() / 20f) } }; GroupDivider()
+        ChoiceRow("Font", FONT_CHOICES, s.fontFamily) { v -> set { copy(fontFamily = v) } }; GroupDivider()
+        ChoiceRow("Reactions", listOf("filled" to "Filled", "outline" to "Outline"), s.reactionStyle) { v -> set { copy(reactionStyle = v) } }; GroupDivider()
+        SwitchRow("Hide Stories", "Removes the Stories row (WhatsApp status updates) from the list", s.hideStories) { v -> set { copy(hideStories = v) } }; GroupDivider()
         ChoiceRow("Bubble style", listOf("round" to "Rounded", "soft" to "Extra round", "square" to "Square", "tail" to "Tail", "outline" to "Outline", "plain" to "No bubbles"), s.bubbleStyle) { v -> set { copy(bubbleStyle = v) } }; GroupDivider()
         ChoiceRow("Bubble fill", listOf("solid" to "Solid", "gradient" to "Gradient", "tinted" to "Soft tint"), s.bubbleFill) { v -> set { copy(bubbleFill = v) } }; GroupDivider()
         ChoiceRow("Bubble depth", listOf("flat" to "Flat", "soft" to "Soft shadow", "raised" to "Raised"), s.bubbleDepth) { v -> set { copy(bubbleDepth = v) } }; GroupDivider()
@@ -502,6 +524,7 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
         SettingsGroup("Inside a page", footer = "A little sound when you send or get a message in the page you have open. Pages you are not looking at use your notification settings.") {
             SwitchRow("Sounds inside a page", null, s.convoSounds) { v -> set { copy(convoSounds = v) } }; GroupDivider()
             ChoiceRow("Send sound", ChatSounds.choices, s.sendSound, s.convoSounds) { v -> set { copy(sendSound = v) }; ChatSounds.play(v, s.convoSoundVolume) }; GroupDivider()
+            ChoiceRow("Reaction sound", ChatSounds.choices, s.reactionSound, s.convoSounds) { v -> set { copy(reactionSound = v) }; ChatSounds.play(v, s.convoSoundVolume) }; GroupDivider()
             ChoiceRow("Receive sound", ChatSounds.choices, s.receiveSound, s.convoSounds) { v -> set { copy(receiveSound = v) }; ChatSounds.play(v, s.convoSoundVolume) }; GroupDivider()
             SliderRow("Volume", s.convoSoundVolume, 0f..1f, "${(s.convoSoundVolume * 100).toInt()}%") { v -> set { copy(convoSoundVolume = (Math.round(v * 20) / 20f)) } }
         }

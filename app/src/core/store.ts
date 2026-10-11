@@ -399,7 +399,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       const when = new Date();
       for (const m of r.incoming) {
         const c = r.chats[m.roomId];
-        if (st.convoSounds && looking(m.roomId) && document.hasFocus()) { playSound(st.receiveSound, st.convoSoundVolume); continue; }
+        if (st.convoSounds && looking(m.roomId) && document.hasFocus()) { playSound(m.reaction ? st.reactionSound : st.receiveSound, st.convoSoundVolume); continue; }
         const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text,
           quiet: muted.includes(m.roomId) || (c ? isLowPriority(c) : false), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
         if (!d.show) continue;
@@ -454,7 +454,7 @@ function notify(m: Incoming, d: Decision) {
   const body = d.preview === "full" ? (m.isGroup ? `${m.sender}: ${m.text}` : m.text) : d.preview === "sender" ? m.sender : "New message";
   const desktop = window.pagerDesktop;
   // We play the sound ourselves (so it can differ per app and per contact) and keep the system notification quiet.
-  if (!d.silent) playSound(d.sound, getSettings().notifSoundVolume);
+  if (!d.silent) playSound(m.reaction ? getSettings().reactionSound : d.sound, getSettings().notifSoundVolume);
   if (desktop) { desktop.notify({ title: m.chat, body, roomId: m.roomId, silent: true }); return; }
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
   const n = new Notification(m.chat, { body, tag: m.roomId, silent: true });
