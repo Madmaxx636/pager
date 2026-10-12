@@ -72,7 +72,9 @@ fun networkIcon(id: String): androidx.compose.ui.graphics.vector.ImageVector? = 
 fun networkMeta(id: String) = networks[id] ?: NetworkMeta(id, Color(0xFF8A94A6), id.take(1).uppercase())
 
 /** Accent choices: (dark-theme tone, light-theme tone, on-color for dark, on-color for light). */
-val ACCENTS: Map<String, List<Color>> = mapOf(
+val ACCENTS: Map<String, List<Color>> by lazy { baseAccents + moreAccents() }
+
+private val baseAccents: Map<String, List<Color>> = mapOf(
     "teal" to listOf(Color(0xFF2DD4BF), Color(0xFF0D9488), Color(0xFF04201C), Color.White),
     "blue" to listOf(Color(0xFF60A5FA), Color(0xFF2563EB), Color(0xFF061A38), Color.White),
     "purple" to listOf(Color(0xFFC4A1FF), Color(0xFF7C3AED), Color(0xFF1E0B3D), Color.White),
@@ -81,6 +83,16 @@ val ACCENTS: Map<String, List<Color>> = mapOf(
     "green" to listOf(Color(0xFF86EFAC), Color(0xFF16A34A), Color(0xFF062B12), Color.White),
     "red" to listOf(Color(0xFFFCA5A5), Color(0xFFDC2626), Color(0xFF3B0A0A), Color.White),
 )
+
+/** More accent colours, made from a hue so each one reads well on light and on dark backgrounds. Same list as the web app. */
+private fun moreAccents(): Map<String, List<Color>> = listOf(
+    Triple("crimson", 350f, .8f), Triple("coral", 10f, .85f), Triple("amber", 38f, .9f), Triple("yellow", 50f, .9f), Triple("lime", 84f, .65f), Triple("mint", 150f, .6f),
+    Triple("emerald", 160f, .75f), Triple("cyan", 188f, .8f), Triple("sky", 204f, .85f), Triple("indigo", 240f, .7f), Triple("violet", 262f, .75f), Triple("magenta", 300f, .7f),
+    Triple("rose", 340f, .8f), Triple("brown", 28f, .45f), Triple("slate", 215f, .2f), Triple("gold", 45f, .85f),
+).associate { (name, h, sat) ->
+    val dark = fromHsl(h, sat, .72f); val light = fromHsl(h, sat, .4f)
+    name to listOf(dark, light, onColor(dark), onColor(light))
+}
 
 /** Parses "#RRGGBB" (or without the #); null if it isn't a colour. */
 fun parseHex(s: String): Color? = runCatching {
@@ -210,13 +222,24 @@ fun bubbleShape(style: String) = when (style) {
     else -> RoundedCornerShape(18.dp)
 }
 
-fun wallpaperBrush(name: String, dark: Boolean): Brush? = when (name) {
-    "dusk" -> Brush.verticalGradient(if (dark) listOf(Color(0xFF1B1530), Color(0xFF0B0E13)) else listOf(Color(0xFFE9E1FA), Color(0xFFF6F7F9)))
-    "forest" -> Brush.verticalGradient(if (dark) listOf(Color(0xFF0E2219), Color(0xFF0B0E13)) else listOf(Color(0xFFDCEFE3), Color(0xFFF6F7F9)))
-    "ocean" -> Brush.verticalGradient(if (dark) listOf(Color(0xFF0A1F33), Color(0xFF0B0E13)) else listOf(Color(0xFFD9ECFA), Color(0xFFF6F7F9)))
-    "sand" -> Brush.verticalGradient(if (dark) listOf(Color(0xFF2A2116), Color(0xFF0B0E13)) else listOf(Color(0xFFF5EBDA), Color(0xFFF6F7F9)))
-    "graphite" -> Brush.verticalGradient(if (dark) listOf(Color(0xFF1C1F24), Color(0xFF0B0E13)) else listOf(Color(0xFFE3E6EA), Color(0xFFF6F7F9)))
-    else -> null
+/** Wallpaper gradients: (light top, light bottom, dark top, dark bottom, angle). Same names as the web app, which also has patterns. */
+private val WALLPAPER_COLORS: Map<String, List<Long>> = mapOf(
+    "dusk" to listOf(0xE9E1FA, 0xF6F7F9, 0x1B1530, 0x0B0E13), "forest" to listOf(0xDCEFE3, 0xF6F7F9, 0x0E2219, 0x0B0E13), "ocean" to listOf(0xD9ECFA, 0xF6F7F9, 0x0A1F33, 0x0B0E13),
+    "sand" to listOf(0xF5EBDA, 0xF6F7F9, 0x2A2116, 0x0B0E13), "graphite" to listOf(0xE3E6EA, 0xF6F7F9, 0x1C1F24, 0x0B0E13),
+    "sunrise" to listOf(0xFFE3CF, 0xFFD0E0, 0x2C1620, 0x3A1F12), "lavender" to listOf(0xECE4FF, 0xDBE9FF, 0x1E1838, 0x12203A), "mint" to listOf(0xDCF7EC, 0xE1F0FF, 0x0C2A22, 0x0E2133),
+    "peach" to listOf(0xFFE8DC, 0xFFF3D6, 0x2E1B14, 0x2B2410), "rosegold" to listOf(0xFDE4E4, 0xF7E3CF, 0x321A1F, 0x2C2013), "steel" to listOf(0xE6EBF1, 0xCFD8E3, 0x1A2028, 0x10151B),
+    "midnight" to listOf(0xD6DCF5, 0xE9D9F5, 0x0A0F24, 0x1A1038), "lagoon" to listOf(0xCDF0F0, 0xD4E5FF, 0x07262B, 0x0B1D3A), "ember" to listOf(0xFFE0D0, 0xFFECCB, 0x2E100A, 0x2F1F08),
+    "moss" to listOf(0xE4EFD3, 0xD6ECDF, 0x162410, 0x0E2419), "aurora" to listOf(0xB9F2DC, 0xF1C9FF, 0x0F5A46, 0x5A1F6E), "candy" to listOf(0xFFC8DD, 0xC8E7FF, 0x6A1F45, 0x1F4A6A),
+    "tropic" to listOf(0xB8F0E4, 0xFFC1C1, 0x0D5A50, 0x6A1F1F), "dawn" to listOf(0xFFD6B8, 0xBFE3FF, 0x6A3517, 0x1A4A6A),
+)
+val WALLPAPER_NAMES = listOf("none" to "None", "dusk" to "Dusk", "forest" to "Forest", "ocean" to "Ocean", "sand" to "Sand", "graphite" to "Graphite", "sunrise" to "Sunrise", "lavender" to "Lavender",
+    "mint" to "Mint", "peach" to "Peach", "rosegold" to "Rose gold", "steel" to "Steel", "midnight" to "Midnight sky", "lagoon" to "Lagoon", "ember" to "Ember", "moss" to "Moss",
+    "aurora" to "Aurora", "candy" to "Candy", "tropic" to "Tropic", "dawn" to "Dawn")
+
+fun wallpaperBrush(name: String, dark: Boolean): Brush? {
+    val c = WALLPAPER_COLORS[name] ?: return null
+    val (a, b) = if (dark) c[2] to c[3] else c[0] to c[1]
+    return Brush.verticalGradient(listOf(Color(0xFF000000 or a), Color(0xFF000000 or b)))
 }
 
 @Composable

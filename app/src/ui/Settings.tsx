@@ -29,6 +29,7 @@ export const PAGES: { id: string; icon: Ico; tint: string; title: string; hint: 
   { id: "media", icon: Smile, tint: "#ec4899", title: "Stickers & GIFs", hint: "Your stickers, GIF search" },
   { id: "privacy", icon: Lock, tint: "#64748b", title: "Privacy & encryption", hint: "Recovery key, receipts, typing, previews" },
   { id: "shortcuts", icon: Keyboard, tint: "#6366f1", title: "Keyboard shortcuts", hint: "See and change every shortcut" },
+  { id: "system", icon: SlidersHorizontal, tint: "#0d9488", title: "System", hint: "Time, motion, stories, greeting" },
   { id: "desktop", icon: Monitor, tint: "#0d9488", title: "Desktop", hint: "Tray, startup, zoom", desktop: true },
   { id: "admin", icon: ShieldCheck, tint: "#dc2626", title: "Admin", hint: "Profiles, bridges, signups" },
   { id: "storage", icon: HardDrive, tint: "#14b8a6", title: "Backup & reset", hint: "Export, import, reset" },
@@ -45,11 +46,14 @@ export const SETTINGS_INDEX: { page: string; title: string; where: string; keywo
   { page: "appearance", title: "Text size", where: "Appearance", keywords: "font zoom bigger smaller accessibility" },
   { page: "appearance", title: "Bubble style", where: "Appearance", keywords: "rounded square" },
   { page: "appearance", title: "Page wallpaper", where: "Appearance", keywords: "background" },
-  { page: "appearance", title: "Time format", where: "Appearance", keywords: "12 24 hour clock" },
+  { page: "system", title: "Time format", where: "System", keywords: "12 24 hour clock" },
   { page: "appearance", title: "Avatar shape", where: "Appearance", keywords: "circle squircle" },
   { page: "appearance", title: "Large emoji", where: "Appearance", keywords: "big emoji only" },
   { page: "appearance", title: "Quick reactions", where: "Appearance", keywords: "emoji reactions favorites" },
-  { page: "appearance", title: "Reduce motion", where: "Appearance", keywords: "animations accessibility" },
+  { page: "system", title: "Reduce motion", where: "System", keywords: "animations accessibility" },
+  { page: "system", title: "Hide Stories", where: "System", keywords: "whatsapp status" },
+  { page: "system", title: "Small animations", where: "System", keywords: "motion glide" },
+  { page: "system", title: "Silly hello", where: "System", keywords: "greeting goofy" },
   { page: "layout", title: "Inbox style", where: "Inbox & layout", keywords: "minimal pro compact titles only" },
   { page: "layout", title: "Density", where: "Inbox & layout", keywords: "compact comfortable spacing" },
   { page: "layout", title: "Pinned pages row", where: "Inbox & layout", keywords: "pins favorites circles" },
@@ -104,12 +108,13 @@ function Home({ nav }: { nav: Nav }) {
   const [q, setQ] = useState("");
   const t = q.trim().toLowerCase();
   const hits = t ? SETTINGS_INDEX.filter((e) => `${e.title} ${e.where} ${e.keywords ?? ""}`.toLowerCase().includes(t)) : [];
-  const groups: string[][] = [["appearance", "layout", "chats", "notifications"], ["bridges", "labels", "media"], ["privacy", "shortcuts", "desktop", "admin", "storage", "advanced"], ["starred", "scheduled"], ["about"]];
+  // Yours at the top, the extra features in the middle, the running of the system at the bottom.
+  const groups: [string, string[]][] = [["Yours", ["appearance", "layout", "chats", "notifications", "shortcuts"]], ["Extras", ["labels", "starred", "scheduled", "media"]], ["System", ["bridges", "privacy", "system", "desktop", "admin", "storage", "advanced"]], ["", ["about"]]];
   return (
     <>
       <div className="pill-search wide"><Search size={18} /><input autoFocus placeholder="Search settings" value={q} onChange={(e) => setQ(e.target.value)} /></div>
       {t ? (hits.length ? <Group>{hits.map((e) => <Row key={e.title} title={e.title} hint={e.where} onClick={() => nav(`settings/${e.page}`)} chevron />)}</Group> : <EmptyState icon={Search} title="No settings match" body="Try a different word." />)
-        : groups.map((g, i) => <Group key={i}>{g.map((id) => PAGES.find((p) => p.id === id)!).filter((p) => (!p.desktop || window.pagerDesktop) && (p.id !== "admin" || isAdmin)).map((p) => <Row key={p.id} title={p.title} hint={p.hint} icon={p.icon} tint={p.tint} onClick={() => nav(`settings/${p.id}`)} chevron />)}</Group>)}
+        : groups.map(([title, ids]) => <Group key={title || "about"} title={title || undefined}>{ids.map((id) => PAGES.find((p) => p.id === id)!).filter((p) => (!p.desktop || window.pagerDesktop) && (p.id !== "admin" || isAdmin)).map((p) => <Row key={p.id} title={p.title} hint={p.hint} icon={p.icon} tint={p.tint} onClick={() => nav(`settings/${p.id}`)} chevron />)}</Group>)}
     </>
   );
 }
@@ -158,7 +163,6 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
           <Select title="Mark as read when" value={s.markReadMode} options={[["open", "I open the page"], ["scrolled", "I reach the newest message"], ["manual", "I do it myself"]]} onChange={(v) => u({ markReadMode: v })} />
           <SwitchRow title="Open at first unread" hint="Jump to the 'New messages' line" checked={s.openAtUnread} onChange={(v) => u({ openAtUnread: v })} />
           <Select title="Message grouping" value={String(s.groupGapMin)} options={[["1", "Within 1 minute"], ["5", "Within 5 minutes"], ["15", "Within 15 minutes"], ["60", "Within an hour"]]} onChange={(v) => u({ groupGapMin: Number(v) })} />
-          <SwitchRow title="Large emoji" hint="Emoji-only messages are shown big" checked={s.largeEmoji} onChange={(v) => u({ largeEmoji: v })} />
         </Group>
         <Group title="Privacy">
           <SwitchRow title="Send read receipts" hint="Off: others won't see when you've read their messages" checked={s.sendReadReceipts} onChange={(v) => u({ sendReadReceipts: v })} />
@@ -196,6 +200,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
     case "shortcuts": return <Shortcuts />;
     case "starred": return <Starred nav={nav} />;
     case "scheduled": return <Scheduled />;
+    case "system": return <System />;
     case "desktop": return <Desktop />;
     case "storage": return <Backup />;
     case "advanced": return (
@@ -238,7 +243,6 @@ function Appearance() {
   return (
     <>
       {window.pagerDesktop && <StyleGroup />}
-      {window.pagerDesktop && <Group title="Motion"><SwitchRow title="Small animations" hint="Things slide, glide, glow, pop, breathe and fade a little. Off for none" checked={s.fancyMotion} onChange={(v) => updateSettings({ fancyMotion: v })} /></Group>}
       <Group title="Theme">
         <Row title="Ready-made looks" hint="A whole colour set for the app, in every colour: on white, on black, or solid. Choose “Mode and accent” to go back to your own mix.">
           <button className={"look-none" + (s.palette === "none" ? " on" : "")} onClick={() => updateSettings({ palette: "none" })}>{s.palette === "none" ? <Check size={14} /> : null} Mode and accent</button>
@@ -262,14 +266,10 @@ function Appearance() {
       <Group title="Text & messages">
         <Select title="Reactions" value={s.reactionStyle} options={[["filled", "Filled"], ["outline", "Outline"]]} onChange={(v) => updateSettings({ reactionStyle: v })} />
         <SwitchRow title="Delete on the other network too" hint="When you delete a chat in Pager, also delete it on Signal, WhatsApp or Google Messages. It can't be undone, so you are asked each time" checked={s.deleteAtSource} onChange={(v) => updateSettings({ deleteAtSource: v })} />
-        <SwitchRow title="Hide Stories" hint="Removes the Stories row (WhatsApp status updates) from the list" checked={s.hideStories} onChange={(v) => updateSettings({ hideStories: v })} />
         <Row title="Text size" hint={`${Math.round(s.fontScale * 100)}%`}><input type="range" min="0.85" max="1.4" step="0.05" value={s.fontScale} onChange={(e) => updateSettings({ fontScale: Number(e.target.value) })} /></Row>
         <Select title="Avatar shape" value={s.avatarShape} options={[["circle", "Circle"], ["squircle", "Rounded square"]]} onChange={(v) => updateSettings({ avatarShape: v })} />
-        <Select title="Time format" value={s.timeFormat} options={[["system", "Follow system"], ["12", "12-hour"], ["24", "24-hour"]]} onChange={(v) => updateSettings({ timeFormat: v })} />
         <SwitchRow title="Color sender names in groups" checked={s.colorSenderNames} onChange={(v) => updateSettings({ colorSenderNames: v })} />
         <SwitchRow title="Large emoji" hint="Emoji-only messages are shown big" checked={s.largeEmoji} onChange={(v) => updateSettings({ largeEmoji: v })} />
-        <SwitchRow title="Silly hello" hint="The pager says something goofy when you open the app" checked={s.greetings} onChange={(v) => updateSettings({ greetings: v })} />
-        <SwitchRow title="Reduce motion" hint="Fewer animations" checked={s.reduceMotion} onChange={(v) => updateSettings({ reduceMotion: v })} />
       </Group>
       <Group title="Reactions" footer="Click “Double-click to react” to choose which reaction it adds. The switch turns it on or off.">
         <Row title="Double-click to react" hint={s.doubleTapReact ? `Double-click a message to add ${s.doubleTapEmoji || s.quickReactions[0]}` : "Off"} onClick={() => setPickDouble(true)}><span className="dt-emoji">{s.doubleTapEmoji || s.quickReactions[0]}</span><Switch checked={s.doubleTapReact} onChange={(v) => updateSettings({ doubleTapReact: v })} /></Row>
@@ -319,7 +319,7 @@ function Notifications() {
         <SwitchRow title="Sound" checked={s.notifSound} disabled={off} onChange={(v) => updateSettings({ notifSound: v })} />
         <Select title="Unread badge counts" hint="The number on the app icon" value={s.notifBadge} options={[["unmuted", "Pages that can notify me"], ["all", "Every unread page"], ["off", "Nothing"]]} onChange={(v) => updateSettings({ notifBadge: v })} />
       </Group>
-      <Group title="Sounds" footer="Each app and each page can have its own sound. Muted and quiet-hours messages stay silent.">
+      <Group title="Sounds" footer="Muted and quiet-hours messages stay silent. A page can have its own sound in its info page.">
         <SwitchRow title="Sounds inside a page" hint="A little sound when you send or get a message in the page you have open" checked={s.convoSounds} onChange={(v) => updateSettings({ convoSounds: v })} />
         <Select title="Send sound" value={s.sendSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ sendSound: v }); playSound(v, s.convoSoundVolume); }} />
         <Select title="Reaction sound" value={s.reactionSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ reactionSound: v }); playSound(v, s.convoSoundVolume); }} />
@@ -327,18 +327,7 @@ function Notifications() {
         <Row title="Page sound volume" hint={`${Math.round(s.convoSoundVolume * 100)}%`}><input type="range" min="0" max="1" step="0.05" value={s.convoSoundVolume} disabled={!s.convoSounds} onChange={(e) => updateSettings({ convoSoundVolume: Number(e.target.value) })} /></Row>
         <Select title="Alert sound" value={s.notifSoundId} disabled={off} options={SOUNDS} onChange={(v) => { updateSettings({ notifSoundId: v }); playSound(v, s.notifSoundVolume); }} />
         <Row title="Volume" hint={`${Math.round(s.notifSoundVolume * 100)}%`}><input type="range" min="0" max="1" step="0.05" value={s.notifSoundVolume} disabled={off} onChange={(e) => updateSettings({ notifSoundVolume: Number(e.target.value) })} onMouseUp={() => playSound(s.notifSoundId, s.notifSoundVolume)} /></Row>
-        {known.map((id) => <Select key={"snd" + id} title={`${networkMeta(id).label} sound`} value={s.notifNetworkSound[id] ?? ""} disabled={off}
-          options={[["", "Same as the app"], ...SOUNDS]} onChange={(v) => { const { [id]: _x, ...rest } = s.notifNetworkSound; updateSettings({ notifNetworkSound: v ? { ...rest, [id]: v } : rest }); if (v) playSound(v, s.notifSoundVolume); }} />)}
-      </Group>
-      <Group title="Do not disturb" footer="Messages still arrive, but nothing alerts you until it ends. Pinned pages and mentions can break through if you allow it under Quiet hours.">
-        <Row title={s.dndUntil > Date.now() ? `On until ${new Date(s.dndUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Off"}>
-          {[["1 hour", 3.6e6], ["8 hours", 8 * 3.6e6]].map(([l, ms]) => <button key={l as string} className="pill" disabled={off} onClick={() => updateSettings({ dndUntil: Date.now() + (ms as number) })}>{l as string}</button>)}
-          <button className="pill" disabled={off} onClick={() => { const d = new Date(); d.setHours(7, 0, 0, 0); if (d.getTime() < Date.now() + 6e4) d.setDate(d.getDate() + 1); updateSettings({ dndUntil: d.getTime() }); }}>Until morning</button>
-          {s.dndUntil > Date.now() && <button className="link" onClick={() => updateSettings({ dndUntil: 0 })}>Turn off</button>}
-        </Row>
-      </Group>
-      <Group title="Delay" footer="Waits, then skips the alert if you already read the page on another device or app.">
-        <Select title="Wait before alerting" value={String(s.notifDelaySec)} disabled={off} options={[["0", "Don't wait"], ["5", "5 seconds"], ["15", "15 seconds"], ["30", "30 seconds"], ["60", "1 minute"]]} onChange={(v) => updateSettings({ notifDelaySec: Number(v) })} />
+        <AppSounds off={off} />
       </Group>
       <Group title="Quiet hours" footer="Messages still arrive, silently.">
         <SwitchRow title="Quiet hours" checked={s.quietHoursEnabled} disabled={off} onChange={(v) => updateSettings({ quietHoursEnabled: v })} />
@@ -771,6 +760,47 @@ function EffectsGroup() {
         <ul className="effect-list">{EFFECT_TRIGGERS.map((t) => <li key={t.effect}><b>{t.glyph} {t.name}</b><span>{t.says}</span><small className="muted">{t.examples.join("  ")}</small></li>)}</ul>
         <div className="row-end"><button className="link" onClick={() => setOpen(false)}>Close</button></div>
       </Modal>}
+    </>
+  );
+}
+
+/** Settings → System: how times, motion and the odd bits of the app behave. */
+function System() {
+  const s = useRawSettings();
+  return (
+    <>
+      <Group title="Time">
+        <Select title="Time format" value={s.timeFormat} options={[["system", "Follow system"], ["12", "12-hour"], ["24", "24-hour"]]} onChange={(v) => updateSettings({ timeFormat: v })} />
+      </Group>
+      <Group title="Motion">
+        {window.pagerDesktop && <SwitchRow title="Small animations" hint="Things slide, glide, glow, pop, breathe and fade a little. Off for none" checked={s.fancyMotion} onChange={(v) => updateSettings({ fancyMotion: v })} />}
+        <SwitchRow title="Reduce motion" hint="Fewer animations" checked={s.reduceMotion} onChange={(v) => updateSettings({ reduceMotion: v })} />
+      </Group>
+      <Group title="Extras">
+        <SwitchRow title="Hide Stories" hint="Removes the Stories row (WhatsApp status updates) from the list" checked={s.hideStories} onChange={(v) => updateSettings({ hideStories: v })} />
+        <SwitchRow title="Silly hello" hint="The pager says something goofy when you open the app" checked={s.greetings} onChange={(v) => updateSettings({ greetings: v })} />
+      </Group>
+    </>
+  );
+}
+
+/** Sounds for particular apps. Only the apps you have set up are listed; the + adds one of your connected apps. */
+function AppSounds({ off }: { off: boolean }) {
+  const s = useRawSettings();
+  const bridges = useStore((x) => x.bridges);
+  const [adding, setAdding] = useState(false);
+  const set = (id: string, v: string) => { const { [id]: _x, ...rest } = s.notifNetworkSound; updateSettings({ notifNetworkSound: v ? { ...rest, [id]: v } : rest }); if (v) playSound(v, s.notifSoundVolume); };
+  const mine = Object.keys(s.notifNetworkSound);
+  const canAdd = bridges.filter((b) => b.logins.length > 0 && !mine.includes(b.id));
+  return (
+    <>
+      {mine.map((id) => (
+        <Select key={"snd" + id} title={`${networkMeta(id).label} sound`} value={s.notifNetworkSound[id]} disabled={off} options={[["", "Same as the app (remove)"], ...SOUNDS]} onChange={(v) => set(id, v)} />
+      ))}
+      <Row title="Sound for one app" hint={mine.length ? "Add another connected app" : "Give a connected app its own alert sound"} onClick={canAdd.length ? () => setAdding(!adding) : undefined}>
+        {canAdd.length ? <Plus size={18} /> : <small className="muted">No more connected apps</small>}
+      </Row>
+      {adding && canAdd.map((b) => <Row key={b.id} title={b.name} onClick={() => { set(b.id, s.notifSoundId); setAdding(false); }}><small className="accent">Add</small></Row>)}
     </>
   );
 }

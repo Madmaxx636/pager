@@ -446,9 +446,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
           const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text,
             quiet: muted.includes(m.roomId) || (c ? isLowPriority(c) : false), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
           if (!d.show) continue;
-          // Optionally wait, and drop the alert if you read the chat somewhere else in the meantime.
-          if (st.notifDelaySec > 0) window.setTimeout(() => { const cc = state.chats[m.roomId]; if (cc && (cc.unread > 0 || cc.markedUnread)) notify(m, d); }, st.notifDelaySec * 1000);
-          else notify(m, d);
+          notify(m, d);
         }
         if (getSettings().unarchiveOnMessage) {
           for (const id of new Set(r.incoming.map((m) => m.roomId))) if (!muted.includes(id) && state.chats[id] && isArchived(state.chats[id])) setTag(id, "u.archived", false);

@@ -2,6 +2,8 @@
 
 package app.pager.android
 
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.foundation.gestures.detectTapGestures
 import kotlinx.coroutines.delay
@@ -223,28 +225,48 @@ fun MessageRow(
     val plain = style == "plain"
     val gradient = mine && s.bubbleFill == "gradient" && !outlined && !plain
     val tinted = mine && s.bubbleFill == "tinted" && !outlined && !plain
+    val glass = s.bubbleFill == "glass" && !outlined && !plain
+    // Your own colours for the bubbles, with text that stays readable on them.
+    val mineColor = if (mine) parseHex(s.bubbleMine) else null
+    val theirsColor = if (!mine) parseHex(s.bubbleTheirs) else null
+    val custom = mineColor ?: theirsColor
     val fg = when {
+        glass -> scheme.onSurface
+        custom != null && !outlined && !plain && !tinted -> if (custom.luminance() > 0.45f) Color(0xFF101418) else Color.White
         outlined || plain || tinted -> scheme.onSurface
         gradient -> scheme.onPrimary
         mine -> scheme.onPrimaryContainer
         else -> scheme.onSurface
     }
+    val baseMine = mineColor ?: scheme.primary
     val fill: Color = when {
         bare || outlined || plain -> Color.Transparent
-        tinted -> scheme.primary.copy(alpha = 0.24f).compositeOver(scheme.surface)
-        gradient -> scheme.primary
+        glass -> (if (mine) baseMine else (theirsColor ?: scheme.surface)).copy(alpha = 0.55f)
+        tinted -> baseMine.copy(alpha = 0.24f).compositeOver(scheme.surface)
+        gradient -> baseMine
+        mineColor != null -> mineColor
+        theirsColor != null -> theirsColor
         mine -> scheme.primaryContainer
         else -> scheme.surface
     }
-    val fillBrush = if (gradient && !bare) Brush.linearGradient(listOf(scheme.primary, lerp(scheme.primary, Color(0xFF7C3AED), 0.45f))) else null
-    val r = when (style) { "square" -> 6.dp; "soft" -> 26.dp; else -> 18.dp }
-    val tight = when (style) { "square" -> 3.dp; "tail" -> 18.dp; else -> 5.dp }
+    val fillBrush = if (gradient && !bare) Brush.linearGradient(listOf(baseMine, lerp(baseMine, Color(0xFF7C3AED), 0.45f))) else null
+    val r = if (s.bubbleRadius > 0) s.bubbleRadius.dp else when (style) { "square" -> 6.dp; "soft" -> 26.dp; "pill" -> 24.dp; "cloud" -> 22.dp; "notch" -> 16.dp; "sharp" -> 2.dp; else -> 18.dp }
+    val tight = if (s.bubbleRadius > 0) (if (style == "tail" || style == "pill" || style == "cloud" || style == "notch") r else minOf(8, s.bubbleRadius / 3).dp)
+        else when (style) { "square" -> 3.dp; "sharp" -> 2.dp; "tail", "pill", "cloud" -> r; "notch" -> r; else -> 5.dp }
     val tailed = style == "tail" && last && !bare && msg.type != "m.image"
     val tailR = 4.dp
-    val shape = if (mine) RoundedCornerShape(r, if (first) r else tight, if (last) (if (tailed) tailR else r) else tight, r)
-        else RoundedCornerShape(if (first) r else tight, r, r, if (last) (if (tailed) tailR else r) else tight)
+    // The corner next to the sender: small for a tail, a notch or a cloud.
+    val corner = when {
+        tailed -> tailR
+        style == "notch" -> 2.dp
+        style == "cloud" && last -> 6.dp
+        last -> r
+        else -> tight
+    }
+    val shape = if (mine) RoundedCornerShape(r, if (first) r else tight, corner, r)
+        else RoundedCornerShape(if (first) r else tight, r, r, corner)
     val elevation = if (bare || outlined || plain || msg.type == "m.image") 0.dp else when (s.bubbleDepth) { "raised" -> 4.dp; "soft" -> 1.dp; else -> 0.dp }
-    val tailColor = if (gradient) lerp(scheme.primary, Color(0xFF7C3AED), 0.45f) else fill
+    val tailColor = if (gradient) lerp(baseMine, Color(0xFF7C3AED), 0.45f) else fill
 
     // Entrance animation, only for messages that just arrived.
     val fresh = remember(msg.id) { System.currentTimeMillis() - msg.ts < 4000 && s.messageAnimation != "none" && !s.reduceMotion }
@@ -267,7 +289,7 @@ fun MessageRow(
         }
         Box(Modifier.swipeToReply(s.swipeToReply && msg.status == STATUS_SENT, onReply) { if (s.haptics) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }) {
             Box(
-                Modifier.widthIn(max = 300.dp)
+                Modifier.widthIn(max = if (s.bubbleWidth >= 40) (LocalConfiguration.current.screenWidthDp * s.bubbleWidth.coerceAtMost(95) / 100f).dp else 300.dp)
                     .graphicsLayer {
                         val t = enter.value
                         alpha = if (s.messageAnimation == "slide" || s.messageAnimation == "fade" || s.messageAnimation == "pop") t.coerceIn(0f, 1f) else 1f

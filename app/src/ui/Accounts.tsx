@@ -5,7 +5,8 @@ import { networkMeta } from "../core/emoji";
 import { refreshBridges, setTag, useStore } from "../core/store";
 import { advance, fraction, importBusy, setImport, stuck, useImport } from "../core/importjob";
 import { updateSettings, useSettings } from "../core/settings";
-import { Modal, Row, SwitchRow } from "./common";
+import { Eye, EyeOff, MoreVertical } from "lucide-react";
+import { IconButton, Modal } from "./common";
 import { isArchived } from "../core/types";
 
 export const needsAttention = (state?: string) => state === "BAD_CREDENTIALS" || state === "LOGGED_OUT" || state === "UNKNOWN_ERROR";
@@ -325,10 +326,11 @@ export function BridgesPage() {
   const [relogin, setRelogin] = useState<Network>();
   const [adding, setAdding] = useState(false);
   const job = useImport();
+  const [menuFor, setMenuFor] = useState("");
   useEffect(() => { void refreshBridges(); }, []);
   return (
     <>
-      <p className="muted pad">Each app you connect is bridged through your own server. Pager shows if a connection needs attention.</p>
+      <div className="bridge-head"><p className="muted">Apps connected through your own server.</p><button className="primary" disabled={importBusy(job)} title={importBusy(job) ? "Wait for the import in progress to finish" : undefined} onClick={() => setAdding(true)}>Add account</button></div>
       {note && <p className="muted pad">{note}</p>}
       {askSync && <Modal title={`Start chats with every ${askSync.n.name} contact?`} onClose={() => setAskSync(undefined)}>
         <p>This opens a new, empty chat with <b>each contact</b> on {askSync.n.name}, which can be hundreds. It won't bring old messages in. Chats you already have are untouched.</p>
@@ -336,31 +338,35 @@ export function BridgesPage() {
         <div className="row-end"><button className="link" onClick={() => setAskSync(undefined)}>Cancel</button><button className="primary" onClick={() => { const a = askSync; setAskSync(undefined); void sync(a.n, a.l); }}>Start them all</button></div>
       </Modal>}
       {!networks.length && <p className="muted pad">Loading…</p>}
-      {networks.length > 0 && !networks.some((n) => n.logins.length) && <p className="muted pad">Nothing connected yet.</p>}
       {job && <div className="pad"><ImportProgress /></div>}
-      <div className="pad"><button className="primary" disabled={importBusy(job)} onClick={() => setAdding(true)}>Add account</button>{importBusy(job) && <p className="muted">Wait for the import in progress to finish.</p>}</div>
-      {networks.filter((n) => n.logins.length > 0).map((n) => {
-        const meta = networkMeta(n.id);
-        return (
-          <section key={n.id}>
-            <h3 className="sec">{n.name}</h3>
-            {n.error && <p className="warn pad">This bridge isn't responding right now.</p>}
-            {n.logins.map((l) => {
-              const [label, color] = stateLabel(l.state_event);
-              return (
-                <Row key={l.id} title={l.name || l.profile?.name || l.id} hint={label}>
-                  <i className="dot" style={{ background: color }} />
-                  {needsAttention(l.state_event) && <button className="pill" onClick={() => setRelogin(n)}>Sign in</button>}
-                  {n.id !== "gmessages" && <button className="link" disabled={!!syncing} onClick={() => setAskSync({ n, l })}>{syncing.startsWith(l.id) ? `Syncing ${syncing.split(":")[1] ?? ""}` : "Start chats with contacts"}</button>}
-                  <button className="link danger" onClick={async () => { if (confirm("Disconnect this account?")) { await pager.logout(n.id, l.id).catch(() => {}); void refreshBridges(); } }}>Disconnect</button>
-                </Row>
-              );
-            })}
-            <div className="pad"><button className="link" disabled={importBusy(job)} onClick={() => setRelogin(n)}>{`Add another ${meta.label} account`}</button></div>
-            <SwitchRow title={`Show ${meta.label} pages in inbox`} checked={!st.hiddenNetworks.includes(n.id)} onChange={(on) => updateSettings({ hiddenNetworks: on ? st.hiddenNetworks.filter((x) => x !== n.id) : [...st.hiddenNetworks, n.id] })} />
-          </section>
-        );
-      })}
+      {networks.length > 0 && !networks.some((n) => n.logins.length) && <p className="muted pad">Nothing connected yet.</p>}
+      <div className="bridge-list">
+        {networks.filter((n) => n.logins.length > 0).flatMap((n) => n.logins.map((l) => {
+          const meta = networkMeta(n.id);
+          const [label, color] = stateLabel(l.state_event);
+          const hidden = st.hiddenNetworks.includes(n.id);
+          const key = n.id + "/" + l.id;
+          return (
+            <div key={key} className={"bridge-row" + (hidden ? " off" : "")}>
+              <i className="net-dot" style={{ background: meta.color }}>{meta.glyph}</i>
+              <div className="bridge-name"><b>{l.name || l.profile?.name || l.id}</b><small>{n.name}{n.error ? " · not responding" : ""}</small></div>
+              <span className="bridge-state" style={{ color }}><i className="dot" style={{ background: color }} />{label}</span>
+              {needsAttention(l.state_event) && <button className="pill" onClick={() => setRelogin(n)}>Sign in</button>}
+              <IconButton icon={hidden ? EyeOff : Eye} label={hidden ? `Show ${meta.label} pages in the inbox` : `Hide ${meta.label} pages from the inbox`} onClick={() => updateSettings({ hiddenNetworks: hidden ? st.hiddenNetworks.filter((x) => x !== n.id) : [...st.hiddenNetworks, n.id] })} />
+              <div className="menu-wrap">
+                <IconButton icon={MoreVertical} label="More" onClick={() => setMenuFor(menuFor === key ? "" : key)} />
+                {menuFor === key && (
+                  <div className="menu" onMouseLeave={() => setMenuFor("")} onClick={() => setMenuFor("")}>
+                    <button disabled={importBusy(job)} onClick={() => setRelogin(n)}>Add another {meta.label} account</button>
+                    {n.id !== "gmessages" && <button disabled={!!syncing} onClick={() => setAskSync({ n, l })}>{syncing.startsWith(l.id) ? `Syncing ${syncing.split(":")[1] ?? ""}` : "Start chats with contacts"}</button>}
+                    <button className="danger" onClick={async () => { if (confirm("Disconnect this account?")) { await pager.logout(n.id, l.id).catch(() => {}); void refreshBridges(); } }}>Disconnect</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }))}
+      </div>
       {relogin && <AccountsModal initial={relogin} onClose={() => setRelogin(undefined)} />}
       {adding && <AccountsModal onClose={() => { setAdding(false); void refreshBridges(); }} />}
     </>

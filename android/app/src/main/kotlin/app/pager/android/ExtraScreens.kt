@@ -28,6 +28,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Label
+import androidx.compose.ui.draw.alpha
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.Delete
@@ -112,24 +116,39 @@ fun BridgesScreen(onBack: () -> Unit) {
         val importJob by store.importJob.collectAsState()
         if (importJob != null) Box(Modifier.padding(horizontal = 16.dp)) { ImportProgressCard(store) }
         SettingsGroup(footer = if (importJob?.busy == true) "Wait for the import in progress to finish." else null) { ButtonRow("Add account", enabled = importJob?.busy != true) { adding = true } }
-        networks.filter { it.logins.isNotEmpty() }.forEach { n ->
-            val meta = networkMeta(n.id)
-            SettingsGroup(n.name, footer = if (n.unavailable) "This bridge isn't responding right now." else null) {
+        // One slim row per account: the app, its name and state, and the rest behind the menu.
+        SettingsGroup {
+            var first = true
+            networks.filter { it.logins.isNotEmpty() }.forEach { n ->
+                val meta = networkMeta(n.id)
+                val hidden = n.id in s.hiddenNetworks
                 n.logins.forEach { l ->
+                    if (!first) GroupDivider(); first = false
                     val (label, color) = loginStateLabel(l.state)
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
-                        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) { Text(l.name); Text(label, style = MaterialTheme.typography.labelMedium, color = color) }
+                    var menu by remember(l.id) { mutableStateOf(false) }
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).alpha(if (hidden) 0.6f else 1f), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).background(meta.color), contentAlignment = Alignment.Center) { Text(meta.glyph, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                            Text(l.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            Text(n.name + if (n.unavailable) " · not responding" else "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(color)); Spacer(Modifier.width(6.dp))
+                        Text(label, style = MaterialTheme.typography.labelMedium, color = color)
                         if (needsAttention(l.state)) TextButton(onClick = { relogin = n }) { Text("Sign in") }
-                        // Google Messages would get an empty conversation on your phone for every contact, so it is not offered there.
-                        if (n.id != "gmessages") TextButton(enabled = syncing == null, onClick = { askSync = n to l }) { Text("Start chats") }
-                        TextButton(onClick = { scope.launch { runCatching { store.pager.logout(n.id, l.id) }; store.refreshBridges() } }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
+                        androidx.compose.material3.IconButton(onClick = { store.settings.update { copy(hiddenNetworks = if (hidden) hiddenNetworks - n.id else hiddenNetworks + n.id) } }) {
+                            Icon(if (hidden) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (hidden) "Show ${meta.label} pages in the inbox" else "Hide ${meta.label} pages from the inbox", Modifier.size(20.dp))
+                        }
+                        Box {
+                            androidx.compose.material3.IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More", Modifier.size(20.dp)) }
+                            androidx.compose.material3.DropdownMenu(menu, { menu = false }) {
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("Add another ${meta.label} account") }, enabled = importJob?.busy != true, onClick = { menu = false; relogin = n })
+                                // Google Messages would get an empty conversation on your phone for every contact, so it is not offered there.
+                                if (n.id != "gmessages") androidx.compose.material3.DropdownMenuItem(text = { Text("Start chats with contacts") }, enabled = syncing == null, onClick = { menu = false; askSync = n to l })
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("Disconnect", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; scope.launch { runCatching { store.pager.logout(n.id, l.id) }; store.refreshBridges() } })
+                            }
+                        }
                     }
-                    GroupDivider()
                 }
-                ButtonRow("Add another ${meta.label} account", enabled = importJob?.busy != true) { relogin = n }
-                GroupDivider()
-                SwitchRow("Show ${meta.label} pages in inbox", null, n.id !in s.hiddenNetworks) { on -> store.settings.update { copy(hiddenNetworks = if (on) hiddenNetworks - n.id else hiddenNetworks + n.id) } }
             }
         }
     }
