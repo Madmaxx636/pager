@@ -6,71 +6,40 @@ beforeEach(() => {
   vi.resetModules();
 });
 
-describe("settings that belong to one device", () => {
-  it("applies newer remote settings and ignores older ones", async () => {
-    const s = await import("./settings");
-    s.updateSettings({ closeToTray: false });
-    const t = s.getSettingsUpdatedAt();
-    expect(s.applyRemoteSettings({ v: 1, updatedAt: t - 1000, settings: { closeToTray: true } })).toBe(false);
-    expect(s.getSettings().closeToTray).toBe(false);
-    expect(s.applyRemoteSettings({ v: 1, updatedAt: t + 1000, settings: { closeToTray: true, gifKey: "secret" } })).toBe(true);
-    expect(s.getSettings().closeToTray).toBe(true);
-    expect(s.getSettings().gifKey).not.toBe("secret");
-  });
-
-  it("does not upload device-only secrets, nor the settings every device shares, and tells listeners about local edits", async () => {
-    const s = await import("./settings");
-    const cb = vi.fn();
-    s.onLocalSettingsChange(cb);
-    s.updateSettings({ gifKey: "k", accent: "pink", closeToTray: false });
-    expect(cb).toHaveBeenCalledTimes(1);
-    const p = s.settingsPayload();
-    expect(p.settings.closeToTray).toBe(false);
-    expect("gifKey" in p.settings).toBe(false);
-    expect("accent" in p.settings).toBe(false);
-  });
-
-  it("applying remote settings is not treated as a local edit", async () => {
-    const s = await import("./settings");
-    const cb = vi.fn();
-    s.onLocalSettingsChange(cb);
-    s.applyRemoteSettings({ v: 1, updatedAt: Date.now() + 5000, settings: { closeToTray: false } });
-    expect(cb).not.toHaveBeenCalled();
-  });
-});
-
-describe("settings every device shares", () => {
-  it("changing one anywhere changes it everywhere, and the newest change wins", async () => {
+describe("syncing settings by hand", () => {
+  it("changing a setting copies nothing anywhere", async () => {
     const s = await import("./settings");
     s.updateSettings({ accent: "pink" });
-    const mine = s.sharedPayload().keys.accent.t;
-    expect(s.sharedPayload().keys.accent.v).toBe("pink");
-    // another device changed it earlier: ours stays
-    expect(s.applyRemoteShared({ v: 2, keys: { accent: { v: "red", t: mine - 5000 } } }).changed).toBe(false);
+    expect(Object.keys(s)).not.toContain("applyRemoteShared"); // no automatic copying exists any more
     expect(s.getSettings().accent).toBe("pink");
-    // another device changed it later: ours follows
-    expect(s.applyRemoteShared({ v: 2, keys: { accent: { v: "green", t: mine + 5000 }, bubbleStyle: { v: "square", t: mine + 5000 } } }).changed).toBe(true);
-    expect(s.getSettings().accent).toBe("green"); expect(s.getSettings().bubbleStyle).toBe("square");
   });
 
-  it("saving never wipes what another device saved, and ignores keys it does not know", async () => {
+  it("saves only the groups you pick, keeping what was saved for the others", async () => {
     const s = await import("./settings");
-    s.applyRemoteShared({ v: 2, keys: { wallpaper: { v: "dusk", t: 1000 }, notAThing: { v: 1, t: 2000 }, gifKey: { v: "secret", t: 3000 } } });
+    s.updateSettings({ accent: "pink", bubbleStyle: "square" });
+    const first = s.mergeSaved(undefined, ["look"], "A", 1000);
+    expect(first.settings.accent).toBe("pink"); expect("bubbleStyle" in first.settings).toBe(false);
+    s.updateSettings({ accent: "green" });
+    const second = s.mergeSaved(first, ["bubbles"], "B", 2000);
+    expect(second.settings.accent).toBe("pink"); expect(second.settings.bubbleStyle).toBe("square");
+    expect(second.savedAt).toBe(2000); expect(second.from).toBe("B");
+  });
+
+  it("loads only the groups you pick and says how many settings changed", async () => {
+    const s = await import("./settings");
+    const saved = { v: 3 as const, savedAt: 1, from: "A", settings: { accent: "red", bubbleStyle: "outline", fontScale: 1.3 } as Record<string, unknown> };
     s.updateSettings({ accent: "blue" });
-    const keys = s.sharedPayload().keys;
-    expect(keys.wallpaper.v).toBe("dusk"); expect(keys.accent.v).toBe("blue");
-    expect("notAThing" in keys).toBe(false); expect("gifKey" in keys).toBe(false);
-    expect(s.getSettings().gifKey).not.toBe("secret");
+    expect(s.loadSaved(saved as never, ["look"])).toBe(2); // accent and fontScale
+    expect(s.getSettings().accent).toBe("red"); expect(s.getSettings().bubbleStyle).not.toBe("outline");
+    expect(s.loadSaved(saved as never, ["look"])).toBe(0); // nothing left to change
   });
 
-  it("a device with choices of its own and an account with none shares those choices", async () => {
+  it("lists only complete groups from a saved set, and never carries secrets", async () => {
     const s = await import("./settings");
-    s.updateSettings({ fontScale: 1.2 });
-    localStorage.removeItem("pager.settingsStamps");
-    vi.resetModules();
-    const again = await import("./settings");
-    again.seedSharedStamps();
-    expect(again.sharedPayload().keys.fontScale.v).toBe(1.2);
-    expect("accent" in again.sharedPayload().keys).toBe(false); // still the default: nothing to share
+    s.updateSettings({ gifKey: "secret" });
+    const saved = s.mergeSaved(undefined, s.SYNC_GROUPS.map((g) => g.id), "A");
+    expect(s.groupsIn(saved).sort()).toEqual(s.SYNC_GROUPS.map((g) => g.id).sort());
+    expect(JSON.stringify(saved)).not.toContain("secret");
+    expect(s.groupsIn({ ...saved, settings: { accent: "x" } })).toEqual([]);
   });
 });

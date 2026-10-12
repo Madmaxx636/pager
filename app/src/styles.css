@@ -545,3 +545,4 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 /* ---- Efficiency: long lists draw only what is on screen. ---- */
 .chat-row { content-visibility: auto; contain-intrinsic-size: auto 68px; }
 .photo-grid > * , .link-pick > * { content-visibility: auto; contain-intrinsic-size: auto 80px; }
+.dt-emoji { font-size: 1.5rem; line-height: 1; margin-right: 10px; } .sync-list { display: grid; gap: 4px; margin: 6px 0 10px; } .sync-list .check-row { align-items: flex-start; }

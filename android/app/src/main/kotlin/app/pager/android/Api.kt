@@ -262,6 +262,8 @@ class MatrixApi(private val http: Http) {
         http.request("GET", "/_matrix/client/v3/user/${enc(me)}/account_data/${enc(type)}")
     } catch (e: ApiException) { if (e.status == 404) null else throw e }
 
+    suspend fun getAccountData(me: String, type: String): JsonObject = http.request("GET", "/_matrix/client/v3/user/${enc(me)}/account_data/${enc(type)}")
+
     suspend fun putAccountData(me: String, type: String, content: JsonObject) {
         http.request("PUT", "/_matrix/client/v3/user/${enc(me)}/account_data/${enc(type)}", content)
     }
