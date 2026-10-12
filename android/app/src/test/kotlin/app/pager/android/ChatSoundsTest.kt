@@ -7,7 +7,7 @@ import org.junit.Test
 
 class ChatSoundsTest {
     @Test fun everyChoiceRendersAudibleSamplesExceptNone() {
-        for ((id, _) in ChatSounds.choices) {
+        for ((id, _) in ChatSounds.choices.filterNot { it.first.startsWith("android_") }) {
             val pcm = ChatSounds.render(id)
             if (id == "none") assertNull(pcm) else {
                 assertNotNull(id, pcm)
@@ -15,5 +15,12 @@ class ChatSoundsTest {
                 assertTrue("$id is short", pcm.size < 44100) // under a second
             }
         }
+    }
+
+    @Test fun androidSoundsShipAsRawFiles() {
+        val dir = java.io.File("src/main/res/raw")
+        for ((id, _) in ANDROID_SOUNDS) org.junit.Assert.assertTrue("$id.ogg", java.io.File(dir, "$id.ogg").exists())
+        assertTrue(ANDROID_SOUNDS.size >= 50)
+        assertTrue(ChatSounds.choices.last().first == "none")
     }
 }

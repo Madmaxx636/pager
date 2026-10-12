@@ -60,7 +60,7 @@ data class Scheduled(val delayId: String, val roomId: String, val chat: String, 
 
 /** Process-wide state: the signed-in session, all chats, and the sync loop that keeps them current. */
 class Store(private val context: Context) {
-    init { Names.init(context) }
+    init { Names.init(context); ChatSounds.init(context) }
     private val prefs = context.getSharedPreferences("pager", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val http = Http(prefs.getString("baseUrl", "") ?: "")

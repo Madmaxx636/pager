@@ -1,5 +1,9 @@
+import { ANDROID_SOUNDS, androidSoundFile } from "./androidsounds";
+
 /** Alert sounds made with Web Audio, so there are no files to ship and they work the same on every system. */
-export const SOUNDS: [string, string][] = [["swoosh", "Swoosh"], ["chime", "Chime"], ["pop", "Pop"], ["ding", "Ding"], ["knock", "Knock"], ["bubble", "Bubble"], ["soft", "Soft"], ["pager", "Pager (three beeps)"], ["beepbeep", "Beep beep"], ["trill", "Trill"], ["twotone", "Two tone"], ["sendblip", "Blip"], ["tick", "Tick"], ["marimba", "Marimba"], ["xylophone", "Xylophone"], ["glass", "Glass"], ["droplet", "Droplet"], ["harp", "Harp"], ["radar", "Radar"], ["coin", "Coin"], ["bell", "Bell"], ["kalimba", "Kalimba"], ["zap", "Zap"], ["doorbell", "Doorbell"], ["rise", "Rise"], ["fall", "Fall"], ["morse", "Morse"], ["whistle", "Whistle"], ["woodblock", "Wood block"], ["none", "None"]];
+const BUILT_IN: [string, string][] = [["swoosh", "Swoosh"], ["chime", "Chime"], ["pop", "Pop"], ["ding", "Ding"], ["knock", "Knock"], ["bubble", "Bubble"], ["soft", "Soft"], ["pager", "Pager (three beeps)"], ["beepbeep", "Beep beep"], ["trill", "Trill"], ["twotone", "Two tone"], ["sendblip", "Blip"], ["tick", "Tick"], ["marimba", "Marimba"], ["xylophone", "Xylophone"], ["glass", "Glass"], ["droplet", "Droplet"], ["harp", "Harp"], ["radar", "Radar"], ["coin", "Coin"], ["bell", "Bell"], ["kalimba", "Kalimba"], ["zap", "Zap"], ["doorbell", "Doorbell"], ["rise", "Rise"], ["fall", "Fall"], ["morse", "Morse"], ["whistle", "Whistle"], ["woodblock", "Wood block"]];
+/** The built-in sounds, then the Android ones, then "None". */
+export const SOUNDS: [string, string][] = [...BUILT_IN, ...ANDROID_SOUNDS.map(([id, label]) => [id, label] as [string, string]), ["none", "None"]];
 
 type Note = { f: number; t: number; d: number; type?: OscillatorType; g?: number; slideTo?: number };
 const RECIPES: Record<string, Note[]> = {
@@ -35,9 +39,14 @@ const RECIPES: Record<string, Note[]> = {
   soft: [{ f: 660, t: 0, d: 0.3, type: "sine", g: 0.5 }, { f: 784, t: 0.09, d: 0.34, type: "sine", g: 0.4 }],
 };
 
-export const hasSound = (id: string) => id === "none" || id in RECIPES;
+export const hasSound = (id: string) => id === "none" || id in RECIPES || androidSoundFile(id) != null;
 let ctx: AudioContext | undefined;
 export function playSound(id: string, volume = 0.7) {
+  const file = androidSoundFile(id);
+  if (file) {
+    try { const a = new Audio(new URL(`sounds/android/${file}`, document.baseURI).href); a.volume = Math.min(1, Math.max(0, volume)); void a.play().catch(() => {}); } catch { /* audio may be blocked until you interact with the page */ }
+    return;
+  }
   const notes = RECIPES[id];
   if (!notes || volume <= 0 || typeof AudioContext === "undefined") return;
   try {
