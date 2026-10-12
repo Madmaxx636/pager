@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { Login, LoginFlow, LoginStep, Network, pager, parseCookies } from "../core/api";
 import { networkMeta } from "../core/emoji";
-import { refreshBridges, useStore } from "../core/store";
+import { refreshBridges, setTag, useStore } from "../core/store";
+import { advance, fraction, importBusy, setImport, stuck, useImport } from "../core/importjob";
 import { updateSettings, useSettings } from "../core/settings";
 import { Modal, Row, SwitchRow } from "./common";
+import { isArchived } from "../core/types";
 
 export const needsAttention = (state?: string) => state === "BAD_CREDENTIALS" || state === "LOGGED_OUT" || state === "UNKNOWN_ERROR";
 export function stateLabel(state?: string): [string, string] {
@@ -150,10 +152,117 @@ export function LoginFlowView({ network, onDone, onCancel }: { network: { id: st
   );
 }
 
+
+/** How far back each network can be asked to go when an account is linked. Other networks offer no choice. */
+const REACH: Record<string, { key: string; label: string; options: [string, number][] }> = {
+  whatsapp: { key: "historyDays", label: "How far back", options: [["Last month", 30], ["Last 3 months", 90], ["Last 6 months", 180], ["Last year", 365], ["Everything the phone sends", 36500]] },
+  gmessages: { key: "chatCount", label: "How many chats", options: [["Latest 25", 25], ["Latest 100", 100], ["Latest 500", 500], ["All of them", 10000]] },
+};
+
+/** Asked before linking an account: everything or pick chats afterwards, and how far back where the network allows it. */
+function ImportOptions({ network, onStart, onCancel }: { network: Network; onStart: (mode: "all" | "choose") => void; onCancel: () => void }) {
+  const meta = networkMeta(network.id);
+  const reach = REACH[network.id];
+  const [mode, setMode] = useState<"all" | "choose">("all");
+  const [current, setCurrent] = useState<number>();
+  const [picked, setPicked] = useState<number>();
+  const [canSet, setCanSet] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!reach) return;
+    pager.admin.bridgeSettings(network.id).then((rows) => {
+      const row = rows.find((r) => r.key === reach.key);
+      if (row) { setCanSet(true); setCurrent(Number(row.value)); setPicked(Number(row.value)); }
+    }).catch(() => {});
+  }, [network.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function go() {
+    setBusy(true); setError("");
+    try {
+      if (reach && canSet && picked != null && picked !== current) await pager.admin.saveBridgeSettings(network.id, { [reach.key]: picked }, true);
+      onStart(mode);
+    } catch (e) { setError((e as Error).message); setBusy(false); }
+  }
+  const sel = reach && canSet ? reach.options.some(([, v]) => v === picked) ? picked : "" : undefined;
+  return (
+    <div className="flow">
+      <div className="flow-head"><i className="net-dot" style={{ background: meta.color }}>{meta.glyph}</i><h3>Import from {meta.label}</h3></div>
+      <div className="stack">
+        <label className="choice"><input type="radio" checked={mode === "all"} onChange={() => setMode("all")} /> <span><b>Import all chats</b><small>Everything {meta.label} offers comes in.</small></span></label>
+        <label className="choice"><input type="radio" checked={mode === "choose"} onChange={() => setMode("choose")} /> <span><b>Let me choose chats</b><small>Everything comes in, then you tick the chats to keep. The rest go to the archive; nothing is deleted.</small></span></label>
+        {reach && canSet && <label>{reach.label}<select value={sel} onChange={(e) => setPicked(Number(e.target.value))}>{sel === "" && <option value="">Custom ({picked})</option>}{reach.options.map(([l, v]) => <option key={v} value={v}>{l}</option>)}</select></label>}
+        {reach && canSet && picked !== current && <p className="muted">{meta.label}'s connection restarts for a moment when you continue.</p>}
+        {!reach && <p className="muted">{meta.label} doesn't send older messages, so only new ones will show up after linking.</p>}
+        {reach && !canSet && <p className="muted">Only an admin can change how far back {meta.label} imports.</p>}
+        {error && <div className="error">{error}</div>}
+        <p className="muted">Only one account can be imported at a time. The next one unlocks when this import has finished.</p>
+        <button className="primary" disabled={busy} onClick={go}>{busy ? "Applying…" : "Continue and link"}</button>
+        <button className="link" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/** Keeps the running import up to date, whichever screen is open. Rendered once for the whole app. */
+export function ImportWatcher() {
+  const job = useImport();
+  const count = useStore((s) => { let c = 0, m = 0; for (const x of Object.values(s.chats)) if (job && x.network === job.network) { c++; m += x.messages.length; } return `${c}:${m}`; });
+  useEffect(() => {
+    if (!job || job.phase === "done" || job.phase === "choosing") return;
+    const [c, m] = count.split(":").map(Number);
+    const tick = () => { const cur = job; const next = advance(cur, Math.max(0, c - cur.baseChats), m, Date.now()); if (next !== cur) setImport(next); };
+    tick();
+    const t = window.setInterval(tick, 5000);
+    return () => window.clearInterval(t);
+  }, [job, count]);
+  return null;
+}
+
+/** The progress of the import in flight, with the chat picker once the chats have arrived. */
+export function ImportProgress() {
+  const job = useImport();
+  const chats = useStore((s) => s.chats);
+  const [now, setNow] = useState(Date.now());
+  const [keep, setKeep] = useState<Set<string>>();
+  useEffect(() => { const t = window.setInterval(() => setNow(Date.now()), 2000); return () => window.clearInterval(t); }, []);
+  if (!job) return null;
+  const mine = Object.values(chats).filter((c) => c.network === job.network && !isArchived(c)).sort((a, b) => a.name.localeCompare(b.name));
+  const chosen = keep ?? new Set(mine.map((c) => c.id));
+  const pct = Math.round(fraction(job, now) * 100);
+  const label = job.phase === "linking" ? "Waiting for you to finish linking…" : job.phase === "importing" ? "Importing…" : job.phase === "choosing" ? "Choose the chats to keep" : "Done";
+  return (
+    <div className="import-card">
+      <div className="import-head"><b>{job.name}</b><span className="muted">{label}</span></div>
+      <div className="bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${job.phase === "linking" || job.chats === 0 ? 4 : pct}%` }} /></div>
+      <small className="muted">{job.chats} chats, {job.messages.toLocaleString()} messages so far</small>
+      {job.phase === "choosing" && <>
+        <ul className="sync-list">
+          {mine.map((c) => <li key={c.id}><label><input type="checkbox" checked={chosen.has(c.id)} onChange={(e) => { const n = new Set(chosen); e.target.checked ? n.add(c.id) : n.delete(c.id); setKeep(n); }} /> {c.name}</label></li>)}
+        </ul>
+        <div className="row-end">
+          <button className="link" onClick={() => setKeep(new Set(chosen.size === mine.length ? [] : mine.map((c) => c.id)))}>{chosen.size === mine.length ? "Select none" : "Select all"}</button>
+          <button className="primary" onClick={() => { mine.forEach((c) => { if (!chosen.has(c.id)) setTag(c.id, "u.archived", true); }); setImport({ ...job, phase: "done" }); }}>Keep {chosen.size} chat{chosen.size === 1 ? "" : "s"}</button>
+        </div>
+      </>}
+      {job.phase !== "choosing" && job.phase !== "done" && <p className="muted">You can add another account once this one finishes.</p>}
+      {(stuck(job, now) || job.phase === "done") && <button className="link" onClick={() => setImport(undefined)}>{job.phase === "done" ? "Dismiss" : "Nothing is coming in: stop waiting"}</button>}
+    </div>
+  );
+}
+
 /** Pick an app to connect, or manage the ones already connected. */
 export function AccountsModal({ onClose, initial }: { onClose: () => void; initial?: Network }) {
   const networks = useStore((s) => s.bridges);
   const [active, setActive] = useState<Network | undefined>(initial);
+  const [asked, setAsked] = useState(false);
+  const job = useImport();
+  const busy = importBusy(job);
+  const chats = useStore((s) => s.chats);
+  const begin = (n: Network, mode: "all" | "choose") => {
+    setImport({ network: n.id, name: n.name, mode, startedAt: Date.now(), baseChats: Object.values(chats).filter((c) => c.network === n.id).length, chats: 0, messages: 0, changedAt: Date.now(), phase: "linking" });
+    setAsked(true);
+  };
+  const abandon = () => { if (job?.phase === "linking") setImport(undefined); };
   const [error, setError] = useState("");
   useEffect(() => { void refreshBridges(); }, []);
 
@@ -164,12 +273,15 @@ export function AccountsModal({ onClose, initial }: { onClose: () => void; initi
   }
   return (
     <Modal onClose={onClose}>
-      {active ? (
-        <LoginFlowView network={active} onCancel={() => (initial ? onClose() : setActive(undefined))} onDone={() => { setActive(undefined); void refreshBridges(); if (initial) onClose(); }} />
+      {active && !asked ? (
+        <ImportOptions network={active} onStart={(mode) => begin(active, mode)} onCancel={() => (initial ? onClose() : setActive(undefined))} />
+      ) : active ? (
+        <LoginFlowView network={active} onCancel={() => { abandon(); setAsked(false); if (initial) onClose(); else setActive(undefined); }} onDone={() => { setAsked(false); setActive(undefined); void refreshBridges(); if (initial) onClose(); }} />
       ) : (
         <>
           <h2>Accounts</h2>
           <p className="muted">Connect the apps you use. You can add more than one account per app.</p>
+          {busy && <ImportProgress />}
           {error && <div className="error">{error}</div>}
           <ul className="net-list">
             {networks.map((n) => {
@@ -182,7 +294,7 @@ export function AccountsModal({ onClose, initial }: { onClose: () => void; initi
                     {n.error && <small className="warn">Unavailable right now</small>}
                     {n.logins.map((l) => <small key={l.id}>{l.name || l.profile?.name || l.id}<button className="link inline" onClick={() => disconnect(n, l)}>Disconnect</button></small>)}
                   </div>
-                  <button className="pill" disabled={!!n.error} onClick={() => setActive(n)}>{n.logins.length ? "Add another" : "Connect"}</button>
+                  <button className="pill" disabled={!!n.error || busy} title={busy ? "Wait for the import in progress to finish" : undefined} onClick={() => setActive(n)}>{n.logins.length ? "Add another" : "Connect"}</button>
                 </li>
               );
             })}
@@ -212,6 +324,7 @@ export function BridgesPage() {
   const st = useSettings();
   const [relogin, setRelogin] = useState<Network>();
   const [adding, setAdding] = useState(false);
+  const job = useImport();
   useEffect(() => { void refreshBridges(); }, []);
   return (
     <>
@@ -224,7 +337,8 @@ export function BridgesPage() {
       </Modal>}
       {!networks.length && <p className="muted pad">Loading…</p>}
       {networks.length > 0 && !networks.some((n) => n.logins.length) && <p className="muted pad">Nothing connected yet.</p>}
-      <div className="pad"><button className="primary" onClick={() => setAdding(true)}>Add account</button></div>
+      {job && <div className="pad"><ImportProgress /></div>}
+      <div className="pad"><button className="primary" disabled={importBusy(job)} onClick={() => setAdding(true)}>Add account</button>{importBusy(job) && <p className="muted">Wait for the import in progress to finish.</p>}</div>
       {networks.filter((n) => n.logins.length > 0).map((n) => {
         const meta = networkMeta(n.id);
         return (
@@ -242,7 +356,7 @@ export function BridgesPage() {
                 </Row>
               );
             })}
-            <div className="pad"><button className="link" onClick={() => setRelogin(n)}>{`Add another ${meta.label} account`}</button></div>
+            <div className="pad"><button className="link" disabled={importBusy(job)} onClick={() => setRelogin(n)}>{`Add another ${meta.label} account`}</button></div>
             <SwitchRow title={`Show ${meta.label} pages in inbox`} checked={!st.hiddenNetworks.includes(n.id)} onChange={(on) => updateSettings({ hiddenNetworks: on ? st.hiddenNetworks.filter((x) => x !== n.id) : [...st.hiddenNetworks, n.id] })} />
           </section>
         );

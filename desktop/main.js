@@ -18,6 +18,7 @@ const savePrefs = () => { try { fs.mkdirSync(path.dirname(prefsFile), { recursiv
 // graphics" in Settings. The disk cache for downloaded pictures is capped.
 if (!prefs.smoothGraphics) app.disableHardwareAcceleration();
 app.commandLine.appendSwitch("disk-cache-size", String(64 * 1024 * 1024));
+app.commandLine.appendSwitch("js-flags", "--max-old-space-size=400"); // keep the page's memory under about 500 MB together with the rest of the app
 
 let win = null, tray = null, quitting = false, unread = 0;
 const hidden = process.argv.includes("--hidden");

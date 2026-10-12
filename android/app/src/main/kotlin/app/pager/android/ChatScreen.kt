@@ -257,6 +257,10 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
         } else if (newestId != null && (newestMine || list.firstVisibleItemIndex <= 4)) { if (s.reduceMotion) list.scrollToItem(0) else list.animateScrollToItem(0) }
         if (s.markReadMode == "open" || (s.markReadMode == "scrolled" && list.firstVisibleItemIndex <= 2)) store.markRead(roomId)
     }
+    LaunchedEffect(roomId) {
+        snapshotFlow { list.firstVisibleItemIndex > 4 }.collect { up -> groupIds.forEach { id -> store.readingOlder(id, up) } }
+    }
+    DisposableEffect(roomId) { onDispose { groupIds.forEach { id -> store.readingOlder(id, false) } } }
     LaunchedEffect(roomId, chat?.reachedStart) {
         snapshotFlow { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index to list.layoutInfo.totalItemsCount }.collect { (last, total) ->
             if (last != null && total > 0 && last >= total - 6) groupIds.forEach { id -> store.loadOlder(id) }

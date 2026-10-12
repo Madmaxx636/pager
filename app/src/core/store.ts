@@ -749,12 +749,29 @@ export const preview = (u: string) => { if (!previews.has(u)) previews.set(u, ma
 const loading = new Set<string>();
 /** How many messages a page should have before we stop fetching older ones by ourselves. */
 const FILL_MESSAGES = 30;
+/** When each chat was last being read above its newest messages, and whether it is right now. */
+const deepAt = new Map<string, number>();
+const deepNow = new Set<string>();
+const POOL_CLEAR_MS = 12 * 60_000;
+/** Chat.tsx reports whether the reader is scrolled up. Scrolling back down starts the clock for dropping the extra history. */
+export function readingOlder(roomId: string, up: boolean) { if (up) { deepNow.add(roomId); deepAt.set(roomId, Date.now()); } else deepNow.delete(roomId); }
+/** Drops the history pulled in by scrolling up once it has been left alone for a while, keeping only the newest messages. */
+export function trimPulledHistory(now = Date.now()) {
+  let chats: typeof state.chats | undefined;
+  for (const c of Object.values(state.chats)) {
+    if (c.messages.length <= KEEP_MESSAGES || deepNow.has(c.id) || now - (deepAt.get(c.id) ?? 0) < POOL_CLEAR_MS) continue;
+    chats ??= { ...state.chats };
+    chats[c.id] = { ...c, messages: c.messages.slice(-KEEP_MESSAGES), prevBatch: null, reachedStart: false };
+  }
+  if (chats) set({ chats });
+}
+window.setInterval(() => trimPulledHistory(), 60_000);
 export function loadOlder(roomId: string, pages = 0) {
   const c = state.chats[roomId];
   if (!c || c.reachedStart || loading.has(roomId)) return;
   const token = c.prevBatch ?? since; if (!token) return;
   loading.add(roomId);
-  matrix.messages(roomId, token).then(async ({ chunk, end, state: st }) => { const clear = await decryptEvents(roomId, chunk); patchChat(roomId, (x) => applyHistory(x, clear, end, st ?? [], state.session?.userId ?? "")); }).catch(() => {}).finally(() => {
+  matrix.messages(roomId, token).then(async ({ chunk, end, state: st }) => { const clear = await decryptEvents(roomId, chunk); deepAt.set(roomId, Date.now()); patchChat(roomId, (x) => applyHistory(x, clear, end, st ?? [], state.session?.userId ?? "")); }).catch(() => {}).finally(() => {
     loading.delete(roomId);
     // A page can be all bookkeeping (people joining, send statuses) and add nothing to show. The list then doesn't change, so nothing
     // would ask for the next page and the history would sit there until something else (like sending a message) woke it up.
