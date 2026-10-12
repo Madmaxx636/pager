@@ -20,6 +20,7 @@ EXPR='
   | (select(.network | has("conversation_sync_limit")) | .network.conversation_sync_limit) = 10000
   | (select(.network.sync | has("create_limit")) | .network.sync.create_limit) = 0
   | (select(.network.sync | has("update_limit")) | .network.sync.update_limit) = 0
+  | (select(.network.history_sync) | .network.history_sync.dispatch_wait) = "5m"
   | (select(.network.history_sync) | .network.history_sync.full_sync_config.days_limit) = 36500
   | (select(.network.history_sync) | .network.history_sync.full_sync_config.size_mb_limit) = 102400
   | (select(.network.history_sync) | .network.history_sync.full_sync_config.storage_quota_mb) = 102400
