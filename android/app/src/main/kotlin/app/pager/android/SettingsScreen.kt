@@ -741,6 +741,7 @@ private fun AdvancedSettings(navigate: (String) -> Unit) {
             SwitchRow("Background sync", "Keeps a quiet notification so messages arrive when the app is closed", s.backgroundSync) { v -> store.settings.update { copy(backgroundSync = v) } }; GroupDivider()
             val ok = remember { androidx.compose.runtime.mutableStateOf(Watchdog.exempt(context)) }
             NavRow("Reliable notifications", if (ok.value) "Allowed: the phone won't stop Pager in the background" else "Not allowed yet: the phone may stop Pager, so messages arrive late. Tap to allow") { Watchdog.requestExemption(context); ok.value = Watchdog.exempt(context) }; GroupDivider()
+            ButtonRow("Reload everything from the server") { store.resyncFromServer() }; GroupDivider()
             ButtonRow("Battery optimization settings") { context.startActivity(Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }
         SettingsGroup("Developer", footer = "Adds a 'View source' action to messages, showing event IDs and raw details.") {
