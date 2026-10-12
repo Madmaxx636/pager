@@ -18,10 +18,30 @@ const savePrefs = () => { try { fs.mkdirSync(path.dirname(prefsFile), { recursiv
 // graphics" in Settings. The disk cache for downloaded pictures is capped.
 if (!prefs.smoothGraphics) app.disableHardwareAcceleration();
 app.commandLine.appendSwitch("disk-cache-size", String(64 * 1024 * 1024));
-app.commandLine.appendSwitch("js-flags", "--max-old-space-size=400"); // keep the page's memory under about 500 MB together with the rest of the app
+// The page's script heap is capped well under the total budget (idle 200-300 MB, never over 400 MB, 500 MB at the very most), and Chromium's
+// low-memory mode makes its caches and buffers smaller. gc is exposed so the memory watcher below can ask for a clean-up.
+app.commandLine.appendSwitch("js-flags", "--max-old-space-size=256 --expose-gc");
+app.commandLine.appendSwitch("enable-low-end-device-mode");
+app.commandLine.appendSwitch("renderer-process-limit", "1");
 
 let win = null, tray = null, quitting = false, unread = 0;
 const hidden = process.argv.includes("--hidden");
+
+/** What the app's processes hold privately, in MB, summed. This is the number the limits below are about. */
+function memoryNow() {
+  const parts = app.getAppMetrics().map((m) => ({ type: m.type === "Tab" ? "Page" : m.type, mb: Math.round((m.memory.privateBytes ?? m.memory.workingSetSize) / 1024) }));
+  return { total: parts.reduce((a, p) => a + p.mb, 0), parts };
+}
+let lastLevel = "ok";
+/** Over 300 MB the page gives back what it can; over 400 it gives back hard; in the tray it keeps next to nothing. */
+function watchMemory() {
+  if (!win || win.isDestroyed()) return;
+  const { total } = memoryNow();
+  const level = !win.isVisible() || win.isMinimized() ? "hidden" : total > 400 ? "critical" : total > 300 ? "high" : "ok";
+  if (level !== "ok" || lastLevel !== "ok") win.webContents.send("memory", level);
+  if (level !== "ok") win.webContents.executeJavaScript("typeof gc === 'function' && gc()").catch(() => {});
+  lastLevel = level;
+}
 
 function showWindow() {
   if (!win) return createWindow();
@@ -178,6 +198,8 @@ if (!app.requestSingleInstanceLock()) {
     w.webContents.setWindowOpenHandler(({ url }) => { try { if (new URL(url).protocol === "https:") w.loadURL(url); } catch { /* ignore */ } return { action: "deny" }; });
     w.loadURL(spec.url).catch((e) => { if (!done) { done = true; clearInterval(timer); if (!w.isDestroyed()) w.destroy(); reject(e); } });
   }));
+  ipcMain.handle("memory:get", () => memoryNow());
+  setInterval(watchMemory, 20_000);
   ipcMain.handle("system-theme", () => readSystemTheme());
   // The encryption library is a WebAssembly file inside the bundled web app; the page cannot fetch it from disk, so we read it for it.
   ipcMain.handle("crypto-wasm", () => {

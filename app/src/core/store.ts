@@ -1,3 +1,4 @@
+import { KEEP_MESSAGES, poolClearMs } from "./memory";
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { BlobCache } from "./lru";
@@ -137,8 +138,6 @@ async function dbSet(key: string, value: unknown) {
 }
 async function dbDel(key: string) { try { const db = await openDb(); db.transaction("kv", "readwrite").objectStore("kv").delete(key); } catch { /* ignore */ } }
 
-/** Messages kept per chat on this device; older ones are fetched from the server again when scrolling up. */
-const KEEP_MESSAGES = 300;
 let saveTimer: number | undefined;
 function scheduleSave() {
   window.clearTimeout(saveTimer);
@@ -752,20 +751,40 @@ const FILL_MESSAGES = 30;
 /** When each chat was last being read above its newest messages, and whether it is right now. */
 const deepAt = new Map<string, number>();
 const deepNow = new Set<string>();
-const POOL_CLEAR_MS = 12 * 60_000;
 /** Chat.tsx reports whether the reader is scrolled up. Scrolling back down starts the clock for dropping the extra history. */
 export function readingOlder(roomId: string, up: boolean) { if (up) { deepNow.add(roomId); deepAt.set(roomId, Date.now()); } else deepNow.delete(roomId); }
 /** Drops the history pulled in by scrolling up once it has been left alone for a while, keeping only the newest messages. */
 export function trimPulledHistory(now = Date.now()) {
   let chats: typeof state.chats | undefined;
   for (const c of Object.values(state.chats)) {
-    if (c.messages.length <= KEEP_MESSAGES || deepNow.has(c.id) || now - (deepAt.get(c.id) ?? 0) < POOL_CLEAR_MS) continue;
+    if (c.messages.length <= KEEP_MESSAGES || deepNow.has(c.id) || now - (deepAt.get(c.id) ?? 0) < poolClearMs(c.messages.length)) continue;
     chats ??= { ...state.chats };
     chats[c.id] = { ...c, messages: c.messages.slice(-KEEP_MESSAGES), prevBatch: null, reachedStart: false };
   }
   if (chats) set({ chats });
 }
-window.setInterval(() => trimPulledHistory(), 60_000);
+window.setInterval(() => trimPulledHistory(), 30_000);
+
+/** The desktop app watches its own memory and says how tight it is: "high" over 300 MB, "critical" over 400, "hidden" while it sits in the tray. */
+export type MemoryLevel = "ok" | "high" | "critical" | "hidden";
+const KEEP_IDLE = 40, KEEP_TIGHT = 20;
+export function squeezeMemory(level: MemoryLevel) {
+  if (level === "ok") return;
+  const idleKeep = level === "high" ? KEEP_IDLE : KEEP_TIGHT;
+  // The chat on screen keeps its messages unless memory is critical; someone scrolled up in it keeps up to 500 so the page doesn't jump.
+  const openKeep = level === "critical" ? (deepNow.has(openRoom ?? "") ? 500 : 150) : level === "hidden" ? idleKeep : KEEP_MESSAGES;
+  let chats: typeof state.chats | undefined;
+  for (const c of Object.values(state.chats)) {
+    const keep = c.id === openRoom ? openKeep : idleKeep;
+    if (c.messages.length <= keep) continue;
+    chats ??= { ...state.chats };
+    chats[c.id] = { ...c, messages: c.messages.slice(-keep), prevBatch: null, reachedStart: false };
+    deepAt.delete(c.id);
+  }
+  if (chats) set({ chats });
+  blobCache.clear();
+}
+window.pagerDesktop?.onMemory?.((level) => squeezeMemory(level as MemoryLevel));
 export function loadOlder(roomId: string, pages = 0) {
   const c = state.chats[roomId];
   if (!c || c.reachedStart || loading.has(roomId)) return;
@@ -979,6 +998,8 @@ declare global {
       setBadge(n: number): void;
       getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean; smoothGraphics?: boolean }): void; setZoom(z: number): void;
       onOpenRoom(cb: (roomId: string) => void): void;
+      onMemory?(cb: (level: string) => void): void;
+      memory?(): Promise<{ total: number; parts: { type: string; mb: number }[] }>;
       cookieLogin(spec: unknown): Promise<Record<string, string> | null>;
       platform: string;
       hostname?: string;

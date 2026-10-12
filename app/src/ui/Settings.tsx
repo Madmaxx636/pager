@@ -203,7 +203,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
     );
     case "about": return (
       <>
-        <Group title="Pager"><Row title={`Version ${import.meta.env.VITE_APP_VERSION ?? "0.3.0"}`} hint={window.pagerDesktop ? `Desktop app (${window.pagerDesktop.platform})` : "Web app"} /><Row title="An open-source, self-hosted unified messenger." /><Row title="Show the welcome tour again" hint="The mascot walks you through Pager" onClick={() => setTouring(true)} chevron /></Group>
+        <Group title="Pager"><Row title={`Version ${import.meta.env.VITE_APP_VERSION ?? "0.3.0"}`} hint={window.pagerDesktop ? `Desktop app (${window.pagerDesktop.platform})` : "Web app"} /><Row title="An open-source, self-hosted unified messenger." />{window.pagerDesktop?.memory && <MemoryRow />}<Row title="Show the welcome tour again" hint="The mascot walks you through Pager" onClick={() => setTouring(true)} chevron /></Group>
         <Group title="Account"><Row title={me()} hint={http.base || window.location.origin} /><Row title="Sign out" onClick={() => signOut()}><span className="danger">Sign out</span></Row><Row title="Delete my profile" hint="Removes your account and everything on this server. This can't be undone" onClick={() => setDeleting(true)}><span className="danger">Delete</span></Row></Group>
         {deleting && <DeleteProfile onClose={() => setDeleting(false)} />}
         {touring && <Tour nav={nav} forceOpen onClose={() => setTouring(false)} />}
@@ -673,4 +673,11 @@ function SyncSettingsDialog({ onClose }: { onClose: () => void }) {
       <div className="row-end"><button className="link" onClick={onClose}>Close</button></div>
     </Modal>
   );
+}
+
+/** Desktop only: what the app is using right now, by part. */
+function MemoryRow() {
+  const [m, setM] = useState<{ total: number; parts: { type: string; mb: number }[] }>();
+  useEffect(() => { const f = () => void window.pagerDesktop?.memory?.().then(setM); f(); const t = window.setInterval(f, 5000); return () => window.clearInterval(t); }, []);
+  return <Row title={m ? `Memory in use: ${m.total} MB` : "Memory in use"} hint={m?.parts.filter((p) => p.mb > 0).map((p) => `${p.type} ${p.mb}`).join(" · ")} />;
 }

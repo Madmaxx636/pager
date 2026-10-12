@@ -16,5 +16,7 @@ contextBridge.exposeInMainWorld("pagerDesktop", {
   cookieLogin: (spec) => ipcRenderer.invoke("cookie-login", spec),
   readCryptoWasm: () => ipcRenderer.invoke("crypto-wasm"),
   setZoom: (z) => ipcRenderer.send("zoom", z),
+  onMemory: (cb) => ipcRenderer.on("memory", (_e, level) => cb(level)),
+  memory: () => ipcRenderer.invoke("memory:get"),
   onOpenRoom: (cb) => ipcRenderer.on("open-room", (_e, id) => cb(id)),
 });
