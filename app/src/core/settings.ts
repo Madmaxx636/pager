@@ -191,8 +191,8 @@ let state: AppSettings = raw;
 const listeners = new Set<() => void>();
 
 function load(): AppSettings {
-  // "Do not disturb" and the alert delay were taken out of Settings, so whatever was saved for them is switched off.
-  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}"), dndUntil: 0, notifDelaySec: 0 }; } catch { return { ...DEFAULTS }; }
+  // "Do not disturb", the alert delay and the per-network settings were taken out of Settings, so whatever was saved for them is switched off.
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}"), dndUntil: 0, notifDelaySec: 0, notifNetworkMode: {}, notifMutedNetworks: [] }; } catch { return { ...DEFAULTS }; }
 }
 
 // ---- Syncing settings between your devices: only when you press the button ----------------------------------------

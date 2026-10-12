@@ -584,15 +584,6 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
                 SwitchRow("Let important ones through", "Pinned pages, mentions, replies and keywords still make a sound", s.notifQuietBreakThrough) { v -> set { copy(notifQuietBreakThrough = v) } }
             }
         }
-        SettingsGroup("Per network", footer = "Pick how each app notifies you. A page's own setting (in its info page) wins.") {
-            known.forEachIndexed { i, id ->
-                if (i > 0) GroupDivider()
-                ChoiceRow(
-                    networkMeta(id).label, listOf("all" to "Every message", "mentions" to "Mentions only", "none" to "Nothing"),
-                    s.notifNetworkMode[id] ?: if (id in s.notifMutedNetworks) "none" else "all", s.notifEnabled,
-                ) { v -> set { copy(notifNetworkMode = notifNetworkMode + (id to v), notifMutedNetworks = notifMutedNetworks - id) } }
-            }
-        }
         val custom = s.notifChat.filterValues { !it.isDefault }
         if (custom.isNotEmpty()) SettingsGroup("Pages with their own settings") {
             val chats by store.chats.collectAsState()

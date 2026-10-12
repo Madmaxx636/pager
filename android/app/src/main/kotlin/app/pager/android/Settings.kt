@@ -170,7 +170,8 @@ class SettingsStore(context: Context) {
     val value get() = _state.value
 
     private fun load(): AppSettings = runCatching {
-        json.decodeFromString(AppSettings.serializer(), prefs.getString("json", null) ?: return@runCatching AppSettings())
+        // The alert delay and the per-network settings were taken out of Settings, so whatever was saved for them is switched off.
+        json.decodeFromString(AppSettings.serializer(), prefs.getString("json", null) ?: return@runCatching AppSettings()).copy(notifDelaySec = 0, notifNetworkMode = emptyMap(), notifMutedNetworks = emptySet())
     }.getOrDefault(AppSettings())
 
     // ---- Syncing settings between your devices: only when you press the button -----------------------------------

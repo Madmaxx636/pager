@@ -147,7 +147,11 @@ object Notifier {
         val id = m.roomId.hashCode()
         val lines = history.getOrPut(m.roomId) { mutableListOf() }
         val shown = when (preview) { "hidden" -> "New message"; else -> m.text }
-        lines.add(Line(if (preview == "hidden") m.chat else m.sender, shown, m.ts.takeIf { it > 0 } ?: System.currentTimeMillis()))
+        val at = m.ts.takeIf { it > 0 } ?: System.currentTimeMillis()
+        val who = if (preview == "hidden") m.chat else m.sender
+        // Never list the same message twice in one notification.
+        if (lines.any { it.sender == who && it.text == shown && it.ts == at }) return
+        lines.add(Line(who, shown, at))
         while (lines.size > 6) lines.removeAt(0)
 
         val me = Person.Builder().setName("You").build()

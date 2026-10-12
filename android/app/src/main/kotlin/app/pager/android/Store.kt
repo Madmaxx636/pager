@@ -68,6 +68,13 @@ class Store(private val context: Context) {
     private val _import = MutableStateFlow<ImportJob?>(prefs.getString("importJob", null)?.let { runCatching { kotlinx.serialization.json.Json.decodeFromString<ImportJob>(it) }.getOrNull() })
     /** The bridge import in flight (only one at a time), or null. */
     val importJob: StateFlow<ImportJob?> = _import.asStateFlow()
+    private val recentAlerts = object : LinkedHashMap<String, Unit>() { override fun removeEldestEntry(e: MutableMap.MutableEntry<String, Unit>?) = size > 300 }
+    /** False when this exact message (same page, sender, text and time) has already been alerted for. */
+    private fun firstTimeSeen(m: Incoming): Boolean = synchronized(recentAlerts) {
+        val key = "${m.roomId}|${m.sender}|${m.text}|${if (m.reaction) m.ts / 5000 else m.ts}"
+        if (recentAlerts.containsKey(key)) false else { recentAlerts[key] = Unit; true }
+    }
+
     fun setImport(job: ImportJob?) {
         _import.value = job
         prefs.edit().apply { if (job == null) remove("importJob") else putString("importJob", kotlinx.serialization.json.Json.encodeToString(ImportJob.serializer(), job)) }.apply()
@@ -568,7 +575,8 @@ class Store(private val context: Context) {
                         val d = NotifyPolicy.decide(m, quiet = m.roomId in muted || c?.lowPriority == true, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st)
                         if (!d.show) continue
                         val out = m.copy(silent = d.silent, preview = d.preview)
-                        _incoming.tryEmit(out)
+                        // The same message can reach us more than once (a refetched page, two sync passes); alert for it only once.
+                        if (firstTimeSeen(out)) _incoming.tryEmit(out)
                     }
                     if (settings.value.unarchiveOnMessage) {
                         r.incoming.map { it.roomId }.distinct().filter { it !in muted && r.chats[it]?.archived == true }.forEach { setTag(it, "u.archived", false) }

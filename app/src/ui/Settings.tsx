@@ -338,13 +338,6 @@ function Notifications() {
           <SwitchRow title="Let important ones through" hint="Pinned pages, mentions, replies and keywords still make a sound" checked={s.notifQuietBreakThrough} onChange={(v) => updateSettings({ notifQuietBreakThrough: v })} />
         </>}
       </Group>
-      <Group title="Per network" footer="Pick how each app notifies you. A page's own setting (in its info page) wins.">
-        {known.map((id) => (
-          <Select key={id} title={networkMeta(id).label} value={s.notifNetworkMode[id] ?? (s.notifMutedNetworks.includes(id) ? "none" : "all")} disabled={off}
-            options={[["all", "Every message"], ["mentions", "Mentions only"], ["none", "Nothing"]]}
-            onChange={(v) => updateSettings({ notifNetworkMode: { ...s.notifNetworkMode, [id]: v }, notifMutedNetworks: s.notifMutedNetworks.filter((x) => x !== id) })} />
-        ))}
-      </Group>
       {chats.length > 0 && (
         <Group title="Pages with their own settings">
           {chats.map(([id, p]) => <Row key={id} title={id.slice(0, 12) + "…"} hint={`${p.mode && p.mode !== "default" ? p.mode : "default alerts"}${p.sound === "off" ? " · silent" : ""}${p.preview && p.preview !== "default" ? ` · ${p.preview} previews` : ""}`}><button className="link" onClick={() => { const { [id]: _x, ...rest } = s.notifChat; updateSettings({ notifChat: rest }); }}>Reset</button></Row>)}
