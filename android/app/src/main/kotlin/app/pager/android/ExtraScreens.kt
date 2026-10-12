@@ -109,7 +109,9 @@ fun BridgesScreen(onBack: () -> Unit) {
         if (note.isNotEmpty()) Text(note, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodyMedium)
         if (networks.isEmpty()) Text("Loading…", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         else if (networks.none { it.logins.isNotEmpty() }) Text("Nothing connected yet.", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SettingsGroup { ButtonRow("Add account") { adding = true } }
+        val importJob by store.importJob.collectAsState()
+        if (importJob != null) Box(Modifier.padding(horizontal = 16.dp)) { ImportProgressCard(store) }
+        SettingsGroup(footer = if (importJob?.busy == true) "Wait for the import in progress to finish." else null) { ButtonRow("Add account", enabled = importJob?.busy != true) { adding = true } }
         networks.filter { it.logins.isNotEmpty() }.forEach { n ->
             val meta = networkMeta(n.id)
             SettingsGroup(n.name, footer = if (n.unavailable) "This bridge isn't responding right now." else null) {
@@ -125,7 +127,7 @@ fun BridgesScreen(onBack: () -> Unit) {
                     }
                     GroupDivider()
                 }
-                ButtonRow("Add another ${meta.label} account") { relogin = n }
+                ButtonRow("Add another ${meta.label} account", enabled = importJob?.busy != true) { relogin = n }
                 GroupDivider()
                 SwitchRow("Show ${meta.label} pages in inbox", null, n.id !in s.hiddenNetworks) { on -> store.settings.update { copy(hiddenNetworks = if (on) hiddenNetworks - n.id else hiddenNetworks + n.id) } }
             }

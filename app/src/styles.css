@@ -546,3 +546,9 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .chat-row { content-visibility: auto; contain-intrinsic-size: auto 68px; }
 .photo-grid > * , .link-pick > * { content-visibility: auto; contain-intrinsic-size: auto 80px; }
 .dt-emoji { font-size: 1.5rem; line-height: 1; margin-right: 10px; } .sync-list { display: grid; gap: 4px; margin: 6px 0 10px; } .sync-list .check-row { align-items: flex-start; }
+
+/* Import wizard */
+.choice { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; } .choice small { display: block; color: var(--muted, #8a94a6); }
+.import-card { border: 1px solid var(--line, #8883); border-radius: 12px; padding: 12px 14px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+.import-head { display: flex; justify-content: space-between; gap: 10px; }
+.bar { height: 8px; border-radius: 4px; background: #8882; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--accent, #0ea5e9); border-radius: 4px; transition: width .6s; }

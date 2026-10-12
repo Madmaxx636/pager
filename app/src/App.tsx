@@ -13,6 +13,7 @@ const NewChat = lazy(() => import("./ui/NewChat").then((m) => ({ default: m.NewC
 const Search = lazy(() => import("./ui/Search").then((m) => ({ default: m.Search })));
 const ChatPicker = lazy(() => import("./ui/ChatPicker").then((m) => ({ default: m.ChatPicker })));
 const AccountsModal = lazy(() => import("./ui/Accounts").then((m) => ({ default: m.AccountsModal })));
+import { ImportWatcher } from "./ui/Accounts";
 const Palette = lazy(() => import("./ui/Palette").then((m) => ({ default: m.Palette })));
 import { SHORTCUTS } from "./core/settings";
 import { comboOf } from "./core/combo";
@@ -121,6 +122,7 @@ export function App() {
       <main className="main">{main}</main>
       <KeySetup />
       <Tour nav={nav} />
+      <ImportWatcher />
       {accounts && <AccountsModal onClose={() => setAccounts(false)} />}
       {palette && <Palette nav={nav} current={roomId ?? undefined} onClose={() => setPalette(false)} onSnooze={setSnoozing} />}
       {snoozing && <WhenModal title="Snooze until" onPick={(at) => { snooze(snoozing, at); setSnoozing(undefined); }} onClose={() => setSnoozing(undefined)} />}

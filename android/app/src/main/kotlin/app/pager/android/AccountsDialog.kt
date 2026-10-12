@@ -49,6 +49,14 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.RadioButton
+import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import kotlinx.coroutines.launch
 
 private fun qrBitmap(data: String, px: Int = 480): Bitmap {
@@ -62,6 +70,9 @@ private fun qrBitmap(data: String, px: Int = 480): Bitmap {
 fun AccountsDialog(store: Store, initial: Network? = null, onClose: () -> Unit) {
     var networks by remember { mutableStateOf<List<Network>?>(null) }
     var active by remember { mutableStateOf(initial) }
+    var asked by remember { mutableStateOf(false) }
+    val job by store.importJob.collectAsState()
+    val busy = job?.busy == true
     var error by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -74,11 +85,20 @@ fun AccountsDialog(store: Store, initial: Network? = null, onClose: () -> Unit) 
         run {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp)) {
                 val net = active
-                if (net != null) {
-                    LoginFlowView(store, net, onCancel = { if (initial != null) onClose() else active = null }, onDone = { active = null; refresh(); scope.launch { store.refreshBridges() }; if (initial != null) onClose() })
+                if (net != null && !asked) {
+                    ImportOptions(store, net, onCancel = { if (initial != null) onClose() else active = null }, onStart = { mode ->
+                        val base = store.chats.value.values.count { it.network == net.id }
+                        store.setImport(ImportJob(net.id, net.name, mode, System.currentTimeMillis(), base))
+                        asked = true
+                    })
+                } else if (net != null) {
+                    LoginFlowView(store, net,
+                        onCancel = { if (store.importJob.value?.phase == "linking") store.setImport(null); asked = false; if (initial != null) onClose() else active = null },
+                        onDone = { asked = false; active = null; refresh(); scope.launch { store.refreshBridges() }; if (initial != null) onClose() })
                 } else {
                     Text("Accounts", fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Text("Connect the apps you use. You can add more than one account per app.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+                    if (busy) ImportProgressCard(store)
                     if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
                     if (networks == null && error.isEmpty()) CircularProgressIndicator(Modifier.padding(16.dp).size(24.dp))
                     networks?.forEach { n ->
@@ -95,7 +115,7 @@ fun AccountsDialog(store: Store, initial: Network? = null, onClose: () -> Unit) 
                                     }
                                 }
                             }
-                            Button(enabled = !n.unavailable, onClick = { active = n }) { Text(if (n.logins.isEmpty()) "Connect" else "Add another") }
+                            Button(enabled = !n.unavailable && !busy, onClick = { active = n }) { Text(if (n.logins.isEmpty()) "Connect" else "Add another") }
                         }
                     }
                     Text(
@@ -216,4 +236,93 @@ private fun LoginFlowView(store: Store, net: Network, onCancel: () -> Unit, onDo
 
     if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 10.dp))
     if (s?.type != "complete") TextButton(onClick = onCancel, Modifier.padding(top = 8.dp)) { Text("Cancel") }
+}
+
+/** How far back each network can be asked to go when an account is linked. Other networks offer no choice. */
+private val REACH = mapOf(
+    "whatsapp" to Triple("historyDays", "How far back", listOf("Last month" to 30, "Last 3 months" to 90, "Last 6 months" to 180, "Last year" to 365, "Everything the phone sends" to 36500)),
+    "gmessages" to Triple("chatCount", "How many chats", listOf("Latest 25" to 25, "Latest 100" to 100, "Latest 500" to 500, "All of them" to 10000)),
+)
+
+/** Asked before linking an account: everything or pick chats afterwards, and how far back where the network allows it. */
+@Composable
+private fun ImportOptions(store: Store, net: Network, onStart: (String) -> Unit, onCancel: () -> Unit) {
+    val meta = networkMeta(net.id)
+    val reach = REACH[net.id]
+    var mode by remember { mutableStateOf("all") }
+    var current by remember { mutableStateOf<Int?>(null) }
+    var picked by remember { mutableStateOf<Int?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(net.id) {
+        if (reach != null) runCatching { store.pager.bridgeNumbers(net.id) }.onSuccess { rows -> rows.firstOrNull { it.key == reach.first }?.let { current = it.value; picked = it.value } }
+    }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) { NetDot(meta, net.id); Text("Import from ${meta.label}", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp)) }
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.Top) {
+            RadioButton(mode == "all", { mode = "all" })
+            Column(Modifier.padding(top = 12.dp)) { Text("Import all chats", fontWeight = FontWeight.SemiBold); Text("Everything ${meta.label} offers comes in.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            RadioButton(mode == "choose", { mode = "choose" })
+            Column(Modifier.padding(top = 12.dp)) { Text("Let me choose chats", fontWeight = FontWeight.SemiBold); Text("Everything comes in, then you tick the chats to keep. The rest go to the archive; nothing is deleted.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        if (reach != null && current != null) {
+            Text(reach.second, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
+            reach.third.forEach { (label, v) ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { RadioButton(picked == v, { picked = v }); Text(label) }
+            }
+            if (picked != current) Text("${meta.label}'s connection restarts for a moment when you continue.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else if (reach == null) Text("${meta.label} doesn't send older messages, so only new ones will show up after linking.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
+        else Text("Only an admin can change how far back ${meta.label} imports.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
+        if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
+        Text("Only one account can be imported at a time. The next one unlocks when this import has finished.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
+        Button(enabled = !busy, onClick = {
+            busy = true; error = ""
+            scope.launch {
+                runCatching { if (reach != null && picked != null && picked != current) store.pager.saveBridgeNumber(net.id, reach.first, picked!!) }
+                    .onSuccess { onStart(mode) }.onFailure { error = it.message ?: "Couldn't apply that"; busy = false }
+            }
+        }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Applying…" else "Continue and link") }
+        TextButton(onClick = onCancel, Modifier.align(Alignment.End)) { Text("Cancel") }
+    }
+}
+
+/** The progress of the import in flight, with the chat picker once the chats have arrived. */
+@Composable
+fun ImportProgressCard(store: Store) {
+    val job by store.importJob.collectAsState()
+    val chats by store.chats.collectAsState()
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(2_000); now = System.currentTimeMillis() } }
+    val j = job ?: return
+    val mine = chats.values.filter { it.network == j.network && !it.archived }.sortedBy { it.name.lowercase() }
+    var keep by remember(j.phase) { mutableStateOf<Set<String>?>(null) }
+    val chosen = keep ?: mine.map { it.id }.toSet()
+    Surface(Modifier.fillMaxWidth().padding(vertical = 8.dp), shape = RoundedCornerShape(12.dp), tonalElevation = 2.dp) {
+        Column(Modifier.padding(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(j.name, fontWeight = FontWeight.Bold)
+                Text(when (j.phase) { "linking" -> "Waiting for you to finish linking…"; "importing" -> "Importing…"; "choosing" -> "Choose the chats to keep"; else -> "Done" }, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            LinearProgressIndicator(progress = { if (j.phase == "linking" || j.chats == 0) 0.04f else j.fraction(now) }, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+            Text("${j.chats} chats, ${"%,d".format(j.messages)} messages so far", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (j.phase == "choosing") {
+                LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                    items(mine, key = { it.id }) { c ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(c.id in chosen, { on -> keep = if (on) chosen + c.id else chosen - c.id })
+                            Text(c.name)
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { keep = if (chosen.size == mine.size) emptySet() else mine.map { it.id }.toSet() }) { Text(if (chosen.size == mine.size) "Select none" else "Select all") }
+                    Button(onClick = { mine.forEach { if (it.id !in chosen) store.setTag(it.id, "u.archived", true) }; store.setImport(j.copy(phase = "done")) }) { Text("Keep ${chosen.size} chat${if (chosen.size == 1) "" else "s"}") }
+                }
+            } else if (j.busy) Text("You can add another account once this one finishes.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+            if (j.stuck(now) || j.phase == "done") TextButton(onClick = { store.setImport(null) }) { Text(if (j.phase == "done") "Dismiss" else "Nothing is coming in: stop waiting") }
+        }
+    }
 }

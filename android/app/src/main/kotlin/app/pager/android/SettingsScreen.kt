@@ -186,9 +186,9 @@ fun TextFieldRow(title: String, value: String, placeholder: String, secret: Bool
 }
 
 @Composable
-fun ButtonRow(label: String, danger: Boolean = false, onClick: () -> Unit) {
-    Text(label, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-        modifier = Modifier.fillMaxWidth().dpadFocus().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp))
+fun ButtonRow(label: String, danger: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+    Text(label, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else 0.4f), fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+        modifier = Modifier.fillMaxWidth().dpadFocus().clickable(enabled = enabled, onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp))
 }
 
 // ---- Search index (the command-bar style "find a setting") ------------------------------

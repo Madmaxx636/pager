@@ -7,7 +7,7 @@ import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, is
 import { networkMeta } from "../core/emoji";
 import { useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
-  edit, enableEncryption, endPoll, forward as _forward, loadOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
+  edit, enableEncryption, endPoll, forward as _forward, loadOlder, readingOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory, setAlias, setSolo,
 } from "../core/store";
 import { addLink, buildMerged, groupOf, suggestLinks, unlink } from "../core/links";
@@ -139,8 +139,10 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const el = scroller.current; if (!el) return;
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (stick.current && st.markReadMode === "scrolled") markRead(roomId);
+    groupIds.forEach((id) => readingOlder(id, !stick.current));
     if (el.scrollTop < 120) groupIds.forEach((id) => loadOlder(id));
   };
+  useEffect(() => () => groupIds.forEach((id) => readingOlder(id, false)), [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
   // An empty or short chat never scrolls, so the check above never fires and its history would stay blank until a message arrived:
   // ask for older messages directly whenever there are few to show.
   useEffect(() => { const el = scroller.current; if (messages.length < 30 || (el && el.scrollHeight <= el.clientHeight + 40)) groupIds.forEach((id) => loadOlder(id)); }, [roomId, messages.length, groupIds.length]);

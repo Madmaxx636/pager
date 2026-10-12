@@ -10,6 +10,8 @@ export const SETTINGS: { key: string; path: string[]; label: string; kind: "bool
   { key: "deliveryReceipts", path: ["matrix", "delivery_receipts"], label: "Delivery receipts", kind: "bool", hint: "Show when a message reached the other app" },
   { key: "statusEvents", path: ["matrix", "message_status_events"], label: "Message status events", kind: "bool", hint: "" },
   { key: "typingPresence", path: ["network", "send_presence_on_typing"], label: "Show online while you type", kind: "bool", hint: "Lets you receive typing indicators" },
+  { key: "historyDays", path: ["network", "history_sync", "full_sync_config", "days_limit"], label: "Days of history to import when linking", kind: "number", hint: "" },
+  { key: "chatCount", path: ["network", "initial_chat_sync_count"], label: "Chats to import when linking", kind: "number", hint: "" },
   { key: "fullHistory", path: ["network", "history_sync", "request_full_sync"], label: "Ask for a full history sync when linking", kind: "bool", hint: "" },
 ];
 

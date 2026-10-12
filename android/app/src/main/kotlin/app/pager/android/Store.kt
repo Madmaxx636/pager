@@ -65,6 +65,26 @@ class Store(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val http = Http(prefs.getString("baseUrl", "") ?: "")
     val pager = PagerApi(http)
+    private val _import = MutableStateFlow<ImportJob?>(prefs.getString("importJob", null)?.let { runCatching { kotlinx.serialization.json.Json.decodeFromString<ImportJob>(it) }.getOrNull() })
+    /** The bridge import in flight (only one at a time), or null. */
+    val importJob: StateFlow<ImportJob?> = _import.asStateFlow()
+    fun setImport(job: ImportJob?) {
+        _import.value = job
+        prefs.edit().apply { if (job == null) remove("importJob") else putString("importJob", kotlinx.serialization.json.Json.encodeToString(ImportJob.serializer(), job)) }.apply()
+    }
+    /** Keeps the running import up to date by counting the chats and messages its network has delivered. */
+    private fun watchImport() {
+        scope.launch {
+            while (isActive) {
+                delay(5_000)
+                val j = _import.value ?: continue
+                if (!j.busy || j.phase == "choosing") continue
+                val mine = _chats.value.values.filter { it.network == j.network }
+                val next = j.advance(maxOf(0, mine.size - j.baseChats), mine.sumOf { it.messages.size }, System.currentTimeMillis())
+                if (next != j) setImport(next)
+            }
+        }
+    }
     private val _isAdmin = MutableStateFlow(false)
     /** This account is an administrator of the server. */
     val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
@@ -421,6 +441,8 @@ class Store(private val context: Context) {
     }
 
     init {
+        scope.launch { while (isActive) { delay(60_000); runCatching { trimPulledHistory() } } }
+        watchImport()
         // Messages to one page are encrypted one after another. The first message in a page is slow (it has to share keys), and a quick
         // second one used to overtake it, so they arrived in the wrong order.
         val sendLocks = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
@@ -928,6 +950,23 @@ class Store(private val context: Context) {
     /** Messages kept per chat on this device; older ones are fetched from the server again when scrolling up. */
     private val KEEP_MESSAGES = 300
 
+    /** When each chat was last being read above its newest messages, and which are being read that way right now. */
+    private val deepAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val deepNow: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** The chat screen reports whether the reader is scrolled up. Scrolling back down starts the clock for dropping the extra history. */
+    fun readingOlder(roomId: String, up: Boolean) {
+        if (up) { deepNow.add(roomId); deepAt[roomId] = System.currentTimeMillis() } else deepNow.remove(roomId)
+    }
+
+    /** Drops the history pulled in by scrolling up once it has been left alone for 12 minutes, keeping only the newest messages. */
+    fun trimPulledHistory(now: Long = System.currentTimeMillis()) {
+        for (c in _chats.value.values) {
+            if (c.messages.size <= KEEP_MESSAGES || c.id in deepNow || now - (deepAt[c.id] ?: 0L) < 12 * 60_000L) continue
+            update(c.id) { it.copy(messages = it.messages.takeLast(KEEP_MESSAGES), prevBatch = null, reachedStart = false) }
+        }
+    }
+
     fun loadOlder(roomId: String, pages: Int = 0) {
         val chat = _chats.value[roomId] ?: return
         if (chat.reachedStart) return
@@ -938,6 +977,7 @@ class Store(private val context: Context) {
             try {
                 val (rawEvents, end, state) = matrix.messages(roomId, token)
                 val events = decryptEvents(roomId, rawEvents)
+                deepAt[roomId] = System.currentTimeMillis()
                 update(roomId) { SyncReducer.applyHistory(it, events, end, state, me) }
             } catch (_: Exception) {
             } finally {

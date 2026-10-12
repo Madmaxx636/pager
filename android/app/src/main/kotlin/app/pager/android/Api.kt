@@ -44,6 +44,19 @@ data class ServerSettings(val domain: String, val signup: String, val inviteCode
 
 class PagerApi(private val http: Http) {
     // ---- Admin (Synapse checks the caller really is an admin) ----
+    data class BridgeSetting(val key: String, val value: Int)
+    /** The number-valued options of one bridge (admin only). */
+    suspend fun bridgeNumbers(id: String): List<BridgeSetting> = http.request("GET", "/api/admin/bridges/${enc(id)}/settings")["settings"].arr().mapNotNull {
+        val o = it.obj(); val v = (o["value"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull()
+        if (v == null) null else BridgeSetting(o["key"].str().orEmpty(), v)
+    }
+    suspend fun saveBridgeNumber(id: String, key: String, value: Int) {
+        http.request("PUT", "/api/admin/bridges/${enc(id)}/settings", kotlinx.serialization.json.buildJsonObject {
+            put("values", kotlinx.serialization.json.buildJsonObject { put(key, kotlinx.serialization.json.JsonPrimitive(value)) })
+            put("restart", kotlinx.serialization.json.JsonPrimitive(true))
+        })
+    }
+
     suspend fun isAdmin(): Boolean = http.request("GET", "/api/me")["admin"].let { (it as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true }
     suspend fun adminUsers(): List<AdminUser> = http.request("GET", "/api/admin/users")["users"].arr().map {
         val o = it.obj()
