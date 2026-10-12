@@ -441,7 +441,7 @@ class Store(private val context: Context) {
     }
 
     init {
-        scope.launch { while (isActive) { delay(60_000); runCatching { trimPulledHistory() } } }
+        scope.launch { while (isActive) { delay(30_000); runCatching { trimPulledHistory() } } }
         watchImport()
         // Messages to one page are encrypted one after another. The first message in a page is slow (it has to share keys), and a quick
         // second one used to overtake it, so they arrived in the wrong order.
@@ -959,10 +959,13 @@ class Store(private val context: Context) {
         if (up) { deepNow.add(roomId); deepAt[roomId] = System.currentTimeMillis() } else deepNow.remove(roomId)
     }
 
-    /** Drops the history pulled in by scrolling up once it has been left alone for 12 minutes, keeping only the newest messages. */
+    /** How long pulled-in history is kept after the reader leaves it: 12 minutes, shrinking to 2 as more is pulled (500 messages = the shortest). */
+    private fun poolClearMs(messages: Int): Long = (12 * 60_000L - 10 * 60_000L * ((messages - KEEP_MESSAGES) / 200f).coerceIn(0f, 1f)).toLong()
+
+    /** Drops the history pulled in by scrolling up once it has been left alone for a while, keeping only the newest messages. */
     fun trimPulledHistory(now: Long = System.currentTimeMillis()) {
         for (c in _chats.value.values) {
-            if (c.messages.size <= KEEP_MESSAGES || c.id in deepNow || now - (deepAt[c.id] ?: 0L) < 12 * 60_000L) continue
+            if (c.messages.size <= KEEP_MESSAGES || c.id in deepNow || now - (deepAt[c.id] ?: 0L) < poolClearMs(c.messages.size)) continue
             update(c.id) { it.copy(messages = it.messages.takeLast(KEEP_MESSAGES), prevBatch = null, reachedStart = false) }
         }
     }
