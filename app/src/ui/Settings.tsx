@@ -288,7 +288,6 @@ function Notifications() {
   const s = useRawSettings();
   const [perm, setPerm] = useState(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
   const [word, setWord] = useState("");
-  const known = ["whatsapp", "signal", "telegram", "discord", "instagram", "messenger", "gmessages"];
   const off = !s.notifEnabled;
   const chats = Object.entries(s.notifChat).filter(([, p]) => p && ((p.mode && p.mode !== "default") || (p.preview && p.preview !== "default") || (p.sound && p.sound !== "default")));
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
