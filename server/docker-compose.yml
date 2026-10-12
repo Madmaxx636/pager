@@ -5,6 +5,9 @@ services:
   postgres:
     image: docker.io/library/postgres:16-alpine
     restart: unless-stopped
+    # Sized for the Synapse database on a small server: it fits in the cache, queries sort in memory, writes are spread out.
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "effective_cache_size=1GB", "-c", "work_mem=8MB", "-c", "maintenance_work_mem=64MB",
+              "-c", "random_page_cost=1.1", "-c", "checkpoint_completion_target=0.9", "-c", "wal_compression=on", "-c", "max_wal_size=1GB"]
     environment:
       POSTGRES_USER: pager
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
