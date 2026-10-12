@@ -120,18 +120,15 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 .head-id { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; text-align: left; padding: 4px 8px; border-radius: 12px; } .head-id:hover { background: var(--panel-2); } .chat-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-sub { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; } .chat-sub i { width: 7px; height: 7px; border-radius: 50%; } .chat-sub.typing { color: var(--accent); }
 .timeline { flex: 1; overflow-y: auto; padding: 14px 20px; display: flex; flex-direction: column; } .timeline > * { flex: none; }
-.wp-dusk { background: linear-gradient(#e9e1fa, var(--bg)); } .wp-forest { background: linear-gradient(#dceee3, var(--bg)); } .wp-ocean { background: linear-gradient(#d9ecfa, var(--bg)); } .wp-sand { background: linear-gradient(#f5ebda, var(--bg)); } .wp-graphite { background: linear-gradient(#e3e6ea, var(--bg)); }
-:root[data-theme="dark"] .wp-dusk, :root[data-theme="black"] .wp-dusk { background: linear-gradient(#1b1530, var(--bg)); } :root[data-theme="dark"] .wp-forest, :root[data-theme="black"] .wp-forest { background: linear-gradient(#0e2219, var(--bg)); }
-:root[data-theme="dark"] .wp-ocean, :root[data-theme="black"] .wp-ocean { background: linear-gradient(#0a1f33, var(--bg)); } :root[data-theme="dark"] .wp-sand, :root[data-theme="black"] .wp-sand { background: linear-gradient(#2a2116, var(--bg)); } :root[data-theme="dark"] .wp-graphite, :root[data-theme="black"] .wp-graphite { background: linear-gradient(#1c1f24, var(--bg)); }
 .day { text-align: center; margin: 12px 0; } .day span { font-size: 0.75rem; font-weight: 500; color: var(--muted); background: var(--panel); padding: 4px 13px; border-radius: 999px; }
 .unread-divider { display: flex; align-items: center; gap: 10px; margin: 10px 0; color: var(--accent); font-size: 0.75rem; font-weight: 600; } .unread-divider::before, .unread-divider::after { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--accent) 45%, transparent); }
-.msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 74%; margin-top: 2px; } .msg.first { margin-top: 10px; } .msg.mine { align-self: flex-end; align-items: flex-end; }
+.msg { display: flex; flex-direction: column; align-items: flex-start; max-width: var(--msg-max, 74%); margin-top: 2px; } .msg.first { margin-top: 10px; } .msg.mine { align-self: flex-end; align-items: flex-end; }
 .msg-sender { font-size: 0.75rem; font-weight: 600; margin: 0 14px 3px; color: var(--muted); }
 .msg-line { display: flex; align-items: center; gap: 6px; max-width: 100%; } .msg.mine .msg-line { flex-direction: row-reverse; }
 .bubble { background: var(--theirs); padding: 8px 13px; border-radius: var(--radius); overflow-wrap: anywhere; position: relative; max-width: 100%; box-shadow: 0 1px 1px rgba(16, 24, 40, .04); }
 .msg:not(.mine):not(.first) .bubble { border-top-left-radius: var(--tight); } .msg:not(.mine):not(.last) .bubble { border-bottom-left-radius: var(--tight); }
 .msg.mine:not(.first) .bubble { border-top-right-radius: var(--tight); } .msg.mine:not(.last) .bubble { border-bottom-right-radius: var(--tight); }
-.msg.mine .bubble { background: var(--accent); color: var(--accent-ink); } .msg.mine .bubble a { color: inherit; } .bubble.bare { background: none !important; padding: 0; box-shadow: none; } .bubble.failed { outline: 1px solid var(--danger); cursor: pointer; } .bubble.media-bubble { padding: 4px; }
+.msg.mine .bubble { background: var(--mine, var(--accent)); color: var(--mine-ink, var(--accent-ink)); } .msg.mine .bubble a { color: inherit; } .bubble.bare { background: none !important; padding: 0; box-shadow: none; } .bubble.failed { outline: 1px solid var(--danger); cursor: pointer; } .bubble.media-bubble { padding: 4px; }
 .bubble .text { white-space: pre-wrap; } .bubble .text code, .bubble code { font: 0.88em ui-monospace, monospace; background: color-mix(in srgb, currentColor 14%, transparent); padding: 1px 5px; border-radius: 5px; } .bubble pre { margin: 4px 0; overflow-x: auto; } .bubble blockquote { margin: 4px 0; padding-left: 10px; border-left: 3px solid color-mix(in srgb, currentColor 40%, transparent); }
 .big-emoji { font-size: 2.9rem; line-height: 1.15; }
 .bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 5px; font-size: 0.68rem; opacity: .7; margin-top: 2px; white-space: normal; } .media-bubble .meta { padding: 0 8px 2px; } .ticks { display: inline-flex; } .ticks.read { opacity: 1; }
@@ -186,7 +183,7 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 /* Narrow screens: one pane at a time, sheets slide up from the bottom */
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; } .shell .main { display: none; } .shell.pane-open .sidebar { display: none; } .shell.pane-open .main { display: block; } .sidebar { width: 100% !important; }
-  .back { display: grid; } .msg { max-width: 88%; } .info { position: absolute; inset: 0; width: auto; z-index: 20; } .hover-tools { display: none !important; }
+  .back { display: grid; } .msg { max-width: min(88%, var(--msg-max, 88%)); } .info { position: absolute; inset: 0; width: auto; z-index: 20; } .hover-tools { display: none !important; }
   .overlay { place-items: end center; padding: 0; } .modal { border-radius: 24px 24px 0 0; max-width: none; animation: rise .18s ease-out; } .modal .grab { display: block; width: 38px; height: 4px; border-radius: 2px; background: var(--line); margin: -8px auto 12px; }
   @keyframes rise { from { transform: translateY(30px); opacity: 0; } }
 }
@@ -203,12 +200,13 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 .undo-toast button { color: var(--accent); font-weight: 700; padding: 6px 12px; border-radius: 10px; }
 
 /* Bubble fills, depth, styles and entrance animations */
-.bubble { background: var(--bubble-bg, var(--theirs)); }
-.msg.mine .bubble { --bubble-bg: var(--accent); background: var(--bubble-bg); }
-:root[data-fill="gradient"] .msg.mine .bubble { background: linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 62%, #7c3aed)); color: #fff; }
+.bubble { background: var(--bubble-bg, var(--bubble-theirs, var(--theirs))); }
+:root[data-btheirs] .msg:not(.mine) .bubble { color: var(--theirs-ink); } :root[data-btheirs] .msg:not(.mine) .bubble a { color: inherit; text-decoration: underline; }
+.msg.mine .bubble { --bubble-bg: var(--mine, var(--accent)); background: var(--bubble-bg); }
+:root[data-fill="gradient"] .msg.mine .bubble { background: linear-gradient(140deg, var(--mine, var(--accent)), color-mix(in srgb, var(--mine, var(--accent)) 62%, #7c3aed)); color: #fff; }
 :root[data-fill="gradient"] .msg.mine .bubble a, :root[data-fill="gradient"] .msg.mine .bubble .meta { color: inherit; }
-:root[data-fill="tinted"] .msg.mine .bubble { --bubble-bg: color-mix(in srgb, var(--accent) 24%, var(--panel)); color: var(--text); }
-:root[data-fill="tinted"] .msg.mine .bubble a { color: var(--accent); }
+:root[data-fill="tinted"] .msg.mine .bubble { --bubble-bg: color-mix(in srgb, var(--mine, var(--accent)) 24%, var(--panel)); color: var(--text); }
+:root[data-fill="tinted"] .msg.mine .bubble a { color: var(--mine, var(--accent)); }
 :root[data-depth="flat"] .bubble { box-shadow: none; }
 :root[data-depth="raised"] .bubble { box-shadow: 0 3px 10px rgba(0,0,0,.22), 0 1px 2px rgba(0,0,0,.18); }
 .bubble.bare, .bubble.media-bubble { box-shadow: none; }
@@ -216,7 +214,7 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 /* Tail */
 :root[data-bubble="tail"] { --radius: 18px; --tight: 18px; }
 :root[data-bubble="tail"] .msg.last .bubble:not(.bare):not(.media-bubble)::after { content: ""; position: absolute; bottom: 0; width: 11px; height: 14px; background: var(--bubble-bg, var(--theirs)); }
-:root[data-bubble="tail"][data-fill="gradient"] .msg.mine.last .bubble::after { background: color-mix(in srgb, var(--accent) 62%, #7c3aed); }
+:root[data-bubble="tail"][data-fill="gradient"] .msg.mine.last .bubble::after { background: color-mix(in srgb, var(--mine, var(--accent)) 62%, #7c3aed); }
 :root[data-bubble="tail"] .msg:not(.mine).last .bubble { border-bottom-left-radius: 4px; }
 :root[data-bubble="tail"] .msg:not(.mine).last .bubble::after { left: -7px; clip-path: path("M11 0 L11 14 L0 14 C 6 13 10 8 11 0 Z"); }
 :root[data-bubble="tail"] .msg.mine.last .bubble { border-bottom-right-radius: 4px; }
@@ -224,13 +222,13 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 
 /* Outline */
 :root[data-bubble="outline"] .bubble:not(.bare):not(.media-bubble) { background: transparent; box-shadow: none; border: 1.5px solid var(--line); }
-:root[data-bubble="outline"] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: transparent; border-color: var(--accent); color: var(--text); }
-:root[data-bubble="outline"] .msg.mine .bubble a { color: var(--accent); }
+:root[data-bubble="outline"] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: transparent; border-color: var(--mine, var(--accent)); color: var(--text); }
+:root[data-bubble="outline"] .msg.mine .bubble a { color: var(--mine, var(--accent)); }
 
 /* No bubbles: a clean list, your messages marked by an accent rule */
 :root[data-bubble="plain"] .bubble:not(.bare):not(.media-bubble) { background: transparent; box-shadow: none; padding: 3px 0 3px 10px; border-radius: 0; border-left: 3px solid var(--line); }
-:root[data-bubble="plain"] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: transparent; border-left-color: var(--accent); color: var(--text); }
-:root[data-bubble="plain"] .msg.mine .bubble a { color: var(--accent); }
+:root[data-bubble="plain"] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: transparent; border-left-color: var(--mine, var(--accent)); color: var(--text); }
+:root[data-bubble="plain"] .msg.mine .bubble a { color: var(--mine, var(--accent)); }
 
 /* Entrance animations for brand-new messages only */
 @keyframes msg-pop { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
@@ -552,3 +550,30 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .import-card { border: 1px solid var(--line, #8883); border-radius: 12px; padding: 12px 14px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
 .import-head { display: flex; justify-content: space-between; gap: 10px; }
 .bar { height: 8px; border-radius: 4px; background: #8882; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--accent, #0ea5e9); border-radius: 4px; transition: width .6s; }
+
+/* Wallpapers: the picked one is in --wp (light or dark version); a photo of your own is in --wp-image. --wp-dim darkens either. */
+.timeline[class*="wp-"]:not(.wp-none) { background: linear-gradient(rgba(0,0,0,var(--wp-dim, 0)), rgba(0,0,0,var(--wp-dim, 0))), var(--wp, none); }
+.timeline.wp-custom[class*="wp-"]:not(.wp-none) { background: linear-gradient(rgba(0,0,0,var(--wp-dim, 0)), rgba(0,0,0,var(--wp-dim, 0))), var(--wp-image, none) center / cover; }
+.wp-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 8px; padding: 8px 16px 12px; }
+.wp-pick { height: 54px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); position: relative; overflow: hidden; display: grid; place-items: end start; font-size: .68rem; padding: 3px 6px; color: var(--text); }
+.wp-pick span { background: color-mix(in srgb, var(--panel) 80%, transparent); border-radius: 6px; padding: 0 4px; }
+.wp-pick.on { border-color: var(--accent); }
+.look-group > small { display: block; color: var(--muted); font-size: .75rem; font-weight: 600; margin: 8px 0 4px; text-transform: uppercase; letter-spacing: .05em; }
+.bubble-preview { padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 4px; }
+.bubble-preview .msg { max-width: var(--msg-max, 74%); }
+
+/* More bubble shapes and a see-through fill */
+:root[data-bubble="pill"] { --radius: 24px; --tight: 24px; }
+:root[data-bubble="sharp"] { --radius: 2px; --tight: 2px; }
+:root[data-bubble="notch"] { --radius: 16px; --tight: 16px; }
+:root[data-bubble="notch"] .msg:not(.mine) .bubble { border-bottom-left-radius: 2px; border-top-left-radius: 16px; }
+:root[data-bubble="notch"] .msg.mine .bubble { border-bottom-right-radius: 2px; border-top-right-radius: 16px; }
+:root[data-bubble="cloud"] { --radius: 22px; --tight: 22px; }
+:root[data-bubble="cloud"] .msg:not(.mine) .bubble { border-radius: 22px 22px 22px 6px; }
+:root[data-bubble="cloud"] .msg.mine .bubble { border-radius: 22px 22px 6px 22px; }
+:root[data-fill="glass"] .bubble:not(.bare):not(.media-bubble) { background: color-mix(in srgb, var(--bubble-theirs, var(--theirs)) 55%, transparent); backdrop-filter: blur(10px); border: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
+:root[data-fill="glass"] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: color-mix(in srgb, var(--mine, var(--accent)) 55%, transparent); color: var(--text); }
+:root[data-fill="glass"] .msg.mine .bubble a { color: var(--mine, var(--accent)); }
+.effect-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 10px; } .effect-list li { display: grid; gap: 2px; }
+.look-none { padding: 5px 12px; border-radius: 999px; background: var(--panel-2); border: 1px solid transparent; display: inline-flex; gap: 6px; align-items: center; } .look-none.on { border-color: var(--accent); font-weight: 600; }
+.look-group .swatches { justify-content: flex-start; }

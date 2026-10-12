@@ -1,8 +1,10 @@
-import { FONTS, PALETTES } from "../core/palettes";
+import { FONTS, PALETTES, PALETTE_GROUPS } from "../core/palettes";
+import { WALLPAPERS, wallpaperCss, importPhoto, removePhoto, loadPhoto } from "../core/wallpapers";
+import { EFFECT_TRIGGERS } from "../core/effects";
 import { SKINS, SKIN_GROUPS, accentsFor, skinById } from "../core/skins";
-import { useEffect, useState } from "react";
-import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
-import { SYNC_GROUPS, groupsIn, loadSaved, SavedSettings, RowAction, ACCENTS, accentTones, DEFAULTS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
+import { useEffect, useRef, useState } from "react";
+import { Bell, Check, ChevronDown, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
+import { AppSettings, SYNC_GROUPS, groupsIn, loadSaved, SavedSettings, RowAction, ACCENTS, accentTones, DEFAULTS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
 import { Tour } from "./Tour";
 import { comboOf } from "../core/combo";
 import { RecoveryKeyDialog, RestoreDialog } from "./KeyDialogs";
@@ -238,14 +240,21 @@ function Appearance() {
       {window.pagerDesktop && <StyleGroup />}
       {window.pagerDesktop && <Group title="Motion"><SwitchRow title="Small animations" hint="Things slide, glide, glow, pop, breathe and fade a little. Off for none" checked={s.fancyMotion} onChange={(v) => updateSettings({ fancyMotion: v })} /></Group>}
       <Group title="Theme">
-        <Row title="Ready-made looks" hint="A whole colour set for the app. Choose “Mode and accent” to go back to your own mix."><div className="swatches looks">
-          <button className={s.palette === "none" ? "on" : ""} style={{ background: "var(--panel-2)" }} onClick={() => updateSettings({ palette: "none" })} aria-label="Mode and accent" title="Mode and accent">{s.palette === "none" ? <Check size={16} /> : null}</button>
-          {PALETTES.map((p) => <button key={p.id} className={s.palette === p.id ? "on" : ""} style={{ background: `linear-gradient(135deg, ${p.bg} 50%, ${p.accent} 50%)`, border: `2px solid ${p.line}` }} onClick={() => updateSettings({ palette: p.id, accent: "custom", accentCustom: p.accent })} aria-label={p.name} title={p.name}>{s.palette === p.id ? <Check size={16} color={p.text} /> : null}</button>)}
-        </div></Row>
+        <Row title="Ready-made looks" hint="A whole colour set for the app, in every colour: on white, on black, or solid. Choose “Mode and accent” to go back to your own mix.">
+          <button className={"look-none" + (s.palette === "none" ? " on" : "")} onClick={() => updateSettings({ palette: "none" })}>{s.palette === "none" ? <Check size={14} /> : null} Mode and accent</button>
+        </Row>
+        <div className="pad">{PALETTE_GROUPS.map(([g, label]) => (
+          <div key={g} className="look-group"><small>{label}</small><div className="swatches looks">
+            {PALETTES.filter((p) => p.group === g).map((p) => <button key={p.id} className={s.palette === p.id ? "on" : ""} style={{ background: `linear-gradient(135deg, ${p.bg} 50%, ${p.accent} 50%)`, border: `2px solid ${p.line}` }} onClick={() => updateSettings({ palette: p.id, accent: "custom", accentCustom: p.accent })} aria-label={p.name} title={p.name}>{s.palette === p.id ? <Check size={16} color={p.text} /> : null}</button>)}
+          </div></div>
+        ))}</div>
         <Select title="Mode" value={s.themeMode} options={[["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black (AMOLED)"]]} onChange={(v) => updateSettings({ themeMode: v })} />
         <Row title="Accent color"><div className="swatches">{Object.entries(ACCENTS).map(([name, c]) => <button key={name} className={s.accent === name ? "on" : ""} style={{ background: c.dark }} onClick={() => updateSettings({ accent: name })} aria-label={name}>{s.accent === name ? <Check size={16} color={c.onDark} /> : null}</button>)}{window.pagerDesktop && <button className={"swatch-system" + (s.accent === "system" ? " on" : "")} onClick={() => updateSettings({ accent: "system" })} aria-label="Match my system accent" title="Match my system accent"><Monitor size={14} color="#fff" /></button>}<button className={"swatch-custom" + (s.accent === "custom" ? " on" : "")} style={s.accent === "custom" ? { background: s.accentCustom } : undefined} onClick={() => setPicker(true)} aria-label="Make your own">{s.accent === "custom" ? <Check size={16} color={accentTones("custom", s.accentCustom).onDark} /> : <Palette size={15} color="#fff" />}</button></div></Row>
         {picker && <ColorDialog value={s.accent === "custom" ? s.accentCustom : accentTones(s.accent, s.accentCustom).light} onClose={() => setPicker(false)} onPick={(c) => { updateSettings({ accent: "custom", accentCustom: c }); setPicker(false); }} />}
       </Group>
+      <BubbleGroup />
+      <WallpaperGroup />
+      <EffectsGroup />
       <Group title="Size & font">
         <Select title="App size" hint="Makes everything bigger or smaller, not only the text" value={s.uiScale} options={[["small", "Small"], ["medium", "Medium"], ["large", "Large"]]} onChange={(v) => updateSettings({ uiScale: v })} />
         <Select title="Font" value={s.fontFamily} options={FONTS.map((f) => [f[0], f[1]] as [string, string])} onChange={(v) => updateSettings({ fontFamily: v })} />
@@ -255,12 +264,6 @@ function Appearance() {
         <SwitchRow title="Delete on the other network too" hint="When you delete a chat in Pager, also delete it on Signal, WhatsApp or Google Messages. It can't be undone, so you are asked each time" checked={s.deleteAtSource} onChange={(v) => updateSettings({ deleteAtSource: v })} />
         <SwitchRow title="Hide Stories" hint="Removes the Stories row (WhatsApp status updates) from the list" checked={s.hideStories} onChange={(v) => updateSettings({ hideStories: v })} />
         <Row title="Text size" hint={`${Math.round(s.fontScale * 100)}%`}><input type="range" min="0.85" max="1.4" step="0.05" value={s.fontScale} onChange={(e) => updateSettings({ fontScale: Number(e.target.value) })} /></Row>
-        <Select title="Bubble style" value={s.bubbleStyle} options={[["round", "Rounded"], ["soft", "Extra round"], ["square", "Square"], ["tail", "Tail"], ["outline", "Outline"], ["plain", "No bubbles"]]} onChange={(v) => updateSettings({ bubbleStyle: v })} />
-        <Select title="Bubble fill" hint="How your own messages are colored" value={s.bubbleFill} options={[["solid", "Solid"], ["gradient", "Gradient"], ["tinted", "Soft tint"]]} onChange={(v) => updateSettings({ bubbleFill: v })} />
-        <Select title="Bubble depth" value={s.bubbleDepth} options={[["flat", "Flat"], ["soft", "Soft shadow"], ["raised", "Raised"]]} onChange={(v) => updateSettings({ bubbleDepth: v })} />
-        <Select title="Message animation" hint="When a new message appears" value={s.messageAnimation} options={[["none", "None"], ["pop", "Pop"], ["slide", "Slide"], ["fade", "Fade"]]} onChange={(v) => updateSettings({ messageAnimation: v })} />
-        <SwitchRow title="Screen effects" hint="Confetti, hearts, balloons and more when a message calls for it (🎉 ❤️ 🎈 ❄️ ✨)" checked={s.screenEffects} onChange={(v) => updateSettings({ screenEffects: v })} />
-        <Select title="Page wallpaper" value={s.wallpaper} options={[["none", "None"], ["dusk", "Dusk"], ["forest", "Forest"], ["ocean", "Ocean"], ["sand", "Sand"], ["graphite", "Graphite"]]} onChange={(v) => updateSettings({ wallpaper: v })} />
         <Select title="Avatar shape" value={s.avatarShape} options={[["circle", "Circle"], ["squircle", "Rounded square"]]} onChange={(v) => updateSettings({ avatarShape: v })} />
         <Select title="Time format" value={s.timeFormat} options={[["system", "Follow system"], ["12", "12-hour"], ["24", "24-hour"]]} onChange={(v) => updateSettings({ timeFormat: v })} />
         <SwitchRow title="Color sender names in groups" checked={s.colorSenderNames} onChange={(v) => updateSettings({ colorSenderNames: v })} />
@@ -625,18 +628,21 @@ function StyleGroup() {
   const s = useRawSettings();
   const skin = skinById(s.skin);
   const accents = skin ? accentsFor(skin) : [];
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem("pager.styleOpen") === "1"; } catch { return false; } });
+  const toggle = () => { setOpen(!open); try { localStorage.setItem("pager.styleOpen", open ? "0" : "1"); } catch { /* private mode */ } };
   return (
     <>
-      <Group title="Style" footer="A whole look for the desktop app: buttons, message field, bubbles, fonts and colours. Pager default keeps the look you know.">
-        <div className="skin-picks">
+      <Group title="Style" footer={open ? "A whole look for the desktop app: buttons, message field, bubbles, fonts and colours. Pager default keeps the look you know." : undefined}>
+        <Row title="Desktop style" hint={skin ? skin.name : "Pager default"} onClick={toggle}><ChevronDown size={18} style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform .2s" }} /></Row>
+        {open && <div className="skin-picks">
           <button className={"skin-chip" + (s.skin === "default" ? " on" : "")} onClick={() => updateSettings({ skin: "default", skinAccent: "" })}>Pager default</button>
           {SKIN_GROUPS.map((g) => (
             <div key={g} className="skin-group"><small>{g}</small><div>{SKINS.filter((x) => x.group === g).map((x) => (
               <button key={x.id} className={"skin-chip" + (s.skin === x.id ? " on" : "")} onClick={() => updateSettings({ skin: x.id, skinAccent: "" })}><i style={{ background: `linear-gradient(135deg, ${x.bg} 50%, ${x.accent} 50%)`, borderColor: x.line }} />{x.name}</button>
             ))}</div></div>
           ))}
-        </div>
-        {skin && accents.length > 0 && <Row title="Accent colour" hint={skin.family === "adwaita" ? "GNOME's accent colours" : "Plasma's accent colours"}><div className="swatches">{accents.map(([n, c]) => <button key={c} className={(s.skinAccent || skin.accent) === c ? "on" : ""} style={{ background: c }} title={n} aria-label={n} onClick={() => updateSettings({ skinAccent: c === skin.accent ? "" : c })}>{(s.skinAccent || skin.accent) === c ? <Check size={16} color="#fff" /> : null}</button>)}</div></Row>}
+        </div>}
+        {open && skin && accents.length > 0 && <Row title="Accent colour" hint={skin.family === "adwaita" ? "GNOME's accent colours" : "Plasma's accent colours"}><div className="swatches">{accents.map(([n, c]) => <button key={c} className={(s.skinAccent || skin.accent) === c ? "on" : ""} style={{ background: c }} title={n} aria-label={n} onClick={() => updateSettings({ skinAccent: c === skin.accent ? "" : c })}>{(s.skinAccent || skin.accent) === c ? <Check size={16} color="#fff" /> : null}</button>)}</div></Row>}
       </Group>
     </>
   );
@@ -680,4 +686,91 @@ function MemoryRow() {
   const [m, setM] = useState<{ total: number; parts: { type: string; mb: number }[] }>();
   useEffect(() => { const f = () => void window.pagerDesktop?.memory?.().then(setM); f(); const t = window.setInterval(f, 5000); return () => window.clearInterval(t); }, []);
   return <Row title={m ? `Memory in use: ${m.total} MB` : "Memory in use"} hint={m?.parts.filter((p) => p.mb > 0).map((p) => `${p.type} ${p.mb}`).join(" · ")} />;
+}
+
+const BUBBLE_STYLES: [AppSettings["bubbleStyle"], string][] = [["round", "Rounded"], ["soft", "Extra round"], ["pill", "Pill"], ["cloud", "Cloud"], ["notch", "Notch"], ["tail", "Tail"], ["square", "Square"], ["sharp", "Sharp"], ["outline", "Outline"], ["plain", "No bubbles"]];
+
+/** A colour for a bubble: the theme's own, one of the accents, or any colour you make. */
+function BubbleColour({ title, hint, value, onChange }: { title: string; hint: string; value: string; onChange: (c: string) => void }) {
+  const [picker, setPicker] = useState(false);
+  return (
+    <Row title={title} hint={hint}>
+      <div className="swatches">
+        <button className={"swatch-system" + (!value ? " on" : "")} onClick={() => onChange("")} aria-label="Follow the theme" title="Follow the theme">{!value ? <Check size={14} color="#fff" /> : <Monitor size={14} color="#fff" />}</button>
+        {Object.entries(ACCENTS).map(([name, c]) => <button key={name} className={value.toLowerCase() === c.light ? "on" : ""} style={{ background: c.light }} onClick={() => onChange(c.light)} aria-label={name} title={name}>{value.toLowerCase() === c.light ? <Check size={16} color={c.onLight} /> : null}</button>)}
+        <button className={"swatch-custom" + (value && !Object.values(ACCENTS).some((c) => c.light === value.toLowerCase()) ? " on" : "")} style={value ? { background: value } : undefined} onClick={() => setPicker(true)} aria-label="Make your own"><Palette size={15} color="#fff" /></button>
+      </div>
+      {picker && <ColorDialog value={value || "#0d9488"} onClose={() => setPicker(false)} onPick={(c) => { onChange(c); setPicker(false); }} />}
+    </Row>
+  );
+}
+
+function BubbleGroup() {
+  const s = useRawSettings();
+  const sample = (mine: boolean, text: string, first = true, last = true) => <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "") + (last ? " last" : "")}><div className="bubble">{text}</div></div>;
+  return (
+    <Group title="Bubbles" footer="Based on the bubble options in other messengers like Beeper: shape, fill, your colour and theirs, roundness and width.">
+      <div className="bubble-preview" aria-hidden>{sample(false, "Are we still on for tonight?", true, true)}{sample(true, "Yes! See you at 7.", true, false)}{sample(true, "Bringing the good snacks 🍿", false, true)}</div>
+      <Select title="Shape" value={s.bubbleStyle} options={BUBBLE_STYLES} onChange={(v) => updateSettings({ bubbleStyle: v })} />
+      <Select title="Fill" hint="How your own messages are coloured" value={s.bubbleFill} options={[["solid", "Solid"], ["gradient", "Gradient"], ["tinted", "Soft tint"], ["glass", "Glass"]]} onChange={(v) => updateSettings({ bubbleFill: v })} />
+      <Select title="Depth" value={s.bubbleDepth} options={[["flat", "Flat"], ["soft", "Soft shadow"], ["raised", "Raised"]]} onChange={(v) => updateSettings({ bubbleDepth: v })} />
+      <BubbleColour title="Your bubbles" hint="The colour of messages you send" value={s.bubbleMine} onChange={(c) => updateSettings({ bubbleMine: c })} />
+      <BubbleColour title="Their bubbles" hint="The colour of messages you receive" value={s.bubbleTheirs} onChange={(c) => updateSettings({ bubbleTheirs: c })} />
+      <Row title="Roundness" hint={s.bubbleRadius ? `${s.bubbleRadius} px` : "As the shape says"}>
+        <input type="range" min="0" max="32" step="2" value={s.bubbleRadius} onChange={(e) => updateSettings({ bubbleRadius: Number(e.target.value) })} />
+      </Row>
+      <Row title="Widest bubble" hint={s.bubbleWidth ? `${s.bubbleWidth}% of the chat` : "Default"}>
+        <input type="range" min="0" max="95" step="5" value={s.bubbleWidth} onChange={(e) => { const v = Number(e.target.value); updateSettings({ bubbleWidth: v > 0 && v < 40 ? 40 : v }); }} />
+      </Row>
+      <Select title="Message animation" hint="When a new message appears" value={s.messageAnimation} options={[["none", "None"], ["pop", "Pop"], ["slide", "Slide"], ["fade", "Fade"]]} onChange={(v) => updateSettings({ messageAnimation: v })} />
+      <Row title="Reset bubbles" hint="Back to the standard look"><button className="link" onClick={() => updateSettings({ bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0 })}>Reset</button></Row>
+    </Group>
+  );
+}
+
+function WallpaperGroup() {
+  const s = useRawSettings();
+  const file = useRef<HTMLInputElement>(null);
+  const [err, setErr] = useState("");
+  const [has, setHas] = useState(false);
+  const dark = typeof document !== "undefined" && document.documentElement.dataset.theme !== "light";
+  useEffect(() => { void loadPhoto().then(setHas); }, []);
+  async function pick(f?: File) {
+    if (!f) return;
+    setErr("");
+    try { await importPhoto(f); setHas(true); updateSettings({ wallpaper: "custom" }); } catch (e) { setErr((e as Error).message); }
+  }
+  return (
+    <Group title="Wallpaper" footer="Made in the app, so there is nothing to download. Your own photo stays on this device and is shrunk to save memory.">
+      <div className="wp-picks">
+        {WALLPAPERS.map((w) => <button key={w.id} className={"wp-pick" + (s.wallpaper === w.id ? " on" : "")} style={{ background: wallpaperCss(w.id, dark) === "none" ? undefined : wallpaperCss(w.id, dark) }} onClick={() => updateSettings({ wallpaper: w.id })}><span>{w.name}</span></button>)}
+        <button className={"wp-pick" + (s.wallpaper === "custom" ? " on" : "")} style={has ? { background: "var(--wp-image) center / cover" } : undefined} onClick={() => (has ? updateSettings({ wallpaper: "custom" }) : file.current?.click())}><span>{has ? "Your photo" : "Add photo…"}</span></button>
+      </div>
+      <input ref={file} type="file" accept="image/*" hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
+      <Row title="Your own photo" hint={has ? "Saved on this device" : "Pick a picture from your computer"}>
+        <button className="link" onClick={() => file.current?.click()}>{has ? "Change…" : "Choose…"}</button>
+        {has && <button className="link danger" onClick={async () => { await removePhoto(); setHas(false); if (s.wallpaper === "custom") updateSettings({ wallpaper: "none" }); }}>Remove</button>}
+      </Row>
+      {err && <p className="error pad">{err}</p>}
+      <Row title="Darken" hint={s.wallpaperDim ? `${s.wallpaperDim}%` : "Off"}><input type="range" min="0" max="70" step="5" value={s.wallpaperDim} onChange={(e) => updateSettings({ wallpaperDim: Number(e.target.value) })} /></Row>
+    </Group>
+  );
+}
+
+/** The switch turns screen effects on or off; clicking the row itself shows what sets each one off. */
+function EffectsGroup() {
+  const s = useRawSettings();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Group title="Screen effects">
+        <Row title="Screen effects" hint="Click to see what sets each one off" onClick={() => setOpen(true)} chevron><Switch checked={s.screenEffects} onChange={(v) => updateSettings({ screenEffects: v })} /></Row>
+      </Group>
+      {open && <Modal title="What sets off each effect" onClose={() => setOpen(false)}>
+        <p className="muted">{s.screenEffects ? "Effects are on." : "Effects are off. The switch turns them on."} They play when a new message, sent or received, says one of these. Nothing extra is sent.</p>
+        <ul className="effect-list">{EFFECT_TRIGGERS.map((t) => <li key={t.effect}><b>{t.glyph} {t.name}</b><span>{t.says}</span><small className="muted">{t.examples.join("  ")}</small></li>)}</ul>
+        <div className="row-end"><button className="link" onClick={() => setOpen(false)}>Close</button></div>
+      </Modal>}
+    </>
+  );
 }
