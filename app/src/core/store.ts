@@ -780,7 +780,6 @@ export function squeezeMemory(level: MemoryLevel) {
     deepAt.delete(c.id);
   }
   if (chats) set({ chats });
-  blobCache.clear();
 }
 window.pagerDesktop?.onMemory?.((level) => squeezeMemory(level as MemoryLevel));
 export function loadOlder(roomId: string, pages = 0) {
