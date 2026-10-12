@@ -1,6 +1,15 @@
 /** Full-screen message effects, triggered by what a message says. Purely local: nothing extra is sent. */
 export type Effect = "confetti" | "hearts" | "balloons" | "snow" | "sparkles";
 
+/** What sets each effect off, for the "Screen effects" pop-up in Settings. effects.test.ts checks every line here really does fire it. */
+export const EFFECT_TRIGGERS: { effect: Effect; name: string; glyph: string; says: string; examples: string[] }[] = [
+  { effect: "confetti", name: "Confetti", glyph: "🎉", says: "A message with a party emoji, or that says congrats.", examples: ["🎉", "🎊", "🥳", "congrats", "congratulations"] },
+  { effect: "balloons", name: "Balloons", glyph: "🎈", says: "A balloon or cake emoji, or happy birthday.", examples: ["🎈", "🎂", "happy birthday"] },
+  { effect: "snow", name: "Snow", glyph: "❄️", says: "A snow emoji, or let it snow.", examples: ["❄️", "⛄", "☃️", "🌨", "let it snow"] },
+  { effect: "sparkles", name: "Sparkles", glyph: "✨", says: "A sparkle or star emoji.", examples: ["✨", "🌟", "⭐", "🪄"] },
+  { effect: "hearts", name: "Hearts", glyph: "❤️", says: "Only hearts or loving faces (up to 12), or the words love you.", examples: ["❤️", "💕", "💖", "💗", "💘", "😍", "🥰", "😘", "♥️", "💞", "i love you", "love you"] },
+];
+
 const has = (t: string, ...needles: string[]) => needles.some((n) => t.includes(n));
 
 export function effectFor(text: string): Effect | undefined {

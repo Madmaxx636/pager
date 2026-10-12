@@ -1,4 +1,5 @@
 import { FONTS, paletteById } from "./palettes";
+import { wallpaperCss } from "./wallpapers";
 import { skinById } from "./skins";
 import { useSyncExternalStore } from "react";
 
@@ -33,8 +34,16 @@ export interface AppSettings {
   autoTranscribe: boolean;
   /** Sound when you get a reaction while inside that page. */
   reactionSound: string;
-  bubbleStyle: "round" | "soft" | "square" | "tail" | "outline" | "plain";
-  bubbleFill: "solid" | "gradient" | "tinted";
+  bubbleStyle: "round" | "soft" | "square" | "tail" | "outline" | "plain" | "pill" | "notch" | "sharp" | "cloud";
+  bubbleFill: "solid" | "gradient" | "tinted" | "glass";
+  /** Colour of your own bubbles and of theirs; empty follows the theme and accent. */
+  bubbleMine: string;
+  bubbleTheirs: string;
+  /** Corner roundness in px (0 = what the bubble style says) and the widest a bubble may get, as a percent of the chat (0 = default). */
+  bubbleRadius: number;
+  bubbleWidth: number;
+  /** How much the wallpaper is darkened, 0 to 70 percent. */
+  wallpaperDim: number;
   bubbleDepth: "flat" | "soft" | "raised";
   messageAnimation: "none" | "pop" | "slide" | "fade";
   screenEffects: boolean;
@@ -145,7 +154,7 @@ export interface AppSettings {
 export const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 export const DEFAULTS: AppSettings = {
-  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, skin: "default", skinAccent: "", fancyMotion: true, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
+  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, skin: "default", skinAccent: "", fancyMotion: true, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0, wallpaperDim: 0, bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
@@ -191,7 +200,7 @@ function load(): AppSettings {
 export interface SyncGroup { id: string; label: string; hint: string; keys: (keyof AppSettings)[] }
 export const SYNC_GROUPS: SyncGroup[] = [
   { id: "look", label: "Colours and theme", hint: "Mode, accent, looks, wallpaper, font, text size, avatars", keys: ["themeMode", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat"] },
-  { id: "bubbles", label: "Bubbles and messages", hint: "Bubble style, fill, depth, animations, effects", keys: ["bubbleStyle", "bubbleFill", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle"] },
+  { id: "bubbles", label: "Bubbles and messages", hint: "Bubble style, fill, depth, animations, effects", keys: ["bubbleStyle", "bubbleFill", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle"] },
   { id: "reactions", label: "Reactions", hint: "Double-click reaction and swipe to reply", keys: ["doubleTapReact", "doubleTapEmoji", "swipeToReply"] },
   { id: "list", label: "Chat list", hint: "What each row shows, filters, hidden networks", keys: ["showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories"] },
   { id: "notifications", label: "Notifications", hint: "What alerts you, quiet hours, previews", keys: ["notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin"] },
@@ -278,6 +287,11 @@ export function accentTones(accent: string, custom: string) {
   return { dark, light, onDark: ink(dark), onLight: ink(light) };
 }
 const lumOf = (h: string) => { const n = parseInt(h.slice(1), 16); const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+// More accent colours, made from a hue so each one reads well on light and on dark backgrounds.
+for (const [name, h, sat] of [["crimson", 350, .8], ["coral", 10, .85], ["amber", 38, .9], ["yellow", 50, .9], ["lime", 84, .65], ["mint", 150, .6], ["emerald", 160, .75], ["cyan", 188, .8], ["sky", 204, .85], ["indigo", 240, .7], ["violet", 262, .75], ["magenta", 300, .7], ["rose", 340, .8], ["brown", 28, .45], ["slate", 215, .2], ["gold", 45, .85]] as [string, number, number][]) {
+  const dark = hslToHex(h, sat, .72), light = hslToHex(h, sat, .4), ink = (c: string) => (lumOf(c) > 0.45 ? "#101418" : "#ffffff");
+  ACCENTS[name] = { dark, light, onDark: ink(dark), onLight: ink(light) };
+}
 function rgbToHsl(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16), r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
@@ -353,6 +367,13 @@ export function applyTheme(s: AppSettings) {
   r.dataset.density = s.density;
   r.dataset.motion = s.reduceMotion ? "reduced" : "full";
   r.dataset.wallpaper = s.wallpaper;
+  r.style.setProperty("--wp-dim", String(Math.min(70, Math.max(0, s.wallpaperDim)) / 100));
+  // Your own bubble colours: the text on them is picked to stay readable.
+  const mineOk = HEX.test(s.bubbleMine), theirsOk = HEX.test(s.bubbleTheirs);
+  const ink = (c: string) => (lum(c) > 0.45 ? "#101418" : "#ffffff");
+  if (mineOk) { r.dataset.bmine = ""; r.style.setProperty("--mine", s.bubbleMine); r.style.setProperty("--mine-ink", ink(s.bubbleMine)); } else { delete r.dataset.bmine; r.style.removeProperty("--mine"); r.style.removeProperty("--mine-ink"); }
+  if (theirsOk) { r.dataset.btheirs = ""; r.style.setProperty("--bubble-theirs", s.bubbleTheirs); r.style.setProperty("--theirs-ink", ink(s.bubbleTheirs)); } else { delete r.dataset.btheirs; r.style.removeProperty("--bubble-theirs"); r.style.removeProperty("--theirs-ink"); }
+  if (s.bubbleWidth >= 40) r.style.setProperty("--msg-max", `${Math.min(95, s.bubbleWidth)}%`); else r.style.removeProperty("--msg-max");
   // Desktop looks: colours, fonts and a family that restyles buttons, fields and bubbles. "default" removes every trace of them.
   const skin = window.pagerDesktop && s.skin !== "default" ? skinById(s.skin) : undefined;
   if (skin) {
@@ -366,6 +387,9 @@ export function applyTheme(s: AppSettings) {
     r.dataset.skin = skin.id; r.dataset.family = skin.family;
     r.dataset.bubble = "round";
   } else { delete r.dataset.skin; delete r.dataset.family; r.style.removeProperty("--radius"); r.style.removeProperty("--tight"); }
+  // Your own roundness beats the style's. The "tail" style keeps its corners the same all round so the tail sits right.
+  if (s.bubbleRadius > 0 && !skin) { r.style.setProperty("--radius", `${s.bubbleRadius}px`); r.style.setProperty("--tight", s.bubbleStyle === "tail" ? `${s.bubbleRadius}px` : `${Math.min(8, Math.round(s.bubbleRadius / 3))}px`); }
   // Desktop: small touches of motion (slides, glides, glows, pops, breathing, fades). One switch in Settings turns them all off.
   if (window.pagerDesktop) r.dataset.fx = s.fancyMotion && !s.reduceMotion ? "on" : "off"; else delete r.dataset.fx;
+  r.style.setProperty("--wp", wallpaperCss(s.wallpaper, r.dataset.theme !== "light"));
 }

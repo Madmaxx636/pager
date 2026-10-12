@@ -22,3 +22,10 @@ describe("effectFor", () => {
     expect(alive).toBe(false);
   });
 });
+
+import { EFFECT_TRIGGERS } from "./effects";
+describe("the list shown in Settings", () => {
+  it("fires the effect it names for every example", () => {
+    for (const t of EFFECT_TRIGGERS) for (const e of t.examples) expect(effectFor(e), `${t.name}: ${e}`).toBe(t.effect);
+  });
+});
