@@ -13,7 +13,7 @@ import kotlin.math.sin
 object ChatSounds {
     private class Note(val f: Double, val t: Double, val d: Double, val type: String = "sine", val g: Double = 0.7, val slideTo: Double? = null)
 
-    val choices = listOf("swoosh" to "Swoosh", "chime" to "Chime", "pop" to "Pop", "ding" to "Ding", "knock" to "Knock", "bubble" to "Bubble", "soft" to "Soft", "pager" to "Pager (three beeps)", "beepbeep" to "Beep beep", "trill" to "Trill", "twotone" to "Two tone", "sendblip" to "Blip", "tick" to "Tick", "marimba" to "Marimba", "xylophone" to "Xylophone", "glass" to "Glass", "droplet" to "Droplet", "harp" to "Harp", "radar" to "Radar", "coin" to "Coin", "bell" to "Bell", "kalimba" to "Kalimba", "zap" to "Zap", "doorbell" to "Doorbell", "rise" to "Rise", "fall" to "Fall", "morse" to "Morse", "whistle" to "Whistle", "woodblock" to "Wood block", "none" to "None")
+    val choices: List<Pair<String, String>> = listOf("swoosh" to "Swoosh", "chime" to "Chime", "pop" to "Pop", "ding" to "Ding", "knock" to "Knock", "bubble" to "Bubble", "soft" to "Soft", "pager" to "Pager (three beeps)", "beepbeep" to "Beep beep", "trill" to "Trill", "twotone" to "Two tone", "sendblip" to "Blip", "tick" to "Tick", "marimba" to "Marimba", "xylophone" to "Xylophone", "glass" to "Glass", "droplet" to "Droplet", "harp" to "Harp", "radar" to "Radar", "coin" to "Coin", "bell" to "Bell", "kalimba" to "Kalimba", "zap" to "Zap", "doorbell" to "Doorbell", "rise" to "Rise", "fall" to "Fall", "morse" to "Morse", "whistle" to "Whistle", "woodblock" to "Wood block").let { it + ANDROID_SOUNDS + ("none" to "None") }
 
     private val recipes = mapOf(
         "swoosh" to listOf(Note(380.0, 0.0, 0.16, slideTo = 1100.0)),
@@ -75,9 +75,14 @@ object ChatSounds {
         return out
     }
 
+    private var appContext: android.content.Context? = null
+    /** Needed for the Android sounds, which are files in the app rather than made from tones. */
+    fun init(context: android.content.Context) { appContext = context.applicationContext }
+
     /** Plays a sound at [volume] (0..1). Quiet if the phone's sounds are turned down. */
     fun play(id: String, volume: Float) {
         if (volume <= 0f) return
+        if (id.startsWith("android_")) { playFile(id, volume); return }
         val pcm = render(id) ?: return
         Thread {
             runCatching {
@@ -92,5 +97,16 @@ object ChatSounds {
                 track.release()
             }
         }.start()
+    }
+
+    private fun playFile(id: String, volume: Float) {
+        val ctx = appContext ?: return
+        runCatching {
+            val res = ctx.resources.getIdentifier(id, "raw", ctx.packageName); if (res == 0) return
+            val mp = android.media.MediaPlayer.create(ctx, res, android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build(), 0) ?: return
+            mp.setVolume(volume.coerceIn(0f, 1f), volume.coerceIn(0f, 1f))
+            mp.setOnCompletionListener { it.release() }
+            mp.start()
+        }
     }
 }

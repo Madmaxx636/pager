@@ -26,8 +26,8 @@ class AppearanceParityTest {
     }
 
     @Test fun everySoundInTheListHasARecipe() {
-        for ((id, _) in ChatSounds.choices.filter { it.first != "none" }) assertNotNull(id, ChatSounds.render(id))
-        assertTrue(ChatSounds.choices.size >= 28)
+        for ((id, _) in ChatSounds.choices.filter { it.first != "none" && !it.first.startsWith("android_") }) assertNotNull(id, ChatSounds.render(id))
+        assertTrue(ChatSounds.choices.size >= 78)
     }
 
     @Test fun bigPhotosAreShrunk() {
