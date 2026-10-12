@@ -568,14 +568,7 @@ class Store(private val context: Context) {
                         val d = NotifyPolicy.decide(m, quiet = m.roomId in muted || c?.lowPriority == true, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st)
                         if (!d.show) continue
                         val out = m.copy(silent = d.silent, preview = d.preview)
-                        if (st.notifDelaySec > 0) {
-                            // Wait, and drop the alert if you read the chat somewhere else in the meantime.
-                            scope.launch {
-                                delay(st.notifDelaySec * 1000L)
-                                val cc = _chats.value[m.roomId]
-                                if (cc != null && (cc.unread > 0 || cc.markedUnread)) _incoming.tryEmit(out)
-                            }
-                        } else _incoming.tryEmit(out)
+                        _incoming.tryEmit(out)
                     }
                     if (settings.value.unarchiveOnMessage) {
                         r.incoming.map { it.roomId }.distinct().filter { it !in muted && r.chats[it]?.archived == true }.forEach { setTag(it, "u.archived", false) }

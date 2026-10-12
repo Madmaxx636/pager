@@ -1,5 +1,5 @@
 /** Alert sounds made with Web Audio, so there are no files to ship and they work the same on every system. */
-export const SOUNDS: [string, string][] = [["swoosh", "Swoosh"], ["chime", "Chime"], ["pop", "Pop"], ["ding", "Ding"], ["knock", "Knock"], ["bubble", "Bubble"], ["soft", "Soft"], ["pager", "Pager (three beeps)"], ["beepbeep", "Beep beep"], ["trill", "Trill"], ["twotone", "Two tone"], ["sendblip", "Blip"], ["tick", "Tick"], ["none", "None"]];
+export const SOUNDS: [string, string][] = [["swoosh", "Swoosh"], ["chime", "Chime"], ["pop", "Pop"], ["ding", "Ding"], ["knock", "Knock"], ["bubble", "Bubble"], ["soft", "Soft"], ["pager", "Pager (three beeps)"], ["beepbeep", "Beep beep"], ["trill", "Trill"], ["twotone", "Two tone"], ["sendblip", "Blip"], ["tick", "Tick"], ["marimba", "Marimba"], ["xylophone", "Xylophone"], ["glass", "Glass"], ["droplet", "Droplet"], ["harp", "Harp"], ["radar", "Radar"], ["coin", "Coin"], ["bell", "Bell"], ["kalimba", "Kalimba"], ["zap", "Zap"], ["doorbell", "Doorbell"], ["rise", "Rise"], ["fall", "Fall"], ["morse", "Morse"], ["whistle", "Whistle"], ["woodblock", "Wood block"], ["none", "None"]];
 
 type Note = { f: number; t: number; d: number; type?: OscillatorType; g?: number; slideTo?: number };
 const RECIPES: Record<string, Note[]> = {
@@ -16,9 +16,26 @@ const RECIPES: Record<string, Note[]> = {
   twotone: [{ f: 1046.5, t: 0, d: 0.16, type: "triangle", g: 0.8 }, { f: 1568, t: 0.17, d: 0.26, type: "triangle", g: 0.8 }],
   sendblip: [{ f: 1200, t: 0, d: 0.07, type: "square", slideTo: 1900, g: 0.35 }],
   tick: [{ f: 2600, t: 0, d: 0.035, type: "square", g: 0.35 }, { f: 3300, t: 0.05, d: 0.035, type: "square", g: 0.3 }],
+  marimba: [{ f: 523.3, t: 0, d: 0.22, type: "triangle", g: 0.9 }, { f: 659.3, t: 0.11, d: 0.22, type: "triangle", g: 0.9 }, { f: 784, t: 0.22, d: 0.3, type: "triangle", g: 0.9 }],
+  xylophone: [{ f: 1318.5, t: 0, d: 0.12, g: 0.7 }, { f: 1760, t: 0.1, d: 0.2, g: 0.7 }],
+  glass: [{ f: 2349, t: 0, d: 0.7, g: 0.45 }, { f: 3136, t: 0.02, d: 0.5, g: 0.25 }],
+  droplet: [{ f: 1800, t: 0, d: 0.12, slideTo: 700, g: 0.8 }],
+  harp: [523.3, 659.3, 784, 1046.5].map((f, i) => ({ f, t: i * 0.07, d: 0.4, type: "sine" as OscillatorType, g: 0.55 })),
+  radar: [{ f: 900, t: 0, d: 0.35, slideTo: 1500, g: 0.5 }, { f: 900, t: 0.4, d: 0.35, slideTo: 1500, g: 0.4 }],
+  coin: [{ f: 988, t: 0, d: 0.08, type: "square", g: 0.35 }, { f: 1319, t: 0.08, d: 0.4, type: "square", g: 0.35 }],
+  bell: [{ f: 1046.5, t: 0, d: 0.85, g: 0.5 }, { f: 2093, t: 0, d: 0.6, g: 0.2 }, { f: 2637, t: 0, d: 0.4, g: 0.12 }],
+  kalimba: [{ f: 784, t: 0, d: 0.35, type: "triangle", g: 0.7 }, { f: 1046.5, t: 0.14, d: 0.45, type: "triangle", g: 0.7 }],
+  zap: [{ f: 2400, t: 0, d: 0.14, type: "sawtooth", slideTo: 200, g: 0.3 }],
+  doorbell: [{ f: 659.3, t: 0, d: 0.3, g: 0.7 }, { f: 523.3, t: 0.35, d: 0.55, g: 0.7 }],
+  rise: [{ f: 392, t: 0, d: 0.12, type: "triangle" }, { f: 523.3, t: 0.1, d: 0.12, type: "triangle" }, { f: 659.3, t: 0.2, d: 0.12, type: "triangle" }, { f: 784, t: 0.3, d: 0.25, type: "triangle" }],
+  fall: [{ f: 784, t: 0, d: 0.12, type: "triangle" }, { f: 659.3, t: 0.1, d: 0.12, type: "triangle" }, { f: 523.3, t: 0.2, d: 0.12, type: "triangle" }, { f: 392, t: 0.3, d: 0.25, type: "triangle" }],
+  morse: [{ f: 880, t: 0, d: 0.06, type: "square", g: 0.35 }, { f: 880, t: 0.12, d: 0.18, type: "square", g: 0.35 }, { f: 880, t: 0.36, d: 0.06, type: "square", g: 0.35 }],
+  whistle: [{ f: 1400, t: 0, d: 0.3, slideTo: 2200, g: 0.4 }, { f: 2200, t: 0.3, d: 0.15, slideTo: 1800, g: 0.35 }],
+  woodblock: [{ f: 900, t: 0, d: 0.05, type: "triangle", g: 1 }, { f: 700, t: 0.15, d: 0.06, type: "triangle", g: 1 }],
   soft: [{ f: 660, t: 0, d: 0.3, type: "sine", g: 0.5 }, { f: 784, t: 0.09, d: 0.34, type: "sine", g: 0.4 }],
 };
 
+export const hasSound = (id: string) => id === "none" || id in RECIPES;
 let ctx: AudioContext | undefined;
 export function playSound(id: string, volume = 0.7) {
   const notes = RECIPES[id];

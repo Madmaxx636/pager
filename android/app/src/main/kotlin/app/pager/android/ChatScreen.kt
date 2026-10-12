@@ -328,6 +328,11 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
             LinkedBar(roomId, onOpen)
 
             Box(Modifier.weight(1f).fillMaxWidth().let { if (wallpaper != null) it.background(wallpaper) else it }) {
+                if (s.wallpaper == "custom") {
+                    val photo = remember(s.wallpaper) { WallpaperPhoto.load(context) }
+                    if (photo != null) androidx.compose.foundation.Image(photo, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                }
+                if (s.wallpaperDim > 0 && s.wallpaper != "none") Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = s.wallpaperDim.coerceAtMost(70) / 100f)))
                 LazyColumn(Modifier.fillMaxSize(), state = list, reverseLayout = true, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)) {
                     // reverseLayout: the first item sits at the bottom, under the newest message.
                     if (chat?.typing.orEmpty().isNotEmpty()) item("typing") {

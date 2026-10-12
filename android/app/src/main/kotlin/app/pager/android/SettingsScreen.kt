@@ -205,12 +205,14 @@ val SETTINGS_INDEX = listOf(
     SettingEntry("appearance", "Text size", "Appearance", "font zoom bigger smaller accessibility"),
     SettingEntry("appearance", "Bubble style", "Appearance", "rounded square"),
     SettingEntry("appearance", "Page wallpaper", "Appearance", "background"),
-    SettingEntry("appearance", "Time format", "Appearance", "12 24 hour clock"),
+    SettingEntry("system", "Time format", "System", "12 24 hour clock"),
+    SettingEntry("system", "Hide Stories", "System", "whatsapp status"),
+    SettingEntry("system", "Silly hello", "System", "greeting goofy"),
     SettingEntry("appearance", "Avatar shape", "Appearance", "circle squircle"),
     SettingEntry("appearance", "Large emoji", "Appearance", "big emoji only"),
     SettingEntry("appearance", "Quick reactions", "Appearance", "emoji reactions favorites"),
     SettingEntry("appearance", "Double-tap to react", "Appearance", "like heart"),
-    SettingEntry("appearance", "Reduce motion", "Appearance", "animations accessibility"),
+    SettingEntry("system", "Reduce motion", "System", "animations accessibility"),
     SettingEntry("layout", "Inbox style", "Inbox & layout", "minimal pro compact titles only"),
     SettingEntry("layout", "Density", "Inbox & layout", "compact comfortable spacing"),
     SettingEntry("layout", "Pinned pages row", "Inbox & layout", "pins favorites circles"),
@@ -280,6 +282,7 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
     when (page) {
         "" -> SettingsHome(navigate, onBack)
         "appearance" -> SettingsPage("Appearance", home) { AppearancePage() }
+        "system" -> SettingsPage("System", home) { SystemSettings() }
         "layout" -> SettingsPage("Inbox & layout", home) {
             SettingsGroup("Inbox") {
                 ChoiceRow("Inbox style", listOf("pro" to "Pro: unread counts and network badges", "minimal" to "Minimal: titles only"), s.inboxStyle) { v -> set { copy(inboxStyle = v) } }; GroupDivider()
@@ -319,7 +322,6 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
                 ChoiceRow("Mark as read when", listOf("open" to "I open the page", "scrolled" to "I reach the newest message", "manual" to "I do it myself"), s.markReadMode) { v -> set { copy(markReadMode = v) } }; GroupDivider()
                 SwitchRow("Open at the new-messages line", "Off: chats open at the newest message. On: they open at the 'New messages' line", s.openAtUnread) { v -> set { copy(openAtUnread = v) } }; GroupDivider()
                 ChoiceRow("Message grouping", listOf("1" to "Within 1 minute", "5" to "Within 5 minutes", "15" to "Within 15 minutes", "60" to "Within an hour"), s.groupGapMin.toString()) { v -> set { copy(groupGapMin = v.toInt()) } }; GroupDivider()
-                SwitchRow("Large emoji", "Emoji-only messages are shown big", s.largeEmoji) { v -> set { copy(largeEmoji = v) } }
             }
             SettingsGroup("Privacy") {
                 SwitchRow("Send read receipts", "Off: others won't see when you've read their messages", s.sendReadReceipts) { v -> set { copy(sendReadReceipts = v) } }; GroupDivider()
@@ -385,26 +387,26 @@ private fun SettingsHome(navigate: (String) -> Unit, onBack: () -> Unit) {
                 }
                 return@Column
             }
-            SettingsGroup {
+            // Yours at the top, the extra features in the middle, the running of the system at the bottom.
+            SettingsGroup("Yours") {
                 NavRow("Appearance", "Theme, colors, text size, bubbles", Icons.Rounded.Palette, Color(0xFF8E6CF0)) { navigate("appearance") }; GroupDivider()
                 NavRow("Inbox & layout", "Tabs, pins, swipe actions, density", Icons.Rounded.Tune, Color(0xFF3B82F6)) { navigate("layout") }; GroupDivider()
                 NavRow("Pages", "Sending, reading, privacy, media", Icons.AutoMirrored.Rounded.Chat, Color(0xFF10B981)) { navigate("chats") }; GroupDivider()
                 NavRow("Notifications", "Previews, scope, quiet hours", Icons.Rounded.Notifications, Color(0xFFEF4444)) { navigate("notifications") }
             }
-            SettingsGroup {
-                NavRow("Bridges & accounts", "Connected apps and their status", Icons.Rounded.Link, Color(0xFF0EA5E9)) { navigate("bridges") }; GroupDivider()
+            SettingsGroup("Extras") {
                 NavRow("Labels", "Organize pages into folders", Icons.AutoMirrored.Rounded.Label, Color(0xFFF59E0B)) { navigate("labels") }; GroupDivider()
+                NavRow("Starred messages", null, Icons.Rounded.Star, Color(0xFFF59E0B)) { navigate("starred") }; GroupDivider()
+                NavRow("Scheduled & reminders", null, Icons.Rounded.AccessTime, Color(0xFFF97316)) { navigate("scheduled") }; GroupDivider()
                 NavRow("Stickers & GIFs", "Your stickers, GIF search", Icons.Rounded.EmojiEmotions, Color(0xFFEC4899)) { navigate("media") }
             }
-            SettingsGroup {
+            SettingsGroup("System") {
+                NavRow("Bridges & accounts", "Connected apps and their status", Icons.Rounded.Link, Color(0xFF0EA5E9)) { navigate("bridges") }; GroupDivider()
                 NavRow("Privacy & security", "Encryption and recovery key, app lock, receipts", Icons.Rounded.Lock, Color(0xFF64748B)) { navigate("privacy") }; GroupDivider()
+                NavRow("System", "Time, motion, stories, greeting", Icons.Rounded.Tune, Color(0xFF0D9488)) { navigate("system") }; GroupDivider()
                 if (LocalStore.current.isAdmin.collectAsState().value) { NavRow("Admin", "Profiles, bridges, signups", Icons.Rounded.AdminPanelSettings, Color(0xFFDC2626)) { navigate("admin") }; GroupDivider() }
                 NavRow("Storage", "Cache, backup, reset", Icons.Rounded.Storage, Color(0xFF14B8A6)) { navigate("storage") }; GroupDivider()
                 NavRow("Advanced", "Background sync, developer tools", Icons.Rounded.Code, Color(0xFF475569)) { navigate("advanced") }
-            }
-            SettingsGroup {
-                NavRow("Starred messages", null, Icons.Rounded.Star, Color(0xFFF59E0B)) { navigate("starred") }; GroupDivider()
-                NavRow("Scheduled & reminders", null, Icons.Rounded.AccessTime, Color(0xFFF97316)) { navigate("scheduled") }
             }
             SettingsGroup { NavRow("About", "Version, server, sign out", Icons.Rounded.Info, Color(0xFF6B7280)) { navigate("about") } }
         }
@@ -435,7 +437,6 @@ private fun AppearancePage() {
     val set = store.settings::update
     var tapPicking by remember { mutableStateOf<String?>(null) }
     SettingsGroup("Display") {
-        SwitchRow("Silly hello", "The pager says something goofy when you open the app", s.greetings) { v -> set { copy(greetings = v) } }; GroupDivider()
         SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }
         if (s.eink) {
             GroupDivider(); SliderRow("Darkness", s.einkDark.toFloat(), 1f..4f, listOf("", "Dark gray", "Darker", "Very dark", "Black")[s.einkDark.coerceIn(1, 4)]) { v -> set { copy(einkDark = Math.round(v).coerceIn(1, 4)) } }
@@ -456,9 +457,14 @@ private fun AppearancePage() {
             Spacer(Modifier.height(10.dp))
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { set { copy(palette = "none") } }, contentAlignment = Alignment.Center) { if (s.palette == "none") Icon(Icons.Rounded.Check, "Mode and accent", modifier = Modifier.size(20.dp)) }
-                PALETTES.forEach { p ->
-                    Box(Modifier.size(38.dp).clip(CircleShape).background(Brush.linearGradient(listOf(p.bg, p.bg, p.accent, p.accent))).border(2.dp, p.line, CircleShape).dpadFocus()
-                        .clickable { set { copy(palette = p.id, accent = "custom", accentCustom = p.accent.toHex()) } }, contentAlignment = Alignment.Center) { if (s.palette == p.id) Icon(Icons.Rounded.Check, p.name, tint = p.text, modifier = Modifier.size(20.dp)) }
+            }
+            PALETTE_GROUPS.forEach { (g, label) ->
+                Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ALL_PALETTES.filter { it.group == g }.forEach { p ->
+                        Box(Modifier.size(38.dp).clip(CircleShape).background(Brush.linearGradient(listOf(p.bg, p.bg, p.accent, p.accent))).border(2.dp, p.line, CircleShape).dpadFocus()
+                            .clickable { set { copy(palette = p.id, accent = "custom", accentCustom = p.accent.toHex()) } }, contentAlignment = Alignment.Center) { if (s.palette == p.id) Icon(Icons.Rounded.Check, p.name, tint = p.text, modifier = Modifier.size(20.dp)) }
+                    }
                 }
             }
         }
@@ -491,19 +497,13 @@ private fun AppearancePage() {
         ChoiceRow("Font", FONT_CHOICES, s.fontFamily) { v -> set { copy(fontFamily = v) } }; GroupDivider()
         ChoiceRow("Reactions", listOf("filled" to "Filled", "outline" to "Outline"), s.reactionStyle) { v -> set { copy(reactionStyle = v) } }; GroupDivider()
         SwitchRow("Delete on the other network too", "When you delete a chat in Pager, also delete it on Signal, WhatsApp or Google Messages. It can't be undone, so you are asked each time", s.deleteAtSource) { v -> set { copy(deleteAtSource = v) } }; GroupDivider()
-        SwitchRow("Hide Stories", "Removes the Stories row (WhatsApp status updates) from the list", s.hideStories) { v -> set { copy(hideStories = v) } }; GroupDivider()
-        ChoiceRow("Bubble style", listOf("round" to "Rounded", "soft" to "Extra round", "square" to "Square", "tail" to "Tail", "outline" to "Outline", "plain" to "No bubbles"), s.bubbleStyle) { v -> set { copy(bubbleStyle = v) } }; GroupDivider()
-        ChoiceRow("Bubble fill", listOf("solid" to "Solid", "gradient" to "Gradient", "tinted" to "Soft tint"), s.bubbleFill) { v -> set { copy(bubbleFill = v) } }; GroupDivider()
-        ChoiceRow("Bubble depth", listOf("flat" to "Flat", "soft" to "Soft shadow", "raised" to "Raised"), s.bubbleDepth) { v -> set { copy(bubbleDepth = v) } }; GroupDivider()
-        ChoiceRow("Message animation", listOf("none" to "None", "pop" to "Pop", "slide" to "Slide", "fade" to "Fade"), s.messageAnimation) { v -> set { copy(messageAnimation = v) } }; GroupDivider()
-        SwitchRow("Screen effects", "Confetti, hearts, balloons and more when a message calls for it", s.screenEffects) { v -> set { copy(screenEffects = v) } }; GroupDivider()
-        ChoiceRow("Page wallpaper", listOf("none" to "None", "dusk" to "Dusk", "forest" to "Forest", "ocean" to "Ocean", "sand" to "Sand", "graphite" to "Graphite"), s.wallpaper) { v -> set { copy(wallpaper = v) } }; GroupDivider()
         ChoiceRow("Avatar shape", listOf("circle" to "Circle", "squircle" to "Rounded square"), s.avatarShape) { v -> set { copy(avatarShape = v) } }; GroupDivider()
-        ChoiceRow("Time format", listOf("system" to "Follow system", "12" to "12-hour", "24" to "24-hour"), s.timeFormat) { v -> set { copy(timeFormat = v) } }; GroupDivider()
         SwitchRow("Color sender names in groups", checked = s.colorSenderNames) { v -> set { copy(colorSenderNames = v) } }; GroupDivider()
-        SwitchRow("Large emoji", "Emoji-only messages are shown big", s.largeEmoji) { v -> set { copy(largeEmoji = v) } }; GroupDivider()
-        SwitchRow("Reduce motion", "Fewer animations", s.reduceMotion) { v -> set { copy(reduceMotion = v) } }
+        SwitchRow("Large emoji", "Emoji-only messages are shown big", s.largeEmoji) { v -> set { copy(largeEmoji = v) } }
     }
+    BubbleSettings()
+    WallpaperSettings()
+    EffectsSettings()
     SettingsGroup("Reactions", footer = "Tap a reaction row to choose which reaction it adds. The switch turns it on or off.") {
         PickToggleRow("Double-tap to react", if (s.doubleTapReact) "Double-tap a message to add ${s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }}" else "Off", s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }, s.doubleTapReact, { v -> set { copy(doubleTapReact = v) } }) { tapPicking = "double" }; GroupDivider()
         PickToggleRow("Triple-tap to react", if (s.tripleTapReact) "Triple-tap a message to add ${s.tripleTapEmoji}. Makes a single tap wait a moment" else "Off", s.tripleTapEmoji, s.tripleTapReact, { v -> set { copy(tripleTapReact = v) } }) { tapPicking = "triple" }
@@ -568,9 +568,6 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
             ButtonRow("Choose ringtone and vibration…") {
                 context.startActivity(Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName).putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Notifier.CH_ALL).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-        }
-        SettingsGroup("Delay", footer = "Waits, then skips the alert if you already read the page on another device or app.") {
-            ChoiceRow("Wait before alerting", listOf(0 to "Don't wait", 5 to "5 seconds", 15 to "15 seconds", 30 to "30 seconds", 60 to "1 minute").map { it.first.toString() to it.second }, s.notifDelaySec.toString(), s.notifEnabled) { v -> set { copy(notifDelaySec = v.toInt()) } }
         }
         SettingsGroup("Quiet hours", footer = "Messages still arrive, silently.") {
             SwitchRow("Quiet hours", checked = s.quietHoursEnabled, enabled = s.notifEnabled) { v -> set { copy(quietHoursEnabled = v) } }
@@ -1126,4 +1123,126 @@ fun SyncSettingsDialog(onClose: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
     )
+}
+
+/** Swatches for a bubble colour: follow the theme, one of the accents, or a colour you make. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun BubbleColourRow(title: String, subtitle: String, value: String, onChange: (String) -> Unit) {
+    var picking by remember { mutableStateOf(false) }
+    val current = parseHex(value)
+    if (picking) ColorPickerDialog(current ?: Color(0xFF0D9488), { picking = false }) { c -> onChange(c.toHex()); picking = false }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(title); Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(10.dp))
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { onChange("") }, contentAlignment = Alignment.Center) {
+                Icon(if (value.isEmpty()) Icons.Rounded.Check else Icons.Rounded.Palette, "Follow the theme", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            }
+            ACCENTS.forEach { (name, c) ->
+                val on = current != null && current.toHex().equals(c[1].toHex(), true)
+                Box(Modifier.size(34.dp).clip(CircleShape).background(c[1]).dpadFocus().clickable { onChange(c[1].toHex()) }, contentAlignment = Alignment.Center) { if (on) Icon(Icons.Rounded.Check, name, tint = c[3], modifier = Modifier.size(18.dp)) }
+            }
+            Box(Modifier.size(34.dp).clip(CircleShape).background(Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red))).dpadFocus().clickable { picking = true }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Palette, "Make your own", tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BubbleSettings() {
+    val store = LocalStore.current
+    val s = LocalRawSettings.current
+    val set = store.settings::update
+    SettingsGroup("Bubbles", footer = "Shape, fill, your colour and theirs, roundness and width. The same options as the desktop app.") {
+        ChoiceRow("Shape", listOf("round" to "Rounded", "soft" to "Extra round", "pill" to "Pill", "cloud" to "Cloud", "notch" to "Notch", "tail" to "Tail", "square" to "Square", "sharp" to "Sharp", "outline" to "Outline", "plain" to "No bubbles"), s.bubbleStyle) { v -> set { copy(bubbleStyle = v) } }; GroupDivider()
+        ChoiceRow("Fill", listOf("solid" to "Solid", "gradient" to "Gradient", "tinted" to "Soft tint", "glass" to "Glass"), s.bubbleFill) { v -> set { copy(bubbleFill = v) } }; GroupDivider()
+        ChoiceRow("Depth", listOf("flat" to "Flat", "soft" to "Soft shadow", "raised" to "Raised"), s.bubbleDepth) { v -> set { copy(bubbleDepth = v) } }; GroupDivider()
+        BubbleColourRow("Your bubbles", "The colour of messages you send", s.bubbleMine) { v -> set { copy(bubbleMine = v) } }; GroupDivider()
+        BubbleColourRow("Their bubbles", "The colour of messages you receive", s.bubbleTheirs) { v -> set { copy(bubbleTheirs = v) } }; GroupDivider()
+        SliderRow("Roundness", s.bubbleRadius.toFloat(), 0f..32f, if (s.bubbleRadius == 0) "As the shape says" else "${s.bubbleRadius} dp") { v -> set { copy(bubbleRadius = (Math.round(v / 2f) * 2).coerceIn(0, 32)) } }; GroupDivider()
+        SliderRow("Widest bubble", s.bubbleWidth.toFloat(), 0f..95f, if (s.bubbleWidth == 0) "Default" else "${s.bubbleWidth}% of the screen") { v -> val n = (Math.round(v / 5f) * 5); set { copy(bubbleWidth = if (n in 1..39) 40 else n.coerceIn(0, 95)) } }; GroupDivider()
+        ChoiceRow("Message animation", listOf("none" to "None", "pop" to "Pop", "slide" to "Slide", "fade" to "Fade"), s.messageAnimation) { v -> set { copy(messageAnimation = v) } }; GroupDivider()
+        ButtonRow("Reset bubbles") { set { copy(bubbleStyle = "round", bubbleFill = "solid", bubbleDepth = "soft", bubbleMine = "", bubbleTheirs = "", bubbleRadius = 0, bubbleWidth = 0) } }
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun WallpaperSettings() {
+    val store = LocalStore.current
+    val s = LocalRawSettings.current
+    val set = store.settings::update
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var has by remember { mutableStateOf(WallpaperPhoto.exists(context)) }
+    var error by remember { mutableStateOf("") }
+    val dark = isDarkTheme(s)
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) runCatching { WallpaperPhoto.import(context, uri) }.onSuccess { has = true; error = ""; set { copy(wallpaper = "custom") } }.onFailure { error = it.message ?: "Couldn't use that picture." }
+    }
+    SettingsGroup("Wallpaper", footer = "Made in the app, so nothing is downloaded. Your own photo stays on this phone and is shrunk to save memory.") {
+        androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            WALLPAPER_NAMES.forEach { (id, name) ->
+                val brush = wallpaperBrush(id, dark)
+                Box(Modifier.size(width = 74.dp, height = 54.dp).clip(RoundedCornerShape(10.dp)).background(brush ?: androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.surfaceVariant))
+                    .border(2.dp, if (s.wallpaper == id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp)).dpadFocus().clickable { set { copy(wallpaper = id) } }, contentAlignment = Alignment.BottomStart) {
+                    Text(name, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(4.dp), maxLines = 1)
+                }
+            }
+        }
+        GroupDivider()
+        NavRow(if (has) "Change your own photo" else "Add your own photo", if (has) "Saved on this phone" else "Pick a picture from this phone") { picker.launch("image/*") }
+        if (has) { GroupDivider(); ButtonRow("Remove my photo", danger = true) { WallpaperPhoto.remove(context); has = false; if (s.wallpaper == "custom") set { copy(wallpaper = "none") } } }
+        if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp))
+        GroupDivider()
+        SliderRow("Darken", s.wallpaperDim.toFloat(), 0f..70f, if (s.wallpaperDim == 0) "Off" else "${s.wallpaperDim}%") { v -> set { copy(wallpaperDim = (Math.round(v / 5f) * 5).coerceIn(0, 70)) } }
+    }
+}
+
+private val EFFECT_HELP = listOf(
+    Triple("🎉 Confetti", "A message with a party emoji, or that says congrats.", "🎉 🎊 🥳 congrats congratulations"),
+    Triple("🎈 Balloons", "A balloon or cake emoji, or happy birthday.", "🎈 🎂 happy birthday"),
+    Triple("❄️ Snow", "A snow emoji, or let it snow.", "❄️ ⛄ ☃️ 🌨 let it snow"),
+    Triple("✨ Sparkles", "A sparkle or star emoji.", "✨ 🌟 ⭐ 🪄"),
+    Triple("❤️ Hearts", "Only hearts or loving faces (up to 12), or the words love you.", "❤️ 💕 💖 💗 💘 😍 🥰 😘 ♥️ 💞 i love you"),
+)
+
+/** The switch turns screen effects on or off; tapping the row shows what sets each one off. */
+@Composable
+private fun EffectsSettings() {
+    val store = LocalStore.current
+    val s = LocalRawSettings.current
+    val set = store.settings::update
+    var open by remember { mutableStateOf(false) }
+    SettingsGroup("Screen effects") {
+        PickToggleRow("Screen effects", "Tap to see what sets each one off", "", s.screenEffects, { v -> set { copy(screenEffects = v) } }) { open = true }
+    }
+    if (open) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { open = false }, title = { Text("What sets off each effect") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(if (s.screenEffects) "Effects are on. " else "Effects are off; the switch turns them on. ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("They play when a new message, sent or received, says one of these. Nothing extra is sent.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                EFFECT_HELP.forEach { (name, says, examples) ->
+                    Text(name, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp)); Text(says); Text(examples, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { open = false }) { Text("Close") } },
+    )
+}
+
+/** Settings → System: how times, motion and the odd bits of the app behave. */
+@Composable
+private fun SystemSettings() {
+    val store = LocalStore.current
+    val s = LocalRawSettings.current
+    val set = store.settings::update
+    SettingsGroup("Time") { ChoiceRow("Time format", listOf("system" to "Follow system", "12" to "12-hour", "24" to "24-hour"), s.timeFormat) { v -> set { copy(timeFormat = v) } } }
+    SettingsGroup("Motion") { SwitchRow("Reduce motion", "Fewer animations", s.reduceMotion) { v -> set { copy(reduceMotion = v) } } }
+    SettingsGroup("Extras") {
+        SwitchRow("Hide Stories", "Removes the Stories row (WhatsApp status updates) from the list", s.hideStories) { v -> set { copy(hideStories = v) } }; GroupDivider()
+        SwitchRow("Silly hello", "The pager says something goofy when you open the app", s.greetings) { v -> set { copy(greetings = v) } }
+    }
 }
