@@ -149,6 +149,9 @@ class Store(private val context: Context) {
         syncJob = scope.launch { if (e2ee == null) kotlinx.coroutines.withTimeoutOrNull(90_000) { startE2ee(s) }; syncLoop(s) }
     }
     private var since: String? = null
+    /** The sync position the chats in [_chats] are up to date with; saved together with them. */
+    private var chatsSince: String? = null
+    private val cacheLock = Any()
     private val loadingOlder = HashSet<String>()
     private val previews = HashMap<String, LinkPreview?>()
     private var lastTyping = 0L
@@ -271,15 +274,18 @@ class Store(private val context: Context) {
             if (c.chats.values.any { it.network != "matrix" && it.roomType == null }) { cacheFile.delete(); return }
             c.chats.values.forEach { ch -> ch.messages.forEach { m -> m.enc?.let(MediaCrypt::register) } } // after a restart, saved pictures still need their keys
             _chats.value = c.chats
-            since = c.since
+            since = c.since; chatsSince = c.since
             _synced.value = true
         }.onFailure { cacheFile.delete() }
     }
 
     @OptIn(FlowPreview::class, kotlinx.serialization.ExperimentalSerializationApi::class)
     private suspend fun persistLoop() {
-        _chats.debounce(8000).collect { chats ->
+        _chats.debounce(8000).collect {
             val me = _session.value?.userId ?: return@collect
+            // Chats and the sync position they match, read together. (Reading the position later saved a position that was ahead of the chats,
+            // and after a restart the messages in between were never fetched.)
+            val (chats, savedSince) = synchronized(cacheLock) { _chats.value to chatsSince }
             withContext(Dispatchers.IO) {
                 runCatching {
                     // Keep the file small: recent messages only, nothing still in flight.
@@ -289,7 +295,7 @@ class Store(private val context: Context) {
                     }
                     // Written straight to a file (then moved into place), not built as one giant text first.
                     val tmp = File(cacheFile.path + ".tmp")
-                    tmp.outputStream().buffered().use { json.encodeToStream(cacheSerializer, Cache(me, since, trimmed), it) }
+                    tmp.outputStream().buffered().use { json.encodeToStream(cacheSerializer, Cache(me, savedSince, trimmed), it) }
                     tmp.renameTo(cacheFile)
                 }
             }
@@ -530,10 +536,11 @@ class Store(private val context: Context) {
                     if (res === raw) throw e
                     SyncReducer.apply(_chats.value, raw, s.userId, initial)
                 }
-                _chats.value = r.chats
                 // The update is in: move on to the next one now, whatever the notifications and bookkeeping below do. One failure there must never
                 // make this phone read the same update again forever (that left it out of step with your other devices).
-                since = (res["next_batch"] as? JsonPrimitive)?.content ?: since
+                // The chats and the position they are up to change together, so the saved copy can never have one without the other.
+                val next = (res["next_batch"] as? JsonPrimitive)?.content ?: since
+                synchronized(cacheLock) { _chats.value = r.chats; since = next; chatsSince = next }
                 lastSyncOk = System.currentTimeMillis()
                 try {
                     r.muted?.let { _muted.value = it }
@@ -588,7 +595,7 @@ class Store(private val context: Context) {
                 if (res === raw) _syncProblem.value = null
             } catch (e: ApiException) {
                 if (e.status == 401) { signOutLocal(); return }
-                if (e.status == 400 && since != null) { since = null; _chats.value = emptyMap(); continue } // stale cache token
+                if (e.status == 400 && since != null) { synchronized(cacheLock) { since = null; chatsSince = null; _chats.value = emptyMap() }; continue } // stale cache token
                 delay(backoff); backoff = (backoff * 2).coerceAtMost(30_000)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -1393,6 +1400,15 @@ class Store(private val context: Context) {
     }
 
     fun clearCache() { media.clear() }
+
+    /** Throws away what this phone has saved and reads everything from the server again. For when this phone has fallen out of step. */
+    fun resyncFromServer() {
+        syncJob?.cancel()
+        synchronized(cacheLock) { since = null; chatsSince = null; _chats.value = emptyMap() }
+        _synced.value = false
+        runCatching { cacheFile.delete() }
+        ensureSyncing()
+    }
     fun cacheSize(): Long = File(context.cacheDir, "media").walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
     // Resumes the saved sign-in. Last on purpose: starting it any earlier let a background thread use fields that were not set up yet,
