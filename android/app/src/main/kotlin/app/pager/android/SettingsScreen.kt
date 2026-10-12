@@ -120,6 +120,19 @@ fun SwitchRow(title: String, subtitle: String? = null, checked: Boolean, enabled
     }
 }
 
+/** A row you tap to choose something (here, an emoji), with its own switch on the right. */
+@Composable
+fun PickToggleRow(title: String, subtitle: String, emoji: String, checked: Boolean, onChange: (Boolean) -> Unit, onPick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().dpadFocus().clickable(onClick = onPick).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(emoji, fontSize = 24.sp, modifier = Modifier.padding(end = 12.dp))
+        Switch(checked, onChange)
+    }
+}
+
 @Composable
 fun NavRow(title: String, subtitle: String? = null, icon: ImageVector? = null, tint: Color = MaterialTheme.colorScheme.primary, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().dpadFocus().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -420,7 +433,6 @@ private fun AppearancePage() {
     val store = LocalStore.current
     val s = LocalRawSettings.current
     val set = store.settings::update
-    var editing by remember { mutableStateOf<Int?>(null) }
     var tapPicking by remember { mutableStateOf<String?>(null) }
     SettingsGroup("Display") {
         SwitchRow("Silly hello", "The pager says something goofy when you open the app", s.greetings) { v -> set { copy(greetings = v) } }; GroupDivider()
@@ -492,21 +504,11 @@ private fun AppearancePage() {
         SwitchRow("Large emoji", "Emoji-only messages are shown big", s.largeEmoji) { v -> set { copy(largeEmoji = v) } }; GroupDivider()
         SwitchRow("Reduce motion", "Fewer animations", s.reduceMotion) { v -> set { copy(reduceMotion = v) } }
     }
-    SettingsGroup("Reactions", footer = "These show first when you long-press a message. Tap one to change it.") {
-        SwitchRow("Double-tap to react", "Double-tap a message to add ${s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }}", s.doubleTapReact) { v -> set { copy(doubleTapReact = v) } }; GroupDivider()
-        NavRow("Double-tap reaction", s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() } + (if (s.doubleTapEmoji.isEmpty()) "  (your first quick reaction)" else "")) { tapPicking = "double" }; GroupDivider()
-        SwitchRow("Triple-tap to react", "Triple-tap a message to add ${s.tripleTapEmoji}. Makes a single tap wait a moment", s.tripleTapReact) { v -> set { copy(tripleTapReact = v) } }; GroupDivider()
-        NavRow("Triple-tap reaction", s.tripleTapEmoji) { tapPicking = "triple" }; GroupDivider()
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            s.quickReactions.forEachIndexed { i, e ->
-                Box(Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { editing = i }, contentAlignment = Alignment.Center) { Text(e, fontSize = 24.sp) }
-            }
-        }
-        GroupDivider()
-        ButtonRow("Reset quick reactions") { set { copy(quickReactions = DEFAULT_QUICK_REACTIONS) } }
+    SettingsGroup("Reactions", footer = "Tap a reaction row to choose which reaction it adds. The switch turns it on or off.") {
+        PickToggleRow("Double-tap to react", if (s.doubleTapReact) "Double-tap a message to add ${s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }}" else "Off", s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }, s.doubleTapReact, { v -> set { copy(doubleTapReact = v) } }) { tapPicking = "double" }; GroupDivider()
+        PickToggleRow("Triple-tap to react", if (s.tripleTapReact) "Triple-tap a message to add ${s.tripleTapEmoji}. Makes a single tap wait a moment" else "Off", s.tripleTapEmoji, s.tripleTapReact, { v -> set { copy(tripleTapReact = v) } }) { tapPicking = "triple" }
     }
     tapPicking?.let { which -> EmojiPickerDialog(s.recentEmoji, onPick = { e -> set { if (which == "double") copy(doubleTapEmoji = e) else copy(tripleTapEmoji = e) }; tapPicking = null }, onDismiss = { tapPicking = null }) }
-    editing?.let { idx -> EmojiPickerDialog(s.recentEmoji, onPick = { e -> set { copy(quickReactions = quickReactions.toMutableList().also { it[idx] = e }) }; editing = null }, onDismiss = { editing = null }) }
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -716,11 +718,16 @@ private fun StorageSettings(navigate: (String) -> Unit) {
     val clipboard = LocalClipboardManager.current
     var size by remember { mutableStateOf(store.cacheSize()) }
     var confirmReset by remember { mutableStateOf(false) }
+    var syncing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    if (syncing) SyncSettingsDialog { syncing = false }
     SettingsPage("Storage", { navigate("") }) {
         SettingsGroup("Cache") {
             Text("Downloaded photos, videos and files: ${humanSize(size)}", Modifier.padding(16.dp))
             GroupDivider(); ButtonRow("Clear media cache") { store.clearCache(); size = store.cacheSize() }
+        }
+        SettingsGroup("Sync settings", footer = "Choose which settings to copy between your phones and tablets. Nothing is copied unless you press the button.") {
+            NavRow("Sync settings…", "Save from this phone or load onto it") { syncing = true }
         }
         SettingsGroup("Back up settings", footer = "Copies every setting as text, so you can paste it on another device.") {
             ButtonRow("Copy settings to clipboard") { clipboard.setText(AnnotatedString(store.exportSettings())); message = "Settings copied." }; GroupDivider()
@@ -1083,5 +1090,40 @@ fun UpdateGate() {
         text = { Text(if (stage == Updater.Stage.DOWNLOADING) "Downloading…" else if (stage == Updater.Stage.INSTALLING) "Installing…" else i.notes.ifBlank { "A new version is available from your server." }) },
         confirmButton = { TextButton(enabled = stage == Updater.Stage.IDLE, onClick = { scope.launch { Updater.install(ctx, i) } }) { Text("Update now") } },
         dismissButton = { TextButton(enabled = stage == Updater.Stage.IDLE, onClick = { Updater.later() }) { Text("Later") } },
+    )
+}
+
+/** "Sync settings": pick which groups to save from this phone, or load onto it. Nothing is copied unless you press a button. */
+@Composable
+fun SyncSettingsDialog(onClose: () -> Unit) {
+    val store = LocalStore.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var saved by remember { mutableStateOf<kotlinx.serialization.json.JsonObject?>(null) }
+    var ready by remember { mutableStateOf(false) }
+    var saveIds by remember { mutableStateOf(listOf<String>()) }
+    var loadIds by remember { mutableStateOf(listOf<String>()) }
+    var note by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { saved = store.loadSavedSettings(); ready = true }
+    val available = store.settings.groupsIn(saved)
+    fun flip(list: List<String>, id: String) = if (id in list) list - id else list + id
+    AlertDialog(
+        onDismissRequest = onClose, title = { Text("Sync settings") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("Settings stay on each device. Here you choose what to copy between your phones and tablets. Computers have their own.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(12.dp)); Text("Save from this phone", fontWeight = FontWeight.SemiBold)
+                SettingsStore.GROUPS.forEach { g -> Row(Modifier.fillMaxWidth().clickable { saveIds = flip(saveIds, g.id) }, verticalAlignment = Alignment.CenterVertically) { androidx.compose.material3.Checkbox(g.id in saveIds, { saveIds = flip(saveIds, g.id) }); Column { Text(g.label); Text(g.hint, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
+                TextButton(enabled = !busy && saveIds.isNotEmpty(), onClick = { busy = true; note = ""; scope.launch { runCatching { store.saveSettingsToAccount(saveIds) }.onSuccess { saved = store.loadSavedSettings(); note = "Saved."; saveIds = emptyList() }.onFailure { note = "Couldn't save. Try again." }; busy = false } }) { Text("Save selected") }
+                Spacer(Modifier.height(8.dp)); Text("Load onto this phone", fontWeight = FontWeight.SemiBold)
+                if (!ready) Text("Looking…") else if (available.isEmpty()) Text("Nothing has been saved yet. Save from your other phone first.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else {
+                    SettingsStore.GROUPS.filter { it.id in available }.forEach { g -> Row(Modifier.fillMaxWidth().clickable { loadIds = flip(loadIds, g.id) }, verticalAlignment = Alignment.CenterVertically) { androidx.compose.material3.Checkbox(g.id in loadIds, { loadIds = flip(loadIds, g.id) }); Column { Text(g.label); Text(g.hint, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
+                    TextButton(enabled = loadIds.isNotEmpty(), onClick = { val n = store.settings.loadSaved(saved!!, loadIds); note = if (n > 0) "Changed $n setting${if (n == 1) "" else "s"} on this phone." else "Nothing to change: this phone already matches."; loadIds = emptyList() }) { Text("Load selected") }
+                }
+                if (note.isNotEmpty()) Text(note, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
     )
 }

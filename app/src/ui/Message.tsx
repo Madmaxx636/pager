@@ -67,7 +67,7 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
         <span className="swipe-cue" style={{ opacity: swipe.progress, transform: `scale(${0.6 + 0.4 * swipe.progress})` }} aria-hidden>↩</span>
         <div className={"bubble" + (bare ? " bare" : "") + (msg.type === "m.image" && !msg.sticker ? " media-bubble" : "") + (msg.status === STATUS_FAILED ? " failed" : "")}
           onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}
-          onDoubleClick={() => st.doubleTapReact && st.quickReactions[0] && onReact(st.quickReactions[0])}
+          onDoubleClick={() => st.doubleTapReact && (st.doubleTapEmoji || st.quickReactions[0]) && onReact(st.doubleTapEmoji || st.quickReactions[0])}
           onClick={() => (msg.status === STATUS_FAILED ? retry(chat.id, msg) : undefined)}>
           {msg.replyTo && <div className="quote"><b>{reply ? nameOf(chat, reply.sender) : "Earlier message"}</b><span>{reply ? previewOf(reply) : "…"}</span></div>}
           <Content msg={msg} chat={chat} st={st} big={big} onOpen={onOpen} onVote={onVote} onEndPoll={onEndPoll} />

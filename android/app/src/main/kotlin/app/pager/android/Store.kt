@@ -72,8 +72,7 @@ class Store(private val context: Context) {
     val media = MediaLoader(context, http)
     val audio = AudioController(media)
     val transcripts = Transcripts(context, http, media)
-    val settings = SettingsStore(context).also { s -> s.onLocalChange = { pushSettingsRef?.invoke() } }
-    private var pushSettingsRef: (() -> Unit)? = null
+    val settings = SettingsStore(context)
     val reminders = Reminders(context)
     private val cacheFile = File(context.filesDir, "chats.json")
     private val cacheSerializer = Cache.serializer()
@@ -215,36 +214,19 @@ class Store(private val context: Context) {
         scope.launch { runCatching { pager.isAdmin() }.onSuccess { _isAdmin.value = it } }
     }
 
-    // --- Settings that follow your account ---------------------------------------------
-    /** Settings belong to one device, found by its name: two phones never share them. */
-    private val settingsType: String = "app.pager.settings.android." +
-        (android.os.Build.MANUFACTURER + "-" + android.os.Build.MODEL).lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').take(40).ifEmpty { "device" }
-    private var settingsPush: Job? = null
-    private var settingsChecked = false
-
-    init { pushSettingsRef = { pushSettings() } }
-
-    private fun pushSettings() {
-        val me = _session.value?.userId ?: return
-        settingsPush?.cancel()
-        settingsPush = scope.launch {
-            kotlinx.coroutines.delay(1500)
-            runCatching { matrix.putAccountData(me, SettingsStore.SHARED_TYPE, settings.sharedPayload()) }
-            runCatching { matrix.putAccountData(me, settingsType, settings.payload()) }
-        }
+    // --- Syncing settings by hand --------------------------------------------------------
+    /** What you last saved with "Sync settings" for phones and tablets, or null if nothing yet. */
+    suspend fun loadSavedSettings(): JsonObject? {
+        val me = _session.value?.userId ?: return null
+        val c = runCatching { matrix.getAccountData(me, SettingsStore.TYPE) }.getOrNull() ?: return null
+        return c.takeIf { (it["v"] as? JsonPrimitive)?.content == "3" && it["settings"] is JsonObject }
     }
 
-    /** Runs on every sync: takes newer settings from the account, or uploads ours if the account has none or older ones. */
-    private fun handleSettingsSync(remote: JsonObject?, userId: String, shared: JsonObject? = null) {
-        val first = !settingsChecked
-        settingsChecked = true
-        if (shared == null && first) settings.seedSharedStamps()
-        if (shared != null || first) { val (_, ahead) = settings.applyRemoteShared(shared); if (ahead && first) pushSettings() }
-        if (remote != null) {
-            val applied = settings.applyRemote(remote)
-            val remoteAt = (remote["updatedAt"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: 0L
-            if (!applied && first && settings.updatedAt > remoteAt) pushSettings()
-        } else if (first && settings.updatedAt > 0) pushSettings()
+    /** Saves the chosen groups of this phone's settings to your account, keeping what was saved for the other groups. */
+    suspend fun saveSettingsToAccount(ids: List<String>) {
+        val me = _session.value?.userId ?: error("Not signed in")
+        val previous = loadSavedSettings()
+        matrix.putAccountData(me, SettingsStore.TYPE, settings.mergeSaved(previous, ids, android.os.Build.MODEL))
     }
 
     // --- Cache -------------------------------------------------------------------
@@ -276,7 +258,7 @@ class Store(private val context: Context) {
                     // Keep the file small: recent messages only, nothing still in flight.
                     val trimmed = chats.mapValues { (_, c) ->
                         val sent = c.messages.filter { it.status == STATUS_SENT }
-                        if (sent.size <= 120) c.copy(messages = sent) else c.copy(messages = sent.takeLast(60), prevBatch = null)
+                        if (sent.size <= KEEP_MESSAGES) c.copy(messages = sent) else c.copy(messages = sent.takeLast(KEEP_MESSAGES), prevBatch = null, reachedStart = false)
                     }
                     // Written straight to a file (then moved into place), not built as one giant text first.
                     val tmp = File(cacheFile.path + ".tmp")
@@ -532,7 +514,6 @@ class Store(private val context: Context) {
                         val empty = r.chats.values.filter { it.messages.isEmpty() && !it.reachedStart }.take(25).map { it.id }
                         if (empty.isNotEmpty()) scope.launch { for (id in empty) { loadOlder(id); delay(150) } }
                     }
-                    handleSettingsSync(r.accountData[settingsType], s.userId, r.accountData[SettingsStore.SHARED_TYPE])
                     for ((type, c) in r.accountData) if (type.startsWith("app.pager.contacts.")) {
                         val rows = ((c["rows"] as? JsonArray) ?: JsonArray(emptyList())).mapNotNull { row ->
                             val a = row as? JsonArray
@@ -944,6 +925,8 @@ class Store(private val context: Context) {
 
     /** How many messages a page should have before we stop fetching older ones by ourselves. */
     private val FILL_MESSAGES = 30
+    /** Messages kept per chat on this device; older ones are fetched from the server again when scrolling up. */
+    private val KEEP_MESSAGES = 300
 
     fun loadOlder(roomId: String, pages: Int = 0) {
         val chat = _chats.value[roomId] ?: return

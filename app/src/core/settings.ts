@@ -87,6 +87,8 @@ export interface AppSettings {
   /** A silly pager message when the app opens. */
   greetings: boolean;
   quickReactions: string[];
+  /** The reaction a double-click adds. */
+  doubleTapEmoji: string;
   recentEmoji: string[];
   // Notifications
   notifEnabled: boolean;
@@ -148,7 +150,7 @@ export const DEFAULTS: AppSettings = {
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
   enterToSend: true, sendReadReceipts: true, sendTyping: true, linkPreviews: true, autoDownload: "always", unarchiveOnMessage: true,
-  confirmDelete: true, greetings: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtUnread: false, gifProvider: "giphy", gifKey: "", doubleTapReact: true, swipeToReply: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
+  doubleTapEmoji: "👍", confirmDelete: true, greetings: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtUnread: false, gifProvider: "giphy", gifKey: "", doubleTapReact: true, swipeToReply: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
   notifEnabled: true, convoSounds: true, sendSound: "swoosh", receiveSound: "pop", convoSoundVolume: 0.5, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [], notifNetworkMode: {}, notifChat: {}, notifKeywords: [], notifQuietDays: [0, 1, 2, 3, 4, 5, 6], notifQuietBreakThrough: false, notifDelaySec: 0, notifBadge: "unmuted", notifDirectMode: "all", notifGroupMode: "all", notifSoundId: "chime", notifSoundVolume: 0.7, notifNetworkSound: {}, dndUntil: 0,
   quietHoursEnabled: false, quietStartMin: 22 * 60, quietEndMin: 7 * 60,
   hiddenNetworks: [],
@@ -183,104 +185,58 @@ function load(): AppSettings {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") }; } catch { return { ...DEFAULTS }; }
 }
 
-// ---- Per-device settings that follow your account ---------------------------------------------
-// Each kind of device (web, desktop, phone) keeps its own settings in your Matrix account data, so signing in on a new
-// computer brings your layout back. Things that only make sense on one machine are left out.
-const SYNC_EXCLUDE: (keyof AppSettings)[] = ["gifKey", "sidebarWidth"];
-// Most settings (look, behaviour, notification rules) are the same on every device: each one is saved in your account with the time it last changed,
-// and the newest change wins, so changing a setting anywhere changes it everywhere. What only makes sense on one device stays on it.
-export const SHARED_KEYS: (keyof AppSettings)[] = ["themeMode", "accent", "accentCustom", "fontScale", "fontFamily", "palette", "bubbleStyle", "bubbleFill", "bubbleDepth", "messageAnimation", "screenEffects", "wallpaper", "timeFormat", "colorSenderNames", "avatarShape", "largeEmoji", "quickReactions", "doubleTapReact", "swipeToReply", "reactionStyle", "hideStories", "deleteAtSource", "autoTranscribe", "markdown", "mentionSuggestions", "greetings", "confirmDelete", "openAtUnread", "markReadMode", "groupGapMin", "hiddenNetworks", "inboxStyle", "defaultTab", "showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "gifProvider", "convoSounds", "sendSound", "receiveSound", "reactionSound", "notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin"];
-export const SHARED_TYPE = "app.pager.settings.shared";
-const sharedSet = new Set<string>(SHARED_KEYS);
-const STAMPS_KEY = "pager.settingsStamps";
-let stamps: Record<string, number> = (() => { try { return JSON.parse(localStorage.getItem(STAMPS_KEY) ?? "{}"); } catch { return {}; } })();
-/** What the account held for the shared settings the last time we saw it, so a save never wipes another device's newer choice. */
-let remoteShared: Record<string, { v: unknown; t: number }> = {};
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-export function sharedPayload(): { v: 2; keys: Record<string, { v: unknown; t: number }> } {
-  const keys = { ...remoteShared };
-  for (const k of SHARED_KEYS) if (stamps[k] && stamps[k] >= (keys[k]?.t ?? 0)) keys[k] = { v: raw[k], t: stamps[k] };
-  return { v: 2, keys };
+// ---- Syncing settings between your devices: only when you press the button ----------------------------------------
+// Nothing here is copied automatically. "Sync settings" in Settings lets you pick which groups of settings to save from this device, and which
+// to load onto it. Computers and browsers share one saved set; phones and tablets keep their own.
+export interface SyncGroup { id: string; label: string; hint: string; keys: (keyof AppSettings)[] }
+export const SYNC_GROUPS: SyncGroup[] = [
+  { id: "look", label: "Colours and theme", hint: "Mode, accent, looks, wallpaper, font, text size, avatars", keys: ["themeMode", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat"] },
+  { id: "bubbles", label: "Bubbles and messages", hint: "Bubble style, fill, depth, animations, effects", keys: ["bubbleStyle", "bubbleFill", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle"] },
+  { id: "reactions", label: "Reactions", hint: "Double-click reaction and swipe to reply", keys: ["doubleTapReact", "doubleTapEmoji", "swipeToReply"] },
+  { id: "list", label: "Chat list", hint: "What each row shows, filters, hidden networks", keys: ["showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories"] },
+  { id: "notifications", label: "Notifications", hint: "What alerts you, quiet hours, previews", keys: ["notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin"] },
+  { id: "sounds", label: "Sounds", hint: "Send, receive and reaction sounds", keys: ["convoSounds", "sendSound", "receiveSound", "reactionSound"] },
+  { id: "behaviour", label: "Chat behaviour", hint: "Read marks, typing, downloads, link previews, confirmations", keys: ["markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider"] },
+  { id: "desktop", label: "Desktop style", hint: "The desktop look and extra motion (computers only)", keys: ["skin", "skinAccent", "fancyMotion"] },
+];
+/** Where this kind of device keeps what you save: computers and browsers together. */
+export const SYNC_TYPE = "app.pager.sync.desktop";
+export interface SavedSettings { v: 3; savedAt: number; from: string; settings: Partial<AppSettings> }
+const groupKeys = (ids: string[]) => SYNC_GROUPS.filter((g) => ids.includes(g.id)).flatMap((g) => g.keys);
+/** The settings of the chosen groups, as they are on this device now. */
+export function pickSettings(ids: string[]): Partial<AppSettings> {
+  const out: Partial<AppSettings> = {};
+  for (const k of groupKeys(ids)) (out as Record<string, unknown>)[k] = raw[k];
+  return out;
 }
-/** First time on a device that has settings of its own but an account with none shared yet: its non-default choices become the shared ones, dated when they were last changed. */
-export function seedSharedStamps() {
-  if (SHARED_KEYS.some((k) => stamps[k])) return;
-  for (const k of SHARED_KEYS) if (!same(raw[k], DEFAULTS[k])) stamps[k] = updatedAt || Date.now();
-  try { localStorage.setItem(STAMPS_KEY, JSON.stringify(stamps)); } catch { /* storage may be unavailable */ }
+/** What to store when you save: what was saved before, with the chosen groups replaced by this device's. */
+export function mergeSaved(previous: SavedSettings | undefined, ids: string[], from: string, now = Date.now()): SavedSettings {
+  return { v: 3, savedAt: now, from, settings: { ...(previous?.settings ?? {}), ...pickSettings(ids) } };
 }
-/** Takes newer shared settings from the account. Returns whether anything here changed, and whether we hold something newer than the account. */
-export function applyRemoteShared(content: unknown): { changed: boolean; ahead: boolean } {
-  const keys = (content as { keys?: Record<string, { v: unknown; t: number }> } | undefined)?.keys;
-  if (!keys || typeof keys !== "object") return { changed: false, ahead: SHARED_KEYS.some((k) => stamps[k]) };
-  remoteShared = {};
-  let changed = false;
-  for (const [k, e] of Object.entries(keys)) {
-    if (!sharedSet.has(k) || !e || typeof e.t !== "number") continue;
-    remoteShared[k] = e;
-    if (e.t > (stamps[k] ?? 0)) { if (!same(raw[k as keyof AppSettings], e.v)) { (raw as unknown as Record<string, unknown>)[k] = e.v; changed = true; } stamps[k] = e.t; }
-  }
-  const ahead = SHARED_KEYS.some((k) => (stamps[k] ?? 0) > (remoteShared[k]?.t ?? 0));
-  if (changed) {
-    state = raw;
-    try { localStorage.setItem(KEY, JSON.stringify(raw)); } catch { /* storage may be unavailable */ }
-    listeners.forEach((l) => l());
-  }
-  try { localStorage.setItem(STAMPS_KEY, JSON.stringify(stamps)); } catch { /* storage may be unavailable */ }
-  return { changed, ahead };
+/** Which groups a saved set holds (every key of the group is there). */
+export function groupsIn(saved: SavedSettings | undefined): string[] {
+  if (!saved?.settings) return [];
+  return SYNC_GROUPS.filter((g) => g.keys.every((k) => k in saved.settings)).map((g) => g.id);
 }
-
-const TS_KEY = "pager.settingsUpdatedAt";
-let updatedAt = (() => { try { return Number(localStorage.getItem(TS_KEY) ?? 0) || 0; } catch { return 0; } })();
-const localListeners = new Set<() => void>();
-/** Settings belong to one device, found by its name: two computers or browsers never share them. */
-export function deviceKey(): string {
-  const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "device";
-  if (typeof window === "undefined") return "web.test";
-  if (window.pagerDesktop) return `desktop.${slug(window.pagerDesktop.hostname || "computer")}`;
-  const ua = navigator.userAgent;
-  const browser = /Edg\//.test(ua) ? "edge" : /Firefox\//.test(ua) ? "firefox" : /Chrome\//.test(ua) ? "chrome" : /Safari\//.test(ua) ? "safari" : "browser";
-  const os = /Windows/.test(ua) ? "windows" : /Android/.test(ua) ? "android" : /iPhone|iPad/.test(ua) ? "ios" : /Mac OS/.test(ua) ? "mac" : /Linux/.test(ua) ? "linux" : "os";
-  return `web.${browser}-${os}`;
+/** Puts the chosen groups of a saved set onto this device. Returns how many settings changed. */
+export function loadSaved(saved: SavedSettings, ids: string[]): number {
+  const patch: Partial<AppSettings> = {};
+  for (const k of groupKeys(ids)) if (k in saved.settings && JSON.stringify(raw[k]) !== JSON.stringify(saved.settings[k])) (patch as Record<string, unknown>)[k] = saved.settings[k];
+  const n = Object.keys(patch).length;
+  if (n) updateSettings(patch);
+  return n;
 }
-export const settingsKind = deviceKey;
-export const settingsSyncType = () => `app.pager.settings.${deviceKey()}`;
-export const getSettingsUpdatedAt = () => updatedAt;
-export function settingsPayload(): { v: 1; updatedAt: number; settings: Partial<AppSettings> } {
-  const s: Partial<AppSettings> = { ...raw };
-  for (const k of SYNC_EXCLUDE) delete s[k];
-  for (const k of SHARED_KEYS) delete s[k]; // those travel in the shared settings
-  return { v: 1, updatedAt, settings: s };
-}
-/** Applies settings saved in the account if they are newer than ours. Returns whether anything changed. */
-export function applyRemoteSettings(content: unknown): boolean {
-  const c = content as { updatedAt?: number; settings?: Partial<AppSettings> } | undefined;
-  if (!c || typeof c.updatedAt !== "number" || !c.settings || c.updatedAt <= updatedAt) return false;
-  const next: Partial<AppSettings> = { ...c.settings };
-  for (const k of SYNC_EXCLUDE) delete next[k];
-  for (const k of SHARED_KEYS) delete next[k]; // older versions saved everything here: the shared settings decide those
-  raw = { ...raw, ...next };
-  state = raw;
-  updatedAt = c.updatedAt;
-  try { localStorage.setItem(KEY, JSON.stringify(raw)); localStorage.setItem(TS_KEY, String(updatedAt)); } catch { /* storage may be unavailable */ }
-  listeners.forEach((l) => l());
-  return true;
-}
-/** Called after you change a setting on this device (not when settings arrive from the account). */
-export function onLocalSettingsChange(cb: () => void) { localListeners.add(cb); return () => { localListeners.delete(cb); }; }
+/** A short name for this device in a saved set ("Desktop app" or "Browser"). */
+export const deviceLabel = () => (typeof window !== "undefined" && window.pagerDesktop ? `Desktop app (${window.pagerDesktop.hostname || "computer"})` : "Browser");
 
 export const getSettings = () => state;
 /** Your own choices, without E-ink's overrides (this is what gets saved and shown on the settings page). */
 export const getRawSettings = () => raw;
 export function updateSettings(patch: Partial<AppSettings>) {
-  const now = Date.now();
-  for (const k of Object.keys(patch)) if (sharedSet.has(k) && !same(raw[k as keyof AppSettings], patch[k as keyof AppSettings])) stamps[k] = now;
-  try { localStorage.setItem(STAMPS_KEY, JSON.stringify(stamps)); } catch { /* storage may be unavailable */ }
   raw = { ...raw, ...patch };
   state = raw;
-  updatedAt = Date.now();
-  try { localStorage.setItem(KEY, JSON.stringify(raw)); localStorage.setItem(TS_KEY, String(updatedAt)); } catch { /* storage may be unavailable */ }
+  try { localStorage.setItem(KEY, JSON.stringify(raw)); } catch { /* storage may be unavailable */ }
   listeners.forEach((l) => l());
-  localListeners.forEach((l) => l());
 }
 export const resetSettings = () => updateSettings({ ...DEFAULTS });
 export function useSettings(): AppSettings {

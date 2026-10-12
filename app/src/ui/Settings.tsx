@@ -2,16 +2,16 @@ import { FONTS, PALETTES } from "../core/palettes";
 import { SKINS, SKIN_GROUPS, accentsFor, skinById } from "../core/skins";
 import { useEffect, useState } from "react";
 import { Bell, Check, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
-import { RowAction, ACCENTS, accentTones, DEFAULTS, DEFAULT_QUICK_REACTIONS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
+import { SYNC_GROUPS, groupsIn, loadSaved, SavedSettings, RowAction, ACCENTS, accentTones, DEFAULTS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
 import { Tour } from "./Tour";
 import { comboOf } from "../core/combo";
 import { RecoveryKeyDialog, RestoreDialog } from "./KeyDialogs";
-import { addStickers, cancelReminder, retryEncryptionStart, enableEncryptionForAll, exportKeyFile, importKeyFile, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore, loadEveryHistory } from "../core/store";
+import { addStickers, cancelReminder, retryEncryptionStart, enableEncryptionForAll, exportKeyFile, importKeyFile, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore, loadEveryHistory, loadSavedSettings, saveSettingsToAccount } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
 import { SOUNDS, playSound } from "../core/sounds";
-import { EmojiPicker, EmptyState, Group, IconButton, Modal, Row, Select, SwitchRow } from "./common";
+import { EmojiPicker, EmptyState, Group, IconButton, Modal, Row, Select, Switch, SwitchRow } from "./common";
 import { BridgesPage } from "./Accounts";
 import { AdminPage } from "./Admin";
 import type { Nav } from "./Sidebar";
@@ -232,7 +232,7 @@ function DeleteProfile({ onClose }: { onClose: () => void }) {
 function Appearance() {
   const [picker, setPicker] = useState(false);
   const s = useRawSettings();
-  const [editing, setEditing] = useState<number>();
+  const [pickDouble, setPickDouble] = useState(false);
   return (
     <>
       {window.pagerDesktop && <StyleGroup />}
@@ -268,13 +268,11 @@ function Appearance() {
         <SwitchRow title="Silly hello" hint="The pager says something goofy when you open the app" checked={s.greetings} onChange={(v) => updateSettings({ greetings: v })} />
         <SwitchRow title="Reduce motion" hint="Fewer animations" checked={s.reduceMotion} onChange={(v) => updateSettings({ reduceMotion: v })} />
       </Group>
-      <Group title="Reactions" footer="These show first when you right-click a message. Click one to change it.">
-        <SwitchRow title="Double-click to react" hint="Double-click a message to add your first quick reaction" checked={s.doubleTapReact} onChange={(v) => updateSettings({ doubleTapReact: v })} />
+      <Group title="Reactions" footer="Click “Double-click to react” to choose which reaction it adds. The switch turns it on or off.">
+        <Row title="Double-click to react" hint={s.doubleTapReact ? `Double-click a message to add ${s.doubleTapEmoji || s.quickReactions[0]}` : "Off"} onClick={() => setPickDouble(true)}><span className="dt-emoji">{s.doubleTapEmoji || s.quickReactions[0]}</span><Switch checked={s.doubleTapReact} onChange={(v) => updateSettings({ doubleTapReact: v })} /></Row>
         <SwitchRow title="Swipe to reply" hint="Swipe a message to the right (touch screens, or two fingers on a trackpad)" checked={s.swipeToReply} onChange={(v) => updateSettings({ swipeToReply: v })} />
-        <Row title="Quick reactions"><div className="quick-edit">{s.quickReactions.map((e, i) => <button key={i} onClick={() => setEditing(i)}>{e}</button>)}</div></Row>
-        <Row title="Reset quick reactions" onClick={() => updateSettings({ quickReactions: DEFAULT_QUICK_REACTIONS })}><span className="accent">Reset</span></Row>
       </Group>
-      {editing !== undefined && <EmojiPicker recent={s.recentEmoji} onPick={(e) => { const q = [...s.quickReactions]; q[editing] = e; updateSettings({ quickReactions: q }); setEditing(undefined); }} onClose={() => setEditing(undefined)} />}
+      {pickDouble && <EmojiPicker recent={s.recentEmoji} onPick={(e) => { updateSettings({ doubleTapEmoji: e }); setPickDouble(false); }} onClose={() => setPickDouble(false)} />}
     </>
   );
 }
@@ -495,9 +493,14 @@ function Desktop() {
 
 function Backup() {
   const [msg, setMsg] = useState("");
+  const [syncing, setSyncing] = useState(false);
   const s = useRawSettings();
   return (
     <>
+      <Group title="Sync settings" footer="Choose which settings to copy between your computers and browsers. Nothing is copied unless you press the button.">
+        <Row title="Sync settings…" hint="Save from this device or load onto it" onClick={() => setSyncing(true)} chevron />
+      </Group>
+      {syncing && <SyncSettingsDialog onClose={() => setSyncing(false)} />}
       <Group title="Back up settings" footer="Copies every setting as text, so you can paste it on another device.">
         <Row title="Copy settings to clipboard" onClick={() => { void navigator.clipboard.writeText(JSON.stringify(s)); setMsg("Settings copied."); }} />
         <Row title="Restore settings from clipboard" onClick={async () => { try { updateSettings({ ...DEFAULTS, ...JSON.parse(await navigator.clipboard.readText()) }); setMsg("Settings restored."); } catch { setMsg("The clipboard doesn't contain Pager settings."); } }} />
@@ -636,5 +639,38 @@ function StyleGroup() {
         {skin && accents.length > 0 && <Row title="Accent colour" hint={skin.family === "adwaita" ? "GNOME's accent colours" : "Plasma's accent colours"}><div className="swatches">{accents.map(([n, c]) => <button key={c} className={(s.skinAccent || skin.accent) === c ? "on" : ""} style={{ background: c }} title={n} aria-label={n} onClick={() => updateSettings({ skinAccent: c === skin.accent ? "" : c })}>{(s.skinAccent || skin.accent) === c ? <Check size={16} color="#fff" /> : null}</button>)}</div></Row>}
       </Group>
     </>
+  );
+}
+
+/** "Sync settings": pick which groups to save from this device, or load onto it. Nothing is copied unless you press a button. */
+function SyncSettingsDialog({ onClose }: { onClose: () => void }) {
+  const [saved, setSaved] = useState<SavedSettings | undefined>();
+  const [ready, setReady] = useState(false);
+  const [saveIds, setSaveIds] = useState<string[]>([]);
+  const [loadIds, setLoadIds] = useState<string[]>([]);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const available = groupsIn(saved);
+  useEffect(() => { void loadSavedSettings().then((c) => { setSaved(c); setReady(true); }); }, []);
+  const toggle = (list: string[], set: (v: string[]) => void, id: string) => set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  const desktop = !!window.pagerDesktop;
+  const groups = SYNC_GROUPS.filter((g) => g.id !== "desktop" || desktop);
+  return (
+    <Modal title="Sync settings" onClose={onClose}>
+      <p className="muted">Settings stay on each device. Here you choose what to copy between your computers and browsers. Phones and tablets have their own.</p>
+      <h4>Save from this device</h4>
+      <div className="sync-list">{groups.map((g) => <label key={g.id} className="check-row"><input type="checkbox" checked={saveIds.includes(g.id)} onChange={() => toggle(saveIds, setSaveIds, g.id)} /><span>{g.label}<small className="muted"> {g.hint}</small></span></label>)}</div>
+      <div className="row-end"><button className="primary" disabled={busy || !saveIds.length} onClick={() => { setBusy(true); setNote(""); saveSettingsToAccount(saveIds).then(async () => { setSaved(await loadSavedSettings()); setNote("Saved."); setSaveIds([]); }).catch(() => setNote("Couldn't save. Try again.")).finally(() => setBusy(false)); }}>Save selected</button></div>
+      <h4>Load onto this device</h4>
+      {!ready ? <p className="muted">Looking…</p> : !available.length ? <p className="muted">Nothing has been saved yet. Save from your other device first.</p> : (
+        <>
+          <p className="muted small">Last saved {new Date(saved!.savedAt).toLocaleString()} from {saved!.from}.</p>
+          <div className="sync-list">{groups.filter((g) => available.includes(g.id)).map((g) => <label key={g.id} className="check-row"><input type="checkbox" checked={loadIds.includes(g.id)} onChange={() => toggle(loadIds, setLoadIds, g.id)} /><span>{g.label}<small className="muted"> {g.hint}</small></span></label>)}</div>
+          <div className="row-end"><button className="primary" disabled={!loadIds.length} onClick={() => { const n = loadSaved(saved!, loadIds); setNote(n ? `Changed ${n} setting${n === 1 ? "" : "s"} on this device.` : "Nothing to change: this device already matches."); setLoadIds([]); }}>Load selected</button></div>
+        </>
+      )}
+      {note && <p className="accent">{note}</p>}
+      <div className="row-end"><button className="link" onClick={onClose}>Close</button></div>
+    </Modal>
   );
 }

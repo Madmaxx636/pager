@@ -10,7 +10,7 @@ import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
 import { playSound } from "./sounds";
-import { SHARED_TYPE, applyRemoteShared, seedSharedStamps, sharedPayload, getSettings, updateSettings, useSettings, AppSettings, applyRemoteSettings, getSettingsUpdatedAt, onLocalSettingsChange, settingsPayload, settingsSyncType } from "./settings";
+import { getSettings, updateSettings, useSettings, AppSettings, SYNC_TYPE, SavedSettings, deviceLabel, mergeSaved } from "./settings";
 import {
   ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isStoriesRoom, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
   labelsOf, lastPreview, lastTs, nameOf, previewOf,
@@ -137,6 +137,8 @@ async function dbSet(key: string, value: unknown) {
 }
 async function dbDel(key: string) { try { const db = await openDb(); db.transaction("kv", "readwrite").objectStore("kv").delete(key); } catch { /* ignore */ } }
 
+/** Messages kept per chat on this device; older ones are fetched from the server again when scrolling up. */
+const KEEP_MESSAGES = 300;
 let saveTimer: number | undefined;
 function scheduleSave() {
   window.clearTimeout(saveTimer);
@@ -144,7 +146,7 @@ function scheduleSave() {
     const s = state.session; if (!s) return;
     const chats = Object.fromEntries(Object.entries(state.chats).map(([id, c]) => {
       const sent = c.messages.filter((m) => m.status === STATUS_SENT);
-      return [id, sent.length <= 120 ? { ...c, messages: sent, typing: [] } : { ...c, messages: sent.slice(-60), prevBatch: null, typing: [] }];
+      return [id, sent.length <= KEEP_MESSAGES ? { ...c, messages: sent, typing: [] } : { ...c, messages: sent.slice(-KEEP_MESSAGES), prevBatch: null, reachedStart: false, typing: [] }];
     }));
     void dbSet("cache", { userId: s.userId, since, chats });
   }, 3000);
@@ -196,27 +198,6 @@ function begin(s: Session, cache?: { userId: string; since?: string; chats: Reco
   void pager.me().then((m) => set({ isAdmin: m.admin })).catch(() => {});
   armReminders();
 }
-
-// ---- Settings that follow your account (see settings.ts) -----------------------------------------
-let settingsPushTimer: number | undefined;
-let settingsChecked = false;
-function pushSettings(userId: string) {
-  window.clearTimeout(settingsPushTimer);
-  settingsPushTimer = window.setTimeout(() => { void pager_putSettings(userId); }, 1500);
-}
-function pager_putSettings(userId: string) { void matrix.putAccountData(userId, SHARED_TYPE, sharedPayload()).catch(() => {}); return matrix.putAccountData(userId, settingsSyncType(), settingsPayload()).catch(() => {}); }
-/** Runs on every sync: takes newer settings from the account, or uploads ours if the account has none or older ones. */
-function handleSettingsSync(remote: unknown, userId: string, shared?: unknown) {
-  const first = !settingsChecked;
-  if (shared === undefined && first) seedSharedStamps();
-  if (shared !== undefined || first) { const r = applyRemoteShared(shared); if (r.ahead && first) pushSettings(userId); }
-  if (remote !== undefined) {
-    const applied = applyRemoteSettings(remote);
-    if (!applied && first && getSettingsUpdatedAt() > ((remote as { updatedAt?: number }).updatedAt ?? 0)) pushSettings(userId);
-  } else if (first && getSettingsUpdatedAt() > 0) pushSettings(userId);
-  settingsChecked = true;
-}
-onLocalSettingsChange(() => { const s = state.session; if (s) pushSettings(s.userId); });
 
 // ---- End-to-end encryption --------------------------------------------------------------------------------------------
 let e2ee: Crypto | undefined;
@@ -446,7 +427,6 @@ async function syncLoop(s: Session, signal: AbortSignal) {
         // the list shows something to read instead of "No messages yet" until each one is opened.
         if (initial) { const empty = Object.values(r.chats).filter((c) => !c.messages.length && !c.reachedStart).slice(0, 25); empty.forEach((c, i) => window.setTimeout(() => loadOlder(c.id), 150 * i)); }
         if (r.userStickers) lsSet("pager.userStickers", r.userStickers);
-        handleSettingsSync(r.accountData?.[settingsSyncType()], s.userId, r.accountData?.[SHARED_TYPE]);
         for (const [type, c] of Object.entries(r.accountData ?? {})) if (type.startsWith("app.pager.contacts.")) {
           const rows = Array.isArray(c.rows) ? (c.rows as unknown[]).filter((x): x is [string, string] => Array.isArray(x) && typeof x[0] === "string" && typeof x[1] === "string") : [];
           addToPhonebook(rows.map(([number, name]) => ({ number, name })), true, true);
@@ -1094,3 +1074,13 @@ export async function addStickers(files: File[]) {
 }
 
 export { buildMerged };
+
+/** What you last saved with "Sync settings" for computers and browsers, or nothing yet. */
+export async function loadSavedSettings(): Promise<SavedSettings | undefined> {
+  try { const c = await matrix.getAccountData(me(), SYNC_TYPE) as SavedSettings; return c && c.v === 3 && c.settings ? c : undefined; } catch { return undefined; }
+}
+/** Saves the chosen groups of this device's settings to your account, keeping what was saved for the other groups. */
+export async function saveSettingsToAccount(groupIds: string[]): Promise<void> {
+  const previous = await loadSavedSettings();
+  await matrix.putAccountData(me(), SYNC_TYPE, mergeSaved(previous, groupIds, deviceLabel()));
+}
