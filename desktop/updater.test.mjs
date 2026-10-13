@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const Module = require("node:module");
 const orig = Module._load;
 Module._load = (req, ...a) => (req === "electron" ? { app: {}, dialog: {}, shell: {} } : orig(req, ...a));
-const { newer, verify } = require("./updater.js");
+const { newer, verify, terminalPlan } = require("./updater.js");
 
 test("compares versions by number, not text", () => {
   assert.equal(newer("0.4.10", "0.4.9"), true);
@@ -26,4 +26,13 @@ test("only a manifest signed by the release key is accepted", () => {
   assert.equal(verify(Buffer.from('{"desktop":{"version":"9.9.8"}}'), good, pem), false); // changed after signing
   assert.equal(verify(body, crypto.sign(null, body, other.privateKey), pem), false);      // signed by someone else
   assert.equal(verify(body, Buffer.from("junk"), pem), false);
+});
+
+test("the terminal fallback runs the install in the first terminal that exists, and quotes the path", () => {
+  const plan = terminalPlan("/home/a b/it's.deb", "/tmp/x/installed", (b) => b === "konsole" || b === "xterm");
+  assert.equal(plan.cmd, "konsole");
+  assert.deepEqual(plan.args.slice(0, 3), ["--nofork", "-e", "bash"]);
+  assert.match(plan.args.at(-1), /sudo apt-get install -y '\/home\/a b\/it'\\''s\.deb'/);
+  assert.match(plan.args.at(-1), /touch '\/tmp\/x\/installed'/);
+  assert.equal(terminalPlan("/a.deb", "/d", () => false), undefined);
 });
