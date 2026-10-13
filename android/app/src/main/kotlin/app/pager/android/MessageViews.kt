@@ -366,6 +366,10 @@ fun MessageRow(
                             if (s.linkPreviews) firstUrl(msg.body)?.let { LinkPreviewCard(it, fg) }
                         }
                     }
+                    if (msg.caption != null && msg.type in listOf("m.image", "m.video", "m.audio", "m.file")) {
+                        Text(rememberRich(msg.copy(body = msg.caption, html = msg.captionHtml), if (mine) fg else scheme.primary, fg.copy(alpha = 0.12f)), color = fg, style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(start = if (msg.type == "m.image") 8.dp else 0.dp, end = if (msg.type == "m.image") 8.dp else 0.dp, top = 6.dp, bottom = 2.dp))
+                    }
                     if (last && !bare && (s.showMessageTimes || (mine && s.showReadTicks) || msg.edited)) {
                         Row(Modifier.align(Alignment.End).padding(top = 2.dp, end = if (msg.type == "m.image") 6.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (starred) Icon(Icons.Rounded.Star, "Starred", tint = fg.dim(0.6f), modifier = Modifier.size(11.dp).padding(end = 2.dp))

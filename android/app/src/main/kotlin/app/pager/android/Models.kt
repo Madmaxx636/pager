@@ -49,6 +49,9 @@ data class Msg(
     val enc: EncFile? = null,
     /** A message we could not read yet: the encrypted original (JSON), kept so it can be opened when its key arrives, even after a restart. */
     val sealed: String? = null,
+    /** The words sent with a picture, video or file (the body is the caption when the file's own name is given separately). */
+    val caption: String? = null,
+    val captionHtml: String? = null,
     /** In a merged view: the chat (on its own network) this message really belongs to. Never saved. */
     @Transient val room: String? = null,
 )
@@ -130,7 +133,12 @@ data class ChatState(
     companion object { const val LABEL_PREFIX = "u.label."; private val BOT = Regex("^@[a-z]*bot:") }
 }
 
-fun previewOf(m: Msg) = when (m.type) {
+fun previewOf(m: Msg): String {
+    val base = previewBase(m)
+    return if (m.caption != null && m.type != "m.audio") "$base: ${m.caption}" else base
+}
+
+private fun previewBase(m: Msg) = when (m.type) {
     "m.image" -> if (m.sticker) "Sticker" else if (m.mime == "image/gif") "GIF" else "Photo"
     "m.location" -> "Location"
     "m.poll" -> "Poll: ${m.poll?.question ?: m.body}"

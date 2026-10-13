@@ -204,6 +204,14 @@ object SyncReducer {
         )
     }
 
+    class Caption(val name: String, val text: String, val html: String?)
+
+    /** The words that came with a media message, when the body is not just the file's name. */
+    fun captionOf(type: String?, body: String, filename: String?, content: JsonObject): Caption? {
+        if (type !in listOf("m.image", "m.video", "m.audio", "m.file") || filename == null || body.isEmpty() || body == filename) return null
+        return Caption(filename, body, if (content["format"].str() == "org.matrix.html") content["formatted_body"].str() else null)
+    }
+
     private fun applyEdit(msgs: MutableList<Msg>, e: JsonObject) {
         val content = e["content"].obj()
         val target = content["m.relates_to"].obj()["event_id"].str() ?: return
@@ -213,6 +221,8 @@ object SyncReducer {
         val body = nc["body"].str() ?: content["body"].str()?.removePrefix("* ") ?: return
         val prev = msgs[i]
         var next = prev.copy(body = body, edited = true)
+        val cap = captionOf(nc["msgtype"].str() ?: prev.type, nc["body"].str() ?: body, nc["filename"].str(), nc)
+        if (cap != null) next = next.copy(body = cap.name, caption = cap.text, captionHtml = cap.html)
         // Some bridges (Google Messages, WhatsApp) send a picture or file as an edit of an earlier message: take its media too.
         // In an encrypted room the picture is an encrypted file ("file"), not a plain address ("url").
         val nf = nc["file"].obj()
@@ -229,7 +239,7 @@ object SyncReducer {
                 edited = prev.edited, // adding the media isn't an edit the reader should see
             )
         } else if (nc["msgtype"].str() != null && nc["msgtype"].str() != prev.type && prev.mxc == null) next = next.copy(type = nc["msgtype"].str()!!)
-        if (nc["format"].str() == "org.matrix.html") next = next.copy(html = nc["formatted_body"].str())
+        if (nc["format"].str() == "org.matrix.html" && cap == null) next = next.copy(html = nc["formatted_body"].str())
         msgs[i] = next
     }
 
@@ -372,7 +382,11 @@ object SyncReducer {
         val reply = content["m.relates_to"].obj()["m.in_reply_to"].obj()["event_id"].str()
         var body = content["body"].str() ?: ""
         if (reply != null) body = stripReplyFallback(body)
+        // A picture, video or file with words: the file's own name is "filename" and the body is what was written.
+        val cap = captionOf(type, body, content["filename"].str(), content)
+        if (cap != null) body = cap.name
         return Msg(
+            caption = cap?.text, captionHtml = cap?.html,
             enc = enc,
             sealed = (content["pagerRaw"] as? JsonObject)?.toString(),
             id = e["event_id"].str() ?: return null,

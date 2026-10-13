@@ -106,7 +106,7 @@ function Content({ msg, chat, st, big, onOpen, onVote, onEndPoll }: { msg: Msg; 
   const media = useMxc(msg.type === "m.audio" || msg.type === "m.video" ? msg.mxc : undefined, 0, allowed);
   const ratio = msg.w && msg.h ? Math.min(2, Math.max(0.5, msg.w / msg.h)) : 4 / 3;
 
-  switch (msg.type) {
+  const main = ((): React.ReactNode => { switch (msg.type) {
     case "m.poll": return <PollCard msg={msg} chat={chat} onVote={onVote} onEnd={onEndPoll} />;
     case "m.image":
       return img ? <div className="img-wrap"><img className={"media" + (msg.sticker ? " sticker" : "")} src={img} alt={msg.body} onClick={onOpen} loading="lazy" decoding="async" />{isGif && !st.autoPlayGifs && <span className="gif-tag">GIF</span>}</div>
@@ -126,7 +126,9 @@ function Content({ msg, chat, st, big, onOpen, onVote, onEndPoll }: { msg: Msg; 
       const url = st.linkPreviews ? firstUrl(msg.body) : undefined;
       return <><span className="text">{msg.html ? <Html html={msg.html} /> : <Linkified text={msg.body} />}</span>{url && <LinkCard url={url} />}</>;
     }
-  }
+  } })();
+  if (!msg.caption || !["m.image", "m.video", "m.audio", "m.file"].includes(msg.type)) return <>{main}</>;
+  return <>{main}<div className="caption">{msg.captionHtml ? <Html html={msg.captionHtml} /> : <Linkified text={msg.caption} />}</div></>;
 }
 
 function FileChip({ icon: Icon, title, sub, onClick }: { icon: React.ComponentType<{ size?: number }>; title: string; sub?: string; onClick: () => void }) {

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { Gif } from "../core/gifs";
 import {
   AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
-  Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon,
+  Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon, Video,
 } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot, isBotRoom, realPeople } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import { useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
-  edit, enableEncryption, endPoll, forward as _forward, loadOlder, readingOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, sendGif,
+  edit, enableEncryption, endPoll, forward as _forward, loadOlder, readingOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, gifFile,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory, setAlias, setSolo,
 } from "../core/store";
 import { addLink, buildMerged, groupOf, suggestLinks, unlink } from "../core/links";
@@ -174,7 +175,12 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const name = displayName(chat, user);
   const meta = networkMeta(chat.network);
   const typingNames = chat.typing.map((u) => nameOf(chat, u));
-  const attachFiles = (files: FileList | File[], viewOnce = false) => Array.from(files).forEach((f) => sendFile(sendRoom, f, undefined, { viewOnce }));
+  // Pictures, videos, files and GIFs wait in the message box until you press send, so you can add more and write something with them.
+  const [staged, setStaged] = useState<Staged[]>([]);
+  useEffect(() => { setStaged((cur) => { cur.forEach((x) => x.preview && URL.revokeObjectURL(x.preview)); return []; }); }, [roomId]);
+  const attachFiles = (files: FileList | Array<File | Blob>, viewOnce = false, gif?: Gif) => setStaged((cur) => [...cur, ...Array.from(files).map((f) => stageOf(f, viewOnce, gif))]);
+  const unstage = (id: string) => setStaged((cur) => { cur.filter((x) => x.id === id).forEach((x) => x.preview && URL.revokeObjectURL(x.preview)); return cur.filter((x) => x.id !== id); });
+  const clearStaged = () => setStaged([]);
 
   return (
     <section className={"chat" + (infoOpen ? " with-info" : "")} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); attachFiles(e.dataTransfer.files); }}>
@@ -212,8 +218,8 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
         {showJump && <button className="jump" onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: st.reduceMotion ? "auto" : "smooth" })} aria-label="Jump to latest"><ChevronDown size={20} /></button>}
 
         {merged && <ViaPick ids={groupIds} current={sendRoom} onPick={setVia} />}
-        <Composer roomId={roomId} sendTo={sendRoom} chat={chat} replyTo={replyTo} editing={editing} st={st} group={group} nav={nav} onClearReply={() => setReplyTo(undefined)} onClearEdit={() => setEditing(undefined)} onFiles={attachFiles} />
-        {dragging && <div className="drop-hint">Drop to send</div>}
+        <Composer roomId={roomId} sendTo={sendRoom} chat={chat} replyTo={replyTo} editing={editing} st={st} group={group} nav={nav} onClearReply={() => setReplyTo(undefined)} onClearEdit={() => setEditing(undefined)} onFiles={attachFiles} staged={staged} onUnstage={unstage} onSent={clearStaged} />
+        {dragging && <div className="drop-hint">Drop to add to your message</div>}
       </div>
 
       {infoOpen && <InfoPanel chat={chat} nav={nav} onClose={() => setInfoOpen(false)} onViewImage={setViewer} />}
@@ -313,8 +319,17 @@ function MenuItems({ roomId, m, mine, starred, dev, close, onReply, onEdit, onFo
 
 // ---- Composer ----------------------------------------------------------------------------------------
 
-function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onClearReply, onClearEdit, onFiles }: {
-  roomId: string; sendTo?: string; chat: ChatState; replyTo?: Msg; editing?: Msg; st: AppSettings; group: boolean; nav: Nav; onClearReply: () => void; onClearEdit: () => void; onFiles: (f: File[], viewOnce?: boolean) => void;
+/** Something waiting in the message box to be sent. */
+interface Staged { id: string; file: File | Blob; name: string; viewOnce: boolean; kind: "image" | "video" | "file"; preview?: string; gif?: boolean; w?: number; h?: number }
+let stagedCount = 0;
+function stageOf(f: File | Blob, viewOnce = false, gif?: Gif): Staged {
+  const mime = f.type || "", name = (f as File).name || "file";
+  const kind = mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : "file";
+  return { id: `st${++stagedCount}`, file: f, name, viewOnce, kind, preview: kind === "file" ? undefined : URL.createObjectURL(f), gif: !!gif || mime === "image/gif", w: gif?.w || undefined, h: gif?.h || undefined };
+}
+
+function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onClearReply, onClearEdit, onFiles, staged, onUnstage, onSent }: {
+  roomId: string; sendTo?: string; chat: ChatState; replyTo?: Msg; editing?: Msg; st: AppSettings; group: boolean; nav: Nav; onClearReply: () => void; onClearEdit: () => void; onFiles: (f: Array<File | Blob>, viewOnce?: boolean, gif?: Gif) => void; staged: Staged[]; onUnstage: (id: string) => void; onSent: () => void;
 }) {
   const [text, setText] = useState(() => getState().drafts[roomId] ?? "");
   const [attach, setAttach] = useState(false);
@@ -348,7 +363,13 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
   const people = token === undefined ? [] : Object.entries(chat.members).filter(([id, n]) => id !== user && n.toLowerCase().includes(token.toLowerCase())).slice(0, 8);
 
   function submit() {
-    const body = text.trim(); if (!body) return;
+    const body = text.trim(); if (!body && !staged.length) return;
+    if (!editing && staged.length) {
+      // The words go with the first item; the rest follow on their own.
+      staged.forEach((x, i) => sendFile(target, x.file, x.name, { viewOnce: x.viewOnce, ...(i === 0 && body ? { caption: body } : {}), ...(x.w ? { w: x.w, h: x.h } : {}) }));
+      onSent(); setText(""); setDraft(roomId, ""); mentionIds.current.clear(); onClearReply(); onClearEdit();
+      return;
+    }
     if (editing) edit(roomId, editing.id, body);
     else send(target, body, replyTo?.id, [...mentionIds.current].filter(([n]) => body.includes(`@${n}`)).map(([, id]) => id));
     setText(""); mentionIds.current.clear(); onClearReply(); onClearEdit();
@@ -407,7 +428,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
     else setSheet(k);
   };
   const once = useRef(false); // the next pictures are sent as view-once
-  const hasText = text.trim().length > 0;
+  const hasText = text.trim().length > 0 || (!editing && staged.length > 0);
   const input = (ref: React.RefObject<HTMLInputElement | null>, accept?: string, capture?: boolean) => (
     <input ref={ref} type="file" multiple={!capture} accept={accept} {...(capture ? { capture: "environment" } : {})} hidden onChange={(e) => { if (e.target.files) onFiles(Array.from(e.target.files), once.current); once.current = false; e.target.value = ""; }} />
   );
@@ -418,6 +439,18 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
       {editing && <div className="banner-bar"><div><b>Editing message</b><span>{editing.body}</span></div><IconButton icon={X} label="Dismiss" onClick={() => { onClearEdit(); setText(""); }} /></div>}
       {people.length > 0 && <div className="mentions">{people.map(([id, n]) => <button key={id} onClick={() => { setText(text.slice(0, text.length - token!.length - 1) + `@${n} `); mentionIds.current.set(n, id); ta.current?.focus(); }}><Avatar name={n} size={22} />@{n}</button>)}</div>}
       {error && <div className="error pad" onClick={() => setError(undefined)}>{error}</div>}
+      {staged.length > 0 && !editing && (
+        <div className="staged" role="list" aria-label="Ready to send">
+          {staged.map((x) => (
+            <div key={x.id} className="staged-item" role="listitem" title={x.name}>
+              {x.preview && x.kind === "image" ? <img src={x.preview} alt={x.name} /> : x.preview && x.kind === "video" ? <video src={x.preview} muted /> : <span className="staged-file"><FileText size={22} /><small>{x.name}</small></span>}
+              {x.kind === "video" && <span className="staged-badge"><Video size={12} /></span>}
+              {x.gif && <span className="staged-badge">GIF</span>}
+              <button type="button" className="staged-x" aria-label={`Remove ${x.name}`} onClick={() => onUnstage(x.id)}><X size={14} /></button>
+            </div>
+          ))}
+        </div>
+      )}
       {input(files)}{input(photos, "image/*,video/*")}{input(camera, "image/*", true)}
       {rec ? (
         <div className="composer rec"><IconButton icon={Trash2} label="Cancel recording" onClick={() => stopRec(true)} /><i className="rec-dot" /><span className="grow">{hold.current && holdDx < -80 ? "Let go to cancel" : hold.current ? "Let go to send · slide left to cancel · " : ""}Recording {Math.floor(rec.ms / 60000)}:{String(Math.floor(rec.ms / 1000) % 60).padStart(2, "0")}</span><button className="send" onClick={() => stopRec(false)} aria-label="Send voice message"><Send size={18} /></button></div>
@@ -428,20 +461,20 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
             {attach && <AttachMenu onPick={pick} onClose={() => setAttach(false)} canViewOnce={chat.network === "signal"} />}
           </div>
           <div className="field">
-            <textarea ref={ta} rows={1} placeholder={`Message ${placeholderName(chat)}`} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={sendKey} spellCheck
+            <textarea ref={ta} rows={1} placeholder={staged.length && !editing ? "Add a message…" : `Message ${placeholderName(chat)}`} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={sendKey} spellCheck
               onPaste={(e) => { const fs = Array.from(e.clipboardData.files); if (fs.length) { e.preventDefault(); onFiles(fs); } }} />
             <IconButton icon={Smile} label="Emoji" onClick={() => setEmoji(true)} />
           </div>
           {hasText ? (
             <div className="send-group">
               <button className="send" aria-label="Send"><Send size={18} /></button>
-              {!editing && <button type="button" className="send-more" onClick={() => setLater(true)} title="Send later" aria-label="Send later"><ChevronDown size={16} /></button>}
+              {!editing && !staged.length && <button type="button" className="send-more" onClick={() => setLater(true)} title="Send later" aria-label="Send later"><ChevronDown size={16} /></button>}
             </div>
           ) : <button type="button" className="send" onPointerDown={pttDown} onPointerMove={pttMove} onPointerUp={pttUp} onPointerCancel={() => { hold.current = undefined; setHoldDx(0); }} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); void startRec(); } }} aria-label="Record voice message: hold to talk, or tap to start" title="Hold to talk, let go to send. Tap to start and stop." style={{ touchAction: "none" }}><Mic size={18} /></button>}
         </form>
       )}
       {emoji && <EmojiPicker recent={st.recentEmoji} onPick={(e) => { setText(text + e); setEmoji(false); ta.current?.focus(); }} onClose={() => setEmoji(false)} />}
-      {sheet === "gif" && <GifModal onPick={(g) => { void sendGif(target, g).catch((e) => setError(e.message)); setSheet(undefined); }} onSettings={() => { setSheet(undefined); nav("settings/media"); }} onClose={() => setSheet(undefined)} />}
+      {sheet === "gif" && <GifModal onPick={(g) => { void gifFile(g).then((f) => onFiles([f], false, g)).catch((e) => setError(e.message)); setSheet(undefined); }} onSettings={() => { setSheet(undefined); nav("settings/media"); }} onClose={() => setSheet(undefined)} />}
       {sheet === "stickers" && <StickerModal roomId={roomId} onPick={(s) => { sendSticker(target, s); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
       {sheet === "poll" && <PollModal onCreate={(q, a, max, disclosed) => { sendPoll(target, q, a, max, disclosed); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
       {sheet === "contact" && <ContactModal onSend={(n, p) => { sendContact(target, n, p); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
