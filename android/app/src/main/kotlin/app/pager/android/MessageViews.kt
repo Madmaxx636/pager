@@ -3,6 +3,10 @@
 package app.pager.android
 
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.material3.ColorScheme
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -250,21 +254,8 @@ fun MessageRow(
         else -> scheme.surface
     }
     val fillBrush = if (gradient && !bare) Brush.linearGradient(listOf(baseMine, lerp(baseMine, Color(0xFF7C3AED), 0.45f))) else null
-    val r = if (s.bubbleRadius > 0) s.bubbleRadius.dp else when (style) { "square" -> 6.dp; "soft" -> 26.dp; "pill" -> 24.dp; "cloud" -> 22.dp; "notch" -> 16.dp; "sharp" -> 2.dp; else -> 18.dp }
-    val tight = if (s.bubbleRadius > 0) (if (style == "tail" || style == "pill" || style == "cloud" || style == "notch") r else minOf(8, s.bubbleRadius / 3).dp)
-        else when (style) { "square" -> 3.dp; "sharp" -> 2.dp; "tail", "pill", "cloud" -> r; "notch" -> r; else -> 5.dp }
     val tailed = style == "tail" && last && !bare && msg.type != "m.image"
-    val tailR = 4.dp
-    // The corner next to the sender: small for a tail, a notch or a cloud.
-    val corner = when {
-        tailed -> tailR
-        style == "notch" -> 2.dp
-        style == "cloud" && last -> 6.dp
-        last -> r
-        else -> tight
-    }
-    val shape = if (mine) RoundedCornerShape(r, if (first) r else tight, corner, r)
-        else RoundedCornerShape(if (first) r else tight, r, r, corner)
+    val shape = bubbleShape(s, mine, first, last, tailed)
     val elevation = if (bare || outlined || plain || msg.type == "m.image") 0.dp else when (s.bubbleDepth) { "raised" -> 4.dp; "soft" -> 1.dp; else -> 0.dp }
     val tailColor = if (gradient) lerp(baseMine, Color(0xFF7C3AED), 0.45f) else fill
 
@@ -311,6 +302,7 @@ fun MessageRow(
                     .let { if (elevation > 0.dp) it.shadow(elevation, shape, clip = false) else it }
                     .clip(shape)
                     .let { if (fillBrush != null) it.background(fillBrush) else it.background(fill) }
+                    .bubbleBorder(s, shape, scheme, enabled = !bare && !outlined && !plain && msg.type != "m.image")
                     .let {
                         when {
                             outlined -> it.border(if (s.eink) inkDp(2f) else 1.5.dp, if (mine) scheme.primary else scheme.outlineVariant, shape)
@@ -593,4 +585,37 @@ private fun PollCard(msg: Msg, chat: ChatState?, me: String, fg: Color, onVote: 
             if (!ended && msg.sender == me && msg.status == STATUS_SENT) TextButton(onClick = onEnd) { Text("End poll") }
         }
     }
+}
+
+
+/** The corners of a bubble from the settings: the style, your own roundness, and a small corner next to the sender for tails, notches and clouds. */
+fun bubbleShape(s: AppSettings, mine: Boolean, first: Boolean, last: Boolean, tailed: Boolean): RoundedCornerShape {
+    val style = s.bubbleStyle
+    val r = if (s.bubbleRadius > 0) s.bubbleRadius.dp else when (style) { "square" -> 6.dp; "soft" -> 26.dp; "pill" -> 24.dp; "cloud" -> 22.dp; "notch" -> 16.dp; "sharp" -> 2.dp; else -> 18.dp }
+    val tight = if (s.bubbleRadius > 0) (if (style == "tail" || style == "pill" || style == "cloud" || style == "notch") r else minOf(8, s.bubbleRadius / 3).dp)
+        else when (style) { "square" -> 3.dp; "sharp" -> 2.dp; "tail", "pill", "cloud" -> r; "notch" -> r; else -> 5.dp }
+    val corner = when {
+        tailed -> 4.dp
+        style == "notch" -> 2.dp
+        style == "cloud" && last -> 6.dp
+        last -> r
+        else -> tight
+    }
+    return if (mine) RoundedCornerShape(r, if (first) r else tight, corner, r) else RoundedCornerShape(if (first) r else tight, r, r, corner)
+}
+
+/** The line around a bubble: solid, dotted or dashed, in your colour or the theme's. */
+fun Modifier.bubbleBorder(s: AppSettings, shape: Shape, scheme: ColorScheme, enabled: Boolean = true): Modifier =
+    if (!enabled || s.bubbleBorder == "none") this else borderLine(s.bubbleBorder, parseHex(s.bubbleBorderColor) ?: scheme.outline, shape)
+
+/** Draws [style] (solid, dotted or dashed) around [shape]. */
+fun Modifier.borderLine(style: String, color: Color, shape: Shape): Modifier = this.drawWithContent {
+    drawContent()
+    val w = 1.5.dp.toPx()
+    val effect = when (style) {
+        "dotted" -> androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(w, w * 2.2f), 0f)
+        "dashed" -> androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(w * 5f, w * 3f), 0f)
+        else -> null
+    }
+    drawOutline(shape.createOutline(size, layoutDirection, this), color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = w, cap = if (style == "dotted") androidx.compose.ui.graphics.StrokeCap.Round else androidx.compose.ui.graphics.StrokeCap.Butt, pathEffect = effect))
 }

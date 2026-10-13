@@ -357,7 +357,11 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
     return () => clearTimeout(t);
   }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { typing(roomId, false); }, [roomId]);
-  useLayoutEffect(() => { const el = ta.current; if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight + 2, 168)}px`; } }, [text]);
+  // The box grows with what you type. It is measured again when its width changes (opening a page, adding an attachment), because a box
+  // measured before it has its width wraps even the placeholder and comes out tall.
+  const fitBox = useCallback(() => { const el = ta.current; if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight + 2, 168)}px`; } }, []);
+  useLayoutEffect(fitBox, [text, staged.length, roomId, fitBox]);
+  useEffect(() => { const el = ta.current; if (!el || typeof ResizeObserver === "undefined") return; const ro = new ResizeObserver(fitBox); ro.observe(el); return () => ro.disconnect(); }, [fitBox, roomId]);
 
   const token = st.mentionSuggestions && group ? /(?:^|\s)@([^\s@]*)$/.exec(text)?.[1] : undefined;
   const people = token === undefined ? [] : Object.entries(chat.members).filter(([id, n]) => id !== user && n.toLowerCase().includes(token.toLowerCase())).slice(0, 8);
@@ -439,18 +443,6 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
       {editing && <div className="banner-bar"><div><b>Editing message</b><span>{editing.body}</span></div><IconButton icon={X} label="Dismiss" onClick={() => { onClearEdit(); setText(""); }} /></div>}
       {people.length > 0 && <div className="mentions">{people.map(([id, n]) => <button key={id} onClick={() => { setText(text.slice(0, text.length - token!.length - 1) + `@${n} `); mentionIds.current.set(n, id); ta.current?.focus(); }}><Avatar name={n} size={22} />@{n}</button>)}</div>}
       {error && <div className="error pad" onClick={() => setError(undefined)}>{error}</div>}
-      {staged.length > 0 && !editing && (
-        <div className="staged" role="list" aria-label="Ready to send">
-          {staged.map((x) => (
-            <div key={x.id} className="staged-item" role="listitem" title={x.name}>
-              {x.preview && x.kind === "image" ? <img src={x.preview} alt={x.name} /> : x.preview && x.kind === "video" ? <video src={x.preview} muted /> : <span className="staged-file"><FileText size={22} /><small>{x.name}</small></span>}
-              {x.kind === "video" && <span className="staged-badge"><Video size={12} /></span>}
-              {x.gif && <span className="staged-badge">GIF</span>}
-              <button type="button" className="staged-x" aria-label={`Remove ${x.name}`} onClick={() => onUnstage(x.id)}><X size={14} /></button>
-            </div>
-          ))}
-        </div>
-      )}
       {input(files)}{input(photos, "image/*,video/*")}{input(camera, "image/*", true)}
       {rec ? (
         <div className="composer rec"><IconButton icon={Trash2} label="Cancel recording" onClick={() => stopRec(true)} /><i className="rec-dot" /><span className="grow">{hold.current && holdDx < -80 ? "Let go to cancel" : hold.current ? "Let go to send · slide left to cancel · " : ""}Recording {Math.floor(rec.ms / 60000)}:{String(Math.floor(rec.ms / 1000) % 60).padStart(2, "0")}</span><button className="send" onClick={() => stopRec(false)} aria-label="Send voice message"><Send size={18} /></button></div>
@@ -460,10 +452,24 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
             <IconButton icon={Plus} label="Attach" onClick={() => setAttach(!attach)} active={attach} className="plus" />
             {attach && <AttachMenu onPick={pick} onClose={() => setAttach(false)} canViewOnce={chat.network === "signal"} />}
           </div>
-          <div className="field">
+          <div className="field has-tray">
+            {staged.length > 0 && !editing && (
+              <div className="staged" role="list" aria-label="Ready to send">
+                {staged.map((x) => (
+                  <div key={x.id} className="staged-item" role="listitem" title={x.name}>
+                    {x.preview && x.kind === "image" ? <img src={x.preview} alt={x.name} /> : x.preview && x.kind === "video" ? <video src={x.preview} muted /> : <span className="staged-file"><FileText size={22} /><small>{x.name}</small></span>}
+                    {x.kind === "video" && <span className="staged-badge"><Video size={12} /></span>}
+                    {x.gif && <span className="staged-badge">GIF</span>}
+                    <button type="button" className="staged-x" aria-label={`Remove ${x.name}`} onClick={() => onUnstage(x.id)}><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="field-row">
             <textarea ref={ta} rows={1} placeholder={staged.length && !editing ? "Add a message…" : `Message ${placeholderName(chat)}`} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={sendKey} spellCheck
               onPaste={(e) => { const fs = Array.from(e.clipboardData.files); if (fs.length) { e.preventDefault(); onFiles(fs); } }} />
             <IconButton icon={Smile} label="Emoji" onClick={() => setEmoji(true)} />
+            </div>
           </div>
           {hasText ? (
             <div className="send-group">

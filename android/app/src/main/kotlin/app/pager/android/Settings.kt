@@ -32,6 +32,8 @@ data class AppSettings(
     val fontScale: Float = 1f,
     val bubbleStyle: String = "round",         // round | soft | pill | cloud | notch | tail | square | sharp | outline | plain
     val bubbleFill: String = "solid",          // solid | gradient | tinted | glass
+    val bubbleBorder: String = "none",         // none | solid | dotted | dashed: the line around bubbles
+    val bubbleBorderColor: String = "",        // its colour; empty follows the theme
     val bubbleMine: String = "",               // colour of your own bubbles; empty follows the theme
     val bubbleTheirs: String = "",             // colour of their bubbles; empty follows the theme
     val bubbleRadius: Int = 0,                 // corner roundness in dp; 0 = what the style says
@@ -185,7 +187,7 @@ class SettingsStore(context: Context) {
         const val TYPE = "app.pager.sync.mobile"
         val GROUPS = listOf(
             Group("look", "Colours and theme", "Mode, accent, looks, wallpaper, font, text size, avatars", listOf("themeMode", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat")),
-            Group("bubbles", "Bubbles and messages", "Bubble style, fill, depth, animations, effects", listOf("bubbleStyle", "bubbleFill", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle")),
+            Group("bubbles", "Bubbles and messages", "Bubble style, fill, depth, animations, effects", listOf("bubbleStyle", "bubbleFill", "bubbleBorder", "bubbleBorderColor", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle")),
             Group("reactions", "Reactions", "Double-tap and triple-tap reactions, swipe to reply", listOf("doubleTapReact", "doubleTapEmoji", "tripleTapReact", "tripleTapEmoji", "swipeToReply")),
             Group("list", "Chat list", "What each row shows, filters, swipes, hidden networks", listOf("showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories", "swipeLeft", "swipeRight")),
             Group("notifications", "Notifications", "What alerts you, quiet hours, previews", listOf("notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin", "notifVibrate", "notifLockScreen", "notifAlertOnce", "notifActions")),

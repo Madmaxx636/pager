@@ -458,10 +458,12 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                         }
                     }
                 } else {
-                    if (staged.isNotEmpty() && editing == null) StagedTray(staged)
                     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.Bottom) {
                         IconBtn(Icons.Rounded.Add, "Attach", { attach = true }, modifier = Modifier.padding(bottom = 4.dp), tint = scheme.primary, size = 44)
-                        Row(Modifier.weight(1f).heightMin().clip(RoundedCornerShape(24.dp)).background(scheme.surfaceVariant).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.Bottom) {
+                        // One rounded card holds what is waiting to be sent, the text, and the send button.
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(scheme.surfaceVariant)) {
+                        if (staged.isNotEmpty() && editing == null) StagedTray(staged)
+                        Row(Modifier.fillMaxWidth().heightMin().padding(start = 16.dp, end = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
                             Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
                                 if (text.isEmpty()) Text(if (staged.isNotEmpty() && editing == null) "Add a message…" else chat?.let { "Message ${SyncReducer.displayName(it, me).substringBefore(' ')} · ${networkMeta(it.network).label}" } ?: "Message", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 BasicTextField(
@@ -494,11 +496,10 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                                 )
                             }
                             IconBtn(Icons.Rounded.EmojiEmotions, "Emoji", { emojiForText = true }, size = 44)
-                        }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(2.dp))
                         val hasText = text.isNotBlank() || (staged.isNotEmpty() && editing == null)
                         Box(
-                            Modifier.padding(bottom = 2.dp).size(48.dp).clip(CircleShape).background(scheme.primary)
+                            Modifier.padding(bottom = 4.dp).size(40.dp).clip(CircleShape).background(scheme.primary)
                                 .onGloballyPositioned { micCoords = it }
                                 .dpadFocus().combinedClick(
                                     onClick = {
@@ -510,6 +511,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                                 ),
                             contentAlignment = Alignment.Center,
                         ) { Icon(if (hasText) Icons.AutoMirrored.Rounded.Send else Icons.Rounded.Mic, if (hasText) "Send (hold to schedule)" else "Record voice message", tint = scheme.onPrimary) }
+                        }
+                        }
                     }
                 }
             }
@@ -656,7 +659,7 @@ private fun StagedThumb(item: StagedItem, onRemove: () -> Unit) {
             }.getOrNull()
         }
     }
-    Box(Modifier.size(76.dp).clip(RoundedCornerShape(12.dp)).background(scheme.surfaceVariant), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(68.dp).clip(RoundedCornerShape(12.dp)).background(scheme.surface), contentAlignment = Alignment.Center) {
         val t = thumb
         if (t != null) androidx.compose.foundation.Image(t, item.name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
         else Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(4.dp)) {
@@ -673,7 +676,7 @@ private fun StagedThumb(item: StagedItem, onRemove: () -> Unit) {
 
 @Composable
 private fun StagedTray(items: androidx.compose.runtime.snapshots.SnapshotStateList<StagedItem>) {
-    LazyRow(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyRow(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(items.toList(), key = { it.id }) { x -> StagedThumb(x) { items.remove(x) } }
     }
 }
