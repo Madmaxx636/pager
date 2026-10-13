@@ -618,3 +618,13 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .bd-sample { background: transparent !important; border-radius: 12px; color: var(--muted); display: grid; place-items: center; }
 .bd-sample.bd-solid { border: 1.5px solid currentColor; } .bd-sample.bd-dotted { border: 2px dotted currentColor; } .bd-sample.bd-dashed { border: 2px dashed currentColor; }
 .bd-sample.bd-thick { border: 3px solid currentColor; } .bd-sample.bd-edge { border-bottom: 3px solid currentColor; border-radius: 4px 4px 12px 12px; } .bd-sample.bd-dashdot { border: 2px dashed currentColor; border-style: dashed; opacity: .8; }
+
+/* With the page info open, the page list steps aside: one side panel at a time */
+.shell.info-open { grid-template-columns: minmax(0, 1fr); } .shell.info-open .sidebar, .shell.info-open .sidebar-grip { display: none; }
+
+/* Linux desktop: our own title bar, so it looks the same maximized or not */
+.titlebar { display: none; }
+:root[data-titlebar] #root { display: flex; flex-direction: column; }
+:root[data-titlebar] .titlebar { display: flex; align-items: center; flex: none; height: 36px; padding: 0 160px 0 14px; -webkit-app-region: drag; user-select: none; background: var(--bg); color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: .02em; }
+:root[data-titlebar] #root > :not(.titlebar) { flex: 1 1 0; min-height: 0; height: auto; }
+:root[data-titlebar] .shell, :root[data-titlebar] .splash { height: auto; }

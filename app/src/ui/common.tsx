@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronRight, MessageCircle, MessageSquare, Phone, Send, Camera, Gamepad2, MessagesSquare, User, X } from "lucide-react";
 import { cachedMedia, mediaUrl } from "../core/store";
 import { EMOJI_CATEGORIES, networkMeta } from "../core/emoji";
@@ -65,7 +66,8 @@ export function Modal({ title, onClose, children, wide }: { title?: string; onCl
     window.addEventListener("keydown", h, true);
     return () => window.removeEventListener("keydown", h, true);
   }, [onClose]);
-  return (
+  // Drawn on the page itself, not inside whatever opened it: a panel that slides in or is cut off would otherwise clip the dialog.
+  return createPortal(
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={"modal" + (wide ? " wide" : "")} role="dialog" aria-modal="true" aria-label={title}>
         <div className="grab" />
@@ -73,7 +75,8 @@ export function Modal({ title, onClose, children, wide }: { title?: string; onCl
         <button className="icon close" onClick={onClose} aria-label="Close"><X size={18} /></button>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

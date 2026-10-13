@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Gif } from "../core/gifs";
+import { setInfoPanelOpen } from "../core/layout";
 import {
   AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
   Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon, Video,
@@ -72,6 +73,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const away = (e: MouseEvent) => { const t = e.target as HTMLElement; if (!t.closest(".info, .info-toggle, .modal, .menu, .overlay, [role=dialog]")) setInfoOpen(false); };
     document.addEventListener("mousedown", away); return () => document.removeEventListener("mousedown", away);
   }, [dsk, infoOpen]);
+  useEffect(() => { setInfoPanelOpen(infoOpen); return () => setInfoPanelOpen(false); }, [infoOpen]);
   const [menu, setMenu] = useState<{ msg: Msg; x: number; y: number }>();
   const [viewer, setViewer] = useState<string>();
   const [picker, setPicker] = useState<Msg>();

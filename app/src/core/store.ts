@@ -996,6 +996,7 @@ declare global {
       getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean; smoothGraphics?: boolean }): void; setZoom(z: number): void;
       onOpenRoom(cb: (roomId: string) => void): void;
       onMemory?(cb: (level: string) => void): void;
+      setTitleBar?(o: { color: string; symbolColor: string }): void;
       memory?(): Promise<{ total: number; parts: { type: string; mb: number }[] }>;
       cookieLogin(spec: unknown): Promise<Record<string, string> | null>;
       platform: string;
