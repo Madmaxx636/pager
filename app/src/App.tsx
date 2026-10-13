@@ -14,6 +14,7 @@ const Search = lazy(() => import("./ui/Search").then((m) => ({ default: m.Search
 const ChatPicker = lazy(() => import("./ui/ChatPicker").then((m) => ({ default: m.ChatPicker })));
 const AccountsModal = lazy(() => import("./ui/Accounts").then((m) => ({ default: m.AccountsModal })));
 import { ImportWatcher } from "./ui/Accounts";
+import { useInfoPanelOpen } from "./core/layout";
 const Palette = lazy(() => import("./ui/Palette").then((m) => ({ default: m.Palette })));
 import { SHORTCUTS } from "./core/settings";
 import { comboOf } from "./core/combo";
@@ -28,6 +29,7 @@ export function App() {
   // Routes: home | chat:<id> | settings[/<page>] | new | search[:<room>] | forward:<room>|<event>
   const [route, setRoute] = useState("home");
   const [accounts, setAccounts] = useState(false);
+  const infoOpen = useInfoPanelOpen();
   const [palette, setPalette] = useState(false);
   const [snoozing, setSnoozing] = useState<string>();
   const inbox = useInbox();
@@ -117,7 +119,7 @@ export function App() {
 
   return (
     <Suspense fallback={null}>
-    <div className={"shell" + (route !== "home" ? " pane-open" : "")} style={{ ["--sidebar-w" as string]: `${st.sidebarWidth}px` }}>
+    <div className={"shell" + (route !== "home" ? " pane-open" : "") + (infoOpen ? " info-open" : "")} style={{ ["--sidebar-w" as string]: `${st.sidebarWidth}px` }}>
       <Sidebar selected={roomId} onSelect={(id) => nav(`chat:${id}`)} nav={nav} onAccounts={() => setAccounts(true)} />
       <main className="main">{main}</main>
       <KeySetup />

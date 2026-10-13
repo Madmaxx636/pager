@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 // The only things the web app may ask the desktop shell to do.
 contextBridge.exposeInMainWorld("pagerDesktop", {
   platform: process.platform,
+  setTitleBar: (o) => ipcRenderer.send("titlebar:set", o),
   hostname: ipcRenderer.sendSync("hostname"),
   notify: (o) => ipcRenderer.send("notify", o),
   setBadge: (n) => ipcRenderer.send("badge", n),

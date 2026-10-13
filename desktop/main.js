@@ -53,6 +53,9 @@ function createWindow() {
   win = new BrowserWindow({
     width: prefs.bounds?.width ?? 1180, height: prefs.bounds?.height ?? 760, x: prefs.bounds?.x, y: prefs.bounds?.y,
     minWidth: 360, minHeight: 500, show: false, autoHideMenuBar: true, backgroundColor: "#0b0e13", title: "Pager",
+    // Linux: the window's own title bar flickered and hid its buttons when maximized on KDE. Pager draws a thin bar of its own (see .titlebar in the app)
+    // and Electron adds the minimize, maximize and close buttons on top of it, the same whether the window is maximized or not.
+    ...(process.platform === "linux" ? { titleBarStyle: "hidden", titleBarOverlay: { color: "#0b0e13", symbolColor: "#c9d1d9", height: 36 } } : {}),
     icon: path.join(__dirname, "build", "icon.png"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
@@ -199,6 +202,11 @@ if (!app.requestSingleInstanceLock()) {
     w.loadURL(spec.url).catch((e) => { if (!done) { done = true; clearInterval(timer); if (!w.isDestroyed()) w.destroy(); reject(e); } });
   }));
   ipcMain.handle("memory:get", () => memoryNow());
+  // The app tells us its colours so the buttons in the title bar match the theme.
+  ipcMain.on("titlebar:set", (_e, o) => {
+    if (process.platform !== "linux" || !win || win.isDestroyed() || !o || typeof o.color !== "string" || typeof o.symbolColor !== "string") return;
+    try { win.setTitleBarOverlay({ color: o.color.slice(0, 40), symbolColor: o.symbolColor.slice(0, 40), height: 36 }); } catch { /* not supported here */ }
+  });
   setInterval(watchMemory, 20_000);
   ipcMain.handle("system-theme", () => readSystemTheme());
   // The encryption library is a WebAssembly file inside the bundled web app; the page cannot fetch it from disk, so we read it for it.

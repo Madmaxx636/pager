@@ -427,4 +427,9 @@ export function applyTheme(s: AppSettings) {
   // Desktop: small touches of motion (slides, glides, glows, pops, breathing, fades). One switch in Settings turns them all off.
   if (window.pagerDesktop) r.dataset.fx = s.fancyMotion && !s.reduceMotion ? "on" : "off"; else delete r.dataset.fx;
   r.style.setProperty("--wp", wallpaperCss(s.wallpaper, r.dataset.theme !== "light"));
+  // Linux desktop: the title bar and its window buttons take the theme's colours.
+  if (window.pagerDesktop?.platform === "linux") {
+    r.dataset.titlebar = "";
+    window.requestAnimationFrame(() => { const cs = getComputedStyle(document.body); window.pagerDesktop?.setTitleBar?.({ color: cs.backgroundColor, symbolColor: cs.color }); });
+  }
 }
