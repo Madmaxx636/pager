@@ -63,6 +63,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.rounded.ExpandLess
@@ -1150,21 +1153,25 @@ private fun BubbleColourRow(title: String, subtitle: String, value: String, onCh
 @Composable
 private fun PreviewBubble(text: String, mine: Boolean, s: AppSettings) {
     val scheme = MaterialTheme.colorScheme
-    val custom = if (mine) parseHex(s.bubbleMine) else parseHex(s.bubbleTheirs)
-    val outlined = s.bubbleStyle == "outline"; val plain = s.bubbleStyle == "plain"
+    val look = s.look(mine)
+    val dark = isDarkTheme(s)
+    val (picked, pickedText) = s.bubbleColors(mine, dark)
+    val custom = picked ?: if (!mine && s.bubbleNative) networkMeta("whatsapp").color else null
+    val outlined = look.style == "outline"
     val base = custom ?: if (mine) scheme.primaryContainer else scheme.surface
     val fill = when {
-        outlined || plain -> Color.Transparent
+        outlined -> Color.Transparent
         s.bubbleFill == "glass" -> base.copy(alpha = 0.55f)
         mine && s.bubbleFill == "tinted" -> (custom ?: scheme.primary).copy(alpha = 0.24f).compositeOver(scheme.surface)
         else -> base
     }
-    val brush = if (mine && s.bubbleFill == "gradient" && !outlined && !plain) Brush.linearGradient(listOf(custom ?: scheme.primary, androidx.compose.ui.graphics.lerp(custom ?: scheme.primary, Color(0xFF7C3AED), 0.45f))) else null
-    val fg = when { custom != null && s.bubbleFill != "glass" && s.bubbleFill != "tinted" && !outlined && !plain -> if (custom.luminance() > 0.45f) Color(0xFF101418) else Color.White; brush != null -> scheme.onPrimary; mine && !outlined && !plain && s.bubbleFill == "solid" -> scheme.onPrimaryContainer; else -> scheme.onSurface }
-    val shape = bubbleShape(s, mine, first = true, last = true, tailed = s.bubbleStyle == "tail")
-    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
-        Box(Modifier.widthIn(max = 260.dp).clip(shape).let { if (brush != null) it.background(brush) else it.background(fill) }
-            .bubbleBorder(s, shape, scheme, enabled = !plain)
+    val brush = if (mine && s.bubbleFill == "gradient" && !outlined) Brush.linearGradient(listOf(custom ?: scheme.primary, androidx.compose.ui.graphics.lerp(custom ?: scheme.primary, Color(0xFF7C3AED), 0.45f))) else null
+    val fg = when { pickedText != null && !outlined -> pickedText; custom != null && s.bubbleFill != "glass" && s.bubbleFill != "tinted" && !outlined -> if (custom.luminance() > 0.45f) Color(0xFF101418) else Color.White; brush != null -> scheme.onPrimary; mine && !outlined && s.bubbleFill == "solid" -> scheme.onPrimaryContainer; else -> scheme.onSurface }
+    val tailed = look.style == "tail" || look.style == "curved"
+    val shape = bubbleShape(look, mine, first = true, last = true, tailed = tailed)
+    Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
+        Box(Modifier.widthIn(max = 260.dp).bubbleTail(look.style, mine, brush?.let { androidx.compose.ui.graphics.lerp(custom ?: scheme.primary, Color(0xFF7C3AED), 0.45f) } ?: fill, tailed).clip(shape).let { if (brush != null) it.background(brush) else it.background(fill) }
+            .bubbleBorder(look, shape, scheme, enabled = !outlined)
             .let { if (outlined) it.border(1.5.dp, if (mine) scheme.primary else scheme.outlineVariant, shape) else it }
             .padding(horizontal = 14.dp, vertical = 10.dp)) { Text(text, color = fg) }
     }
@@ -1180,58 +1187,83 @@ private fun PickTile(label: String, selected: Boolean, onClick: () -> Unit, draw
     ) { Box(Modifier.height(30.dp), contentAlignment = Alignment.Center) { drawing() }; Text(label, style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant, maxLines = 1) }
 }
 
-/** Message bubbles, laid out like Beeper's: a preview, the shape, the corner radius, the border, then incoming and outgoing. */
+/** A colour row like Beeper's: the name on the left, a swatch on the right that opens the colour picker. */
+@Composable
+private fun ColorSwatchRow(title: String, value: String, onChange: (String) -> Unit) {
+    var picking by remember { mutableStateOf(false) }
+    val current = parseHex(value)
+    if (picking) ColorPickerDialog(current ?: Color(0xFF8B7CF6), { picking = false }) { c -> onChange(c.toHex()); picking = false }
+    Row(Modifier.fillMaxWidth().dpadFocus().clickable { picking = true }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, Modifier.weight(1f))
+        if (value.isNotEmpty()) TextButton(onClick = { onChange("") }) { Text("Default") }
+        Box(Modifier.size(width = 64.dp, height = 36.dp).clip(RoundedCornerShape(8.dp)).background(current ?: MaterialTheme.colorScheme.surfaceVariant).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)))
+    }
+}
+
+/** Everything Beeper lets you set for one side: colours for light and dark, the shape, the corner radius and the border. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun SideSettings(mine: Boolean) {
+    val store = LocalStore.current
+    val s = LocalRawSettings.current
+    val set = store.settings::update
+    val look = s.look(mine)
+    val sample = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    if (!mine) { SwitchRow("Use native colors", "Each network's own colour", s.bubbleNative) { v -> set { copy(bubbleNative = v) } }; GroupDivider() }
+    Text("Light", Modifier.padding(start = 16.dp, top = 10.dp), style = MaterialTheme.typography.titleSmall)
+    ColorSwatchRow("Color", if (mine) s.bubbleMine else s.bubbleTheirs) { v -> set { if (mine) copy(bubbleMine = v) else copy(bubbleTheirs = v) } }
+    ColorSwatchRow("Text color", if (mine) s.bubbleMineText else s.bubbleTheirsText) { v -> set { if (mine) copy(bubbleMineText = v) else copy(bubbleTheirsText = v) } }
+    Text("Dark", Modifier.padding(start = 16.dp, top = 10.dp), style = MaterialTheme.typography.titleSmall)
+    ColorSwatchRow("Color", if (mine) s.bubbleMineDark else s.bubbleTheirsDark) { v -> set { if (mine) copy(bubbleMineDark = v) else copy(bubbleTheirsDark = v) } }
+    ColorSwatchRow("Text color", if (mine) s.bubbleMineTextDark else s.bubbleTheirsTextDark) { v -> set { if (mine) copy(bubbleMineTextDark = v) else copy(bubbleTheirsTextDark = v) } }
+    Text("Bubble shape", Modifier.padding(start = 16.dp, top = 14.dp, bottom = 8.dp))
+    androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(Triple("round", "Rounded", RoundedCornerShape(12.dp)), Triple("curved", "Curved tail", RoundedCornerShape(12.dp, 12.dp, 12.dp, 3.dp)), Triple("tail", "Pointed tail", RoundedCornerShape(12.dp, 12.dp, 12.dp, 0.dp)), Triple("outline", "Outlined", RoundedCornerShape(12.dp))).forEach { (id, label, shape) ->
+            PickTile(label, look.style == id, { set { if (mine) copy(outStyle = id) else copy(bubbleStyle = id) } }) {
+                Box(Modifier.size(width = 46.dp, height = 24.dp).clip(shape).let { if (id == "outline") it.border(2.dp, sample, shape) else it.background(sample) })
+            }
+        }
+    }
+    SliderRow("Corner radius: ${if (look.radius == 0) 18 else look.radius}", (if (look.radius == 0) 18 else look.radius).toFloat(), 0f..24f, "") { v -> val n = Math.round(v).coerceIn(0, 24); set { if (mine) copy(outRadius = n) else copy(bubbleRadius = n) } }
+    Text("Border style", Modifier.padding(start = 16.dp, top = 6.dp, bottom = 8.dp))
+    LazyRow(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(BORDER_STYLES) { (id, label) ->
+            PickTile(label, look.border == id, { set { if (mine) copy(outBorder = id) else copy(bubbleBorder = id) } }) {
+                if (id == "none") Icon(Icons.Rounded.Close, null, tint = sample)
+                else Box(Modifier.size(width = 46.dp, height = 24.dp).borderLine(id, sample, RoundedCornerShape(12.dp)))
+            }
+        }
+    }
+    if (look.border != "none") ColorSwatchRow("Border color", look.borderColor) { v -> set { if (mine) copy(outBorderColor = v) else copy(bubbleBorderColor = v) } }
+    Spacer(Modifier.height(8.dp))
+}
+
+/** Message bubbles, laid out like Beeper's: a preview, then Incoming and Outgoing, each with its own colours, shape, corner radius and border. */
 @Composable
 private fun BubbleSettings() {
     val store = LocalStore.current
     val s = LocalRawSettings.current
     val set = store.settings::update
-    val scheme = MaterialTheme.colorScheme
     var incoming by remember { mutableStateOf(false) }
     var outgoing by remember { mutableStateOf(false) }
-    val sample = scheme.onSurfaceVariant.copy(alpha = 0.55f)
     SettingsGroup("Message bubbles") {
         Column(Modifier.padding(vertical = 8.dp)) { PreviewBubble("Hey! How do you like the new theme?", false, s); PreviewBubble("It looks amazing! 🎨", true, s) }
         GroupDivider()
-        Text("Bubble shape", Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp))
-        androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(
-                Triple("round", "Rounded", RoundedCornerShape(12.dp)), Triple("cloud", "Curved tail", RoundedCornerShape(14.dp, 14.dp, 14.dp, 3.dp)), Triple("tail", "Pointed tail", RoundedCornerShape(12.dp, 12.dp, 12.dp, 0.dp)),
-                Triple("pill", "Pill", RoundedCornerShape(50)), Triple("soft", "Extra round", RoundedCornerShape(16.dp)), Triple("notch", "Notch", RoundedCornerShape(12.dp, 12.dp, 12.dp, 2.dp)),
-                Triple("square", "Square", RoundedCornerShape(4.dp)), Triple("sharp", "Sharp", RoundedCornerShape(1.dp)), Triple("outline", "Outline", RoundedCornerShape(12.dp)), Triple("plain", "No bubbles", RoundedCornerShape(0.dp)),
-            ).forEach { (id, label, shape) ->
-                PickTile(label, s.bubbleStyle == id, { set { copy(bubbleStyle = id) } }) {
-                    Box(Modifier.size(width = 46.dp, height = 24.dp).clip(shape).let { if (id == "outline") it.border(2.dp, sample, shape) else if (id == "plain") it.background(Color.Transparent) else it.background(sample) })
-                }
-            }
-        }
-        Spacer(Modifier.height(12.dp)); GroupDivider()
-        SliderRow("Corner radius: ${if (s.bubbleRadius == 0) "as the shape says" else s.bubbleRadius}", s.bubbleRadius.toFloat(), 0f..32f, "") { v -> set { copy(bubbleRadius = Math.round(v).coerceIn(0, 32)) } }; GroupDivider()
-        Text("Border style", Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp))
-        androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("none" to "None", "solid" to "Solid", "dotted" to "Dotted", "dashed" to "Dashed").forEach { (id, label) ->
-                PickTile(label, s.bubbleBorder == id, { set { copy(bubbleBorder = id) } }) {
-                    if (id == "none") Icon(Icons.Rounded.Close, null, tint = sample)
-                    else Box(Modifier.size(width = 46.dp, height = 24.dp).borderLine(id, sample, RoundedCornerShape(12.dp)))
-                }
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        if (s.bubbleBorder != "none") { GroupDivider(); BubbleColourRow("Border color", "The line around bubbles", s.bubbleBorderColor) { v -> set { copy(bubbleBorderColor = v) } } }
-        GroupDivider()
         NavRow("Incoming", null, if (incoming) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore) { incoming = !incoming }
-        if (incoming) BubbleColourRow("Background", "The colour of messages you receive", s.bubbleTheirs) { v -> set { copy(bubbleTheirs = v) } }
+        if (incoming) SideSettings(mine = false)
         GroupDivider()
         NavRow("Outgoing", null, if (outgoing) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore) { outgoing = !outgoing }
         if (outgoing) {
-            BubbleColourRow("Background", "The colour of messages you send", s.bubbleMine) { v -> set { copy(bubbleMine = v) } }
+            SideSettings(mine = true)
             GroupDivider(); ChoiceRow("Fill", listOf("solid" to "Solid", "gradient" to "Gradient", "tinted" to "Soft tint", "glass" to "Glass"), s.bubbleFill) { v -> set { copy(bubbleFill = v) } }
         }
         GroupDivider(); ChoiceRow("Depth", listOf("flat" to "Flat", "soft" to "Soft shadow", "raised" to "Raised"), s.bubbleDepth) { v -> set { copy(bubbleDepth = v) } }
         GroupDivider(); SliderRow("Widest bubble", s.bubbleWidth.toFloat(), 0f..95f, if (s.bubbleWidth == 0) "Default" else "${s.bubbleWidth}% of the screen") { v -> val n = (Math.round(v / 5f) * 5); set { copy(bubbleWidth = if (n in 1..39) 40 else n.coerceIn(0, 95)) } }
         GroupDivider(); ChoiceRow("Message animation", listOf("none" to "None", "pop" to "Pop", "slide" to "Slide", "fade" to "Fade"), s.messageAnimation) { v -> set { copy(messageAnimation = v) } }
-        GroupDivider(); ButtonRow("Reset message bubbles", danger = true) { set { copy(bubbleStyle = "round", bubbleFill = "solid", bubbleDepth = "soft", bubbleBorder = "none", bubbleBorderColor = "", bubbleMine = "", bubbleTheirs = "", bubbleRadius = 0, bubbleWidth = 0) } }
+        GroupDivider(); ButtonRow("Reset message bubbles", danger = true) {
+            set { copy(bubbleStyle = "round", bubbleFill = "solid", bubbleDepth = "soft", bubbleBorder = "none", bubbleBorderColor = "", bubbleMine = "", bubbleTheirs = "", bubbleRadius = 0, bubbleWidth = 0,
+                outStyle = "", outRadius = -1, outBorder = "", outBorderColor = "", bubbleMineDark = "", bubbleTheirsDark = "", bubbleMineText = "", bubbleTheirsText = "", bubbleMineTextDark = "", bubbleTheirsTextDark = "", bubbleNative = false) }
+        }
     }
 }
 

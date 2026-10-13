@@ -10,8 +10,6 @@
   --theirs: #161b23; --danger: #ff7b7b; --warn: #f5b85a; --shadow: 0 12px 40px rgba(0, 0, 0, 0.55); color-scheme: dark;
 }
 :root[data-theme="black"] { --bg: #000; --panel: #0a0a0a; --panel-2: #161616; --line: #1d1d1d; --theirs: #121212; }
-:root[data-bubble="soft"] { --radius: 26px; --tight: 8px; }
-:root[data-bubble="square"] { --radius: 6px; --tight: 3px; }
 :root[data-density="compact"] { --row-pad: 6px; }
 :root[data-motion="reduced"] * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 
@@ -201,7 +199,7 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 
 /* Bubble fills, depth, styles and entrance animations */
 .bubble { background: var(--bubble-bg, var(--bubble-theirs, var(--theirs))); }
-:root[data-btheirs] .msg:not(.mine) .bubble { color: var(--theirs-ink); } :root[data-btheirs] .msg:not(.mine) .bubble a { color: inherit; text-decoration: underline; }
+.msg:not(.mine)[data-colored] .bubble { color: var(--theirs-ink, inherit); }
 .msg.mine .bubble { --bubble-bg: var(--mine, var(--accent)); background: var(--bubble-bg); }
 :root[data-fill="gradient"] .msg.mine .bubble { background: linear-gradient(140deg, var(--mine, var(--accent)), color-mix(in srgb, var(--mine, var(--accent)) 62%, #7c3aed)); color: #fff; }
 :root[data-fill="gradient"] .msg.mine .bubble a, :root[data-fill="gradient"] .msg.mine .bubble .meta { color: inherit; }
@@ -212,23 +210,10 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 .bubble.bare, .bubble.media-bubble { box-shadow: none; }
 
 /* Tail */
-:root[data-bubble="tail"] { --radius: 18px; --tight: 18px; }
-:root[data-bubble="tail"] .msg.last .bubble:not(.bare):not(.media-bubble)::after { content: ""; position: absolute; bottom: 0; width: 11px; height: 14px; background: var(--bubble-bg, var(--theirs)); }
-:root[data-bubble="tail"][data-fill="gradient"] .msg.mine.last .bubble::after { background: color-mix(in srgb, var(--mine, var(--accent)) 62%, #7c3aed); }
-:root[data-bubble="tail"] .msg:not(.mine).last .bubble { border-bottom-left-radius: 4px; }
-:root[data-bubble="tail"] .msg:not(.mine).last .bubble::after { left: -7px; clip-path: path("M11 0 L11 14 L0 14 C 6 13 10 8 11 0 Z"); }
-:root[data-bubble="tail"] .msg.mine.last .bubble { border-bottom-right-radius: 4px; }
-:root[data-bubble="tail"] .msg.mine.last .bubble::after { right: -7px; clip-path: path("M0 0 L0 14 L11 14 C 5 13 1 8 0 0 Z"); }
 
 /* Outline */
-:root[data-bubble="outline"] .bubble:not(.bare):not(.media-bubble) { background: transparent; box-shadow: none; border: 1.5px solid var(--line); }
-:root[data-bubble="outline"] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: transparent; border-color: var(--mine, var(--accent)); color: var(--text); }
-:root[data-bubble="outline"] .msg.mine .bubble a { color: var(--mine, var(--accent)); }
 
 /* No bubbles: a clean list, your messages marked by an accent rule */
-:root[data-bubble="plain"] .bubble:not(.bare):not(.media-bubble) { background: transparent; box-shadow: none; padding: 3px 0 3px 10px; border-radius: 0; border-left: 3px solid var(--line); }
-:root[data-bubble="plain"] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: transparent; border-left-color: var(--mine, var(--accent)); color: var(--text); }
-:root[data-bubble="plain"] .msg.mine .bubble a { color: var(--mine, var(--accent)); }
 
 /* Entrance animations for brand-new messages only */
 @keyframes msg-pop { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
@@ -563,14 +548,6 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .bubble-preview .msg { max-width: var(--msg-max, 74%); }
 
 /* More bubble shapes and a see-through fill */
-:root[data-bubble="pill"] { --radius: 24px; --tight: 24px; }
-:root[data-bubble="sharp"] { --radius: 2px; --tight: 2px; }
-:root[data-bubble="notch"] { --radius: 16px; --tight: 16px; }
-:root[data-bubble="notch"] .msg:not(.mine) .bubble { border-bottom-left-radius: 2px; border-top-left-radius: 16px; }
-:root[data-bubble="notch"] .msg.mine .bubble { border-bottom-right-radius: 2px; border-top-right-radius: 16px; }
-:root[data-bubble="cloud"] { --radius: 22px; --tight: 22px; }
-:root[data-bubble="cloud"] .msg:not(.mine) .bubble { border-radius: 22px 22px 22px 6px; }
-:root[data-bubble="cloud"] .msg.mine .bubble { border-radius: 22px 22px 6px 22px; }
 :root[data-fill="glass"] .bubble:not(.bare):not(.media-bubble) { background: color-mix(in srgb, var(--bubble-theirs, var(--theirs)) 55%, transparent); backdrop-filter: blur(10px); border: 1px solid color-mix(in srgb, var(--text) 12%, transparent); }
 :root[data-fill="glass"] .msg.mine .bubble:not(.bare):not(.media-bubble) { background: color-mix(in srgb, var(--mine, var(--accent)) 55%, transparent); color: var(--text); }
 :root[data-fill="glass"] .msg.mine .bubble a { color: var(--mine, var(--accent)); }
@@ -598,8 +575,6 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .staged-x { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,.65); color: #fff; display: grid; place-items: center; padding: 0; }
 
 /* Lines around bubbles */
-:root[data-bborder] .bubble:not(.bare):not(.media-bubble) { border: 1.5px var(--bborder-style, solid) var(--bborder-color, var(--line)); }
-:root[data-bborder="dotted"] { --bborder-style: dotted; } :root[data-bborder="dashed"] { --bborder-style: dashed; }
 .shape-tiles { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 16px 12px; }
 .shape-tile { width: 76px; height: 56px; border-radius: 14px; background: var(--panel-2); border: 2px solid transparent; display: grid; place-items: center; position: relative; }
 .shape-tile.on { border-color: var(--accent); }
@@ -611,3 +586,35 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .composer .field.has-tray { flex-direction: column; align-items: stretch; padding: 2px 4px 2px 16px; }
 .composer .field-row { display: flex; align-items: flex-end; } .composer .field-row textarea { flex: 1; min-width: 0; }
 .composer .field .staged { padding: 12px 8px 4px 0; }
+
+/* Bubble shapes and borders, per message: Message.tsx puts data-shape, data-border and the colours on each .msg, so each side has its own look */
+.msg[data-shape="curved"], .msg[data-shape="tail"] { --tight: var(--radius); }
+.msg[data-shape="curved"].last .bubble:not(.bare):not(.media-bubble)::after, .msg[data-shape="tail"].last .bubble:not(.bare):not(.media-bubble)::after { content: ""; position: absolute; bottom: 0; width: 11px; height: 14px; background: var(--bubble-bg, var(--bubble-theirs, var(--theirs))); }
+:root[data-fill="gradient"] .msg[data-shape="curved"].mine.last .bubble::after, :root[data-fill="gradient"] .msg[data-shape="tail"].mine.last .bubble::after { background: color-mix(in srgb, var(--mine, var(--accent)) 62%, #7c3aed); }
+.msg[data-shape="curved"]:not(.mine).last .bubble, .msg[data-shape="tail"]:not(.mine).last .bubble { border-bottom-left-radius: 4px; }
+.msg[data-shape="curved"].mine.last .bubble, .msg[data-shape="tail"].mine.last .bubble { border-bottom-right-radius: 4px; }
+.msg[data-shape="curved"]:not(.mine).last .bubble::after { left: -7px; clip-path: path("M11 0 L11 14 L0 14 C 6 13 10 8 11 0 Z"); }
+.msg[data-shape="curved"].mine.last .bubble::after { right: -7px; clip-path: path("M0 0 L0 14 L11 14 C 5 13 1 8 0 0 Z"); }
+.msg[data-shape="tail"]:not(.mine).last .bubble::after { left: -7px; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.msg[data-shape="tail"].mine.last .bubble::after { right: -7px; clip-path: polygon(0 0, 0 100%, 100% 100%); }
+.msg[data-shape="outline"] .bubble:not(.bare):not(.media-bubble) { background: transparent; box-shadow: none; border: 1.5px solid var(--bc, color-mix(in srgb, currentColor 65%, transparent)); }
+.msg[data-shape="outline"].mine .bubble:not(.bare):not(.media-bubble) { background: transparent; border-color: var(--bc, var(--mine, var(--accent))); color: var(--text); }
+.msg[data-shape="outline"].mine .bubble a { color: var(--mine, var(--accent)); }
+/* The line around a bubble: solid, dotted, dashed, thick, only along the bottom, or dash-dot */
+.msg[data-border] .bubble:not(.bare):not(.media-bubble) { border: 1.5px solid var(--bc, color-mix(in srgb, currentColor 65%, transparent)); }
+.msg[data-border="dotted"] .bubble:not(.bare):not(.media-bubble) { border-style: dotted; }
+.msg[data-border="dashed"] .bubble:not(.bare):not(.media-bubble) { border-style: dashed; }
+.msg[data-border="thick"] .bubble:not(.bare):not(.media-bubble) { border-width: 3px; }
+.msg[data-border="edge"] .bubble:not(.bare):not(.media-bubble) { border: 0; border-bottom: 3px solid var(--bc, color-mix(in srgb, currentColor 65%, transparent)); }
+.msg[data-border="dashdot"] .bubble:not(.bare):not(.media-bubble) { border: 0; }
+.msg[data-border="dashdot"] .bubble:not(.bare):not(.media-bubble)::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: repeating-linear-gradient(90deg, var(--bc, color-mix(in srgb, currentColor 65%, transparent)) 0 10px, transparent 10px 15px, var(--bc, color-mix(in srgb, currentColor 65%, transparent)) 15px 18px, transparent 18px 23px);
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+.msg[data-colored] .bubble:not(.bare) a { color: inherit; }
+
+.swatch-box { display: inline-block; width: 64px; height: 34px; border-radius: 8px; border: 1px solid var(--line); }
+.side-h { margin: 10px 16px 0; font-size: .85rem; color: var(--muted); }
+.shape-tiles.scroll { flex-wrap: nowrap; overflow-x: auto; } .shape-tiles.scroll .shape-tile { flex: none; }
+.bd-sample { background: transparent !important; border-radius: 12px; color: var(--muted); display: grid; place-items: center; }
+.bd-sample.bd-solid { border: 1.5px solid currentColor; } .bd-sample.bd-dotted { border: 2px dotted currentColor; } .bd-sample.bd-dashed { border: 2px dashed currentColor; }
+.bd-sample.bd-thick { border: 3px solid currentColor; } .bd-sample.bd-edge { border-bottom: 3px solid currentColor; border-radius: 4px 4px 12px 12px; } .bd-sample.bd-dashdot { border: 2px dashed currentColor; border-style: dashed; opacity: .8; }

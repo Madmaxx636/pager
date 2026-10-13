@@ -16,12 +16,12 @@ describe("syncing settings by hand", () => {
 
   it("saves only the groups you pick, keeping what was saved for the others", async () => {
     const s = await import("./settings");
-    s.updateSettings({ accent: "pink", bubbleStyle: "square" });
+    s.updateSettings({ accent: "pink", bubbleStyle: "curved" });
     const first = s.mergeSaved(undefined, ["look"], "A", 1000);
     expect(first.settings.accent).toBe("pink"); expect("bubbleStyle" in first.settings).toBe(false);
     s.updateSettings({ accent: "green" });
     const second = s.mergeSaved(first, ["bubbles"], "B", 2000);
-    expect(second.settings.accent).toBe("pink"); expect(second.settings.bubbleStyle).toBe("square");
+    expect(second.settings.accent).toBe("pink"); expect(second.settings.bubbleStyle).toBe("curved");
     expect(second.savedAt).toBe(2000); expect(second.from).toBe("B");
   });
 

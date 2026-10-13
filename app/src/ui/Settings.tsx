@@ -4,7 +4,7 @@ import { EFFECT_TRIGGERS } from "../core/effects";
 import { SKINS, SKIN_GROUPS, accentsFor, skinById } from "../core/skins";
 import { useEffect, useRef, useState } from "react";
 import { Bell, Check, ChevronDown, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
-import { AppSettings, SYNC_GROUPS, groupsIn, loadSaved, SavedSettings, RowAction, ACCENTS, accentTones, DEFAULTS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
+import { AppSettings, BubbleBorder, bubbleColorsFor, bubbleLook, SYNC_GROUPS, groupsIn, loadSaved, SavedSettings, RowAction, ACCENTS, accentTones, DEFAULTS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
 import { Tour } from "./Tour";
 import { comboOf } from "../core/combo";
 import { RecoveryKeyDialog, RestoreDialog } from "./KeyDialogs";
@@ -670,55 +670,67 @@ function MemoryRow() {
 }
 
 
-/** A colour for a bubble: the theme's own, one of the accents, or any colour you make. */
-function BubbleColour({ title, hint, value, onChange }: { title: string; hint: string; value: string; onChange: (c: string) => void }) {
+const BORDER_STYLES: [BubbleBorder, string][] = [["none", "None"], ["solid", "Solid"], ["dotted", "Dotted"], ["dashed", "Dashed"], ["thick", "Thick"], ["edge", "Bottom edge"], ["dashdot", "Dash dot"]];
+const SHAPES: [AppSettings["bubbleStyle"], string, string][] = [["round", "Rounded", "12px"], ["curved", "Curved tail", "12px 12px 12px 3px"], ["tail", "Pointed tail", "12px 12px 12px 0"], ["outline", "Outlined", "12px"]];
+
+/** A colour row like Beeper's: the name on the left and a swatch on the right that opens a colour picker. */
+function ColorSwatchRow({ title, value, onChange }: { title: string; value: string; onChange: (c: string) => void }) {
   const [picker, setPicker] = useState(false);
   return (
-    <Row title={title} hint={hint}>
-      <div className="swatches">
-        <button className={"swatch-system" + (!value ? " on" : "")} onClick={() => onChange("")} aria-label="Follow the theme" title="Follow the theme">{!value ? <Check size={14} color="#fff" /> : <Monitor size={14} color="#fff" />}</button>
-        {Object.entries(ACCENTS).map(([name, c]) => <button key={name} className={value.toLowerCase() === c.light ? "on" : ""} style={{ background: c.light }} onClick={() => onChange(c.light)} aria-label={name} title={name}>{value.toLowerCase() === c.light ? <Check size={16} color={c.onLight} /> : null}</button>)}
-        <button className={"swatch-custom" + (value && !Object.values(ACCENTS).some((c) => c.light === value.toLowerCase()) ? " on" : "")} style={value ? { background: value } : undefined} onClick={() => setPicker(true)} aria-label="Make your own"><Palette size={15} color="#fff" /></button>
-      </div>
-      {picker && <ColorDialog value={value || "#0d9488"} onClose={() => setPicker(false)} onPick={(c) => { onChange(c); setPicker(false); }} />}
+    <Row title={title} onClick={() => setPicker(true)}>
+      {value && <button type="button" className="link" onClick={(e) => { e.stopPropagation(); onChange(""); }}>Default</button>}
+      <span className="swatch-box" style={{ background: value || "var(--panel-2)" }} />
+      {picker && <ColorDialog value={value || "#8b7cf6"} onClose={() => setPicker(false)} onPick={(c) => { onChange(c); setPicker(false); }} />}
     </Row>
   );
 }
 
-/** A small drawing of each bubble shape, for the picker. */
-const SHAPE_TILES: [AppSettings["bubbleStyle"], string, string][] = [
-  ["round", "Rounded", "12px"], ["cloud", "Curved tail", "14px 14px 14px 3px"], ["tail", "Pointed tail", "12px 12px 12px 0"],
-  ["pill", "Pill", "999px"], ["soft", "Extra round", "16px"], ["notch", "Notch", "12px 12px 12px 2px"], ["square", "Square", "4px"], ["sharp", "Sharp", "1px"],
-  ["outline", "Outline", "12px"], ["plain", "No bubbles", "0"],
-];
-
-/** Message bubbles, laid out like Beeper's: a preview, the shape, the corner radius, the border, then your bubbles and theirs. */
-function BubbleGroup() {
+/** Everything Beeper lets you set for one side: colours for light and dark, the shape, the corner radius and the border. */
+function SideSettings({ mine }: { mine: boolean }) {
   const s = useRawSettings();
-  const sample = (mine: boolean, text: string, first = true, last = true) => <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "") + (last ? " last" : "")}><div className="bubble">{text}</div></div>;
-  const BORDERS: [AppSettings["bubbleBorder"], string][] = [["none", "None"], ["solid", "Solid"], ["dotted", "Dotted"], ["dashed", "Dashed"]];
+  const look = bubbleLook(s, mine);
+  const k = (a: keyof AppSettings, b: keyof AppSettings) => (mine ? a : b);
+  const set = (patch: Partial<AppSettings>) => updateSettings(patch);
+  const light = mine ? ["bubbleMine", "bubbleMineText"] : ["bubbleTheirs", "bubbleTheirsText"];
+  const dark = mine ? ["bubbleMineDark", "bubbleMineTextDark"] : ["bubbleTheirsDark", "bubbleTheirsTextDark"];
+  const radius = look.radius || 18;
   return (
-    <Group title="Message bubbles">
-      <div className="bubble-preview" aria-hidden>{sample(false, "Hey! How do you like the new theme?", true, true)}{sample(true, "It looks amazing! 🎨", true, true)}</div>
+    <>
+      {!mine && <SwitchRow title="Use native colors" hint="Each network's own colour" checked={s.bubbleNative} onChange={(v) => set({ bubbleNative: v })} />}
+      <h4 className="side-h">Light</h4>
+      <ColorSwatchRow title="Color" value={s[light[0] as keyof AppSettings] as string} onChange={(c) => set({ [light[0]]: c })} />
+      <ColorSwatchRow title="Text color" value={s[light[1] as keyof AppSettings] as string} onChange={(c) => set({ [light[1]]: c })} />
+      <h4 className="side-h">Dark</h4>
+      <ColorSwatchRow title="Color" value={s[dark[0] as keyof AppSettings] as string} onChange={(c) => set({ [dark[0]]: c })} />
+      <ColorSwatchRow title="Text color" value={s[dark[1] as keyof AppSettings] as string} onChange={(c) => set({ [dark[1]]: c })} />
       <Row title="Bubble shape" />
       <div className="shape-tiles" role="radiogroup" aria-label="Bubble shape">
-        {SHAPE_TILES.map(([id, label, radius]) => <button key={id} type="button" role="radio" aria-checked={s.bubbleStyle === id} className={"shape-tile" + (s.bubbleStyle === id ? " on" : "")} onClick={() => updateSettings({ bubbleStyle: id })} title={label}><i style={{ borderRadius: radius, ...(id === "outline" ? { background: "transparent", border: "2px solid currentColor" } : {}) }} /><small>{label}</small></button>)}
+        {SHAPES.map(([id, label, r]) => <button key={id} type="button" role="radio" aria-checked={look.style === id} className={"shape-tile" + (look.style === id ? " on" : "")} onClick={() => set({ [k("outStyle", "bubbleStyle")]: id })} title={label}><i style={{ borderRadius: r, ...(id === "outline" ? { background: "transparent", border: "2px solid currentColor" } : {}) }} /><small>{label}</small></button>)}
       </div>
-      <Row title={`Corner radius: ${s.bubbleRadius || "as the shape says"}`}>
-        <input type="range" min="0" max="32" step="1" value={s.bubbleRadius} onChange={(e) => updateSettings({ bubbleRadius: Number(e.target.value) })} />
+      <Row title={`Corner radius: ${radius}`}>
+        <input type="range" min="0" max="24" step="1" value={radius} onChange={(e) => set({ [k("outRadius", "bubbleRadius")]: Number(e.target.value) })} />
       </Row>
       <Row title="Border style" />
-      <div className="shape-tiles" role="radiogroup" aria-label="Border style">
-        {BORDERS.map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={s.bubbleBorder === id} className={"shape-tile" + (s.bubbleBorder === id ? " on" : "")} onClick={() => updateSettings({ bubbleBorder: id })} title={label}><i style={{ borderRadius: "12px", background: "transparent", border: id === "none" ? "none" : `2px ${id} currentColor` }}>{id === "none" ? "✕" : ""}</i><small>{label}</small></button>)}
+      <div className="shape-tiles scroll" role="radiogroup" aria-label="Border style">
+        {BORDER_STYLES.map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={look.border === id} className={"shape-tile" + (look.border === id ? " on" : "")} onClick={() => set({ [k("outBorder", "bubbleBorder")]: id })} title={label}><i className={"bd-sample bd-" + id}>{id === "none" ? "✕" : ""}</i><small>{label}</small></button>)}
       </div>
-      {s.bubbleBorder !== "none" && <BubbleColour title="Border color" hint="The line around bubbles" value={s.bubbleBorderColor} onChange={(c) => updateSettings({ bubbleBorderColor: c })} />}
-      <details className="bubble-section">
-        <summary>Incoming</summary>
-        <BubbleColour title="Background" hint="The colour of messages you receive" value={s.bubbleTheirs} onChange={(c) => updateSettings({ bubbleTheirs: c })} />
-      </details>
-      <details className="bubble-section">
-        <summary>Outgoing</summary>
-        <BubbleColour title="Background" hint="The colour of messages you send" value={s.bubbleMine} onChange={(c) => updateSettings({ bubbleMine: c })} />
+      {look.border !== "none" && <ColorSwatchRow title="Border color" value={look.borderColor} onChange={(c) => set({ [k("outBorderColor", "bubbleBorderColor")]: c })} />}
+    </>
+  );
+}
+
+/** Message bubbles, laid out like Beeper's: a preview, then Incoming and Outgoing, each with its own colours, shape, corner radius and border. */
+function BubbleGroup() {
+  const s = useRawSettings();
+  const sample = (mine: boolean, text: string) => { const look = bubbleLook(s, mine); const dark = document.documentElement.dataset.theme !== "light"; const col = bubbleColorsFor(s, mine, dark);
+    const st: Record<string, string> = {}; if (look.radius > 0) { st["--radius"] = `${look.radius}px`; if (look.style === "round" || look.style === "outline") st["--tight"] = `${Math.min(8, Math.round(look.radius / 3))}px`; }
+    if (look.borderColor) st["--bc"] = look.borderColor; if (col.color) { st[mine ? "--mine" : "--bubble-theirs"] = col.color; st[mine ? "--mine-ink" : "--theirs-ink"] = col.text || "#fff"; } else if (col.text) st[mine ? "--mine-ink" : "--theirs-ink"] = col.text;
+    return <div className={"msg first last" + (mine ? " mine" : "")} data-shape={look.style} data-border={look.border === "none" ? undefined : look.border} data-colored={col.color || col.text ? "" : undefined} style={st as React.CSSProperties}><div className="bubble">{text}</div></div>; };
+  return (
+    <Group title="Message bubbles">
+      <div className="bubble-preview" aria-hidden>{sample(false, "Hey! How do you like the new theme?")}{sample(true, "It looks amazing! 🎨")}</div>
+      <details className="bubble-section"><summary>Incoming</summary><SideSettings mine={false} /></details>
+      <details className="bubble-section"><summary>Outgoing</summary><SideSettings mine />
         <Select title="Fill" hint="How your own messages are coloured" value={s.bubbleFill} options={[["solid", "Solid"], ["gradient", "Gradient"], ["tinted", "Soft tint"], ["glass", "Glass"]]} onChange={(v) => updateSettings({ bubbleFill: v })} />
       </details>
       <Select title="Depth" value={s.bubbleDepth} options={[["flat", "Flat"], ["soft", "Soft shadow"], ["raised", "Raised"]]} onChange={(v) => updateSettings({ bubbleDepth: v })} />
@@ -726,10 +738,13 @@ function BubbleGroup() {
         <input type="range" min="0" max="95" step="5" value={s.bubbleWidth} onChange={(e) => { const v = Number(e.target.value); updateSettings({ bubbleWidth: v > 0 && v < 40 ? 40 : v }); }} />
       </Row>
       <Select title="Message animation" hint="When a new message appears" value={s.messageAnimation} options={[["none", "None"], ["pop", "Pop"], ["slide", "Slide"], ["fade", "Fade"]]} onChange={(v) => updateSettings({ messageAnimation: v })} />
-      <Row title="Reset message bubbles" onClick={() => updateSettings({ bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", bubbleBorder: "none", bubbleBorderColor: "", bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0 })}><span className="danger">Reset</span></Row>
+      <Row title="Reset message bubbles" hint="Undo all bubble color and shape changes made here" onClick={() => updateSettings(RESET_BUBBLES)}><span className="danger">Reset</span></Row>
     </Group>
   );
 }
+
+const RESET_BUBBLES: Partial<AppSettings> = { bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", bubbleBorder: "none", bubbleBorderColor: "", bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0,
+  outStyle: "", outRadius: -1, outBorder: "", outBorderColor: "", bubbleMineDark: "", bubbleTheirsDark: "", bubbleMineText: "", bubbleTheirsText: "", bubbleMineTextDark: "", bubbleTheirsTextDark: "", bubbleNative: false };
 
 function WallpaperGroup() {
   const s = useRawSettings();

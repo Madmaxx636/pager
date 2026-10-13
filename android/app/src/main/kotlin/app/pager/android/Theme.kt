@@ -177,7 +177,7 @@ fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int, k
     if (keypad) e = e.copy(reduceMotion = true, screenEffects = false, autoPlayGifs = false)
     if (s.eink) e = e.copy(
         themeMode = "light", reduceMotion = true, screenEffects = false, messageAnimation = "none", bubbleFill = "solid", bubbleDepth = "flat",
-        bubbleStyle = if (s.bubbleStyle == "plain") "plain" else "outline", wallpaper = "none", autoPlayGifs = false, colorSenderNames = false, accent = "teal",
+        bubbleStyle = "outline", outStyle = "", wallpaper = "none", autoPlayGifs = false, colorSenderNames = false, accent = "teal",
     )
     // Small screens get tighter rows.
     val small = screenWidthDp < 340 || screenHeightDp < 560

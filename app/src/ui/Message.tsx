@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Check, CheckCheck, Clock, FileText, MapPin, Music, Pause, Play, Star, Video, UserRound, Mic } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, nameOf, previewOf } from "../core/types";
 import { isEmojiOnly } from "../core/format";
-import { AppSettings } from "../core/settings";
+import { AppSettings, bubbleColorsFor, bubbleLook } from "../core/settings";
+import { networkMeta } from "../core/emoji";
 import { LinkPreview } from "../core/api";
 import { me, mediaUrl, preview, retry } from "../core/store";
 import { Avatar, humanSize, useMxc } from "./common";
@@ -60,8 +61,22 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
   const bare = !!msg.sticker || big;
   const tick = msg.status === STATUS_SENDING ? <Clock size={13} /> : msg.status === STATUS_FAILED ? <AlertCircle size={13} /> : read ? <CheckCheck size={14} /> : delivered ? <CheckCheck size={14} style={{ opacity: 0.55 }} /> : <Check size={14} style={{ opacity: 0.55 }} />;
   const swipe = useSwipeToReply(st.swipeToReply && msg.status === STATUS_SENT, onReply);
+  // Each side has its own shape, roundness, border and colours (set in Settings > Appearance > Message bubbles). A desktop style keeps its own look.
+  const look = bubbleLook(st, mine);
+  const skinned = !!window.pagerDesktop && st.skin !== "default";
+  const dark = document.documentElement.dataset.theme !== "light";
+  const col = bubbleColorsFor(st, mine, dark);
+  const native = !mine && st.bubbleNative && !col.color ? networkMeta(chat.network).color : "";
+  const bg = col.color || native;
+  const ink = (c: string) => { const n = parseInt(c.slice(1), 16); const l = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; return l > 0.6 ? "#101418" : "#ffffff"; };
+  const sideStyle: Record<string, string> = {};
+  if (!skinned && look.radius > 0) { sideStyle["--radius"] = `${look.radius}px`; if (look.style !== "curved" && look.style !== "tail") sideStyle["--tight"] = `${Math.min(8, Math.round(look.radius / 3))}px`; }
+  if (look.borderColor && /^#[0-9a-f]{6}$/i.test(look.borderColor)) sideStyle["--bc"] = look.borderColor;
+  if (bg && /^#[0-9a-f]{6}$/i.test(bg)) { const t = col.text || ink(bg); if (mine) { sideStyle["--mine"] = bg; sideStyle["--mine-ink"] = t; } else { sideStyle["--bubble-theirs"] = bg; sideStyle["--theirs-ink"] = t; } }
+  else if (col.text) { sideStyle[mine ? "--mine-ink" : "--theirs-ink"] = col.text; }
   return (
-    <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "") + (last ? " last" : "") + (Date.now() - msg.ts < 4000 ? " fresh" : "")} data-id={msg.id}>
+    <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "") + (last ? " last" : "") + (Date.now() - msg.ts < 4000 ? " fresh" : "")} data-id={msg.id}
+      data-shape={skinned ? "round" : look.style} data-border={skinned || look.border === "none" ? undefined : look.border} data-colored={bg || col.text ? "" : undefined} style={Object.keys(sideStyle).length ? (sideStyle as React.CSSProperties) : undefined}>
       {group && !mine && first && <div className="msg-sender" style={st.colorSenderNames ? { color: `hsl(${senderHue(author)} 60% 62%)` } : undefined}>{author}</div>}
       <div className="msg-line swipe-line" {...swipe.bind}>
         <span className="swipe-cue" style={{ opacity: swipe.progress, transform: `scale(${0.6 + 0.4 * swipe.progress})` }} aria-hidden>↩</span>
