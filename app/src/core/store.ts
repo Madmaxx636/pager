@@ -643,11 +643,11 @@ export function markUnread(roomId: string, unread: boolean) { patchChat(roomId, 
 export function markAllRead() { Object.values(state.chats).filter((c) => c.unread > 0 || c.markedUnread).forEach((c) => markRead(c.id)); }
 
 /** [viewOnce]: Signal shows the picture or video once and then it is gone (the bridge turns this into Signal's own view-once). */
-export function sendFile(roomId: string, file: File | Blob, name = (file as File).name || "file", extra: Partial<Msg> & { viewOnce?: boolean } = {}) {
+export function sendFile(roomId: string, file: File | Blob, name = (file as File).name || "file", extra: Partial<Msg> & { viewOnce?: boolean; caption?: string } = {}) {
   const mime = file.type || "application/octet-stream";
   const type = mime.startsWith("image/") ? "m.image" : mime.startsWith("video/") ? "m.video" : mime.startsWith("audio/") ? "m.audio" : "m.file";
   const txn = uuid(), localId = `local-${txn}`;
-  addLocal(roomId, localMsg(localId, type, name, { mime, size: file.size, txn, ...extra, viewOnce: undefined } as Partial<Msg>));
+  addLocal(roomId, localMsg(localId, type, name, { mime, size: file.size, txn, ...extra, viewOnce: undefined, caption: extra.caption?.trim() || undefined } as Partial<Msg>));
   void (async () => {
     try {
       let w = extra.w, h = extra.h;
@@ -657,7 +657,7 @@ export function sendFile(roomId: string, file: File | Blob, name = (file as File
       const mxc = await matrix.upload(sealed ? sealed.data : file, sealed ? "encrypted" : name);
       const info: Record<string, unknown> = { mimetype: mime, size: file.size, ...(w ? { w, h } : {}), ...(extra.durationMs ? { duration: extra.durationMs } : {}) };
       const id = await matrix.send(roomId, "m.room.message", txn, {
-        msgtype: type, body: name, ...(sealed ? { file: { url: mxc, ...sealed.file } } : { url: mxc }), info,
+        msgtype: type, body: extra.caption?.trim() || name, ...(extra.caption?.trim() ? { filename: name } : {}), ...(sealed ? { file: { url: mxc, ...sealed.file } } : { url: mxc }), info,
         ...(extra.viewOnce && (type === "m.image" || type === "m.video") ? { "com.beeper.view_limited": { type: "count", count: 1 } } : {}),
         ...(extra.voice ? { "org.matrix.msc3245.voice": {}, "org.matrix.msc1767.audio": { duration: extra.durationMs ?? 0 } } : {}),
       });
@@ -1063,12 +1063,14 @@ export async function saveAsSticker(m: Msg) {
   }).catch(() => {});
 }
 
-export async function sendGif(roomId: string, gif: Gif) {
+/** Downloads a GIF so it can wait in the message box. */
+export async function gifFile(gif: Gif): Promise<File> {
   const res = await fetch(gif.url);
   if (!res.ok) throw new Error("Couldn't download that GIF");
   const blob = await res.blob();
-  sendFile(roomId, new Blob([blob], { type: "image/gif" }), `${(gif.title || "gif").slice(0, 40)}.gif`, { w: gif.w || undefined, h: gif.h || undefined });
+  return new File([blob], `${(gif.title || "gif").replace(/[^\w .-]/g, "").slice(0, 40) || "gif"}.gif`, { type: "image/gif" });
 }
+export async function sendGif(roomId: string, gif: Gif) { sendFile(roomId, await gifFile(gif), undefined, { w: gif.w || undefined, h: gif.h || undefined }); }
 
 export function sendContact(roomId: string, name: string, phone: string) {
   const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL;TYPE=CELL:${phone}\nEND:VCARD\n`;

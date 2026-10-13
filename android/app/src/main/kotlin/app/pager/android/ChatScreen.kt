@@ -53,6 +53,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.content.contentReceiver
+import androidx.compose.foundation.content.consume
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -227,12 +236,15 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     }
     LaunchedEffect(recording) { while (recording) { recordedMs = recorder.elapsedMs; delay(200) } }
 
+    // Pictures, videos, files and GIFs wait in the message box until you press send, so you can add more and write something with them.
+    val staged = remember(roomId) { mutableStateListOf<StagedItem>() }
+    fun stage(uri: Uri, viewOnce: Boolean = false) { val p = store.describe(uri); staged.add(StagedItem(uri = uri, name = p.name, mime = p.mime, viewOnce = viewOnce)) }
     var onceNext by remember { mutableStateOf(false) } // the next pictures go out as view-once
-    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(8)) { uris: List<Uri> -> val once = onceNext; onceNext = false; uris.forEach { store.sendFile(sendRoom, it, once) } }
-    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> -> uris.forEach { store.sendFile(sendRoom, it) } }
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(8)) { uris: List<Uri> -> val once = onceNext; onceNext = false; uris.forEach { stage(it, once) } }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> -> uris.forEach { stage(it) } }
     val pickStickerImages = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> -> if (uris.isNotEmpty()) scope.launch { store.addStickers(uris) } }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) cameraUri?.let { store.sendFile(sendRoom, it) } }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) cameraUri?.let { stage(it) } }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) recording = recorder.start() }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
         scope.launch { currentLocation(context)?.let { store.sendLocation(sendRoom, it.latitude, it.longitude) } }
@@ -275,7 +287,16 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
 
     fun send() {
         val body = text.trim()
-        if (body.isEmpty()) return
+        if (body.isEmpty() && (staged.isEmpty() || editing != null)) return
+        if (staged.isNotEmpty() && editing == null) {
+            // The words go with the first item; the rest follow on their own.
+            staged.toList().forEachIndexed { i, x ->
+                val cap = if (i == 0 && body.isNotEmpty()) body else null
+                if (x.gif != null) store.sendGif(sendRoom, x.gif, cap) else x.uri?.let { store.sendFile(sendRoom, it, x.viewOnce, cap) }
+            }
+            staged.clear(); text = ""; replyTo = null; mentionIds.clear(); store.setDraft(roomId, "")
+            return
+        }
         val e = editing
         if (e != null) store.edit(roomId, e.id, body)
         else store.send(sendRoom, body, replyTo?.id, mentionIds.filterKeys { body.contains("@$it") }.values.toList())
@@ -437,15 +458,22 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                         }
                     }
                 } else {
+                    if (staged.isNotEmpty() && editing == null) StagedTray(staged)
                     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.Bottom) {
                         IconBtn(Icons.Rounded.Add, "Attach", { attach = true }, modifier = Modifier.padding(bottom = 4.dp), tint = scheme.primary, size = 44)
                         Row(Modifier.weight(1f).heightMin().clip(RoundedCornerShape(24.dp)).background(scheme.surfaceVariant).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.Bottom) {
                             Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
-                                if (text.isEmpty()) Text(chat?.let { "Message ${SyncReducer.displayName(it, me).substringBefore(' ')} · ${networkMeta(it.network).label}" } ?: "Message", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (text.isEmpty()) Text(if (staged.isNotEmpty() && editing == null) "Add a message…" else chat?.let { "Message ${SyncReducer.displayName(it, me).substringBefore(' ')} · ${networkMeta(it.network).label}" } ?: "Message", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 BasicTextField(
                                     text, { text = it }, maxLines = 6, textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface), cursorBrush = SolidColor(scheme.primary),
                                     keyboardOptions = KeyboardOptions(imeAction = if (s.enterSends) ImeAction.Send else ImeAction.Default), keyboardActions = KeyboardActions(onSend = { send() }),
-                                    modifier = Modifier.fillMaxWidth().focusRequester(composerFocus).onPreviewKeyEvent { e ->
+                                    modifier = Modifier.fillMaxWidth().focusRequester(composerFocus)
+                                        // Pictures, GIFs and other files pasted or sent from the keyboard wait in the message box too.
+                                        .contentReceiver(object : androidx.compose.foundation.content.ReceiveContentListener {
+                                            override fun onReceive(transferableContent: androidx.compose.foundation.content.TransferableContent): androidx.compose.foundation.content.TransferableContent? =
+                                                transferableContent.consume { item -> val u = item.uri; if (u != null && editing == null) { stage(u); true } else false }
+                                        })
+                                        .onPreviewKeyEvent { e ->
                                         if (keypad && e.type == KeyEventType.KeyDown && text.isEmpty()) {
                                             val ids = messages.map { it.id }
                                             val at = ids.indexOf(selId)
@@ -468,7 +496,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                             IconBtn(Icons.Rounded.EmojiEmotions, "Emoji", { emojiForText = true }, size = 44)
                         }
                         Spacer(Modifier.width(8.dp))
-                        val hasText = text.isNotBlank()
+                        val hasText = text.isNotBlank() || (staged.isNotEmpty() && editing == null)
                         Box(
                             Modifier.padding(bottom = 2.dp).size(48.dp).clip(CircleShape).background(scheme.primary)
                                 .onGloballyPositioned { micCoords = it }
@@ -512,7 +540,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                 else locationPermission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     })
-    if (gifSheet) GifSheet(onPick = { store.sendGif(sendRoom, it); gifSheet = false }, onSettings = { gifSheet = false; onSettings("media") }, onDismiss = { gifSheet = false })
+    if (gifSheet) GifSheet(onPick = { staged.add(StagedItem(gif = it, name = "${it.title.ifBlank { "GIF" }}", mime = "image/gif")); gifSheet = false }, onSettings = { gifSheet = false; onSettings("media") }, onDismiss = { gifSheet = false })
     if (stickerSheet) StickerSheet(roomId, onPick = { store.sendSticker(sendRoom, it); stickerSheet = false }, onAdd = { pickStickerImages.launch("image/*") }, onDismiss = { stickerSheet = false })
     if (pollSheet) PollSheet(onCreate = { q, a, max, disclosed -> store.sendPoll(sendRoom, q, a, max, disclosed); pollSheet = false }, onDismiss = { pollSheet = false })
     if (emojiForText) EmojiPickerDialog(s.recentEmoji, onPick = { e -> text += e; emojiForText = false }, onDismiss = { emojiForText = false })
@@ -598,5 +626,54 @@ private fun BannerBar(title: String, subtitle: String, onClose: () -> Unit) {
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         IconBtn(Icons.Rounded.Close, "Dismiss", onClose)
+    }
+}
+
+
+/** Something waiting in the message box to be sent: a file from the phone, or a GIF. */
+data class StagedItem(val uri: Uri? = null, val gif: Gif? = null, val name: String, val mime: String, val viewOnce: Boolean = false, val id: Long = System.nanoTime())
+
+/** A small preview of a staged picture or video; other files get an icon. */
+@Composable
+private fun StagedThumb(item: StagedItem, onRemove: () -> Unit) {
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val thumb by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, item.id) {
+        val uri = item.uri ?: return@produceState
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                when {
+                    item.mime.startsWith("image/") -> {
+                        val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        context.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, o) }
+                        var sample = 1
+                        while (o.outWidth / (sample * 2) >= 240 && o.outHeight / (sample * 2) >= 240) sample *= 2
+                        context.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) }?.asImageBitmap()
+                    }
+                    item.mime.startsWith("video/") -> android.media.MediaMetadataRetriever().let { r -> try { r.setDataSource(context, uri); r.getFrameAtTime(0)?.asImageBitmap() } finally { r.release() } }
+                    else -> null
+                }
+            }.getOrNull()
+        }
+    }
+    Box(Modifier.size(76.dp).clip(RoundedCornerShape(12.dp)).background(scheme.surfaceVariant), contentAlignment = Alignment.Center) {
+        val t = thumb
+        if (t != null) androidx.compose.foundation.Image(t, item.name, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+        else Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(4.dp)) {
+            Icon(if (item.gif != null) Icons.Rounded.EmojiEmotions else Icons.AutoMirrored.Rounded.InsertDriveFile, null, tint = scheme.onSurfaceVariant)
+            Text(item.name, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis, color = scheme.onSurfaceVariant)
+        }
+        if (item.mime.startsWith("video/")) Icon(Icons.Rounded.Videocam, null, tint = Color.White, modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).size(16.dp))
+        if (item.gif != null || item.mime == "image/gif") Text("GIF", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp)).padding(horizontal = 4.dp))
+        Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(22.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.65f)).clickable(onClick = onRemove), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Close, "Remove ${item.name}", tint = Color.White, modifier = Modifier.size(14.dp))
+        }
+    }
+}
+
+@Composable
+private fun StagedTray(items: androidx.compose.runtime.snapshots.SnapshotStateList<StagedItem>) {
+    LazyRow(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(items.toList(), key = { it.id }) { x -> StagedThumb(x) { items.remove(x) } }
     }
 }

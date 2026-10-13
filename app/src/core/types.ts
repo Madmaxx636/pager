@@ -10,6 +10,9 @@ export interface Sticker { shortcode: string; url: string; body: string; w?: num
 export interface StickerPack { key: string; name: string; stickers: Sticker[] }
 
 export interface Msg {
+  /** The words sent with a picture, video or file (the message body when the file's own name is given separately). */
+  caption?: string;
+  captionHtml?: string;
   /** In a merged view: the chat (on its own network) this message really belongs to. */
   room?: string;
   /** A message we could not read yet: the encrypted original, kept so it can be opened when its key arrives (even after a restart). */
@@ -138,6 +141,10 @@ export const labelsOf = (c: ChatState) => c.tags.filter((t) => t.startsWith(LABE
 export const nameOf = (c: ChatState, userId: string) => prettyName(c.members[userId] ?? userId.replace(/^@/, "").split(":")[0]);
 
 export function previewOf(m: Msg): string {
+  const base = previewBase(m);
+  return m.caption && m.type !== "m.audio" ? `${base}: ${m.caption}` : base;
+}
+function previewBase(m: Msg): string {
   switch (m.type) {
     case "m.image": return m.sticker ? "Sticker" : m.mime === "image/gif" ? "GIF" : "Photo";
     case "m.location": return "Location";

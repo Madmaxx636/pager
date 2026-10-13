@@ -212,6 +212,8 @@ function applyEdit(msgs: Msg[], e: J): Msg[] {
   if (body == null) return msgs;
   const prev = msgs[i];
   const next: Msg = { ...prev, body, edited: true };
+  const cap = captionOf(str(nc.msgtype) ?? prev.type, str(nc.body) ?? body, str(nc.filename), nc);
+  if (cap) Object.assign(next, { body: cap.name, caption: cap.text, captionHtml: cap.html });
   // Some bridges (Google Messages, WhatsApp) send a picture or file as an edit of an earlier message: take its media too.
   // In an encrypted room the picture is an encrypted file ("file"), not a plain address ("url").
   const encFile = str(obj(nc.file).url) && obj(nc.file).key ? (obj(nc.file) as unknown as EncFile) : undefined;
@@ -224,7 +226,7 @@ function applyEdit(msgs: Msg[], e: J): Msg[] {
       durationMs: num(info.duration) ?? prev.durationMs, edited: prev.edited, // adding the media isn't an edit the reader should see
     });
   } else if (str(nc.msgtype) && str(nc.msgtype) !== prev.type && !prev.mxc) next.type = str(nc.msgtype)!;
-  if (nc.format === "org.matrix.html") next.html = str(nc.formatted_body);
+  if (nc.format === "org.matrix.html" && !cap) next.html = str(nc.formatted_body);
   const copy = [...msgs]; copy[i] = next;
   return copy;
 }
@@ -333,6 +335,12 @@ function stickerMsg(e: J): Msg | undefined {
   return { id, sender, ts: num(e.origin_server_ts) ?? 0, type: "m.image", body: str(c.body) ?? "Sticker", mxc, mime: str(info.mimetype), w: num(info.w), h: num(info.h), sticker: true, status: STATUS_SENT, mentions: [] };
 }
 
+const MEDIA_TYPES = ["m.image", "m.video", "m.audio", "m.file"];
+/** The words that came with a media message, when the body is not just the file's name. */
+export function captionOf(type: string | undefined, body: string, filename: string | undefined, content: J): { name: string; text: string; html?: string } | undefined {
+  if (!type || !MEDIA_TYPES.includes(type) || !filename || !body || body === filename) return undefined;
+  return { name: filename, text: body, html: content.format === "org.matrix.html" ? str(content.formatted_body) : undefined };
+}
 export function toMsg(e: J): Msg | undefined {
   if (e.type !== "m.room.message") return undefined;
   const content = obj(e.content);
@@ -347,8 +355,11 @@ export function toMsg(e: J): Msg | undefined {
   const reply = str(obj(obj(content["m.relates_to"])["m.in_reply_to"]).event_id);
   let body = str(content.body) ?? "";
   if (reply) body = stripReplyFallback(body);
+  // A picture, video or file with words: the file's own name is "filename" and the body is what was written (MSC2530).
+  const cap = captionOf(type, body, str(content.filename), content);
+  if (cap) body = cap.name;
   return {
-    id, sender, ts: num(e.origin_server_ts) ?? 0, type, body,
+    id, sender, ts: num(e.origin_server_ts) ?? 0, type, body, caption: cap?.text, captionHtml: cap?.html,
     sealed: content.pagerRaw ?? undefined,
     mxc: enc ? enc.url : str(content.url), enc, mime: str(info.mimetype), size: num(info.size), w: num(info.w), h: num(info.h),
     durationMs: num(info.duration) ?? num(obj(content["org.matrix.msc1767.audio"]).duration),
