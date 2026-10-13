@@ -3,6 +3,8 @@ import { wallpaperCss } from "./wallpapers";
 import { skinById } from "./skins";
 import { useSyncExternalStore } from "react";
 
+export type BubbleBorder = "none" | "solid" | "dotted" | "dashed" | "thick" | "edge" | "dashdot";
+
 /** Everything the user can tune. One JSON blob in localStorage. */
 export type RowAction = "none" | "archive" | "read" | "pin" | "mute" | "low" | "snooze";
 
@@ -34,12 +36,27 @@ export interface AppSettings {
   autoTranscribe: boolean;
   /** Sound when you get a reaction while inside that page. */
   reactionSound: string;
-  bubbleStyle: "round" | "soft" | "square" | "tail" | "outline" | "plain" | "pill" | "notch" | "sharp" | "cloud";
+  /** Beeper's shapes: round (no tail), curved tail, pointed tail, and outlined. Settings from older versions are mapped onto these. */
+  bubbleStyle: "round" | "curved" | "tail" | "outline";
   bubbleFill: "solid" | "gradient" | "tinted" | "glass";
   /** Colour of your own bubbles and of theirs; empty follows the theme and accent. */
+  /** The outgoing side's own shape, roundness and border; empty / -1 follow the incoming side (the plain settings above are the incoming ones). */
+  outStyle: "" | "round" | "curved" | "tail" | "outline";
+  outRadius: number;
+  outBorder: "" | BubbleBorder;
+  outBorderColor: string;
+  /** Dark-theme colours, and the text on them; bubbleMine / bubbleTheirs are the light-theme ones. */
+  bubbleMineDark: string;
+  bubbleTheirsDark: string;
+  bubbleMineText: string;
+  bubbleTheirsText: string;
+  bubbleMineTextDark: string;
+  bubbleTheirsTextDark: string;
+  /** Incoming bubbles take each network's own colour. */
+  bubbleNative: boolean;
   bubbleMine: string;
   /** The line around bubbles: none, solid, dotted or dashed, and its colour (empty follows the theme). */
-  bubbleBorder: "none" | "solid" | "dotted" | "dashed";
+  bubbleBorder: BubbleBorder;
   bubbleBorderColor: string;
   bubbleTheirs: string;
   /** Corner roundness in px (0 = what the bubble style says) and the widest a bubble may get, as a percent of the chat (0 = default). */
@@ -157,7 +174,7 @@ export interface AppSettings {
 export const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 export const DEFAULTS: AppSettings = {
-  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, skin: "default", skinAccent: "", fancyMotion: true, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleBorder: "none", bubbleBorderColor: "", bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0, wallpaperDim: 0, bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
+  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, skin: "default", skinAccent: "", fancyMotion: true, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleBorder: "none", bubbleBorderColor: "", outStyle: "", outRadius: -1, outBorder: "", outBorderColor: "", bubbleMineDark: "", bubbleTheirsDark: "", bubbleMineText: "", bubbleTheirsText: "", bubbleMineTextDark: "", bubbleTheirsTextDark: "", bubbleNative: false, bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0, wallpaperDim: 0, bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
@@ -194,8 +211,31 @@ let state: AppSettings = raw;
 const listeners = new Set<() => void>();
 
 function load(): AppSettings {
-  // "Do not disturb", the alert delay and the per-network settings were taken out of Settings, so whatever was saved for them is switched off.
-  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}"), dndUntil: 0, notifDelaySec: 0, notifNetworkMode: {}, notifMutedNetworks: [] }; } catch { return { ...DEFAULTS }; }
+  try {
+    const x = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") } as AppSettings;
+    // "Do not disturb", the alert delay and the per-network settings were taken out of Settings, so whatever was saved for them is switched off.
+    return { ...x, dndUntil: 0, notifDelaySec: 0, notifNetworkMode: {}, notifMutedNetworks: [], bubbleStyle: migrateBubbleStyle(x.bubbleStyle), outStyle: x.outStyle ? migrateBubbleStyle(x.outStyle) : "" };
+  } catch { return { ...DEFAULTS }; }
+}
+
+/** The bubble shapes are now Beeper's three (round, curved tail, pointed tail) and outlined. Older shapes become the nearest one. */
+export function migrateBubbleStyle(style: string): "round" | "curved" | "tail" | "outline" {
+  return style === "round" || style === "curved" || style === "tail" || style === "outline" ? style : style === "cloud" ? "curved" : "round";
+}
+
+export interface SideLook { style: "round" | "curved" | "tail" | "outline"; radius: number; border: BubbleBorder; borderColor: string }
+/** The look of one side of a conversation. Incoming bubbles use the plain settings; outgoing ones use their own where set. */
+export function bubbleLook(s: AppSettings, mine: boolean): SideLook {
+  if (!mine) return { style: s.bubbleStyle, radius: s.bubbleRadius, border: s.bubbleBorder, borderColor: s.bubbleBorderColor };
+  return { style: s.outStyle || s.bubbleStyle, radius: s.outRadius < 0 ? s.bubbleRadius : s.outRadius, border: s.outBorder || s.bubbleBorder, borderColor: s.outBorderColor || s.bubbleBorderColor };
+}
+
+/** The colour you chose for a side's bubbles and the text on them, for the light or dark theme. Empty means follow the theme. */
+export function bubbleColorsFor(s: AppSettings, mine: boolean, dark: boolean): { color: string; text: string } {
+  const [c, cd, t, td] = mine ? [s.bubbleMine, s.bubbleMineDark, s.bubbleMineText, s.bubbleMineTextDark] : [s.bubbleTheirs, s.bubbleTheirsDark, s.bubbleTheirsText, s.bubbleTheirsTextDark];
+  const ok = (v: string) => HEX.test(v);
+  const pick = (light: string, dk: string) => (dark && ok(dk) ? dk : ok(light) ? light : "");
+  return { color: pick(c, cd), text: pick(t, td) };
 }
 
 // ---- Syncing settings between your devices: only when you press the button ----------------------------------------
@@ -204,7 +244,7 @@ function load(): AppSettings {
 export interface SyncGroup { id: string; label: string; hint: string; keys: (keyof AppSettings)[] }
 export const SYNC_GROUPS: SyncGroup[] = [
   { id: "look", label: "Colours and theme", hint: "Mode, accent, looks, wallpaper, font, text size, avatars", keys: ["themeMode", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat"] },
-  { id: "bubbles", label: "Bubbles and messages", hint: "Bubble style, fill, depth, animations, effects", keys: ["bubbleStyle", "bubbleFill", "bubbleBorder", "bubbleBorderColor", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle"] },
+  { id: "bubbles", label: "Bubbles and messages", hint: "Bubble style, fill, depth, animations, effects", keys: ["bubbleStyle", "bubbleFill", "bubbleBorder", "bubbleBorderColor", "outStyle", "outRadius", "outBorder", "outBorderColor", "bubbleMineDark", "bubbleTheirsDark", "bubbleMineText", "bubbleTheirsText", "bubbleMineTextDark", "bubbleTheirsTextDark", "bubbleNative", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle"] },
   { id: "reactions", label: "Reactions", hint: "Double-click reaction and swipe to reply", keys: ["doubleTapReact", "doubleTapEmoji", "swipeToReply"] },
   { id: "list", label: "Chat list", hint: "What each row shows, filters, hidden networks", keys: ["showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories"] },
   { id: "notifications", label: "Notifications", hint: "What alerts you, quiet hours, previews", keys: ["notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin"] },
@@ -364,20 +404,13 @@ export function applyTheme(s: AppSettings) {
   r.dataset.reactions = s.reactionStyle;
   const fam = FONTS.find((f) => f[0] === s.fontFamily)?.[2];
   if (fam) r.style.setProperty("--font", fam); else r.style.removeProperty("--font");
-  r.dataset.bubble = s.bubbleStyle;
   r.dataset.fill = s.bubbleFill;
   r.dataset.depth = s.bubbleDepth;
   r.dataset.anim = s.messageAnimation;
   r.dataset.density = s.density;
   r.dataset.motion = s.reduceMotion ? "reduced" : "full";
   r.dataset.wallpaper = s.wallpaper;
-  if (s.bubbleBorder !== "none") { r.dataset.bborder = s.bubbleBorder; if (HEX.test(s.bubbleBorderColor)) r.style.setProperty("--bborder-color", s.bubbleBorderColor); else r.style.removeProperty("--bborder-color"); } else { delete r.dataset.bborder; r.style.removeProperty("--bborder-color"); }
   r.style.setProperty("--wp-dim", String(Math.min(70, Math.max(0, s.wallpaperDim)) / 100));
-  // Your own bubble colours: the text on them is picked to stay readable.
-  const mineOk = HEX.test(s.bubbleMine), theirsOk = HEX.test(s.bubbleTheirs);
-  const ink = (c: string) => (lum(c) > 0.45 ? "#101418" : "#ffffff");
-  if (mineOk) { r.dataset.bmine = ""; r.style.setProperty("--mine", s.bubbleMine); r.style.setProperty("--mine-ink", ink(s.bubbleMine)); } else { delete r.dataset.bmine; r.style.removeProperty("--mine"); r.style.removeProperty("--mine-ink"); }
-  if (theirsOk) { r.dataset.btheirs = ""; r.style.setProperty("--bubble-theirs", s.bubbleTheirs); r.style.setProperty("--theirs-ink", ink(s.bubbleTheirs)); } else { delete r.dataset.btheirs; r.style.removeProperty("--bubble-theirs"); r.style.removeProperty("--theirs-ink"); }
   if (s.bubbleWidth >= 40) r.style.setProperty("--msg-max", `${Math.min(95, s.bubbleWidth)}%`); else r.style.removeProperty("--msg-max");
   // Desktop looks: colours, fonts and a family that restyles buttons, fields and bubbles. "default" removes every trace of them.
   const skin = window.pagerDesktop && s.skin !== "default" ? skinById(s.skin) : undefined;
@@ -390,10 +423,7 @@ export function applyTheme(s: AppSettings) {
     for (const [k, c] of Object.entries(v)) r.style.setProperty(k, c);
     if (skin.font) r.style.setProperty("--font", skin.font);
     r.dataset.skin = skin.id; r.dataset.family = skin.family;
-    r.dataset.bubble = "round";
   } else { delete r.dataset.skin; delete r.dataset.family; r.style.removeProperty("--radius"); r.style.removeProperty("--tight"); }
-  // Your own roundness beats the style's. The "tail" style keeps its corners the same all round so the tail sits right.
-  if (s.bubbleRadius > 0 && !skin) { r.style.setProperty("--radius", `${s.bubbleRadius}px`); r.style.setProperty("--tight", s.bubbleStyle === "tail" ? `${s.bubbleRadius}px` : `${Math.min(8, Math.round(s.bubbleRadius / 3))}px`); }
   // Desktop: small touches of motion (slides, glides, glows, pops, breathing, fades). One switch in Settings turns them all off.
   if (window.pagerDesktop) r.dataset.fx = s.fancyMotion && !s.reduceMotion ? "on" : "off"; else delete r.dataset.fx;
   r.style.setProperty("--wp", wallpaperCss(s.wallpaper, r.dataset.theme !== "light"));

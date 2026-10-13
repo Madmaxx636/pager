@@ -4,6 +4,7 @@ package app.pager.android
 
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.draw.drawWithContent
@@ -224,27 +225,31 @@ fun MessageRow(
     val scheme = MaterialTheme.colorScheme
     val bigEmoji = s.largeEmoji && msg.type == "m.text" && msg.html == null && Format.isEmojiOnly(msg.body)
     val bare = msg.sticker || bigEmoji
-    val style = s.bubbleStyle
+    val look = s.look(mine)
+    val style = look.style
     val outlined = style == "outline"
-    val plain = style == "plain"
-    val gradient = mine && s.bubbleFill == "gradient" && !outlined && !plain
-    val tinted = mine && s.bubbleFill == "tinted" && !outlined && !plain
-    val glass = s.bubbleFill == "glass" && !outlined && !plain
-    // Your own colours for the bubbles, with text that stays readable on them.
-    val mineColor = if (mine) parseHex(s.bubbleMine) else null
-    val theirsColor = if (!mine) parseHex(s.bubbleTheirs) else null
+    val dark = isDarkTheme(s)
+    val gradient = mine && s.bubbleFill == "gradient" && !outlined
+    val tinted = mine && s.bubbleFill == "tinted" && !outlined
+    val glass = s.bubbleFill == "glass" && !outlined
+    // Your own colours for the bubbles (one set for the light theme, one for the dark), or each network's own colour for incoming ones.
+    val (pickedColor, pickedText) = s.bubbleColors(mine, dark)
+    val nativeColor = if (!mine && s.bubbleNative) networkMeta(chat?.network ?: "matrix").color else null
+    val mineColor = if (mine) pickedColor else null
+    val theirsColor = if (!mine) (nativeColor ?: pickedColor) else null
     val custom = mineColor ?: theirsColor
     val fg = when {
         glass -> scheme.onSurface
-        custom != null && !outlined && !plain && !tinted -> if (custom.luminance() > 0.45f) Color(0xFF101418) else Color.White
-        outlined || plain || tinted -> scheme.onSurface
+        pickedText != null && !outlined && !tinted -> pickedText
+        custom != null && !outlined && !tinted -> if (custom.luminance() > 0.45f) Color(0xFF101418) else Color.White
+        outlined || tinted -> scheme.onSurface
         gradient -> scheme.onPrimary
         mine -> scheme.onPrimaryContainer
         else -> scheme.onSurface
     }
     val baseMine = mineColor ?: scheme.primary
     val fill: Color = when {
-        bare || outlined || plain -> Color.Transparent
+        bare || outlined -> Color.Transparent
         glass -> (if (mine) baseMine else (theirsColor ?: scheme.surface)).copy(alpha = 0.55f)
         tinted -> baseMine.copy(alpha = 0.24f).compositeOver(scheme.surface)
         gradient -> baseMine
@@ -254,9 +259,9 @@ fun MessageRow(
         else -> scheme.surface
     }
     val fillBrush = if (gradient && !bare) Brush.linearGradient(listOf(baseMine, lerp(baseMine, Color(0xFF7C3AED), 0.45f))) else null
-    val tailed = style == "tail" && last && !bare && msg.type != "m.image"
-    val shape = bubbleShape(s, mine, first, last, tailed)
-    val elevation = if (bare || outlined || plain || msg.type == "m.image") 0.dp else when (s.bubbleDepth) { "raised" -> 4.dp; "soft" -> 1.dp; else -> 0.dp }
+    val tailed = (style == "tail" || style == "curved") && last && !bare && msg.type != "m.image"
+    val shape = bubbleShape(look, mine, first, last, tailed)
+    val elevation = if (bare || outlined || msg.type == "m.image") 0.dp else when (s.bubbleDepth) { "raised" -> 4.dp; "soft" -> 1.dp; else -> 0.dp }
     val tailColor = if (gradient) lerp(baseMine, Color(0xFF7C3AED), 0.45f) else fill
 
     // Entrance animation, only for messages that just arrived.
@@ -289,24 +294,14 @@ fun MessageRow(
                             "slide" -> translationY = (1f - t) * 14.dp.toPx()
                         }
                     }
-                    .drawBehind {
-                        if (tailed) {
-                            val d = density; val w = size.width; val h = size.height
-                            val path = androidx.compose.ui.graphics.Path().apply {
-                                if (mine) { moveTo(w - 6 * d, h - 16 * d); lineTo(w + 7 * d, h); lineTo(w - 10 * d, h); close() }
-                                else { moveTo(6 * d, h - 16 * d); lineTo(-7 * d, h); lineTo(10 * d, h); close() }
-                            }
-                            drawPath(path, tailColor)
-                        }
-                    }
+                    .bubbleTail(style, mine, tailColor, tailed)
                     .let { if (elevation > 0.dp) it.shadow(elevation, shape, clip = false) else it }
                     .clip(shape)
                     .let { if (fillBrush != null) it.background(fillBrush) else it.background(fill) }
-                    .bubbleBorder(s, shape, scheme, enabled = !bare && !outlined && !plain && msg.type != "m.image")
+                    .bubbleBorder(look, shape, scheme, enabled = !bare && !outlined && msg.type != "m.image")
                     .let {
                         when {
                             outlined -> it.border(if (s.eink) inkDp(2f) else 1.5.dp, if (mine) scheme.primary else scheme.outlineVariant, shape)
-                            plain -> it.drawBehind { drawRect(if (mine) scheme.primary else scheme.outlineVariant, Offset.Zero, Size(3.dp.toPx(), size.height)) }
                             else -> it
                         }
                     }
@@ -588,34 +583,35 @@ private fun PollCard(msg: Msg, chat: ChatState?, me: String, fg: Color, onVote: 
 }
 
 
-/** The corners of a bubble from the settings: the style, your own roundness, and a small corner next to the sender for tails, notches and clouds. */
-fun bubbleShape(s: AppSettings, mine: Boolean, first: Boolean, last: Boolean, tailed: Boolean): RoundedCornerShape {
-    val style = s.bubbleStyle
-    val r = if (s.bubbleRadius > 0) s.bubbleRadius.dp else when (style) { "square" -> 6.dp; "soft" -> 26.dp; "pill" -> 24.dp; "cloud" -> 22.dp; "notch" -> 16.dp; "sharp" -> 2.dp; else -> 18.dp }
-    val tight = if (s.bubbleRadius > 0) (if (style == "tail" || style == "pill" || style == "cloud" || style == "notch") r else minOf(8, s.bubbleRadius / 3).dp)
-        else when (style) { "square" -> 3.dp; "sharp" -> 2.dp; "tail", "pill", "cloud" -> r; "notch" -> r; else -> 5.dp }
-    val corner = when {
-        tailed -> 4.dp
-        style == "notch" -> 2.dp
-        style == "cloud" && last -> 6.dp
-        last -> r
-        else -> tight
-    }
-    return if (mine) RoundedCornerShape(r, if (first) r else tight, corner, r) else RoundedCornerShape(if (first) r else tight, r, r, corner)
-}
+/** The line around a bubble, in your colour or the theme's. */
+fun Modifier.bubbleBorder(look: SideLook, shape: Shape, scheme: ColorScheme, enabled: Boolean = true): Modifier =
+    if (!enabled || look.border == "none") this else borderLine(look.border, parseHex(look.borderColor) ?: scheme.outline, shape)
 
-/** The line around a bubble: solid, dotted or dashed, in your colour or the theme's. */
-fun Modifier.bubbleBorder(s: AppSettings, shape: Shape, scheme: ColorScheme, enabled: Boolean = true): Modifier =
-    if (!enabled || s.bubbleBorder == "none") this else borderLine(s.bubbleBorder, parseHex(s.bubbleBorderColor) ?: scheme.outline, shape)
-
-/** Draws [style] (solid, dotted or dashed) around [shape]. */
+/** Draws [style] around [shape]: solid, dotted, dashed, dash-dot, thick, or only along the bottom edge. */
 fun Modifier.borderLine(style: String, color: Color, shape: Shape): Modifier = this.drawWithContent {
     drawContent()
-    val w = 1.5.dp.toPx()
+    val w = (if (style == "thick" || style == "edge") 3.dp else 1.5.dp).toPx()
     val effect = when (style) {
         "dotted" -> androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(w, w * 2.2f), 0f)
         "dashed" -> androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(w * 5f, w * 3f), 0f)
+        "dashdot" -> androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(w * 5f, w * 2.5f, w, w * 2.5f), 0f)
         else -> null
     }
-    drawOutline(shape.createOutline(size, layoutDirection, this), color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = w, cap = if (style == "dotted") androidx.compose.ui.graphics.StrokeCap.Round else androidx.compose.ui.graphics.StrokeCap.Butt, pathEffect = effect))
+    val outline = shape.createOutline(size, layoutDirection, this)
+    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = w, cap = if (style == "dotted") androidx.compose.ui.graphics.StrokeCap.Round else androidx.compose.ui.graphics.StrokeCap.Butt, pathEffect = effect)
+    if (style == "edge") clipRect(0f, size.height * 0.55f, size.width, size.height) { drawOutline(outline, color, style = stroke) }
+    else drawOutline(outline, color, style = stroke)
+}
+
+/** The little tail that sticks out of the bottom corner next to the sender: curved or pointed. */
+fun Modifier.bubbleTail(style: String, mine: Boolean, color: Color, tailed: Boolean): Modifier = if (!tailed) this else this.drawBehind {
+    val d = density; val w = size.width; val h = size.height
+    val path = androidx.compose.ui.graphics.Path().apply {
+        if (style == "curved") {
+            if (mine) { moveTo(w - 8 * d, h - 14 * d); cubicTo(w - 2 * d, h - 4 * d, w + 2 * d, h - 1 * d, w + 8 * d, h); lineTo(w - 12 * d, h); close() }
+            else { moveTo(8 * d, h - 14 * d); cubicTo(2 * d, h - 4 * d, -2 * d, h - 1 * d, -8 * d, h); lineTo(12 * d, h); close() }
+        } else if (mine) { moveTo(w - 6 * d, h - 16 * d); lineTo(w + 7 * d, h); lineTo(w - 10 * d, h); close() }
+        else { moveTo(6 * d, h - 16 * d); lineTo(-7 * d, h); lineTo(10 * d, h); close() }
+    }
+    drawPath(path, color)
 }

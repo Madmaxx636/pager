@@ -30,10 +30,24 @@ data class AppSettings(
     val accent: String = "teal",               // teal | blue | purple | pink | orange | green | red | dynamic | custom
     val accentCustom: String = "#0D9488",      // the colour used when accent is "custom"
     val fontScale: Float = 1f,
-    val bubbleStyle: String = "round",         // round | soft | pill | cloud | notch | tail | square | sharp | outline | plain
+    val bubbleStyle: String = "round",         // round (no tail) | curved | tail (pointed) | outline
     val bubbleFill: String = "solid",          // solid | gradient | tinted | glass
     val bubbleBorder: String = "none",         // none | solid | dotted | dashed: the line around bubbles
     val bubbleBorderColor: String = "",        // its colour; empty follows the theme
+    /** Outgoing side, when it differs from the incoming side above ("" and -1 mean the same as incoming). Beeper keeps a full set for each side. */
+    val outStyle: String = "",
+    val outRadius: Int = -1,
+    val outBorder: String = "",
+    val outBorderColor: String = "",
+    /** Bubble colours for the dark theme and the text on them, and for the light theme's text; the plain bubbleMine/bubbleTheirs are the light-theme colours. */
+    val bubbleMineDark: String = "",
+    val bubbleTheirsDark: String = "",
+    val bubbleMineText: String = "",
+    val bubbleTheirsText: String = "",
+    val bubbleMineTextDark: String = "",
+    val bubbleTheirsTextDark: String = "",
+    /** Incoming bubbles take each network's own colour. */
+    val bubbleNative: Boolean = false,
     val bubbleMine: String = "",               // colour of your own bubbles; empty follows the theme
     val bubbleTheirs: String = "",             // colour of their bubbles; empty follows the theme
     val bubbleRadius: Int = 0,                 // corner roundness in dp; 0 = what the style says
@@ -173,7 +187,7 @@ class SettingsStore(context: Context) {
 
     private fun load(): AppSettings = runCatching {
         // The alert delay and the per-network settings were taken out of Settings, so whatever was saved for them is switched off.
-        json.decodeFromString(AppSettings.serializer(), prefs.getString("json", null) ?: return@runCatching AppSettings()).copy(notifDelaySec = 0, notifNetworkMode = emptyMap(), notifMutedNetworks = emptySet())
+        json.decodeFromString(AppSettings.serializer(), prefs.getString("json", null) ?: return@runCatching AppSettings()).copy(notifDelaySec = 0, notifNetworkMode = emptyMap(), notifMutedNetworks = emptySet()).let { it.copy(bubbleStyle = migrateBubbleStyle(it.bubbleStyle), outStyle = if (it.outStyle.isEmpty()) "" else migrateBubbleStyle(it.outStyle)) }
     }.getOrDefault(AppSettings())
 
     // ---- Syncing settings between your devices: only when you press the button -----------------------------------
@@ -187,7 +201,7 @@ class SettingsStore(context: Context) {
         const val TYPE = "app.pager.sync.mobile"
         val GROUPS = listOf(
             Group("look", "Colours and theme", "Mode, accent, looks, wallpaper, font, text size, avatars", listOf("themeMode", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat")),
-            Group("bubbles", "Bubbles and messages", "Bubble style, fill, depth, animations, effects", listOf("bubbleStyle", "bubbleFill", "bubbleBorder", "bubbleBorderColor", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle")),
+            Group("bubbles", "Bubbles and messages", "Bubble style, fill, depth, animations, effects", listOf("bubbleStyle", "bubbleFill", "bubbleBorder", "bubbleBorderColor", "outStyle", "outRadius", "outBorder", "outBorderColor", "bubbleMineDark", "bubbleTheirsDark", "bubbleMineText", "bubbleTheirsText", "bubbleMineTextDark", "bubbleTheirsTextDark", "bubbleNative", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle")),
             Group("reactions", "Reactions", "Double-tap and triple-tap reactions, swipe to reply", listOf("doubleTapReact", "doubleTapEmoji", "tripleTapReact", "tripleTapEmoji", "swipeToReply")),
             Group("list", "Chat list", "What each row shows, filters, swipes, hidden networks", listOf("showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories", "swipeLeft", "swipeRight")),
             Group("notifications", "Notifications", "What alerts you, quiet hours, previews", listOf("notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin", "notifVibrate", "notifLockScreen", "notifAlertOnce", "notifActions")),
@@ -246,3 +260,20 @@ fun inQuietHours(s: AppSettings, minuteOfDay: Int): Boolean {
     return if (s.quietStartMin < s.quietEndMin) minuteOfDay in s.quietStartMin until s.quietEndMin
     else minuteOfDay >= s.quietStartMin || minuteOfDay < s.quietEndMin
 }
+
+/** The look of one side of a conversation: its shape, roundness and the line around it. */
+data class SideLook(val style: String, val radius: Int, val border: String, val borderColor: String)
+
+/** Incoming bubbles use the plain settings; outgoing ones use their own where set, and otherwise follow the incoming side. */
+fun AppSettings.look(mine: Boolean): SideLook =
+    if (!mine) SideLook(bubbleStyle, bubbleRadius, bubbleBorder, bubbleBorderColor)
+    else SideLook(outStyle.ifEmpty { bubbleStyle }, if (outRadius < 0) bubbleRadius else outRadius, outBorder.ifEmpty { bubbleBorder }, outBorderColor.ifEmpty { bubbleBorderColor })
+
+/** The colour you chose for a side's bubbles and for the text on them, for the light or dark theme. Null means follow the theme. */
+fun AppSettings.bubbleColors(mine: Boolean, dark: Boolean): Pair<androidx.compose.ui.graphics.Color?, androidx.compose.ui.graphics.Color?> {
+    val (c, cd, t, td) = if (mine) listOf(bubbleMine, bubbleMineDark, bubbleMineText, bubbleMineTextDark) else listOf(bubbleTheirs, bubbleTheirsDark, bubbleTheirsText, bubbleTheirsTextDark)
+    return (if (dark) parseHex(cd) ?: parseHex(c) else parseHex(c)) to (if (dark) parseHex(td) ?: parseHex(t) else parseHex(t))
+}
+
+/** The bubble shapes are now Beeper's three (rounded, curved tail, pointed tail) and Outlined. Older shapes become the nearest one. */
+fun migrateBubbleStyle(style: String): String = when (style) { "round", "curved", "tail", "outline" -> style; "cloud" -> "curved"; else -> "round" }
