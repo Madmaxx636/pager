@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const Module = require("node:module");
 const orig = Module._load;
 Module._load = (req, ...a) => (req === "electron" ? { app: {}, dialog: {}, shell: {} } : orig(req, ...a));
-const { newer, verify, terminalPlan } = require("./updater.js");
+const { newer, verify, terminalPlan, asUserService } = require("./updater.js");
 
 test("compares versions by number, not text", () => {
   assert.equal(newer("0.4.10", "0.4.9"), true);
@@ -35,4 +35,14 @@ test("the terminal fallback runs the install in the first terminal that exists, 
   assert.match(plan.args.at(-1), /sudo apt-get install -y '\/home\/a b\/it'\\''s\.deb'/);
   assert.match(plan.args.at(-1), /touch '\/tmp\/x\/installed'/);
   assert.equal(terminalPlan("/a.deb", "/d", () => false), undefined);
+});
+
+test("the terminal install runs as a service of the user's systemd, so sudo is allowed in it", () => {
+  const plan = terminalPlan("/a.deb", "/d", (b) => b === "konsole");
+  const run = asUserService(plan, { DISPLAY: ":0", WAYLAND_DISPLAY: "wayland-0", XDG_RUNTIME_DIR: "/run/user/1000", HOME: "/h" }, (b) => b === "systemd-run");
+  assert.equal(run.cmd, "systemd-run");
+  assert.deepEqual(run.args.slice(0, 4), ["--user", "--collect", "--quiet", "--wait"]);
+  assert.ok(run.args.includes("--setenv=DISPLAY") && run.args.includes("--setenv=WAYLAND_DISPLAY") && !run.args.includes("--setenv=HOME"));
+  assert.equal(run.args[run.args.indexOf("konsole") - 0], "konsole");
+  assert.deepEqual(asUserService(plan, {}, () => false), plan); // no systemd-run: the plain terminal command
 });

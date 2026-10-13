@@ -95,12 +95,23 @@ function viaPkexec(file) {
   });
 }
 
+/** True when this program may not gain privileges (the "no new privileges" flag): then pkexec and sudo started from here can never work, and neither can anything started by us. */
+const noNewPrivs = () => { try { return /^NoNewPrivs:\s*1/m.test(fs.readFileSync("/proc/self/status", "utf8")); } catch { return false; } };
+
+/** Runs [plan] as a service of the user's systemd instead of as a child of Pager, so it does not inherit the "no new privileges" flag and sudo works in it. */
+function asUserService(plan, env, exists) {
+  if (!exists("systemd-run")) return plan;
+  const keep = ["DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE", "LANG", "PATH"].filter((k) => env[k]);
+  return { cmd: "systemd-run", args: ["--user", "--collect", "--quiet", "--wait", ...keep.map((k) => `--setenv=${k}`), plan.cmd, ...plan.args] };
+}
+
 /** Same install in a terminal window: for when the system password prompt does not appear. */
 function viaTerminal(file) {
   return new Promise((resolve, reject) => {
     const done = path.join(path.dirname(file), "installed");
     fs.rmSync(done, { force: true });
-    const plan = terminalPlan(file, done, onPath);
+    const found = terminalPlan(file, done, onPath);
+    const plan = found && asUserService(found, process.env, onPath);
     if (!plan) return reject(new Error(`No terminal window could be opened. Install it yourself: sudo apt install ${file}`));
     const p = spawn(plan.cmd, plan.args, { stdio: "ignore" });
     p.on("error", () => reject(new Error(`Couldn't open a terminal. Install it yourself: sudo apt install ${file}`)));
@@ -109,8 +120,11 @@ function viaTerminal(file) {
 }
 
 async function install(file, win) {
-  try { await viaPkexec(file); return; }
-  catch (e) {
+  try {
+    // With "no new privileges" set, the password prompt can never work from here: go straight to the terminal.
+    if (noNewPrivs()) throw Object.assign(new Error("This computer starts Pager in a way that stops it from asking for administrator rights"), { asked: false });
+    await viaPkexec(file); return;
+  } catch (e) {
     if (e.asked) throw e; // you said no: nothing more to try
     console.warn("password prompt failed:", e.message);
     const r = await dialog.showMessageBox(win ?? undefined, { type: "question", message: "Your computer didn't show a password prompt", detail: `${e.message}\n\nPager can open a terminal window instead, where you type your password to finish the update.`, buttons: ["Install in a terminal", "Cancel"], defaultId: 0, cancelId: 1 });
@@ -119,4 +133,4 @@ async function install(file, win) {
   await viaTerminal(file);
 }
 
-module.exports = { checkForUpdates, newer, verify, terminalPlan };
+module.exports = { checkForUpdates, newer, verify, terminalPlan, asUserService };
