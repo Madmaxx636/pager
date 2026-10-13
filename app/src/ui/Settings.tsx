@@ -669,7 +669,6 @@ function MemoryRow() {
   return <Row title={m ? `Memory in use: ${m.total} MB` : "Memory in use"} hint={m?.parts.filter((p) => p.mb > 0).map((p) => `${p.type} ${p.mb}`).join(" · ")} />;
 }
 
-const BUBBLE_STYLES: [AppSettings["bubbleStyle"], string][] = [["round", "Rounded"], ["soft", "Extra round"], ["pill", "Pill"], ["cloud", "Cloud"], ["notch", "Notch"], ["tail", "Tail"], ["square", "Square"], ["sharp", "Sharp"], ["outline", "Outline"], ["plain", "No bubbles"]];
 
 /** A colour for a bubble: the theme's own, one of the accents, or any colour you make. */
 function BubbleColour({ title, hint, value, onChange }: { title: string; hint: string; value: string; onChange: (c: string) => void }) {
@@ -686,25 +685,48 @@ function BubbleColour({ title, hint, value, onChange }: { title: string; hint: s
   );
 }
 
+/** A small drawing of each bubble shape, for the picker. */
+const SHAPE_TILES: [AppSettings["bubbleStyle"], string, string][] = [
+  ["round", "Rounded", "12px"], ["cloud", "Curved tail", "14px 14px 14px 3px"], ["tail", "Pointed tail", "12px 12px 12px 0"],
+  ["pill", "Pill", "999px"], ["soft", "Extra round", "16px"], ["notch", "Notch", "12px 12px 12px 2px"], ["square", "Square", "4px"], ["sharp", "Sharp", "1px"],
+  ["outline", "Outline", "12px"], ["plain", "No bubbles", "0"],
+];
+
+/** Message bubbles, laid out like Beeper's: a preview, the shape, the corner radius, the border, then your bubbles and theirs. */
 function BubbleGroup() {
   const s = useRawSettings();
   const sample = (mine: boolean, text: string, first = true, last = true) => <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "") + (last ? " last" : "")}><div className="bubble">{text}</div></div>;
+  const BORDERS: [AppSettings["bubbleBorder"], string][] = [["none", "None"], ["solid", "Solid"], ["dotted", "Dotted"], ["dashed", "Dashed"]];
   return (
-    <Group title="Bubbles" footer="Based on the bubble options in other messengers like Beeper: shape, fill, your colour and theirs, roundness and width.">
-      <div className="bubble-preview" aria-hidden>{sample(false, "Are we still on for tonight?", true, true)}{sample(true, "Yes! See you at 7.", true, false)}{sample(true, "Bringing the good snacks 🍿", false, true)}</div>
-      <Select title="Shape" value={s.bubbleStyle} options={BUBBLE_STYLES} onChange={(v) => updateSettings({ bubbleStyle: v })} />
-      <Select title="Fill" hint="How your own messages are coloured" value={s.bubbleFill} options={[["solid", "Solid"], ["gradient", "Gradient"], ["tinted", "Soft tint"], ["glass", "Glass"]]} onChange={(v) => updateSettings({ bubbleFill: v })} />
-      <Select title="Depth" value={s.bubbleDepth} options={[["flat", "Flat"], ["soft", "Soft shadow"], ["raised", "Raised"]]} onChange={(v) => updateSettings({ bubbleDepth: v })} />
-      <BubbleColour title="Your bubbles" hint="The colour of messages you send" value={s.bubbleMine} onChange={(c) => updateSettings({ bubbleMine: c })} />
-      <BubbleColour title="Their bubbles" hint="The colour of messages you receive" value={s.bubbleTheirs} onChange={(c) => updateSettings({ bubbleTheirs: c })} />
-      <Row title="Roundness" hint={s.bubbleRadius ? `${s.bubbleRadius} px` : "As the shape says"}>
-        <input type="range" min="0" max="32" step="2" value={s.bubbleRadius} onChange={(e) => updateSettings({ bubbleRadius: Number(e.target.value) })} />
+    <Group title="Message bubbles">
+      <div className="bubble-preview" aria-hidden>{sample(false, "Hey! How do you like the new theme?", true, true)}{sample(true, "It looks amazing! 🎨", true, true)}</div>
+      <Row title="Bubble shape" />
+      <div className="shape-tiles" role="radiogroup" aria-label="Bubble shape">
+        {SHAPE_TILES.map(([id, label, radius]) => <button key={id} type="button" role="radio" aria-checked={s.bubbleStyle === id} className={"shape-tile" + (s.bubbleStyle === id ? " on" : "")} onClick={() => updateSettings({ bubbleStyle: id })} title={label}><i style={{ borderRadius: radius, ...(id === "outline" ? { background: "transparent", border: "2px solid currentColor" } : {}) }} /><small>{label}</small></button>)}
+      </div>
+      <Row title={`Corner radius: ${s.bubbleRadius || "as the shape says"}`}>
+        <input type="range" min="0" max="32" step="1" value={s.bubbleRadius} onChange={(e) => updateSettings({ bubbleRadius: Number(e.target.value) })} />
       </Row>
+      <Row title="Border style" />
+      <div className="shape-tiles" role="radiogroup" aria-label="Border style">
+        {BORDERS.map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={s.bubbleBorder === id} className={"shape-tile" + (s.bubbleBorder === id ? " on" : "")} onClick={() => updateSettings({ bubbleBorder: id })} title={label}><i style={{ borderRadius: "12px", background: "transparent", border: id === "none" ? "none" : `2px ${id} currentColor` }}>{id === "none" ? "✕" : ""}</i><small>{label}</small></button>)}
+      </div>
+      {s.bubbleBorder !== "none" && <BubbleColour title="Border color" hint="The line around bubbles" value={s.bubbleBorderColor} onChange={(c) => updateSettings({ bubbleBorderColor: c })} />}
+      <details className="bubble-section">
+        <summary>Incoming</summary>
+        <BubbleColour title="Background" hint="The colour of messages you receive" value={s.bubbleTheirs} onChange={(c) => updateSettings({ bubbleTheirs: c })} />
+      </details>
+      <details className="bubble-section">
+        <summary>Outgoing</summary>
+        <BubbleColour title="Background" hint="The colour of messages you send" value={s.bubbleMine} onChange={(c) => updateSettings({ bubbleMine: c })} />
+        <Select title="Fill" hint="How your own messages are coloured" value={s.bubbleFill} options={[["solid", "Solid"], ["gradient", "Gradient"], ["tinted", "Soft tint"], ["glass", "Glass"]]} onChange={(v) => updateSettings({ bubbleFill: v })} />
+      </details>
+      <Select title="Depth" value={s.bubbleDepth} options={[["flat", "Flat"], ["soft", "Soft shadow"], ["raised", "Raised"]]} onChange={(v) => updateSettings({ bubbleDepth: v })} />
       <Row title="Widest bubble" hint={s.bubbleWidth ? `${s.bubbleWidth}% of the chat` : "Default"}>
         <input type="range" min="0" max="95" step="5" value={s.bubbleWidth} onChange={(e) => { const v = Number(e.target.value); updateSettings({ bubbleWidth: v > 0 && v < 40 ? 40 : v }); }} />
       </Row>
       <Select title="Message animation" hint="When a new message appears" value={s.messageAnimation} options={[["none", "None"], ["pop", "Pop"], ["slide", "Slide"], ["fade", "Fade"]]} onChange={(v) => updateSettings({ messageAnimation: v })} />
-      <Row title="Reset bubbles" hint="Back to the standard look"><button className="link" onClick={() => updateSettings({ bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0 })}>Reset</button></Row>
+      <Row title="Reset message bubbles" onClick={() => updateSettings({ bubbleStyle: "round", bubbleFill: "solid", bubbleDepth: "soft", bubbleBorder: "none", bubbleBorderColor: "", bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0 })}><span className="danger">Reset</span></Row>
     </Group>
   );
 }

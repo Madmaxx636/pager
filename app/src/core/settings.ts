@@ -38,6 +38,9 @@ export interface AppSettings {
   bubbleFill: "solid" | "gradient" | "tinted" | "glass";
   /** Colour of your own bubbles and of theirs; empty follows the theme and accent. */
   bubbleMine: string;
+  /** The line around bubbles: none, solid, dotted or dashed, and its colour (empty follows the theme). */
+  bubbleBorder: "none" | "solid" | "dotted" | "dashed";
+  bubbleBorderColor: string;
   bubbleTheirs: string;
   /** Corner roundness in px (0 = what the bubble style says) and the widest a bubble may get, as a percent of the chat (0 = default). */
   bubbleRadius: number;
@@ -154,7 +157,7 @@ export interface AppSettings {
 export const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 export const DEFAULTS: AppSettings = {
-  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, skin: "default", skinAccent: "", fancyMotion: true, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0, wallpaperDim: 0, bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
+  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, skin: "default", skinAccent: "", fancyMotion: true, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleBorder: "none", bubbleBorderColor: "", bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0, wallpaperDim: 0, bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
@@ -201,7 +204,7 @@ function load(): AppSettings {
 export interface SyncGroup { id: string; label: string; hint: string; keys: (keyof AppSettings)[] }
 export const SYNC_GROUPS: SyncGroup[] = [
   { id: "look", label: "Colours and theme", hint: "Mode, accent, looks, wallpaper, font, text size, avatars", keys: ["themeMode", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat"] },
-  { id: "bubbles", label: "Bubbles and messages", hint: "Bubble style, fill, depth, animations, effects", keys: ["bubbleStyle", "bubbleFill", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle"] },
+  { id: "bubbles", label: "Bubbles and messages", hint: "Bubble style, fill, depth, animations, effects", keys: ["bubbleStyle", "bubbleFill", "bubbleBorder", "bubbleBorderColor", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle"] },
   { id: "reactions", label: "Reactions", hint: "Double-click reaction and swipe to reply", keys: ["doubleTapReact", "doubleTapEmoji", "swipeToReply"] },
   { id: "list", label: "Chat list", hint: "What each row shows, filters, hidden networks", keys: ["showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories"] },
   { id: "notifications", label: "Notifications", hint: "What alerts you, quiet hours, previews", keys: ["notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin"] },
@@ -368,6 +371,7 @@ export function applyTheme(s: AppSettings) {
   r.dataset.density = s.density;
   r.dataset.motion = s.reduceMotion ? "reduced" : "full";
   r.dataset.wallpaper = s.wallpaper;
+  if (s.bubbleBorder !== "none") { r.dataset.bborder = s.bubbleBorder; if (HEX.test(s.bubbleBorderColor)) r.style.setProperty("--bborder-color", s.bubbleBorderColor); else r.style.removeProperty("--bborder-color"); } else { delete r.dataset.bborder; r.style.removeProperty("--bborder-color"); }
   r.style.setProperty("--wp-dim", String(Math.min(70, Math.max(0, s.wallpaperDim)) / 100));
   // Your own bubble colours: the text on them is picked to stay readable.
   const mineOk = HEX.test(s.bubbleMine), theirsOk = HEX.test(s.bubbleTheirs);
