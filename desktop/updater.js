@@ -60,18 +60,63 @@ async function checkForUpdates({ server, win, quiet }) {
     const got = await get(base + d.file, { toFile: file });
     if (!got || got.sha256 !== String(d.sha256).toLowerCase()) { fs.rmSync(file, { force: true }); throw new Error("the download doesn't match its checksum, so it was not installed"); }
     if (win32) { spawn(file, ["/S", "--force-run"], { detached: true, stdio: "ignore" }).unref(); app.exit(0); return; } // the installer replaces the app and starts it again
-    await install(file);
+    await install(file, win);
     app.relaunch(); app.exit(0);
   } catch (e) { if (!quiet) dialog.showErrorBox("Update failed", e.message || String(e)); else console.warn("update check failed:", e.message); }
   finally { busy = false; }
 }
 
-function install(file) {
+/** Terminal windows Pager can open to run the install itself, with what each needs so the command runs and the window waits. */
+const TERMINALS = [["x-terminal-emulator", ["-e"]], ["konsole", ["--nofork", "-e"]], ["gnome-terminal", ["--wait", "--"]], ["xfce4-terminal", ["--disable-server", "-x"]], ["kitty", []], ["alacritty", ["-e"]], ["xterm", ["-e"]]];
+const shq = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
+
+/** The command that installs [file] in a terminal window (asking for your password there). [done] is created when it worked. Undefined when no terminal is installed. */
+function terminalPlan(file, done, exists) {
+  const t = TERMINALS.find(([bin]) => exists(bin));
+  if (!t) return undefined;
+  const script = `echo 'Installing Pager…'; if sudo apt-get install -y ${shq(file)}; then touch ${shq(done)}; echo; echo 'Done. Pager will reopen.'; sleep 1; else echo; read -r -p 'Something went wrong. Press Enter to close.' _; fi`;
+  return { cmd: t[0], args: [...t[1], "bash", "-c", script] };
+}
+
+const onPath = (bin) => (process.env.PATH || "").split(":").some((d) => { try { fs.accessSync(path.join(d, bin), fs.constants.X_OK); return true; } catch { return false; } });
+
+/** Asks for your password through the system (pkexec). Rejects with .asked = true when you saw the prompt and said no, false when the prompt could not be shown. */
+function viaPkexec(file) {
   return new Promise((resolve, reject) => {
-    const p = spawn("pkexec", ["apt-get", "install", "-y", file], { stdio: "ignore" });
-    p.on("error", () => reject(new Error(`pkexec isn't available. Install it yourself: sudo apt install ${file}`)));
-    p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(code === 126 || code === 127 ? "the password prompt was cancelled" : `the installer stopped (code ${code})`))));
+    let err = "";
+    const p = spawn("pkexec", ["apt-get", "install", "-y", file], { stdio: ["ignore", "ignore", "pipe"] });
+    p.stderr.on("data", (d) => { err += d; });
+    p.on("error", () => reject(Object.assign(new Error("pkexec isn't available"), { asked: false })));
+    p.on("exit", (code) => {
+      if (code === 0) return resolve();
+      // 126: you dismissed the prompt or it was refused. 127: no prompt could be shown (no agent for this session, or pkexec could not start).
+      reject(Object.assign(new Error(code === 126 ? "the password prompt was cancelled" : (err.trim().split("\n").pop() || `the installer stopped (code ${code})`)), { asked: code === 126 }));
+    });
   });
 }
 
-module.exports = { checkForUpdates, newer, verify };
+/** Same install in a terminal window: for when the system password prompt does not appear. */
+function viaTerminal(file) {
+  return new Promise((resolve, reject) => {
+    const done = path.join(path.dirname(file), "installed");
+    fs.rmSync(done, { force: true });
+    const plan = terminalPlan(file, done, onPath);
+    if (!plan) return reject(new Error(`No terminal window could be opened. Install it yourself: sudo apt install ${file}`));
+    const p = spawn(plan.cmd, plan.args, { stdio: "ignore" });
+    p.on("error", () => reject(new Error(`Couldn't open a terminal. Install it yourself: sudo apt install ${file}`)));
+    p.on("exit", () => (fs.existsSync(done) ? resolve() : reject(new Error("the install in the terminal didn't finish"))));
+  });
+}
+
+async function install(file, win) {
+  try { await viaPkexec(file); return; }
+  catch (e) {
+    if (e.asked) throw e; // you said no: nothing more to try
+    console.warn("password prompt failed:", e.message);
+    const r = await dialog.showMessageBox(win ?? undefined, { type: "question", message: "Your computer didn't show a password prompt", detail: `${e.message}\n\nPager can open a terminal window instead, where you type your password to finish the update.`, buttons: ["Install in a terminal", "Cancel"], defaultId: 0, cancelId: 1 });
+    if (r.response !== 0) throw new Error("the update was cancelled");
+  }
+  await viaTerminal(file);
+}
+
+module.exports = { checkForUpdates, newer, verify, terminalPlan };
