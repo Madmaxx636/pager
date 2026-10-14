@@ -216,7 +216,7 @@ fun Modifier.swipeToReply(enabled: Boolean, onReply: () -> Unit, onThreshold: ()
 @Composable
 fun MessageRow(
     chat: ChatState?, msg: Msg, me: String, group: Boolean, first: Boolean, last: Boolean, dark: Boolean, reply: Msg?, read: Boolean, delivered: Boolean, starred: Boolean,
-    onLong: () -> Unit, onReact: (String) -> Unit, onWho: (String) -> Unit, onDouble: () -> Unit, onTriple: () -> Unit, onOpen: (Msg) -> Unit, onReply: () -> Unit, onVote: (List<String>) -> Unit, onEndPoll: () -> Unit,
+    onLong: () -> Unit, onReact: (String) -> Unit, onWho: (String) -> Unit, onDouble: () -> Unit, onTriple: () -> Unit, onOpen: (Msg) -> Unit, onReply: () -> Unit, onVote: (List<String>) -> Unit, onEndPoll: () -> Unit, onJump: (String) -> Unit = {},
 ) {
     val store = LocalStore.current
     val s = LocalSettings.current
@@ -329,7 +329,7 @@ fun MessageRow(
                 burst?.let { e -> Text(e, fontSize = 42.sp, modifier = Modifier.align(Alignment.Center).zIndex(2f).graphicsLayer { val t = 1f; scaleX = 1.2f * t; scaleY = 1.2f * t }) }
                 Column(Modifier.padding(horizontal = if (bare || msg.type == "m.image") (if (bare) 0.dp else 4.dp) else 12.dp, vertical = if (bare) 0.dp else if (msg.type == "m.image") 4.dp else 8.dp)) {
                     if (msg.replyTo != null) {
-                        Row(Modifier.padding(bottom = 6.dp, start = if (msg.type == "m.image") 8.dp else 0.dp, top = if (msg.type == "m.image") 4.dp else 0.dp).height(IntrinsicSize.Min)) {
+                        Row(Modifier.padding(bottom = 6.dp, start = if (msg.type == "m.image") 8.dp else 0.dp, top = if (msg.type == "m.image") 4.dp else 0.dp).height(IntrinsicSize.Min).clip(RoundedCornerShape(6.dp)).clickable { msg.replyTo?.let(onJump) }) {
                             Box(Modifier.width(3.dp).fillMaxHeight().clip(CircleShape).background(fg.dim(0.45f)))
                             Column(Modifier.padding(start = 8.dp)) {
                                 Text(reply?.let { chat?.nameOf(it.sender) } ?: "Earlier message", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = fg.dim(0.85f))

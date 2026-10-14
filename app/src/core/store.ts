@@ -491,7 +491,9 @@ async function signOutLocal() {
 // ---- Notifications ----------------------------------------------------------------------
 
 function notify(m: Incoming, d: Decision) {
-  if (document.hasFocus() && document.visibilityState === "visible") return;
+  const inApp = document.hasFocus() && document.visibilityState === "visible";
+  // The alert sound plays for a page you are not looking at even while you are in Pager; the pop-up only appears when you are not.
+  if (inApp) { if (!d.silent) playSound(m.reaction ? getSettings().reactionSound : d.sound, getSettings().notifSoundVolume); return; }
   const body = d.preview === "full" ? (m.isGroup ? `${m.sender}: ${m.text}` : m.text) : d.preview === "sender" ? m.sender : "New message";
   const desktop = window.pagerDesktop;
   // We play the sound ourselves (so it can differ per app and per contact) and keep the system notification quiet.

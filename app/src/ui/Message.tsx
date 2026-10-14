@@ -51,9 +51,9 @@ function useSwipeToReply(enabled: boolean, onReply: () => void) {
   };
 }
 
-export function MessageRow({ chat, msg, first, last, group, mine, read, delivered, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply, onVote, onEndPoll }: {
+export function MessageRow({ chat, msg, first, last, group, mine, read, delivered, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply, onVote, onEndPoll, onJump }: {
   chat: ChatState; msg: Msg; first: boolean; last: boolean; group: boolean; mine: boolean; read: boolean; delivered?: boolean; reply?: Msg; st: AppSettings; starred: boolean;
-  onMenu: (x: number, y: number) => void; onOpen: () => void; onWho: (key: string) => void; onReact: (key: string) => void; onReply: () => void; onVote: (ids: string[]) => void; onEndPoll: () => void;
+  onMenu: (x: number, y: number) => void; onOpen: () => void; onWho: (key: string) => void; onReact: (key: string) => void; onReply: () => void; onVote: (ids: string[]) => void; onEndPoll: () => void; onJump?: (id: string) => void;
 }) {
   const reactions = chat.reactions[msg.id] ?? {};
   const author = nameOf(chat, msg.sender);
@@ -84,7 +84,7 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
           onContextMenu={(e) => { e.preventDefault(); onMenu(e.clientX, e.clientY); }}
           onDoubleClick={() => st.doubleTapReact && (st.doubleTapEmoji || st.quickReactions[0]) && onReact(st.doubleTapEmoji || st.quickReactions[0])}
           onClick={() => (msg.status === STATUS_FAILED ? retry(chat.id, msg) : undefined)}>
-          {msg.replyTo && <div className="quote"><b>{reply ? nameOf(chat, reply.sender) : "Earlier message"}</b><span>{reply ? previewOf(reply) : "…"}</span></div>}
+          {msg.replyTo && <div className="quote tappable" role="button" tabIndex={0} title="Go to that message" onClick={(e) => { e.stopPropagation(); onJump?.(msg.replyTo!); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onJump?.(msg.replyTo!); } }}><b>{reply ? nameOf(chat, reply.sender) : "Earlier message"}</b><span>{reply ? previewOf(reply) : "…"}</span></div>}
           <Content msg={msg} chat={chat} st={st} big={big} onOpen={onOpen} onVote={onVote} onEndPoll={onEndPoll} />
           {last && !bare && (st.showMessageTimes || (mine && st.showReadTicks) || msg.edited) && (
             <div className="meta">

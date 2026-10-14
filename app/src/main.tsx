@@ -9,3 +9,7 @@ import { loadPhoto } from "./core/wallpapers";
 void loadPhoto(); // a wallpaper photo of your own, if you added one
 
 createRoot(document.getElementById("root")!).render(<><Titlebar /><App /><Greeting /></>);
+
+// Everything that moves stops while the window is in the background or minimised: no point drawing what nobody can see.
+const syncIdle = () => document.documentElement.toggleAttribute("data-idle", document.hidden || !document.hasFocus());
+window.addEventListener("focus", syncIdle); window.addEventListener("blur", syncIdle); document.addEventListener("visibilitychange", syncIdle); syncIdle();

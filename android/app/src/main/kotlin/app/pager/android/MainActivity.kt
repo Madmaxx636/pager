@@ -146,7 +146,7 @@ class MainActivity : FragmentActivity() {
         }
         LaunchedEffect(openRoom) { openRoom?.let { screen = "chat:$it"; openRoom = null } }
         // Tell the store which page is open, so the in-page sounds know where they belong.
-        SideEffect { store.openRoom = if (screen.startsWith("chat:")) screen.removePrefix("chat:") else null; ScreenCleanTrigger.page = screen.substringBefore(':') }
+        SideEffect { store.openRoom = if (screen.startsWith("chat:")) screen.removePrefix("chat:") else null; store.openRoom?.let { Notifier.clear(this@MainActivity, it) }; ScreenCleanTrigger.page = screen.substringBefore(':') }
         LaunchedEffect(shared, session != null) { if (shared != null && session != null) screen = "share" }
 
         if (session == null) { AuthScreen(store); return }

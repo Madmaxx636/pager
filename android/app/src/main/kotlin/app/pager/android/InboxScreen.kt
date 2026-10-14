@@ -167,6 +167,8 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             (filters.network == null || c.network == filters.network) &&
             (q.isEmpty() || c.name.lowercase().contains(q) || c.preview.lowercase().contains(q))
     }
+    // Unread pages pulse around their picture; only the first dozen do, so a long unread list doesn't keep the screen redrawing.
+    val pulseIds = (pins + shown).filter { (it.unread > 0 || it.markedUnread) && !it.muted && !it.archived && !it.lowPriority }.take(12).map { it.id }.toSet()
     val totalUnread = all.count { !it.archived && !it.muted && !it.lowPriority && (it.unread > 0 || it.markedUnread) }
     val attention = bridges.flatMap { n -> n.logins.filter { needsAttention(it.state) }.map { n.name } }.distinct()
     val networks = all.map { it.network }.distinct().sorted()
@@ -261,7 +263,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                 if (stories != null && tab == "inbox" && q.isEmpty() && !selecting) item("stories") { StoriesRow(stories) { onOpen(stories.id) } }
                 if (pins.isNotEmpty()) item("pins") {
-                    PinnedGrid(pins, onOpen = { id -> if (selecting) toggleSelect(id) else onOpen(id) }, onMenu = { menuFor = it }, onMove = { id, to -> store.movePin(id, to) })
+                    PinnedGrid(pins, pulseIds, onOpen = { id -> if (selecting) toggleSelect(id) else onOpen(id) }, onMenu = { menuFor = it }, onMove = { id, to -> store.movePin(id, to) })
                 }
                 if (shown.isEmpty() && pins.isEmpty()) item("empty") {
                     when {
@@ -277,7 +279,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
                     // Rows glide to their new place when a chat moves, archives or a new message bumps it.
                     Box(if (s.reduceMotion) Modifier else Modifier.animateItem()) {
                     ChatRow(
-                        c, selected = c.id in selected, selecting = selecting,
+                        c, selected = c.id in selected, selecting = selecting, pulse = c.id in pulseIds,
                         onClick = { if (selecting) toggleSelect(c.id) else onOpen(c.id) },
                         onLong = { if (selecting) toggleSelect(c.id) else { menuFor = c; if (s.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress) } },
                         onSwipe = { act(it, c) },
@@ -387,19 +389,6 @@ private fun Tab(label: String, icon: androidx.compose.ui.graphics.vector.ImageVe
     }
 }
 
-/** A pinned chat as a circle with its name under it, Beeper style. */
-@Composable
-private fun PinnedChip(c: ChatSummary, onOpen: () -> Unit, onLong: () -> Unit) {
-    val unread = c.unread > 0 || c.markedUnread
-    Column(Modifier.width(72.dp).dpadFocus().combinedClickable(onClick = onOpen, onLongClick = onLong), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box {
-            ChatAvatar(c.name, LocalSettings.current.let { if (it.showNetworkBadges) c.network else null }, 58.dp, c.avatarMxc, c.faces)
-            if (unread) Box(Modifier.align(Alignment.TopEnd).size(18.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background).padding(2.dp).clip(CircleShape).background(if (c.muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary))
-        }
-        Text(c.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp), fontWeight = if (unread) FontWeight.Bold else FontWeight.Medium)
-    }
-}
-
 private fun swipeLabel(action: String, c: ChatSummary) = when (action) {
     "archive" -> if (c.archived) "Move to inbox" else "Archive"
     "read" -> if (c.unread > 0 || c.markedUnread) "Mark read" else "Mark unread"
@@ -429,7 +418,7 @@ private fun swipeIcon(action: String, c: ChatSummary) = when (action) {
 }
 
 @Composable
-private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onClick: () -> Unit, onLong: () -> Unit, onSwipe: (String) -> Unit) {
+private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, pulse: Boolean, onClick: () -> Unit, onLong: () -> Unit, onSwipe: (String) -> Unit) {
     val s = LocalSettings.current
     val unread = c.unread > 0 || c.markedUnread
     val minimal = s.inboxStyle == "minimal"
@@ -473,7 +462,7 @@ private fun ChatRow(c: ChatSummary, selected: Boolean, selecting: Boolean, onCli
             if (selecting) {
                 Icon(if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 12.dp).size(24.dp))
             }
-            if (s.showAvatars) { ChatAvatar(c.name, if (s.showNetworkBadges) c.network else null, avatar, c.avatarMxc, c.faces); Spacer(Modifier.width(14.dp)) }
+            if (s.showAvatars) { Box(Modifier.pulseRing(pulse, MaterialTheme.colorScheme.primary)) { ChatAvatar(c.name, if (s.showNetworkBadges) c.network else null, avatar, c.avatarMxc, c.faces) }; Spacer(Modifier.width(14.dp)) }
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // The name takes everything the time doesn't need (it used to stop at half the row, cutting names short on narrow screens).
@@ -519,7 +508,7 @@ private fun UnreadBadge(c: ChatSummary) {
  * Press and hold a picture, then drag it onto another to rearrange; hold without moving for its menu.
  */
 @Composable
-private fun PinnedGrid(pins: List<ChatSummary>, onOpen: (String) -> Unit, onMenu: (ChatSummary) -> Unit, onMove: (String, Int) -> Unit) {
+private fun PinnedGrid(pins: List<ChatSummary>, pulseIds: Set<String>, onOpen: (String) -> Unit, onMenu: (ChatSummary) -> Unit, onMove: (String, Int) -> Unit) {
     val cols = 3
     val s = LocalSettings.current
     val bounds = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
@@ -566,8 +555,13 @@ private fun PinnedGrid(pins: List<ChatSummary>, onOpen: (String) -> Unit, onMenu
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Box {
-                            ChatAvatar(c.name, if (s.showNetworkBadges) c.network else null, 76.dp, c.avatarMxc, c.faces)
-                            if (unread) Box(Modifier.align(Alignment.TopEnd).size(20.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background).padding(3.dp).clip(CircleShape).background(if (c.muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary))
+                            Box(Modifier.pulseRing(c.id in pulseIds, MaterialTheme.colorScheme.primary)) { ChatAvatar(c.name, if (s.showNetworkBadges) c.network else null, 76.dp, c.avatarMxc, c.faces) }
+                            // The number of new messages sits on the picture (a plain dot when it was only marked unread).
+                            if (unread) Box(
+                                Modifier.align(Alignment.TopEnd).defaultMinSize(minWidth = 24.dp, minHeight = 24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background).padding(3.dp).clip(CircleShape)
+                                    .background(if (c.muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary).padding(horizontal = if (c.unread > 9) 5.dp else 0.dp),
+                                contentAlignment = Alignment.Center,
+                            ) { if (c.unread > 0) Text(if (c.unread > 99) "99+" else c.unread.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (c.muted) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onPrimary, maxLines = 1) }
                             if (c.typing) Box(Modifier.align(Alignment.BottomCenter).offset(y = 6.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface).padding(horizontal = 9.dp, vertical = 5.dp)) { TypingDots(MaterialTheme.colorScheme.primary, 5.dp) }
                         }
                         Text(c.name, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold)

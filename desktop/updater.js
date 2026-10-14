@@ -59,7 +59,7 @@ async function checkForUpdates({ server, win, quiet }) {
     const file = path.join(dir, d.file);
     const got = await get(base + d.file, { toFile: file });
     if (!got || got.sha256 !== String(d.sha256).toLowerCase()) { fs.rmSync(file, { force: true }); throw new Error("the download doesn't match its checksum, so it was not installed"); }
-    if (win32) { spawn(file, ["/S", "--force-run"], { detached: true, stdio: "ignore" }).unref(); app.exit(0); return; } // the installer replaces the app and starts it again
+    if (win32) { await installWindows(file, win); return; }
     await install(file, win);
     app.relaunch(); app.exit(0);
   } catch (e) { if (!quiet) dialog.showErrorBox("Update failed", e.message || String(e)); else console.warn("update check failed:", e.message); }
@@ -117,6 +117,18 @@ function viaTerminal(file) {
     p.on("error", () => reject(new Error(`Couldn't open a terminal. Install it yourself: sudo apt install ${file}`)));
     p.on("exit", () => (fs.existsSync(done) ? resolve() : reject(new Error("the install in the terminal didn't finish"))));
   });
+}
+
+/** Windows: open the installer the way Explorer does, so Windows can show its own "do you want to run this" step. Starting it from behind (as this used to) was refused outright on Windows 11 and Pager closed anyway, leaving nothing installed. */
+async function installWindows(file, win) {
+  const problem = await shell.openPath(file);
+  if (!problem) return; // the installer closes Pager itself when it needs to replace it, and starts it again afterwards
+  const r = await dialog.showMessageBox(win ?? undefined, {
+    type: "warning", message: "Windows wouldn't open the installer",
+    detail: `${problem}\n\nThis usually means Windows blocked a file it doesn't recognise. Open the folder, right-click the installer, choose Properties, tick "Unblock" and press OK, then run it. If Windows still refuses, Smart App Control may be on: it blocks programs that aren't signed. You can turn it off in Windows Security > App & browser control.`,
+    buttons: ["Show the installer", "Close"], defaultId: 0, cancelId: 1,
+  });
+  if (r.response === 0) shell.showItemInFolder(file);
 }
 
 async function install(file, win) {

@@ -131,7 +131,13 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 .big-emoji { font-size: 2.9rem; line-height: 1.15; }
 .bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 5px; font-size: 0.68rem; opacity: .7; margin-top: 2px; white-space: normal; } .media-bubble .meta { padding: 0 8px 2px; } .ticks { display: inline-flex; } .ticks.read { opacity: 1; }
 .quote { border-left: 3px solid color-mix(in srgb, currentColor 50%, transparent); padding-left: 9px; margin: 0 0 6px; display: grid; font-size: 0.87rem; opacity: .85; white-space: normal; } .media-bubble .quote { margin: 6px 8px; } .quote span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.hover-tools { display: none; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 2px; box-shadow: var(--shadow); } .msg-line:hover .hover-tools { display: flex; } .hover-tools button { width: 30px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--muted); } .hover-tools button:hover { background: var(--panel-2); color: var(--text); }
+.hover-tools { gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 2px; box-shadow: var(--shadow); }
+/* The buttons that appear when you point at a message hang beside it, outside the flow, so the message never moves or squeezes. */
+.msg-line { position: relative; }
+.hover-tools { position: absolute; top: 50%; transform: translateY(-50%); display: flex; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .12s; z-index: 5; }
+.msg:not(.mine) .hover-tools { left: 100%; margin-left: 6px; } .msg.mine .hover-tools { right: 100%; margin-right: 6px; }
+.hover-tools::before { content: ""; position: absolute; inset: -6px -10px; } /* so moving from the message to the buttons never loses the hover */
+.msg-line:hover .hover-tools, .hover-tools:focus-within { opacity: 1; visibility: visible; pointer-events: auto; } .hover-tools button { width: 30px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--muted); } .hover-tools button:hover { background: var(--panel-2); color: var(--text); }
 .img-wrap { position: relative; line-height: 0; } .gif-tag { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.6); color: #fff; font: 700 0.65rem system-ui; padding: 2px 6px; border-radius: 5px; }
 .media { display: block; max-width: min(320px, 100%); max-height: 380px; border-radius: 14px; cursor: zoom-in; } .media.sticker { max-width: 160px; background: none; border-radius: 0; }
 .media.placeholder { width: 270px; max-width: 100%; background: color-mix(in srgb, currentColor 12%, transparent); display: grid; place-items: center; cursor: pointer; font-size: 0.87rem; white-space: normal; text-align: center; }
@@ -170,7 +176,7 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 .palette-list { max-height: 52vh; overflow-y: auto; padding: 6px; } .palette-list h4 { margin: 10px 12px 4px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); } .palette-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 9px 12px; border-radius: 12px; } .palette-item.on { background: color-mix(in srgb, var(--accent) 16%, transparent); } .pi { width: 28px; height: 28px; border-radius: 8px; background: var(--panel-2); display: grid; place-items: center; color: var(--muted); flex: none; }
 .emoji-tabs { display: flex; gap: 2px; overflow-x: auto; margin: 0 0 8px; padding-right: 30px; } .emoji-tabs button { font-size: 1.2rem; padding: 6px; border-radius: 8px; } .emoji-tabs button:hover { background: var(--panel-2); }
 .emoji-grid-wrap { max-height: 340px; overflow-y: auto; } .emoji-grid-wrap h4 { margin: 10px 4px 4px; color: var(--muted); font-size: 0.8rem; } .emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); } .emoji-grid button { font-size: 1.6rem; height: 40px; border-radius: 10px; } .emoji-grid button:hover { background: var(--panel-2); }
-.gif-grid { columns: 2; column-gap: 6px; max-height: 52vh; overflow-y: auto; } .gif-grid button { display: block; width: 100%; margin-bottom: 6px; border-radius: 12px; overflow: hidden; background: var(--panel-2); break-inside: avoid; } .gif-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gif-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-height: 52vh; overflow-y: auto; align-content: start; } /* a grid, not columns: columns in a box with a maximum height spill sideways and hide everything after the first two */ .gif-grid button { display: block; width: 100%; border-radius: 12px; overflow: hidden; background: var(--panel-2); break-inside: avoid; } .gif-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sticker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 8px; max-height: 50vh; overflow-y: auto; } .sticker-cell { aspect-ratio: 1; border-radius: 12px; display: grid; place-items: center; } .sticker-cell:hover { background: var(--panel-2); } .sticker-cell img { max-width: 92%; max-height: 92%; }
 .net-list { margin: 14px 0; } .net-list li { display: flex; align-items: center; gap: 14px; padding: 10px 0; } .net-dot { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: #fff; font: 700 1rem system-ui; font-style: normal; flex: none; }
 .net-info { flex: 1; display: grid; min-width: 0; } .fine { font-size: 0.8rem; color: var(--muted); margin: 0; }
@@ -505,8 +511,8 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-fx="on"] .info { animation: fx-slide-left .28s cubic-bezier(.2, .9, .3, 1) both; }
 :root[data-fx="on"] .chat-row { animation: fx-in-row .35s cubic-bezier(.2, .9, .3, 1) both; } :root[data-fx="on"] .chat-row:nth-child(2) { animation-delay: .03s; } :root[data-fx="on"] .chat-row:nth-child(3) { animation-delay: .06s; } :root[data-fx="on"] .chat-row:nth-child(4) { animation-delay: .09s; } :root[data-fx="on"] .chat-row:nth-child(5) { animation-delay: .12s; } :root[data-fx="on"] .chat-row:nth-child(6) { animation-delay: .15s; } :root[data-fx="on"] .chat-row:nth-child(n+7) { animation-delay: .18s; }
 :root[data-fx="on"] .chat-row { transition: background .18s ease, box-shadow .25s ease, transform .18s ease; } :root[data-fx="on"] .chat-row.sel { box-shadow: inset 3px 0 0 var(--accent); }
-:root[data-fx="on"] .unread:not(.muted-badge):not(:empty) { animation: fx-breathe 3.2s ease-in-out infinite; }
-:root[data-fx="on"] .unread { transition: transform .2s; } :root[data-fx="on"] .pin-dot:not(.muted) { animation: fx-breathe 3.2s ease-in-out infinite; }
+
+:root[data-fx="on"] .unread { transition: transform .2s; }
 :root[data-fx="on"] .send, :root[data-fx="on"] .primary { transition: transform .15s ease, box-shadow .2s ease, filter .15s; } :root[data-fx="on"] .send:hover, :root[data-fx="on"] .primary:hover:not(:disabled) { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
 :root[data-fx="on"] .send:active, :root[data-fx="on"] .primary:active { transform: scale(.94); }
 :root[data-fx="on"] .icon { transition: background .15s, color .15s, transform .15s, box-shadow .2s; } :root[data-fx="on"] .icon:hover { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent); transform: none; } :root[data-fx="on"] .icon:active { transform: scale(.9); }
@@ -628,3 +634,18 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-titlebar] .titlebar { display: flex; align-items: center; flex: none; height: 36px; padding: 0 160px 0 14px; -webkit-app-region: drag; user-select: none; background: var(--bg); color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: .02em; }
 :root[data-titlebar] #root > :not(.titlebar) { flex: 1 1 0; min-height: 0; height: auto; }
 :root[data-titlebar] .shell, :root[data-titlebar] .splash { height: auto; }
+
+/* Easy on the processor: nothing animates forever except a pulse on pages with something new, and everything stops while the window is in the background */
+.mascot:not(.ring), .mascot:not(.ring) * { animation-iteration-count: 2 !important; }
+:root[data-idle] *, :root[data-idle] *::before, :root[data-idle] *::after { animation-play-state: paused !important; }
+.av-pulse { position: relative; display: inline-flex; flex: none; }
+/* The pulse is a ring around the whole picture that grows and fades. Only transform and opacity change, so the screen is not repainted for it. */
+.pulse::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--accent); pointer-events: none; opacity: 0; animation: av-pulse 2.6s ease-out infinite; will-change: transform, opacity; }
+@keyframes av-pulse { 0% { transform: scale(.96); opacity: .75; } 70%, 100% { transform: scale(1.22); opacity: 0; } }
+:root[data-motion="reduced"] .pulse::after { animation: none; opacity: .55; }
+.pin-chip .pin-dot { display: grid; place-items: center; min-width: 22px; width: auto; height: 22px; padding: 0 5px; border-radius: 11px; top: -2px; right: -2px; color: var(--accent-ink); font-size: .72rem; font-weight: 700; line-height: 1; }
+.pin-chip .pin-dot:empty { min-width: 16px; width: 16px; height: 16px; padding: 0; }
+.pin-chip .pin-dot.muted { color: var(--bg); }
+
+.quote.tappable { cursor: pointer; } .quote.tappable:hover { opacity: 1; } .quote.tappable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.msg.flash .bubble { outline: 2px solid var(--accent); outline-offset: 2px; transition: outline-color .6s; }
