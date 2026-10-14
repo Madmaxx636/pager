@@ -185,6 +185,9 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
         fresh.firstOrNull { it.sender != me }?.id
     }
     val items = remember(messages, unreadBefore, s.groupGapMin) { buildItems(messages, unreadBefore, s.groupGapMin * 60_000L) }
+    // Tapping the quote on a reply takes you to the message it answers, loading older messages first when it is further back.
+    var flashId by remember { mutableStateOf<String?>(null) }
+    val itemsNow by androidx.compose.runtime.rememberUpdatedState(items)
 
     val list = rememberLazyListState()
     // When someone starts typing and you are at the bottom, bring the dots into view.
@@ -372,7 +375,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                                 Text("  New messages  ", style = MaterialTheme.typography.labelMedium, color = scheme.primary, fontWeight = FontWeight.SemiBold)
                                 Box(Modifier.weight(1f).height(1.dp).background(scheme.primary.dim(0.4f)))
                             }
-                            is Item.M -> Box(if (selId == item.msg.id) Modifier.border(3.dp, scheme.primary, RoundedCornerShape(16.dp)) else Modifier) { MessageRow(
+                            is Item.M -> Box(if (selId == item.msg.id || flashId == item.msg.id) Modifier.border(3.dp, scheme.primary, RoundedCornerShape(16.dp)) else Modifier) { MessageRow(
                                 chat = chat, msg = item.msg, me = me, group = group, first = item.first, last = item.last, dark = dark,
                                 reply = item.msg.replyTo?.let { byId[it] }, read = item.index <= readIndex, delivered = item.index <= deliveredIndex, starred = stars.any { it.eventId == item.msg.id },
                                 onLong = { actions = item.msg },
@@ -383,6 +386,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                                 onReply = { replyTo = item.msg; editing = null },
                                 onVote = { ids -> store.votePoll(roomId, item.msg.id, ids) },
                                 onEndPoll = { store.endPoll(roomId, item.msg.id) },
+                                onJump = { target -> scope.launch { repeat(14) { val at = itemsNow.indexOfFirst { it is Item.M && it.msg.id == target }; if (at >= 0) { list.animateScrollToItem(at + (if (typingNow) 1 else 0)); flashId = target; delay(1800); flashId = null; return@launch }; groupIds.forEach { store.loadOlder(it) }; delay(450) } } },
                                 onOpen = { m ->
                                     when {
                                         m.type == "m.location" && m.geo != null -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(m.geo)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

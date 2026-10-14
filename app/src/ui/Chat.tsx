@@ -152,6 +152,20 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const [showJump, setShowJump] = useState(false);
   useEffect(() => { const el = scroller.current; if (!el) return; const f = () => setShowJump(el.scrollHeight - el.scrollTop - el.clientHeight > 400); el.addEventListener("scroll", f); return () => el.removeEventListener("scroll", f); }, [roomId]);
 
+  // Tapping the quote on a reply takes you to the message it answers, loading older messages first if it is further back.
+  const jumpTo = useCallback(async (id: string) => {
+    for (let i = 0; i < 14; i++) {
+      const target = scroller.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`);
+      if (target) {
+        stick.current = false;
+        target.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+        target.classList.add("flash"); window.setTimeout(() => target.classList.remove("flash"), 1800);
+        return;
+      }
+      groupIds.forEach((g) => loadOlder(g));
+      await new Promise((r) => window.setTimeout(r, 450));
+    }
+  }, [groupIds]);
   const openMsg = useCallback((m: Msg) => {
     if (m.type === "m.location" && m.geo) { const [lat, lon] = m.geo.replace("geo:", "").split(";")[0].split(","); window.open(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`, "_blank", "noopener"); }
     else if (m.type === "m.image" && m.mxc && !m.sticker) setViewer(m.id);
@@ -209,7 +223,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
             : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} last={it.last} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} delivered={it.index <= deliveredIndex} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}
                 st={st} starred={stars.some((s) => s.eventId === it.msg.id)} onMenu={(x, y) => setMenu({ msg: it.msg, x, y })} onOpen={() => openMsg(it.msg)} onWho={(key) => setWho({ msg: it.msg, key })}
                 onReact={(key) => react(roomId, it.msg.id, key)} onReply={() => { setReplyTo(it.msg); setEditing(undefined); }}
-                onVote={(ids) => votePoll(roomId, it.msg.id, ids)} onEndPoll={() => endPoll(roomId, it.msg.id)} />)}
+                onVote={(ids) => votePoll(roomId, it.msg.id, ids)} onEndPoll={() => endPoll(roomId, it.msg.id)} onJump={jumpTo} />)}
           {typingNames.length > 0 && (
             <div className="msg typing-row" aria-live="polite">
               {group && <div className="msg-sender">{typingNames.join(", ")}</div>}

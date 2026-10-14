@@ -208,13 +208,36 @@ object Notifier {
         val nm = NotificationManagerCompat.from(context)
         runCatching {
             nm.notify(id, b.build())
-            nm.notify(0, NotificationCompat.Builder(context, CH_SILENT).setSmallIcon(R.drawable.ic_notif).setGroup(GROUP).setGroupSummary(true).setAutoCancel(true).build())
+            // The bundle's header opens Pager when tapped (it used to do nothing).
+            val openApp = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            nm.notify(0, NotificationCompat.Builder(context, CH_SILENT).setSmallIcon(R.drawable.ic_notif).setContentTitle("Pager").setContentText("New messages").setContentIntent(openApp).setGroup(GROUP).setGroupSummary(true).setAutoCancel(true).build())
         }
     }
 
     fun clear(context: Context, roomId: String) {
         history.remove(roomId)
         NotificationManagerCompat.from(context).cancel(roomId.hashCode())
+        dropEmptySummary(context)
+    }
+
+    /** Takes down the notification of each page in [rooms] that is still showing: the page was read here, or on another device. */
+    fun clearRead(context: Context, rooms: Collection<String>) {
+        if (rooms.isEmpty()) return
+        val shown = activeIds(context)
+        if (shown.isEmpty()) return
+        val nm = NotificationManagerCompat.from(context)
+        var any = false
+        for (r in rooms) { val id = r.hashCode(); if (id in shown) { history.remove(r); nm.cancel(id); any = true } }
+        if (any) dropEmptySummary(context)
+    }
+
+    private fun activeIds(context: Context): Set<Int> =
+        runCatching { (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).activeNotifications.map { it.id }.toSet() }.getOrDefault(emptySet())
+
+    /** The grouped "summary" notification has nothing under it once the last page's notification is gone, so it goes too. */
+    private fun dropEmptySummary(context: Context) {
+        val ids = activeIds(context)
+        if (ids.isNotEmpty() && ids.none { it != 0 }) NotificationManagerCompat.from(context).cancel(0)
     }
 
     fun replyText(intent: Intent): String? = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_REPLY)?.toString()

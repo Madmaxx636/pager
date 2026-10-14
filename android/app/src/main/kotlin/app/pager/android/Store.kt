@@ -540,7 +540,12 @@ class Store(private val context: Context) {
                 // make this phone read the same update again forever (that left it out of step with your other devices).
                 // The chats and the position they are up to change together, so the saved copy can never have one without the other.
                 val next = (res["next_batch"] as? JsonPrimitive)?.content ?: since
+                val before = _chats.value
                 synchronized(cacheLock) { _chats.value = r.chats; since = next; chatsSince = next }
+                // A page that was unread and now is not was read on another device (or app): take its alert down here too.
+                runCatching {
+                    Notifier.clearRead(context, r.chats.values.filter { c -> before[c.id]?.let { it.unread > 0 || it.markedUnread } == true && c.unread == 0 && !c.markedUnread }.map { it.id })
+                }
                 lastSyncOk = System.currentTimeMillis()
                 try {
                     r.muted?.let { _muted.value = it }
@@ -748,12 +753,13 @@ class Store(private val context: Context) {
         ids.forEach { markReadOne(it) }
     }
     private fun markReadOne(roomId: String) {
+        // Whatever the counter says, an alert for this page that is still on the screen has been dealt with.
+        Notifier.clear(context, roomId)
         val c = _chats.value[roomId] ?: return
         val last = c.messages.lastOrNull { it.status == STATUS_SENT } ?: return
         val me = _session.value?.userId ?: return
         if (c.unread == 0 && !c.markedUnread) return
         update(roomId) { it.copy(unread = 0, markedUnread = false) }
-        Notifier.clear(context, roomId)
         val private = !settings.value.sendReadReceipts
         scope.launch {
             runCatching { matrix.markRead(roomId, last.id, private) }

@@ -96,6 +96,8 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
   const pinIds = new Set(pins.map((p) => p.id));
   const networks = useMemo(() => [...new Set(all.map((c) => c.network))].sort(), [all]);
   const unreadCount = all.filter((c) => inTab(c, "unread")).length;
+  // Unread pages pulse around their picture. Only the first dozen do, so a long unread list doesn't keep the screen redrawing.
+  const pulseIds = new Set([...pins, ...all.filter((c) => !pinIds.has(c.id))].filter((c) => (c.unread > 0 || c.markedUnread) && !c.muted && !c.archived && !c.lowPriority).slice(0, 12).map((c) => c.id));
   const shown = all.filter((c) =>
     inTab(c, tab) && !pinIds.has(c.id) && (!filters.groups || c.isGroup) && (!filters.dms || !c.isGroup) && (!filters.drafts || !!c.draft) && (!filters.unanswered || c.unanswered)
     && (!filters.network || c.network === filters.network) && (!q || c.name.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q)));
@@ -189,7 +191,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
                 onDragStart={() => setDragId(c.id)} onDragEnd={() => setDragId(undefined)}
                 onDragOver={(e) => { e.preventDefault(); }} onDrop={() => { if (dragId && dragId !== c.id) movePin(dragId, i); setDragId(undefined); }}
                 onClick={() => open(c.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }} title={c.name}>
-                <span className="pin-av">{c.faces && c.faces.length > 1 ? <GroupAvatar faces={c.faces} size={76} /> : <Avatar name={c.name} mxc={c.avatarMxc} size={76} network={st.showNetworkBadges ? c.network : undefined} />}{(c.unread > 0 || c.markedUnread) && <i className={"pin-dot" + (c.muted ? " muted" : "")} />}{c.typing && <span className="typing-badge"><TypingDots /></span>}</span>
+                <span className={"pin-av" + (pulseIds.has(c.id) ? " pulse" : "")}>{c.faces && c.faces.length > 1 ? <GroupAvatar faces={c.faces} size={76} /> : <Avatar name={c.name} mxc={c.avatarMxc} size={76} network={st.showNetworkBadges ? c.network : undefined} />}{(c.unread > 0 || c.markedUnread) && <i className={"pin-dot" + (c.muted ? " muted" : "") + (c.unread > 9 ? " wide" : "")}>{c.unread > 0 ? (c.unread > 99 ? "99+" : c.unread) : ""}</i>}{c.typing && <span className="typing-badge"><TypingDots /></span>}</span>
                 <span className="pin-name">{c.name}</span>
               </button>
             ))}
@@ -202,7 +204,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
               <li key={c.id} className="chat-li">
                 <button className={"chat-row" + (c.id === selected ? " sel" : "") + (picked.includes(c.id) ? " picked" : "")} onClick={() => open(c.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }}>
                   {selecting && (picked.includes(c.id) ? <CheckCircle2 className="check on" size={22} /> : <Circle className="check" size={22} />)}
-                  {st.showAvatars && (c.faces && c.faces.length > 1 ? <GroupAvatar faces={c.faces} size={st.density === "compact" ? 40 : 50} /> : <Avatar name={c.name} mxc={c.avatarMxc} network={st.showNetworkBadges ? c.network : undefined} size={st.density === "compact" ? 40 : 50} />)}
+                  {st.showAvatars && <span className={"av-pulse" + (pulseIds.has(c.id) ? " pulse" : "")}>{c.faces && c.faces.length > 1 ? <GroupAvatar faces={c.faces} size={st.density === "compact" ? 40 : 50} /> : <Avatar name={c.name} mxc={c.avatarMxc} network={st.showNetworkBadges ? c.network : undefined} size={st.density === "compact" ? 40 : 50} />}</span>}
                   <div className="chat-main">
                     <div className="chat-top">
                       <span className={"chat-name" + (unread ? " unread-name" : "")}>{c.name}</span>

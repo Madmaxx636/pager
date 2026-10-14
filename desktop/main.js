@@ -22,6 +22,11 @@ app.commandLine.appendSwitch("disk-cache-size", String(64 * 1024 * 1024));
 // low-memory mode makes its caches and buffers smaller. gc is exposed so the memory watcher below can ask for a clean-up.
 app.commandLine.appendSwitch("js-flags", "--max-old-space-size=256 --expose-gc");
 app.commandLine.appendSwitch("enable-low-end-device-mode");
+// Alert sounds are played by the page itself; without this the browser engine keeps them silent until you have clicked in the window,
+// which is why a message that arrived while Pager sat in the tray sometimes made no sound.
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+// Windows only shows a program's notifications when they carry the same identity as its Start menu entry.
+if (process.platform === "win32") app.setAppUserModelId("app.pager.desktop");
 app.commandLine.appendSwitch("renderer-process-limit", "1");
 
 let win = null, tray = null, quitting = false, unread = 0;
