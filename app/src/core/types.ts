@@ -30,6 +30,9 @@ export interface Msg {
   w?: number;
   h?: number;
   durationMs?: number;
+  /** A video's preview picture (its address), and whether it is really a GIF in video form (looping, silent). */
+  poster?: string;
+  gifLike?: boolean;
   replyTo?: string;
   edited?: boolean;
   txn?: string;

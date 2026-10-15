@@ -32,6 +32,9 @@ data class Msg(
     val w: Int? = null,
     val h: Int? = null,
     val durationMs: Long? = null,
+    /** A video's preview picture (its address), and whether it is really a GIF in video form (silent and looping). */
+    val poster: String? = null,
+    val gifLike: Boolean = false,
     val replyTo: String? = null,
     val edited: Boolean = false,
     val txn: String? = null,

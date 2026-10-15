@@ -340,7 +340,7 @@ fun MessageRow(
                     when {
                         msg.type == "m.poll" -> PollCard(msg, chat, me, fg, onVote, onEndPoll)
                         msg.type == "m.image" -> ImageContent(msg, allowAuto = mediaAllowed(context, s.autoDownload), autoPlay = s.autoPlayGifs)
-                        msg.type == "m.video" -> FileChip(Icons.Rounded.Videocam, msg.body.ifEmpty { "Video" }, msg.size, fg)
+                        msg.type == "m.video" -> VideoContent(msg, allowAuto = mediaAllowed(context, s.autoDownload), autoPlay = s.autoPlayGifs, fg = fg)
                         msg.type == "m.audio" -> AudioContent(msg, fg)
                         msg.type == "m.file" && (msg.mime?.contains("vcard") == true || msg.body.endsWith(".vcf")) -> ContactCard(msg, fg)
                         msg.type == "m.file" -> FileChip(Icons.AutoMirrored.Rounded.InsertDriveFile, msg.body.ifEmpty { "File" }, msg.size, fg)
@@ -614,4 +614,65 @@ fun Modifier.bubbleTail(style: String, mine: Boolean, color: Color, tailed: Bool
         else { moveTo(6 * d, h - 16 * d); lineTo(-7 * d, h); lineTo(10 * d, h); close() }
     }
     drawPath(path, color)
+}
+
+/**
+ * A video the way chat apps show it: a still picture with a play button and its length, played right there when tapped.
+ * Clips that are really GIFs (silent, looping) start by themselves.
+ */
+@Composable
+private fun VideoContent(msg: Msg, allowAuto: Boolean, autoPlay: Boolean, fg: Color) {
+    val store = LocalStore.current
+    val s = LocalSettings.current
+    var tapped by remember(msg.id) { mutableStateOf(false) }
+    var playing by remember(msg.id) { mutableStateOf(false) }
+    var failed by remember(msg.id) { mutableStateOf(false) }
+    val enabled = allowAuto || tapped || msg.status != STATUS_SENT
+    val ratio = if (msg.w != null && msg.h != null && msg.h > 0) (msg.w.toFloat() / msg.h).coerceIn(0.5f, 2f) else 16f / 9f
+    val autoStart = msg.gifLike && autoPlay && enabled && !s.lowData
+    val wantFile = enabled && (playing || autoStart)
+    val file by produceState<File?>(null, msg.mxc, wantFile) { value = if (wantFile && msg.mxc != null) store.media.fetch(msg.mxc) else null }
+    val poster = rememberMxcImage(msg.poster, 480, enabled = enabled || !s.lowData)
+    Box(
+        Modifier.widthIn(max = 272.dp).fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(14.dp)).background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        val f = file
+        when {
+            failed -> {
+                poster?.let { Image(it, null, Modifier.fillMaxSize().alpha(0.3f), contentScale = ContentScale.Crop) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(12.dp)) {
+                    Text("This video can't play here", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    val scope = rememberCoroutineScope()
+                    Text("Open with another app", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, modifier = Modifier.dpadFocus().clickable { scope.launch { store.media.open(msg.mxc ?: return@launch, msg.body.ifEmpty { "video" }, msg.mime) } })
+                }
+            }
+            f != null -> AndroidView(
+                factory = { ctx ->
+                    android.widget.FrameLayout(ctx).also { frame ->
+                        val vv = android.widget.VideoView(ctx)
+                        frame.addView(vv, android.widget.FrameLayout.LayoutParams(-1, -1, android.view.Gravity.CENTER))
+                        vv.setOnErrorListener { _, _, _ -> failed = true; true }
+                        vv.setOnPreparedListener { mp ->
+                            if (msg.gifLike) { mp.isLooping = true; mp.setVolume(0f, 0f) }
+                            else { vv.setMediaController(android.widget.MediaController(ctx).also { it.setAnchorView(frame) }) }
+                        }
+                        vv.setOnCompletionListener { if (!msg.gifLike) playing = false }
+                        vv.setVideoPath(f.path); vv.start()
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+            else -> {
+                poster?.let { Image(it, msg.body, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+                Box(
+                    Modifier.size(54.dp).clip(CircleShape).background(Color(0x99000000)).dpadFocus().clickable { tapped = true; playing = true },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Rounded.PlayArrow, "Play video", tint = Color.White, modifier = Modifier.size(34.dp)) }
+                val label = if (msg.gifLike) "GIF" else msg.durationMs?.let { val t = (it / 1000).toInt(); "%d:%02d".format(t / 60, t % 60) } ?: ""
+                val extra = if (!enabled) msg.size?.let { " · ${humanSize(it)}" } ?: "" else ""
+                if (label.isNotEmpty() || extra.isNotEmpty()) Box(Modifier.align(Alignment.BottomStart).padding(8.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x99000000)).padding(horizontal = 6.dp, vertical = 2.dp)) { Text(label + extra, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+    }
 }

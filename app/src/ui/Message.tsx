@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, CheckCheck, Clock, FileText, MapPin, Music, Pause, Play, Star, Video, UserRound, Mic } from "lucide-react";
+import { VideoPlayer } from "./Video";
+import { AlertCircle, Check, CheckCheck, Clock, FileText, MapPin, Music, Pause, Play, Star, UserRound, Mic } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, nameOf, previewOf } from "../core/types";
 import { isEmojiOnly } from "../core/format";
 import { AppSettings, bubbleColorsFor, bubbleLook } from "../core/settings";
@@ -118,7 +119,7 @@ function Content({ msg, chat, st, big, onOpen, onVote, onEndPoll }: { msg: Msg; 
   const isGif = msg.mime === "image/gif" || msg.body.toLowerCase().endsWith(".gif");
   // GIFs animate only from the original file; thumbnails are still frames.
   const img = useMxc(msg.type === "m.image" ? msg.mxc : undefined, isGif && st.autoPlayGifs ? 0 : msg.sticker ? 320 : 640, allowed);
-  const media = useMxc(msg.type === "m.audio" || msg.type === "m.video" ? msg.mxc : undefined, 0, allowed);
+  const media = useMxc(msg.type === "m.audio" ? msg.mxc : undefined, 0, allowed);
   const ratio = msg.w && msg.h ? Math.min(2, Math.max(0.5, msg.w / msg.h)) : 4 / 3;
 
   const main = ((): React.ReactNode => { switch (msg.type) {
@@ -127,7 +128,7 @@ function Content({ msg, chat, st, big, onOpen, onVote, onEndPoll }: { msg: Msg; 
       return img ? <div className="img-wrap"><img className={"media" + (msg.sticker ? " sticker" : "")} src={img} alt={msg.body} onClick={onOpen} loading="lazy" decoding="async" />{isGif && !st.autoPlayGifs && <span className="gif-tag">GIF</span>}</div>
         : <div className="media placeholder" style={{ aspectRatio: String(ratio) }} onClick={() => setTapped(true)}>{msg.status === STATUS_SENDING ? "Sending…" : !allowed ? `Click to load${msg.size ? ` · ${humanSize(msg.size)}` : ""}` : ""}</div>;
     case "m.video":
-      return media ? <video className="media" src={media} controls preload="metadata" /> : <FileChip icon={Video} title={msg.body || "Video"} sub={msg.size ? `${humanSize(msg.size)} · click to load` : undefined} onClick={() => setTapped(true)} />;
+      return <VideoPlayer msg={msg} st={st} allowed={allowed} onLoad={() => setTapped(true)} />;
     case "m.audio":
       return media ? <div className="audio-box"><audio src={media} controls preload="metadata" />{msg.voice && <Words id={msg.id} media={media} auto={st.autoTranscribe} />}</div> : <FileChip icon={msg.voice ? Mic : Music} title={msg.voice ? "Voice message" : msg.body} sub={msg.durationMs ? `${Math.floor(msg.durationMs / 60000)}:${String(Math.floor(msg.durationMs / 1000) % 60).padStart(2, "0")} · click to load` : "click to load"} onClick={() => setTapped(true)} />;
     case "m.file":
