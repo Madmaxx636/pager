@@ -118,6 +118,10 @@ data class AppSettings(
     val markdown: Boolean = true,              // **bold**, _italic_, ~~strike~~, `code` on send
     val largeEmoji: Boolean = true,
     val autoPlayGifs: Boolean = true,
+    /** For a slow or limited connection: nothing downloads by itself, smaller pictures, less background traffic. */
+    val lowData: Boolean = false,
+    /** For an older or slower phone: no animation or effects, plain bubbles, fewer messages kept in memory. */
+    val lowEnd: Boolean = false,
     val imageQuality: String = "original",     // original | high
     val swipeToReply: Boolean = true,
     val greetings: Boolean = true,            // a silly pager message when the app opens
@@ -135,6 +139,8 @@ data class AppSettings(
     // --- Notifications ---
     val notifEnabled: Boolean = true,
     val notifPreview: String = "full",         // full | sender | hidden
+    /** The alert sound: "system" (Android's own, set in its notification settings) or "custom" (the file you chose). */
+    val alertSound: String = "system",
     val notifSound: Boolean = true,
     /** Sounds for sending and receiving, only while you are inside that page. */
     val convoSounds: Boolean = true,
@@ -212,7 +218,7 @@ class SettingsStore(context: Context) {
             Group("notifications", "Notifications", "What alerts you, quiet hours, previews", listOf("notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin", "notifVibrate", "notifLockScreen", "notifAlertOnce", "notifActions")),
             Group("sounds", "Sounds", "Send, receive and reaction sounds", listOf("convoSounds", "sendSound", "receiveSound", "reactionSound")),
             Group("gifs", "GIF search keys", "Your GIPHY and KLIPY keys (kept on your own server)", listOf("gifKeys")),
-            Group("behaviour", "Chat behaviour", "Read marks, typing, downloads, link previews, confirmations", listOf("markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider", "enterSends", "imageQuality")),
+            Group("behaviour", "Chat behaviour", "Read marks, typing, downloads, link previews, confirmations", listOf("lowData", "lowEnd", "markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider", "enterSends", "imageQuality")),
         )
     }
     private fun keysOf(ids: List<String>) = GROUPS.filter { it.id in ids }.flatMap { it.keys }

@@ -1,9 +1,11 @@
 import { FONTS, PALETTES, PALETTE_GROUPS } from "../core/palettes";
+import { hasCustomSound, importSound, onCustomSoundChange, playCustom, removeCustomSound } from "../core/customsound";
+import { APP_ICONS } from "../core/appicons";
 import { GIF_SOURCES, KEY_PROVIDERS, searchGifs } from "../core/gifs";
 import { WALLPAPERS, wallpaperCss, importPhoto, removePhoto, loadPhoto } from "../core/wallpapers";
 import { EFFECT_TRIGGERS } from "../core/effects";
 import { SKINS, SKIN_GROUPS, accentsFor, skinById } from "../core/skins";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Bell, Check, ChevronDown, ChevronLeft, Code2, HardDrive, Hourglass, Info, Keyboard, Lock, MessageSquare, Monitor, Palette, Search, SlidersHorizontal, Smile, Star, Tag, Link as LinkIcon, Trash2, Plus, ShieldCheck } from "lucide-react";
 import { AppSettings, BubbleBorder, bubbleColorsFor, bubbleLook, SYNC_GROUPS, groupsIn, loadSaved, SavedSettings, RowAction, ACCENTS, accentTones, DEFAULTS, SHORTCUTS, resetSettings, updateSettings, useRawSettings } from "../core/settings";
 import { Tour } from "./Tour";
@@ -260,6 +262,7 @@ function Appearance() {
       <BubbleGroup />
       <WallpaperGroup />
       <EffectsGroup />
+      <AppIconGroup />
       <Group title="Size & font">
         <Select title="App size" hint="Makes everything bigger or smaller, not only the text" value={s.uiScale} options={[["small", "Small"], ["medium", "Medium"], ["large", "Large"]]} onChange={(v) => updateSettings({ uiScale: v })} />
         <Select title="Font" value={s.fontFamily} options={FONTS.map((f) => [f[0], f[1]] as [string, string])} onChange={(v) => updateSettings({ fontFamily: v })} />
@@ -326,6 +329,7 @@ function Notifications() {
         <Select title="Receive sound" value={s.receiveSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ receiveSound: v }); playSound(v, s.convoSoundVolume); }} />
         <Row title="Page sound volume" hint={`${Math.round(s.convoSoundVolume * 100)}%`}><input type="range" min="0" max="1" step="0.05" value={s.convoSoundVolume} disabled={!s.convoSounds} onChange={(e) => updateSettings({ convoSoundVolume: Number(e.target.value) })} /></Row>
         <Select title="Alert sound" value={s.notifSoundId} disabled={off} options={SOUNDS} onChange={(v) => { updateSettings({ notifSoundId: v }); playSound(v, s.notifSoundVolume); }} />
+        <CustomSoundRow />
         <Row title="Volume" hint={`${Math.round(s.notifSoundVolume * 100)}%`}><input type="range" min="0" max="1" step="0.05" value={s.notifSoundVolume} disabled={off} onChange={(e) => updateSettings({ notifSoundVolume: Number(e.target.value) })} onMouseUp={() => playSound(s.notifSoundId, s.notifSoundVolume)} /></Row>
         <AppSounds off={off} />
       </Group>
@@ -798,6 +802,10 @@ function System() {
   const s = useRawSettings();
   return (
     <>
+      <Group title="Easy on your connection and your machine" footer="Both are overrides: your own settings are not changed, so switching one off brings everything back.">
+        <SwitchRow title="Low data mode" hint="For a slow or limited connection: nothing downloads until you tap it, GIFs don't play by themselves, link previews and typing indicators are off, pictures arrive at half size, and less runs in the background" checked={s.lowData} onChange={(v) => updateSettings({ lowData: v })} />
+        <SwitchRow title="Low-end device mode" hint={`For an older or slower computer: no animations, effects, blur or shadows, plain bubbles, and fewer messages kept in memory.${window.pagerDesktop ? " Pager also draws the screen without your graphics chip. Takes full effect after you restart Pager" : ""}`} checked={s.lowEnd} onChange={(v) => { updateSettings({ lowEnd: v }); window.pagerDesktop?.setPrefs({ lowEnd: v }); }} />
+      </Group>
       <Group title="Time">
         <Select title="Time format" value={s.timeFormat} options={[["system", "Follow system"], ["12", "12-hour"], ["24", "24-hour"]]} onChange={(v) => updateSettings({ timeFormat: v })} />
       </Group>
@@ -852,5 +860,40 @@ function GifKeyRow({ provider }: { provider: (typeof KEY_PROVIDERS)[number] }) {
       {state === "ok" && <p className="accent pad">{provider.name} works.</p>}
       {state && state !== "ok" && state !== "testing" && <p className="error pad">{state}</p>}
     </>
+  );
+}
+
+/** Pick a sound file of your own to use for alerts (then choose "Your own sound" in any sound list). */
+function CustomSoundRow() {
+  const s = useRawSettings();
+  const has = useSyncExternalStore(onCustomSoundChange, hasCustomSound);
+  const file = useRef<HTMLInputElement>(null);
+  const [err, setErr] = useState("");
+  return (
+    <>
+      <Row title="Your own sound" hint={has ? "Saved on this device. Pick “Your own sound” in any sound list to use it" : "Pick an audio file (MP3, OGG, WAV…), up to 30 seconds"}>
+        {has && <button className="link" onClick={() => playCustom(s.notifSoundVolume)}>Play</button>}
+        <button className="pill" onClick={() => file.current?.click()}>{has ? "Change…" : "Choose file…"}</button>
+        {has && <button className="link danger" onClick={() => void removeCustomSound()}>Remove</button>}
+      </Row>
+      <input ref={file} type="file" accept="audio/*" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { setErr(""); importSound(f).then(() => updateSettings({ notifSoundId: "custom" })).catch((x) => setErr((x as Error).message)); } }} />
+      {err && <p className="error pad">{err}</p>}
+    </>
+  );
+}
+
+/** Which colour the app's icon wears: on the browser tab, and in the desktop app on the window and in the tray. */
+function AppIconGroup() {
+  const s = useRawSettings();
+  return (
+    <Group title="App icon" footer={window.pagerDesktop ? "Shows on the window and in the tray. Some desktops keep showing the installed icon in the task bar and menus." : "Shows on this browser tab."}>
+      <div className="icon-picks" role="radiogroup" aria-label="App icon">
+        {APP_ICONS.map((i) => (
+          <button key={i.id} type="button" role="radio" aria-checked={s.appIcon === i.id} className={"icon-pick" + (s.appIcon === i.id ? " on" : "")} onClick={() => updateSettings({ appIcon: i.id })} title={i.name}>
+            <i style={{ background: `linear-gradient(135deg, ${i.from}, ${i.to})` }}>{s.appIcon === i.id && <Check size={18} color="#fff" />}</i><small>{i.name}</small>
+          </button>
+        ))}
+      </div>
+    </Group>
   );
 }

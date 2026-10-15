@@ -1,6 +1,7 @@
 import type React from "react";
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { Mascot } from "./ui/Mascot";
+import { applyAppIcon } from "./core/appicon";
 import { applyTheme, getSettings, setSystemTheme, useSettings, type SystemTheme } from "./core/settings";
 import { forward, getState, requestNotifications, restoreSession, roomFor, setOpenRoom, useStore } from "./core/store";
 import { KeySetup } from "./ui/KeySetup";
@@ -38,6 +39,7 @@ export function App() {
   const nav = useCallback((to: string) => setRoute(to), []);
 
   useEffect(() => { restoreSession().catch(() => {}).finally(() => setBooting(false)); }, []);
+  useEffect(() => { void applyAppIcon(st.appIcon); }, [st.appIcon]);
   useEffect(() => {
     applyTheme(st);
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

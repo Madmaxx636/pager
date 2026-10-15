@@ -31,10 +31,6 @@
             android:allowEmbedded="true"
             android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <!-- Share text, photos and files from any app into a Pager chat. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -47,6 +43,76 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+        <!-- The app icon you pick in Settings: only one of these is switched on at a time. -->
+        <activity-alias android:name=".IconClassic" android:targetActivity=".MainActivity" android:label="Pager" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:enabled="true" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <!-- The app icon you pick in Settings: only one of these is switched on at a time. -->
+        <activity-alias android:name=".IconSunset" android:targetActivity=".MainActivity" android:label="Pager" android:icon="@mipmap/ic_launcher_sunset" android:roundIcon="@mipmap/ic_launcher_sunset" android:enabled="false" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <!-- The app icon you pick in Settings: only one of these is switched on at a time. -->
+        <activity-alias android:name=".IconMidnight" android:targetActivity=".MainActivity" android:label="Pager" android:icon="@mipmap/ic_launcher_midnight" android:roundIcon="@mipmap/ic_launcher_midnight" android:enabled="false" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <!-- The app icon you pick in Settings: only one of these is switched on at a time. -->
+        <activity-alias android:name=".IconCandy" android:targetActivity=".MainActivity" android:label="Pager" android:icon="@mipmap/ic_launcher_candy" android:roundIcon="@mipmap/ic_launcher_candy" android:enabled="false" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <!-- The app icon you pick in Settings: only one of these is switched on at a time. -->
+        <activity-alias android:name=".IconMint" android:targetActivity=".MainActivity" android:label="Pager" android:icon="@mipmap/ic_launcher_mint" android:roundIcon="@mipmap/ic_launcher_mint" android:enabled="false" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <!-- The app icon you pick in Settings: only one of these is switched on at a time. -->
+        <activity-alias android:name=".IconRetro" android:targetActivity=".MainActivity" android:label="Pager" android:icon="@mipmap/ic_launcher_retro" android:roundIcon="@mipmap/ic_launcher_retro" android:enabled="false" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <!-- The app icon you pick in Settings: only one of these is switched on at a time. -->
+        <activity-alias android:name=".IconGraphite" android:targetActivity=".MainActivity" android:label="Pager" android:icon="@mipmap/ic_launcher_graphite" android:roundIcon="@mipmap/ic_launcher_graphite" android:enabled="false" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <!-- The app icon you pick in Settings: only one of these is switched on at a time. -->
+        <activity-alias android:name=".IconSky" android:targetActivity=".MainActivity" android:label="Pager" android:icon="@mipmap/ic_launcher_sky" android:roundIcon="@mipmap/ic_launcher_sky" android:enabled="false" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <!-- The app icon you pick in Settings: only one of these is switched on at a time. -->
+        <activity-alias android:name=".IconLemon" android:targetActivity=".MainActivity" android:label="Pager" android:icon="@mipmap/ic_launcher_lemon" android:roundIcon="@mipmap/ic_launcher_lemon" android:enabled="false" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <!-- The app icon you pick in Settings: only one of these is switched on at a time. -->
+        <activity-alias android:name=".IconRose" android:targetActivity=".MainActivity" android:label="Pager" android:icon="@mipmap/ic_launcher_rose" android:roundIcon="@mipmap/ic_launcher_rose" android:enabled="false" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
         <receiver android:name=".NotificationActionReceiver" android:exported="false" />
         <receiver android:name=".ReminderReceiver" android:exported="false" />
         <receiver android:name=".BootReceiver" android:exported="true">
