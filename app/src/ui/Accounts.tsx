@@ -292,10 +292,10 @@ export function AccountsModal({ onClose, initial }: { onClose: () => void; initi
                   <i className="net-dot" style={{ background: meta.color }}>{meta.glyph}</i>
                   <div className="net-info">
                     <b>{n.name}</b>
-                    {n.error && <small className="warn">Unavailable right now</small>}
+                    {n.error && (n.id === "discord" ? <small className="muted">No connect screen: send "help" to @discordbot in a chat to log in</small> : <small className="warn">Unavailable right now</small>)}
                     {n.logins.map((l) => <small key={l.id}>{l.name || l.profile?.name || l.id}<button className="link inline" onClick={() => disconnect(n, l)}>Disconnect</button></small>)}
                   </div>
-                  <button className="pill" disabled={!!n.error || busy} title={busy ? "Wait for the import in progress to finish" : undefined} onClick={() => setActive(n)}>{n.logins.length ? "Add another" : "Connect"}</button>
+                  <button className="pill" disabled={(!!n.error && n.id !== "discord") || busy || n.id === "discord"} title={busy ? "Wait for the import in progress to finish" : undefined} onClick={() => setActive(n)}>{n.logins.length ? "Add another" : "Connect"}</button>
                 </li>
               );
             })}

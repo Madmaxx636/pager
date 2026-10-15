@@ -162,7 +162,8 @@ export function isBotRoom(c: ChatState, me: string): boolean {
   const others = c.joined.filter((u) => u !== me);
   // Only some members are loaded at a time: a room with more people than that (like Signal's Note to Self: you, the bot and your own account) is not a bot room.
   // A real chat the bridge made (Note to Self with your own account puppeted by you has only you and the bot) carries the bridge's mark and is never a management room.
-  return others.length === 1 && /^@[a-z]*bot:/.test(others[0]) && (!c.memberCount || c.memberCount <= 2) && c.network === "matrix";
+  // The Discord bot is where you log in to Discord (it has no connect screen), so its chat is shown.
+  return others.length === 1 && /^@(?!discordbot:)[a-z]*bot:/.test(others[0]) && (!c.memberCount || c.memberCount <= 2) && c.network === "matrix";
 }
 
 /** Names you gave chats for yourself (desktop app). The chat keeps its real name for everyone else. */
@@ -172,7 +173,7 @@ export const aliasOf = (id: string) => aliases[id];
 export const isBotUser = (id: string) => /^@[a-z0-9_-]*bot:/.test(id);
 /** The real people in a member list: no bridge bots, and no bridge accounts that have no name yet. */
 export function realPeople(list: Record<string, string>): [string, string][] {
-  return Object.entries(list).filter(([id, n]) => !isBotUser(id) && n.trim() && !/^@/.test(n.trim()) && !(/^@(whatsapp|signal|gmessages|messenger|slack|discord|telegram|instagram|twitter|bluesky|linkedin|groupme)_/.test(id) && n.trim() === id.slice(1).split(":")[0]))
+  return Object.entries(list).filter(([id, n]) => !isBotUser(id) && n.trim() && !/^@/.test(n.trim()) && !(/^@(whatsapp|signal|gmessages|messenger|slack|discord|telegram|instagram|twitter|bluesky|linkedin|groupme|gvoice|teams|irc)_/.test(id) && n.trim() === id.slice(1).split(":")[0]))
     .sort((a, b) => a[1].localeCompare(b[1]));
 }
 
@@ -201,7 +202,7 @@ export function readersOf(chat: ChatState, msgId: string, sender: string): { use
 }
 
 /** The bridge's own bot account (e.g. @signalbot:server). It sends a receipt when a message reaches the other network: that means "delivered", not "read". */
-export const isBridgeBot = (userId: string) => /^@(whatsapp|signal|gmessages|messenger|instagram|slack|twitter|bluesky|linkedin|telegram|discord|googlechat|imessage)bot:/.test(userId);
+export const isBridgeBot = (userId: string) => /^@(whatsapp|signal|gmessages|messenger|instagram|slack|twitter|bluesky|linkedin|telegram|discord|googlechat|imessage|gvoice|teams)bot:/.test(userId);
 
 /** WhatsApp stories (status updates) arrive in one bridge room; we show it as "Stories". */
 export const isStoriesRoom = (c: ChatState) => /^whatsapp status broadcast$/i.test(c.name.trim()) || (c.network === "whatsapp" && /status.?broadcast/i.test(c.name));

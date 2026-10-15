@@ -130,7 +130,7 @@ data class ChatState(
         return others.size == 1 && BOT.containsMatchIn(others[0]) && (memberCount <= 0 || memberCount <= 2) && network == "matrix"
     }
 
-    companion object { const val LABEL_PREFIX = "u.label."; private val BOT = Regex("^@[a-z]*bot:") }
+    companion object { const val LABEL_PREFIX = "u.label."; private val BOT = Regex("^@(?!discordbot:)[a-z]*bot:") }
 }
 
 fun previewOf(m: Msg): String {
