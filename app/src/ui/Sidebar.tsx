@@ -80,7 +80,10 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
   const [labelFor, setLabelFor] = useState<string[]>();
   const [whenFor, setWhenFor] = useState<{ ids: string[]; kind: "snooze" | "remind" }>();
   const [picked, setPicked] = useState<string[]>([]);
-  const [dragId, setDragId] = useState<string>();
+  // Pinned pages are dragged with the pointer: the picked one follows the finger, the others slide aside to make room.
+  const [drag, setDrag] = useState<{ id: string; from: number; over: number; dx: number; dy: number }>();
+  const dragRects = useRef<DOMRect[]>([]);
+  const dragSwallow = useRef(false);
   const search = useRef<HTMLInputElement>(null);
   const selecting = picked.length > 0;
 
@@ -94,6 +97,56 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
   const pinsRow = st.showPinsRow && tab === "inbox" && !q && !filterCount(filters);
   const pins = pinsRow ? all.filter((c) => c.pinned && !c.archived && !c.lowPriority).sort((a, b) => a.pinOrder - b.pinOrder) : [];
   const pinIds = new Set(pins.map((p) => p.id));
+
+  const pinShift = (id: string, i: number): React.CSSProperties | undefined => {
+    if (!drag) return undefined;
+    const r = dragRects.current;
+    if (id === drag.id) return { transform: `translate(${drag.dx}px, ${drag.dy}px) scale(1.08)`, zIndex: 5, transition: "none", boxShadow: "0 8px 24px rgba(0,0,0,.35)" };
+    // Where this one sits once the picked one is lifted out and dropped at `over`.
+    const order = r.map((_, k) => k).filter((k) => k !== drag.from); order.splice(drag.over, 0, drag.from);
+    const slot = order.indexOf(i), home = r[i], to = r[slot];
+    return home && to ? { transform: `translate(${to.left - home.left}px, ${to.top - home.top}px)` } : undefined;
+  };
+  const startPinDrag = (e: React.PointerEvent<HTMLButtonElement>, id: string, from: number) => {
+    if (e.button !== 0) return;
+    const el = e.currentTarget, sx = e.clientX, sy = e.clientY, touch = e.pointerType === "touch";
+    let active = false, hold: number | undefined;
+    const begin = () => {
+      active = true; dragRects.current = [...(el.parentElement?.children ?? [])].map((n) => n.getBoundingClientRect());
+      try { el.setPointerCapture(e.pointerId); } catch { /* the pointer may already be gone */ }
+      navigator.vibrate?.(8);
+      setDrag({ id, from, over: from, dx: 0, dy: 0 });
+    };
+    const move = (m: PointerEvent) => {
+      const dx = m.clientX - sx, dy = m.clientY - sy;
+      if (!active) {
+        if (touch) { if (Math.hypot(dx, dy) > 8) cleanup(); return; }
+        if (Math.hypot(dx, dy) < 6) return;
+        begin();
+      }
+      m.preventDefault();
+      const home = dragRects.current[from]; if (!home) return;
+      const cx = home.left + home.width / 2 + dx, cy = home.top + home.height / 2 + dy;
+      let over = from, best = Infinity;
+      dragRects.current.forEach((r, k) => { const d = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy); if (d < best) { best = d; over = k; } });
+      setDrag({ id, from, over, dx, dy });
+    };
+    const up = () => {
+      const was = active;
+      cleanup();
+      if (!was) return;
+      dragSwallow.current = true; window.setTimeout(() => { dragSwallow.current = false; }, 0);
+      setDrag((d) => { if (d && d.over !== d.from) movePin(d.id, d.over); return undefined; });
+    };
+    const cleanup = () => {
+      window.clearTimeout(hold);
+      el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up);
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+    };
+    if (touch) hold = window.setTimeout(begin, 350);
+    window.addEventListener("pointermove", move, { passive: false }); window.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  };
   const networks = useMemo(() => [...new Set(all.map((c) => c.network))].sort(), [all]);
   const unreadCount = all.filter((c) => inTab(c, "unread")).length;
   // Unread pages pulse around their picture. Only the first dozen do, so a long unread list doesn't keep the screen redrawing.
@@ -187,10 +240,9 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
         {pins.length > 0 && (
           <div className="pins">
             {pins.map((c, i) => (
-              <button key={c.id} className={"pin-chip" + (c.id === selected ? " sel" : "") + (dragId === c.id ? " dragging" : "")} draggable
-                onDragStart={() => setDragId(c.id)} onDragEnd={() => setDragId(undefined)}
-                onDragOver={(e) => { e.preventDefault(); }} onDrop={() => { if (dragId && dragId !== c.id) movePin(dragId, i); setDragId(undefined); }}
-                onClick={() => open(c.id)} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }} title={c.name}>
+              <button key={c.id} className={"pin-chip" + (c.id === selected ? " sel" : "") + (drag?.id === c.id ? " dragging" : "") + (drag ? " shifting" : "")} style={pinShift(c.id, i)}
+                onPointerDown={(e) => startPinDrag(e, c.id, i)}
+                onClick={() => { if (dragSwallow.current) { dragSwallow.current = false; return; } open(c.id); }} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }} title={c.name}>
                 <span className={"pin-av" + (pulseIds.has(c.id) ? " pulse" : "")}>{c.faces && c.faces.length > 1 ? <GroupAvatar faces={c.faces} size={76} /> : <Avatar name={c.name} mxc={c.avatarMxc} size={76} network={st.showNetworkBadges ? c.network : undefined} />}{(c.unread > 0 || c.markedUnread) && <i className={"pin-dot" + (c.muted ? " muted" : "") + (c.unread > 9 ? " wide" : "")}>{c.unread > 0 ? (c.unread > 99 ? "99+" : c.unread) : ""}</i>}{c.typing && <span className="typing-badge"><TypingDots /></span>}</span>
                 <span className="pin-name">{c.name}</span>
               </button>

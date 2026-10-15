@@ -514,6 +514,8 @@ private fun PinnedGrid(pins: List<ChatSummary>, pulseIds: Set<String>, onOpen: (
     val bounds = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
     var dragId by remember { mutableStateOf<String?>(null) }
     var drag by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    // Where the lifted one would land right now; the others slide to the places that leaves them.
+    var over by remember { mutableStateOf(-1) }
     val haptic = LocalHapticFeedback.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
         pins.chunked(cols).forEach { row ->
@@ -521,18 +523,27 @@ private fun PinnedGrid(pins: List<ChatSummary>, pulseIds: Set<String>, onOpen: (
                 row.forEach { c ->
                     val unread = c.unread > 0 || c.markedUnread
                     val dragging = dragId == c.id
+                    val idx = pins.indexOf(c)
+                    val fromIdx = pins.indexOfFirst { it.id == dragId }
+                    val shift = run {
+                        if (fromIdx < 0 || over < 0 || dragging) return@run androidx.compose.ui.geometry.Offset.Zero
+                        val order = pins.indices.filter { it != fromIdx }.toMutableList().also { it.add(over.coerceIn(0, it.size), fromIdx) }
+                        val home = bounds[c.id]; val to = bounds[pins[order.indexOf(idx)].id]
+                        if (home != null && to != null) androidx.compose.ui.geometry.Offset(to.left - home.left, to.top - home.top) else androidx.compose.ui.geometry.Offset.Zero
+                    }
+                    val slide by androidx.compose.animation.core.animateOffsetAsState(shift, androidx.compose.animation.core.spring(dampingRatio = 0.7f, stiffness = 500f), label = "pinSlide")
                     Column(
                         Modifier.weight(1f).padding(vertical = 6.dp)
                             .onGloballyPositioned { bounds[c.id] = it.boundsInRoot() }
                             .zIndex(if (dragging) 1f else 0f)
-                            .graphicsLayer { if (dragging) { translationX = drag.x; translationY = drag.y; scaleX = 1.1f; scaleY = 1.1f; alpha = 0.92f } }
+                            .graphicsLayer { if (dragging) { translationX = drag.x; translationY = drag.y; scaleX = 1.1f; scaleY = 1.1f; alpha = 0.92f; shadowElevation = 24f } else { translationX = slide.x; translationY = slide.y } }
                             .dpadFocus().clickable { onOpen(c.id) }
                             // After the tap handler, so it sees touches first: a hold is ours (menu or drag), a quick tap is left to clickable.
                             .pointerInput(c.id) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
                                     awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
-                                    dragId = c.id; drag = androidx.compose.ui.geometry.Offset.Zero
+                                    dragId = c.id; drag = androidx.compose.ui.geometry.Offset.Zero; over = pins.indexOf(c)
                                     if (s.haptics) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     var moved = false
                                     while (true) {
@@ -541,15 +552,14 @@ private fun PinnedGrid(pins: List<ChatSummary>, pulseIds: Set<String>, onOpen: (
                                         if (!ch.pressed) break
                                         drag += ch.positionChange()
                                         if (drag.getDistance() > 24f) moved = true
+                                        bounds[c.id]?.let { h ->
+                                            val centre = h.center + drag
+                                            over = pins.indices.minByOrNull { k -> bounds[pins[k].id]?.let { (it.center - centre).getDistance() } ?: Float.MAX_VALUE } ?: over
+                                        }
                                     }
-                                    val from = bounds[c.id]
                                     if (!moved) onMenu(c)
-                                    else if (from != null) {
-                                        val centre = from.center + drag
-                                        val target = pins.firstOrNull { it.id != c.id && bounds[it.id]?.contains(centre) == true }
-                                        if (target != null) onMove(c.id, pins.indexOf(target))
-                                    }
-                                    dragId = null; drag = androidx.compose.ui.geometry.Offset.Zero
+                                    else if (over >= 0 && over != pins.indexOf(c)) onMove(c.id, over)
+                                    dragId = null; drag = androidx.compose.ui.geometry.Offset.Zero; over = -1
                                 }
                             },
                         horizontalAlignment = Alignment.CenterHorizontally,
