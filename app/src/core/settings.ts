@@ -108,6 +108,12 @@ export interface AppSettings {
   markReadMode: "open" | "scrolled" | "manual";
   /** Open a chat at its 'New messages' line instead of at the newest message. */
   openAtUnread: boolean;
+  /** The app icon you picked (see core/appicons.ts). */
+  appIcon: string;
+  /** For a slow or limited connection: nothing downloads by itself, smaller pictures, less background traffic. */
+  lowData: boolean;
+  /** For an older or slower computer: no animation, no effects, no blur or shadows, fewer messages kept in memory. */
+  lowEnd: boolean;
   /** Old single-provider setting (Tenor is gone); kept only so older saved settings still load. Use gifKeys. */
   gifProvider: "giphy" | "tenor";
   gifKey: string;
@@ -182,7 +188,7 @@ export const DEFAULTS: AppSettings = {
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
   enterToSend: true, sendReadReceipts: true, sendTyping: true, linkPreviews: true, autoDownload: "always", unarchiveOnMessage: true,
-  doubleTapEmoji: "👍", confirmDelete: true, greetings: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtUnread: false, gifProvider: "giphy", gifKey: "", gifKeys: {}, doubleTapReact: true, swipeToReply: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
+  doubleTapEmoji: "👍", confirmDelete: true, greetings: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtUnread: false, gifProvider: "giphy", gifKey: "", gifKeys: {}, lowData: false, lowEnd: false, appIcon: "classic", doubleTapReact: true, swipeToReply: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
   notifEnabled: true, convoSounds: true, sendSound: "swoosh", receiveSound: "pop", convoSoundVolume: 0.5, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [], notifNetworkMode: {}, notifChat: {}, notifKeywords: [], notifQuietDays: [0, 1, 2, 3, 4, 5, 6], notifQuietBreakThrough: false, notifDelaySec: 0, notifBadge: "unmuted", notifDirectMode: "all", notifGroupMode: "all", notifSoundId: "chime", notifSoundVolume: 0.7, notifNetworkSound: {}, dndUntil: 0,
   quietHoursEnabled: false, quietStartMin: 22 * 60, quietEndMin: 7 * 60,
   hiddenNetworks: [],
@@ -210,7 +216,7 @@ export const SHORTCUTS: { id: string; label: string; keys: string }[] = [
 
 const KEY = "pager.settings";
 let raw: AppSettings = load();
-let state: AppSettings = raw;
+let state: AppSettings = effective(raw);
 const listeners = new Set<() => void>();
 
 function load(): AppSettings {
@@ -255,7 +261,7 @@ export const SYNC_GROUPS: SyncGroup[] = [
   { id: "notifications", label: "Notifications", hint: "What alerts you, quiet hours, previews", keys: ["notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin"] },
   { id: "sounds", label: "Sounds", hint: "Send, receive and reaction sounds", keys: ["convoSounds", "sendSound", "receiveSound", "reactionSound"] },
   { id: "gifs", label: "GIF search keys", hint: "Your GIPHY and KLIPY keys (kept on your own server)", keys: ["gifKeys"] },
-  { id: "behaviour", label: "Chat behaviour", hint: "Read marks, typing, downloads, link previews, confirmations", keys: ["markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider"] },
+  { id: "behaviour", label: "Chat behaviour", hint: "Read marks, typing, downloads, link previews, confirmations", keys: ["lowData", "lowEnd", "markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider"] },
   { id: "desktop", label: "Desktop style", hint: "The desktop look and extra motion (computers only)", keys: ["skin", "skinAccent", "fancyMotion"] },
 ];
 /** Where this kind of device keeps what you save: computers and browsers together. */
@@ -288,12 +294,23 @@ export function loadSaved(saved: SavedSettings, ids: string[]): number {
 /** A short name for this device in a saved set ("Desktop app" or "Browser"). */
 export const deviceLabel = () => (typeof window !== "undefined" && window.pagerDesktop ? `Desktop app (${window.pagerDesktop.hostname || "computer"})` : "Browser");
 
+/**
+ * What the app actually uses: your settings with the two "easy on the machine" switches applied on top. Your own choices are not changed,
+ * so switching one off puts everything back as it was.
+ */
+export function effective(r: AppSettings): AppSettings {
+  let s = r;
+  if (r.lowData) s = { ...s, autoDownload: "never", autoPlayGifs: false, linkPreviews: false, autoTranscribe: false, sendTyping: false, showMessageTimes: s.showMessageTimes };
+  if (r.lowEnd) s = { ...s, fancyMotion: false, reduceMotion: true, screenEffects: false, messageAnimation: "none", bubbleDepth: "flat", bubbleFill: s.bubbleFill === "glass" ? "solid" : s.bubbleFill, wallpaper: "none", skin: "default", autoPlayGifs: false, greetings: false };
+  return s;
+}
+
 export const getSettings = () => state;
 /** Your own choices, without E-ink's overrides (this is what gets saved and shown on the settings page). */
 export const getRawSettings = () => raw;
 export function updateSettings(patch: Partial<AppSettings>) {
   raw = { ...raw, ...patch };
-  state = raw;
+  state = effective(raw);
   try { localStorage.setItem(KEY, JSON.stringify(raw)); } catch { /* storage may be unavailable */ }
   listeners.forEach((l) => l());
 }
@@ -407,6 +424,7 @@ export function applyTheme(s: AppSettings) {
     for (const [k, c] of Object.entries(v)) r.style.setProperty(k, c);
   }
   r.dataset.uiScale = s.uiScale;
+  r.toggleAttribute("data-lowend", getRawSettings().lowEnd);
   r.dataset.reactions = s.reactionStyle;
   const fam = FONTS.find((f) => f[0] === s.fontFamily)?.[2];
   if (fam) r.style.setProperty("--font", fam); else r.style.removeProperty("--font");

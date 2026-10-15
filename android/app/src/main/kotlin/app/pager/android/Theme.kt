@@ -185,6 +185,9 @@ fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int, k
         themeMode = "light", reduceMotion = true, screenEffects = false, messageAnimation = "none", bubbleFill = "solid", bubbleDepth = "flat",
         bubbleStyle = "outline", outStyle = "", wallpaper = "none", autoPlayGifs = false, colorSenderNames = false, accent = "teal",
     )
+    // Low data: nothing downloads by itself. Low-end: nothing moves and nothing is drawn that costs more than it is worth. Your own settings are untouched.
+    if (s.lowData) e = e.copy(autoDownload = "never", autoPlayGifs = false, linkPreviews = false, autoTranscribe = false, sendTyping = false)
+    if (s.lowEnd) e = e.copy(reduceMotion = true, screenEffects = false, messageAnimation = "none", bubbleDepth = "flat", bubbleFill = if (e.bubbleFill == "glass") "solid" else e.bubbleFill, wallpaper = "none", autoPlayGifs = false, greetings = false)
     // Small screens get tighter rows.
     val small = screenWidthDp < 340 || screenHeightDp < 560
     if (s.smallScreen == "on" || (s.smallScreen == "auto" && small)) e = e.copy(density = "compact")

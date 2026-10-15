@@ -7,7 +7,7 @@ import org.junit.Test
 
 class ChatSoundsTest {
     @Test fun everyChoiceRendersAudibleSamplesExceptNone() {
-        for ((id, _) in ChatSounds.choices.filterNot { it.first.startsWith("android_") }) {
+        for ((id, _) in ChatSounds.choices.filterNot { it.first.startsWith("android_") || it.first == "custom" }) {
             val pcm = ChatSounds.render(id)
             if (id == "none") assertNull(pcm) else {
                 assertNotNull(id, pcm)

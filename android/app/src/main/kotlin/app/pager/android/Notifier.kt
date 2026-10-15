@@ -185,7 +185,9 @@ object Notifier {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE).setOnlyAlertOnce(s.notifAlertOnce && lines.size > 1)
             .setVisibility(when (s.notifLockScreen) { "hide" -> NotificationCompat.VISIBILITY_SECRET; "hide_content" -> NotificationCompat.VISIBILITY_PRIVATE; else -> NotificationCompat.VISIBILITY_PUBLIC })
             .setColor(networkMeta(m.network).color.toArgb())
-        if (quiet) b.setSilent(true)
+        // With a sound of your own the system stays quiet and Pager plays the file itself.
+        val own = s.alertSound == "custom" && !quiet && s.notifSound && CustomSound.exists(context)
+        if (quiet || own) b.setSilent(true)
         if (android.os.Build.VERSION.SDK_INT >= 30) b.setBubbleMetadata(
             NotificationCompat.BubbleMetadata.Builder(
                 PendingIntent.getActivity(context, id + 1, openIntent, PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT), icon,
@@ -213,6 +215,7 @@ object Notifier {
         val nm = NotificationManagerCompat.from(context)
         runCatching {
             nm.notify(id, b.build())
+            if (own) CustomSound.play(context, 1f)
             // The bundle's header opens Pager when tapped (it used to do nothing).
             val openApp = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             nm.notify(0, NotificationCompat.Builder(context, CH_SILENT).setSmallIcon(R.drawable.ic_notif).setContentTitle("Pager").setContentText("New messages").setContentIntent(openApp).setGroup(GROUP).setGroupSummary(true).setAutoCancel(true).build())

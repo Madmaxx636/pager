@@ -511,6 +511,7 @@ private fun AppearancePage() {
     BubbleSettings()
     WallpaperSettings()
     EffectsSettings()
+    AppIconSettings()
     SettingsGroup("Reactions", footer = "Tap a reaction row to choose which reaction it adds. The switch turns it on or off.") {
         PickToggleRow("Double-tap to react", if (s.doubleTapReact) "Double-tap a message to add ${s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }}" else "Off", s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }, s.doubleTapReact, { v -> set { copy(doubleTapReact = v) } }) { tapPicking = "double" }; GroupDivider()
         PickToggleRow("Triple-tap to react", if (s.tripleTapReact) "Triple-tap a message to add ${s.tripleTapEmoji}. Makes a single tap wait a moment" else "Off", s.tripleTapEmoji, s.tripleTapReact, { v -> set { copy(tripleTapReact = v) } }) { tapPicking = "triple" }
@@ -571,6 +572,8 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
         SettingsGroup("Sound & vibration", footer = "For a custom ringtone, vibration pattern or light, open the system settings for Pager's messages.") {
             SwitchRow("Sound", checked = s.notifSound, enabled = s.notifEnabled) { v -> set { copy(notifSound = v) } }; GroupDivider()
             SwitchRow("Vibrate", checked = s.notifVibrate, enabled = s.notifEnabled) { v -> set { copy(notifVibrate = v) } }; GroupDivider()
+            CustomAlertSoundRows()
+            GroupDivider()
             SwitchRow("Alert once per burst", "Only the first message of several makes a sound", s.notifAlertOnce, s.notifEnabled) { v -> set { copy(notifAlertOnce = v) } }; GroupDivider()
             ButtonRow("Choose ringtone and vibration…") {
                 context.startActivity(Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName).putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Notifier.CH_ALL).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -1340,6 +1343,10 @@ private fun SystemSettings() {
     val store = LocalStore.current
     val s = LocalRawSettings.current
     val set = store.settings::update
+    SettingsGroup("Easy on your connection and your phone", footer = "Both are overrides: your own settings are not changed, so switching one off brings everything back.") {
+        SwitchRow("Low data mode", "For a slow or limited connection: nothing downloads until you tap it, GIFs don't play by themselves, link previews and typing indicators are off, pictures arrive at half size, and less runs in the background", s.lowData) { v -> set { copy(lowData = v) } }; GroupDivider()
+        SwitchRow("Low-end device mode", "For an older or slower phone: no animations or effects, plain bubbles, and fewer messages kept in memory", s.lowEnd) { v -> set { copy(lowEnd = v) } }
+    }
     SettingsGroup("Time") { ChoiceRow("Time format", listOf("system" to "Follow system", "12" to "12-hour", "24" to "24-hour"), s.timeFormat) { v -> set { copy(timeFormat = v) } } }
     SettingsGroup("Motion") { SwitchRow("Reduce motion", "Fewer animations", s.reduceMotion) { v -> set { copy(reduceMotion = v) } } }
     SettingsGroup("Extras") {
@@ -1367,6 +1374,47 @@ private fun GifKeyRow(id: String, name: String, where: String) {
                 }
             }) { Text(if (state == "testing") "Trying…" else "Try it") }
             when (state) { "ok" -> Text("$name works.", color = MaterialTheme.colorScheme.primary); "", "testing" -> {}; else -> Text(state, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
+
+/** Your own alert sound: pick an audio file, then choose to use it instead of Android's. */
+@Composable
+private fun CustomAlertSoundRows() {
+    val store = LocalStore.current
+    val s = LocalRawSettings.current
+    val context = LocalContext.current
+    var has by remember { mutableStateOf(CustomSound.exists(context)) }
+    var error by remember { mutableStateOf("") }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) runCatching { CustomSound.import(context, uri) }.onSuccess { has = true; error = ""; store.settings.update { copy(alertSound = "custom") } }.onFailure { error = it.message ?: "Couldn't use that file." }
+    }
+    NavRow(if (has) "Change your own sound…" else "Choose a sound of your own…", if (has) "Saved on this phone, up to 30 seconds" else "Pick an audio file (MP3, OGG, WAV…)") { pick.launch("audio/*") }
+    if (has) {
+        GroupDivider(); ChoiceRow("Alert sound", listOf("system" to "Android's sound", "custom" to "Your own sound"), s.alertSound, s.notifEnabled) { v -> store.settings.update { copy(alertSound = v) } }
+        GroupDivider(); ButtonRow("Play it") { CustomSound.play(context, 1f) }
+        GroupDivider(); ButtonRow("Remove my sound", danger = true) { CustomSound.remove(context); has = false; store.settings.update { copy(alertSound = "system") } }
+    }
+    if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+}
+
+/** Which colour the launcher icon wears. The change is made by switching which launcher entry of the app is on. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun AppIconSettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var current by remember { mutableStateOf(AppIcons.current(context)) }
+    SettingsGroup("App icon", footer = "Your launcher may take a few seconds to show the new icon.") {
+        androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            AppIcons.all.forEach { i ->
+                Column(Modifier.width(68.dp).dpadFocus().clickable { AppIcons.set(context, i.id); current = i.id }, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(Color(i.from), Color(i.to)))).border(2.dp, if (current == i.id) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) { if (current == i.id) Icon(Icons.Rounded.Check, i.name, tint = Color.White) }
+                    Text(i.name, style = MaterialTheme.typography.labelSmall, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
     }
 }

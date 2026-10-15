@@ -1,4 +1,4 @@
-import { KEEP_MESSAGES, poolClearMs } from "./memory";
+import { KEEP_MESSAGES, LOW_END_KEEP, poolClearMs } from "./memory";
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { BlobCache } from "./lru";
@@ -145,7 +145,7 @@ function scheduleSave() {
     const s = state.session; if (!s) return;
     const chats = Object.fromEntries(Object.entries(state.chats).map(([id, c]) => {
       const sent = c.messages.filter((m) => m.status === STATUS_SENT);
-      return [id, sent.length <= KEEP_MESSAGES ? { ...c, messages: sent, typing: [] } : { ...c, messages: sent.slice(-KEEP_MESSAGES), prevBatch: null, reachedStart: false, typing: [] }];
+      return [id, sent.length <= keepMessages() ? { ...c, messages: sent, typing: [] } : { ...c, messages: sent.slice(-keepMessages()), prevBatch: null, reachedStart: false, typing: [] }];
     }));
     void dbSet("cache", { userId: s.userId, since, chats });
   }, 3000);
@@ -748,6 +748,8 @@ export const preview = (u: string) => { if (!previews.has(u)) previews.set(u, ma
 const loading = new Set<string>();
 /** How many messages a page should have before we stop fetching older ones by ourselves. */
 const FILL_MESSAGES = 30;
+/** Low data fetches less history by itself; you can still scroll for more. */
+const fillTarget = () => (getSettings().lowData ? 15 : FILL_MESSAGES);
 /** When each chat was last being read above its newest messages, and whether it is right now. */
 const deepAt = new Map<string, number>();
 const deepNow = new Set<string>();
@@ -757,12 +759,13 @@ export function readingOlder(roomId: string, up: boolean) { if (up) { deepNow.ad
 export function trimPulledHistory(now = Date.now()) {
   let chats: typeof state.chats | undefined;
   for (const c of Object.values(state.chats)) {
-    if (c.messages.length <= KEEP_MESSAGES || deepNow.has(c.id) || now - (deepAt.get(c.id) ?? 0) < poolClearMs(c.messages.length)) continue;
+    if (c.messages.length <= keepMessages() || deepNow.has(c.id) || now - (deepAt.get(c.id) ?? 0) < poolClearMs(c.messages.length)) continue;
     chats ??= { ...state.chats };
-    chats[c.id] = { ...c, messages: c.messages.slice(-KEEP_MESSAGES), prevBatch: null, reachedStart: false };
+    chats[c.id] = { ...c, messages: c.messages.slice(-keepMessages()), prevBatch: null, reachedStart: false };
   }
   if (chats) set({ chats });
 }
+const keepMessages = () => (getSettings().lowEnd ? LOW_END_KEEP : KEEP_MESSAGES);
 window.setInterval(() => trimPulledHistory(), 30_000);
 
 /** The desktop app watches its own memory and says how tight it is: "high" over 300 MB, "critical" over 400, "hidden" while it sits in the tray. */
@@ -794,7 +797,7 @@ export function loadOlder(roomId: string, pages = 0) {
     // A page can be all bookkeeping (people joining, send statuses) and add nothing to show. The list then doesn't change, so nothing
     // would ask for the next page and the history would sit there until something else (like sending a message) woke it up.
     const n = state.chats[roomId];
-    if (n && !n.reachedStart && pages < 8 && n.messages.length < FILL_MESSAGES && (n.prevBatch ?? since) !== token) loadOlder(roomId, pages + 1);
+    if (n && !n.reachedStart && pages < 8 && n.messages.length < fillTarget() && (n.prevBatch ?? since) !== token) loadOlder(roomId, pages + 1);
   });
 }
 export function setTag(roomId: string, tag: string, on: boolean, order?: number) {
@@ -928,7 +931,8 @@ async function loadPhonebook(nets: Network[]) {
     try { addToPhonebook((await pager.contacts(n.id, l.id)).filter((c) => c.detail).map((c) => ({ number: c.detail!, name: c.name }))); } catch { /* this network has no contact list */ }
   }
 }
-window.setInterval(() => { if (document.visibilityState === "visible") void refreshBridges(); }, 120_000);
+let bridgeTick = 0;
+window.setInterval(() => { if (document.visibilityState === "visible" && (!getSettings().lowData || ++bridgeTick % 5 === 0)) void refreshBridges(); }, 120_000);
 
 /** Gives a chat a name only you see (empty puts the real name back). Saved in your account. */
 export function setAlias(roomId: string, name: string) {
@@ -967,6 +971,8 @@ const inflight = new Map<string, Promise<string | undefined>>();
 /** Already-downloaded media, available synchronously (avoids flashing placeholders). */
 export const cachedMedia = (mxc: string, thumb = 0) => blobCache.get(`${mxc}|${thumb}`);
 export function mediaUrl(mxc: string, thumb = 0): Promise<string | undefined> {
+  // Low data: pictures come in at about half the size (originals, thumb 0, are only fetched when you open one).
+  if (thumb > 0 && getSettings().lowData) thumb = Math.max(48, Math.round(thumb / 2));
   const key = `${mxc}|${thumb}`;
   const hit = blobCache.get(key); if (hit) return Promise.resolve(hit);
   if (inflight.has(key)) return inflight.get(key)!;
@@ -995,10 +1001,11 @@ declare global {
     pagerDesktop?: {
       notify(o: { title: string; body: string; roomId?: string; silent?: boolean }): void;
       setBadge(n: number): void;
-      getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean; smoothGraphics?: boolean }): void; setZoom(z: number): void;
+      getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean; smoothGraphics?: boolean; lowEnd?: boolean }): void; setZoom(z: number): void;
       onOpenRoom(cb: (roomId: string) => void): void;
       onMemory?(cb: (level: string) => void): void;
       setTitleBar?(o: { color: string; symbolColor: string }): void;
+      setIcon?(png: string): void;
       memory?(): Promise<{ total: number; parts: { type: string; mb: number }[] }>;
       cookieLogin(spec: unknown): Promise<Record<string, string> | null>;
       platform: string;

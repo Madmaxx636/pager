@@ -20,7 +20,9 @@ if (!prefs.smoothGraphics) app.disableHardwareAcceleration();
 app.commandLine.appendSwitch("disk-cache-size", String(64 * 1024 * 1024));
 // The page's script heap is capped well under the total budget (idle 200-300 MB, never over 400 MB, 500 MB at the very most), and Chromium's
 // low-memory mode makes its caches and buffers smaller. gc is exposed so the memory watcher below can ask for a clean-up.
-app.commandLine.appendSwitch("js-flags", "--max-old-space-size=256 --expose-gc");
+app.commandLine.appendSwitch("js-flags", `--max-old-space-size=${prefs.lowEnd ? 160 : 256} --expose-gc`);
+// Low-end device mode (Settings > System): draw without the graphics chip and without smooth scrolling, and keep a smaller memory budget.
+if (prefs.lowEnd) { app.disableHardwareAcceleration(); app.commandLine.appendSwitch("disable-smooth-scrolling"); }
 app.commandLine.appendSwitch("enable-low-end-device-mode");
 // Alert sounds are played by the page itself; without this the browser engine keeps them silent until you have clicked in the window,
 // which is why a message that arrived while Pager sat in the tray sometimes made no sound.
@@ -48,6 +50,16 @@ function watchMemory() {
   lastLevel = level;
 }
 
+/** The window and tray icon: the one you picked, or the original. */
+function currentIcon(size) {
+  const base = prefs.iconPng ? nativeImage.createFromDataURL(prefs.iconPng) : nativeImage.createFromPath(path.join(__dirname, "build", "icon.png"));
+  return size ? base.resize({ width: size, height: size }) : base;
+}
+function applyIcon() {
+  try { if (win && !win.isDestroyed()) win.setIcon(currentIcon()); } catch { /* not every desktop allows it */ }
+  try { if (tray) tray.setImage(prefs.iconPng ? currentIcon(22) : nativeImage.createFromPath(path.join(__dirname, "build", "tray.png")).resize({ width: 22, height: 22 })); } catch { /* ignore */ }
+}
+
 function showWindow() {
   if (!win) return createWindow();
   if (win.isMinimized()) win.restore();
@@ -61,7 +73,7 @@ function createWindow() {
     // Linux: the window's own title bar flickered and hid its buttons when maximized on KDE. Pager draws a thin bar of its own (see .titlebar in the app)
     // and Electron adds the minimize, maximize and close buttons on top of it, the same whether the window is maximized or not.
     ...(process.platform === "linux" ? { titleBarStyle: "hidden", titleBarOverlay: { color: "#0b0e13", symbolColor: "#c9d1d9", height: 36 } } : {}),
-    icon: path.join(__dirname, "build", "icon.png"),
+    icon: prefs.iconPng ? currentIcon() : path.join(__dirname, "build", "icon.png"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   win.loadFile(path.join(__dirname, "app-dist", "index.html"));
@@ -141,7 +153,7 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" }]));
 
-    try { tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "build", "tray.png")).resize({ width: 22, height: 22 })); tray.on("click", () => (win && win.isVisible() && win.isFocused() ? win.hide() : showWindow())); updateTray(); } catch { tray = null; }
+    try { tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "build", "tray.png")).resize({ width: 22, height: 22 })); tray.on("click", () => (win && win.isVisible() && win.isFocused() ? win.hide() : showWindow())); updateTray(); applyIcon(); } catch { tray = null; }
     // Downloaded installers from earlier updates are no longer needed.
     fs.rm(path.join(app.getPath("userData"), "updates"), { recursive: true, force: true }, () => {});
     createWindow();
@@ -174,6 +186,11 @@ if (!app.requestSingleInstanceLock()) {
     const n = new Notification({ title: String(o.title ?? "Pager"), body: String(o.body ?? ""), silent: !!o.silent, icon: path.join(__dirname, "build", "icon.png") });
     n.on("click", () => { showWindow(); if (o.roomId && win) win.webContents.send("open-room", o.roomId); });
     n.show();
+  });
+  // The icon colour you picked in Settings: a PNG from the page, for the window and the tray. An empty one goes back to the original.
+  ipcMain.on("icon:set", (_e, png) => {
+    const ok = typeof png === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]{20,}$/.test(png) && png.length < 600_000;
+    prefs.iconPng = ok ? png : undefined; savePrefs(); applyIcon();
   });
   ipcMain.on("badge", (_e, n) => { unread = Number(n) || 0; app.setBadgeCount(unread); updateTray(); });
   // Browser sign-in for networks that need your cookies (Google Messages). Opens a separate, throwaway browser window;

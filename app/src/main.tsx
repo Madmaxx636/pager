@@ -5,7 +5,9 @@ import { Greeting } from "./ui/Greeting";
 import { Titlebar } from "./ui/Titlebar";
 import "./styles.css";
 import { loadPhoto } from "./core/wallpapers";
+import { loadCustomSound } from "./core/customsound";
 
+void loadCustomSound(); // a sound of your own for alerts, if you added one
 void loadPhoto(); // a wallpaper photo of your own, if you added one
 
 createRoot(document.getElementById("root")!).render(<><Titlebar /><App /><Greeting /></>);

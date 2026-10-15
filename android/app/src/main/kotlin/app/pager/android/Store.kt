@@ -96,7 +96,7 @@ class Store(private val context: Context) {
     /** This account is an administrator of the server. */
     val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
     val matrix = MatrixApi(http)
-    val media = MediaLoader(context, http)
+    val media = MediaLoader(context, http).also { it.lowData = { settings.value.lowData } }
     val audio = AudioController(media)
     val transcripts = Transcripts(context, http, media)
     val settings = SettingsStore(context)
@@ -293,7 +293,7 @@ class Store(private val context: Context) {
                     // Keep the file small: recent messages only, nothing still in flight.
                     val trimmed = chats.mapValues { (_, c) ->
                         val sent = c.messages.filter { it.status == STATUS_SENT }
-                        if (sent.size <= KEEP_MESSAGES) c.copy(messages = sent) else c.copy(messages = sent.takeLast(KEEP_MESSAGES), prevBatch = null, reachedStart = false)
+                        if (sent.size <= keepMessages()) c.copy(messages = sent) else c.copy(messages = sent.takeLast(keepMessages()), prevBatch = null, reachedStart = false)
                     }
                     // Written straight to a file (then moved into place), not built as one giant text first.
                     val tmp = File(cacheFile.path + ".tmp")
@@ -968,6 +968,8 @@ class Store(private val context: Context) {
     private val FILL_MESSAGES = 30
     /** Messages kept per chat on this device; older ones are fetched from the server again when scrolling up. */
     private val KEEP_MESSAGES = 300
+    /** Low-end device mode keeps fewer messages per chat. */
+    private fun keepMessages() = if (settings.value.lowEnd) 120 else KEEP_MESSAGES
 
     /** When each chat was last being read above its newest messages, and which are being read that way right now. */
     private val deepAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
@@ -984,8 +986,8 @@ class Store(private val context: Context) {
     /** Drops the history pulled in by scrolling up once it has been left alone for a while, keeping only the newest messages. */
     fun trimPulledHistory(now: Long = System.currentTimeMillis()) {
         for (c in _chats.value.values) {
-            if (c.messages.size <= KEEP_MESSAGES || c.id in deepNow || now - (deepAt[c.id] ?: 0L) < poolClearMs(c.messages.size)) continue
-            update(c.id) { it.copy(messages = it.messages.takeLast(KEEP_MESSAGES), prevBatch = null, reachedStart = false) }
+            if (c.messages.size <= keepMessages() || c.id in deepNow || now - (deepAt[c.id] ?: 0L) < poolClearMs(c.messages.size)) continue
+            update(c.id) { it.copy(messages = it.messages.takeLast(keepMessages()), prevBatch = null, reachedStart = false) }
         }
     }
 

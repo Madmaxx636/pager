@@ -34,7 +34,11 @@ class MediaLoader(private val context: Context, private val http: Http) {
         Regex("^mxc://([^/]+)/(.+)$").find(mxc)?.destructured?.let { it.component1() to it.component2() }
 
     /** [thumb] > 0 requests a server-side thumbnail of that many pixels (fast and small); 0 loads the original. */
-    suspend fun bitmap(mxc: String, thumb: Int): Bitmap? {
+    /** Set by the app: true in low data mode, when pictures are fetched at about half size. */
+    @Volatile var lowData: () -> Boolean = { false }
+
+    suspend fun bitmap(mxc: String, thumbWanted: Int): Bitmap? {
+        val thumb = if (thumbWanted > 0 && lowData()) maxOf(48, thumbWanted / 2) else thumbWanted
         val key = "$mxc|$thumb"
         bitmaps.get(key)?.let { return it }
         val file = fetch(mxc, thumb) ?: return null

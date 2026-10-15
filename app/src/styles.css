@@ -651,3 +651,13 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .msg.flash .bubble { outline: 2px solid var(--accent); outline-offset: 2px; transition: outline-color .6s; }
 .gif-added { position: absolute; left: 6px; top: 6px; background: var(--accent); color: var(--accent-ink); font-size: .75rem; font-weight: 700; padding: 1px 7px; border-radius: 10px; pointer-events: none; }
 .tabs { flex-wrap: wrap; }
+
+/* Low-end device mode: nothing moves, no blur, no shadows */
+:root[data-lowend] *, :root[data-lowend] *::before, :root[data-lowend] *::after { animation: none !important; transition: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+:root[data-lowend] .bubble, :root[data-lowend] .menu, :root[data-lowend] .modal, :root[data-lowend] .hover-tools, :root[data-lowend] .composer .field { box-shadow: none !important; }
+:root[data-lowend] .pulse::after { display: none; }
+
+.icon-picks { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 16px 14px; }
+.icon-pick { width: 72px; display: grid; justify-items: center; gap: 4px; background: none; border: 0; padding: 0; color: var(--muted); }
+.icon-pick i { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; border: 2px solid transparent; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.icon-pick.on i { border-color: var(--accent); } .icon-pick small { font-size: .68rem; text-align: center; }
