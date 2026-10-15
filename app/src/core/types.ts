@@ -32,6 +32,8 @@ export interface Msg {
   durationMs?: number;
   /** A video's preview picture (its address), and whether it is really a GIF in video form (looping, silent). */
   poster?: string;
+  /** A Pager nudge, ring or full-screen picture (other apps just show the words). */
+  attention?: "nudge" | "ring" | "video" | "image";
   gifLike?: boolean;
   replyTo?: string;
   edited?: boolean;
@@ -97,6 +99,10 @@ export interface Incoming {
   replyToMe?: boolean;
   /** Someone reacted to a message (the text says how). */
   reaction?: boolean;
+  /** The message is a Pager attention alert. */
+  attention?: "nudge" | "ring" | "video" | "image";
+  mxc?: string;
+  id?: string;
 }
 
 export interface ChatSummary {

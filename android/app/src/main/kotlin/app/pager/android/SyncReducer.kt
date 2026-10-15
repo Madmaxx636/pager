@@ -81,7 +81,7 @@ object SyncReducer {
                 if (!initial && m.sender != me) {
                     val mine = pre.members[me] ?: me.removePrefix("@").substringBefore(':')
                     val mentioned = me in m.mentions || m.body.contains("@$mine", ignoreCase = true)
-                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.isGroup, mentioned, m.ts, replyToMe = parentSender == me))
+                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.isGroup, mentioned, m.ts, replyToMe = parentSender == me, attention = m.attention, msgId = m.id, mxc = m.mxc))
                 }
             })
 
@@ -401,7 +401,7 @@ object SyncReducer {
             w = info["w"].int(),
             h = info["h"].int(),
             durationMs = info["duration"].long() ?: content["org.matrix.msc1767.audio"].obj()["duration"].long(),
-            poster = videoExtras(info).first, gifLike = videoExtras(info).second,
+            poster = videoExtras(info).first, gifLike = videoExtras(info).second, attention = Attention.kindOf(content),
             replyTo = reply,
             txn = e["unsigned"].obj()["transaction_id"].str(),
             geo = content["geo_uri"].str(),

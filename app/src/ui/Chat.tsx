@@ -10,7 +10,7 @@ import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, is
 import { networkMeta } from "../core/emoji";
 import { useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
-  edit, enableEncryption, endPoll, forward as _forward, loadOlder, readingOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendContact, sendFile, gifFile,
+  edit, enableEncryption, endPoll, forward as _forward, loadOlder, readingOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendAttention, sendContact, sendFile, gifFile,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory, setAlias, setSolo,
 } from "../core/store";
 import { addLink, buildMerged, groupOf, suggestLinks, unlink } from "../core/links";
@@ -20,7 +20,7 @@ import { SOUNDS, playSound } from "../core/sounds";
 import { Avatar, GroupAvatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
 import { MessageRow } from "./Message";
 import { Effects } from "./Effects";
-import { AttachKind, AttachMenu, ContactModal, GifModal, PollModal, StickerModal } from "./Attach";
+import { AttachKind, AttachMenu, AttentionModal, ContactModal, GifModal, PollModal, StickerModal } from "./Attach";
 import { firstUrl } from "./rich";
 import type { Nav } from "./Sidebar";
 
@@ -362,6 +362,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
   const ta = useRef<HTMLTextAreaElement>(null);
   const files = useRef<HTMLInputElement>(null);
   const photos = useRef<HTMLInputElement>(null);
+  const attnPic = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const recorder = useRef<{ mr: MediaRecorder; stream: MediaStream; cancel?: boolean } | undefined>(undefined);
   const user = me();
@@ -502,6 +503,8 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
       {emoji && <EmojiPicker recent={st.recentEmoji} onPick={(e) => { setText(text + e); setEmoji(false); ta.current?.focus(); }} onClose={() => setEmoji(false)} />}
       {sheet === "gif" && <GifModal onPick={(g) => { void gifFile(g).then((f) => onFiles([f], false, g)).catch((e) => setError(e.message)); }} onSettings={() => { setSheet(undefined); nav("settings/media"); }} onClose={() => setSheet(undefined)} />}
       {sheet === "stickers" && <StickerModal roomId={roomId} onPick={(s) => { sendSticker(target, s); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
+      {sheet === "attention" && <AttentionModal onSend={(k) => { sendAttention(target, k); setSheet(undefined); }} onPicture={() => { setSheet(undefined); attnPic.current?.click(); }} onClose={() => setSheet(undefined)} />}
+      <input ref={attnPic} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) sendFile(target, f, f.name, { attention: "image", caption: "🔔 Look at this!" }); e.target.value = ""; }} />
       {sheet === "poll" && <PollModal onCreate={(q, a, max, disclosed) => { sendPoll(target, q, a, max, disclosed); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
       {sheet === "contact" && <ContactModal onSend={(n, p) => { sendContact(target, n, p); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
       {later && <WhenModal title="Send later" onClose={() => setLater(false)} onPick={async (at) => { setLater(false); const err = await schedule(target, text.trim(), Math.max(5000, at - Date.now())); if (err) setError(err); else { setText(""); onClearReply(); } }} />}

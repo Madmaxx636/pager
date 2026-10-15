@@ -1,3 +1,4 @@
+import { ATTENTION_FIELD, attentionText, isFresh, raise, type AttentionKind } from "./attention";
 import { attended } from "./presence";
 import { KEEP_MESSAGES, LOW_END_KEEP, poolClearMs } from "./memory";
 import { useMemo, useRef, useSyncExternalStore } from "react";
@@ -443,6 +444,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
         const when = new Date();
         for (const m of r.incoming) {
           const c = r.chats[m.roomId];
+          if (m.attention && !initial && m.id && isFresh(m.ts) && !muted.includes(m.roomId)) raise({ id: m.id, roomId: m.roomId, chat: m.chat, sender: m.sender, kind: m.attention, mxc: m.attention === "image" ? m.mxc : undefined });
           if (st.convoSounds && looking(m.roomId) && attended()) { playSound(m.reaction ? st.reactionSound : st.receiveSound, st.convoSoundVolume); continue; }
           const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text,
             quiet: muted.includes(m.roomId) || (c ? isLowPriority(c) : false), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
@@ -646,6 +648,12 @@ export function markUnread(roomId: string, unread: boolean) { patchChat(roomId, 
 export function markAllRead() { Object.values(state.chats).filter((c) => c.unread > 0 || c.markedUnread).forEach((c) => markRead(c.id)); }
 
 /** [viewOnce]: Signal shows the picture or video once and then it is gone (the bridge turns this into Signal's own view-once). */
+export function sendAttention(roomId: string, kind: AttentionKind) {
+  const txn = uuid(), localId = `local-${txn}`, text = attentionText(kind);
+  addLocal(roomId, localMsg(localId, "m.text", text, { txn, attention: kind }));
+  matrix.send(roomId, "m.room.message", txn, { msgtype: "m.text", body: text, [ATTENTION_FIELD]: { kind } })
+    .then((id) => setStatus(roomId, localId, STATUS_SENT, id)).catch(() => setStatus(roomId, localId, STATUS_FAILED));
+}
 export function sendFile(roomId: string, file: File | Blob, name = (file as File).name || "file", extra: Partial<Msg> & { viewOnce?: boolean; caption?: string } = {}) {
   const mime = file.type || "application/octet-stream";
   const type = mime.startsWith("image/") ? "m.image" : mime.startsWith("video/") ? "m.video" : mime.startsWith("audio/") ? "m.audio" : "m.file";
@@ -662,6 +670,7 @@ export function sendFile(roomId: string, file: File | Blob, name = (file as File
       const id = await matrix.send(roomId, "m.room.message", txn, {
         msgtype: type, body: extra.caption?.trim() || name, ...(extra.caption?.trim() ? { filename: name } : {}), ...(sealed ? { file: { url: mxc, ...sealed.file } } : { url: mxc }), info,
         ...(extra.viewOnce && (type === "m.image" || type === "m.video") ? { "com.beeper.view_limited": { type: "count", count: 1 } } : {}),
+        ...(extra.attention ? { [ATTENTION_FIELD]: { kind: extra.attention } } : {}),
         ...(extra.voice ? { "org.matrix.msc3245.voice": {}, "org.matrix.msc1767.audio": { duration: extra.durationMs ?? 0 } } : {}),
       });
       setStatus(roomId, localId, STATUS_SENT, id);

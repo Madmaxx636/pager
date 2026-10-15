@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { EyeOff, BarChart3, ContactRound, File as FileIcon, Image as ImageIcon, MapPin, Plus, Smile, Sticker as StickerIcon, X, Camera } from "lucide-react";
+import { Bell, EyeOff, BarChart3, ContactRound, File as FileIcon, Image as ImageIcon, MapPin, Plus, Smile, Sticker as StickerIcon, X, Camera } from "lucide-react";
+import { ATTENTION_KINDS, AttentionKind } from "../core/attention";
 import { Gif, searchGifs, sourcesWithKeys } from "../core/gifs";
 import { Sticker } from "../core/types";
 import { addStickers, stickerPacks, toggleFavoriteGif, useStore } from "../core/store";
 import { useSettings } from "../core/settings";
 import { EmptyState, Modal, useMxc } from "./common";
 
-export type AttachKind = "viewonce" | "photos" | "camera" | "gif" | "stickers" | "emoji" | "file" | "poll" | "contact" | "location";
+export type AttachKind = "viewonce" | "photos" | "camera" | "gif" | "stickers" | "emoji" | "file" | "poll" | "contact" | "location" | "attention";
 
 const ITEMS: [AttachKind, string, React.ComponentType<{ size?: number; color?: string }> | "gif", string][] = [
   ["photos", "Photos", ImageIcon, "#3b82f6"], ["camera", "Camera", Camera, "#6b7280"], ["gif", "GIF", "gif", "#ec4899"],
   ["stickers", "Stickers", StickerIcon, "#f59e0b"], ["emoji", "Emoji", Smile, "#eab308"], ["file", "File", FileIcon, "#14b8a6"],
-  ["viewonce", "View once", EyeOff, "#475569"], ["poll", "Poll", BarChart3, "#8b5cf6"], ["contact", "Contact", ContactRound, "#0ea5e9"], ["location", "Location", MapPin, "#ef4444"],
+  ["viewonce", "View once", EyeOff, "#475569"], ["poll", "Poll", BarChart3, "#8b5cf6"], ["contact", "Contact", ContactRound, "#0ea5e9"], ["location", "Location", MapPin, "#ef4444"], ["attention", "Get attention", Bell, "#f43f5e"],
 ];
 
 /** The + menu: a grid of everything you can add to a message. */
@@ -155,6 +156,20 @@ export function ContactModal({ onSend, onClose }: { onSend: (name: string, phone
         <button className="primary" disabled={!name.trim() || !phone.trim()}>Send contact card</button>
         <p className="fine">Sent as a vCard file the other person can save.</p>
       </form>
+    </Modal>
+  );
+}
+
+/** Pick how to get their attention. Only Pager apps ring or shake; other apps just show the words. */
+export function AttentionModal({ onSend, onPicture, onClose }: { onSend: (k: AttentionKind) => void; onPicture: () => void; onClose: () => void }) {
+  return (
+    <Modal title="Get their attention" onClose={onClose}>
+      <div className="attn-picks">
+        {ATTENTION_KINDS.map((k) => (
+          <button key={k.kind} onClick={() => (k.kind === "image" ? onPicture() : onSend(k.kind))}><b>{k.label}</b><small>{k.hint}</small></button>
+        ))}
+      </div>
+      <p className="hint">Rings and nudges only alert people using Pager; on other apps they just see a short message. This is an alert, not a real voice or video call.</p>
     </Modal>
   );
 }

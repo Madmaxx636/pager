@@ -35,6 +35,8 @@ data class Msg(
     /** A video's preview picture (its address), and whether it is really a GIF in video form (silent and looping). */
     val poster: String? = null,
     val gifLike: Boolean = false,
+    /** A Pager nudge, ring or full-screen picture: nudge | ring | video | image (other apps just show the words). */
+    val attention: String? = null,
     val replyTo: String? = null,
     val edited: Boolean = false,
     val txn: String? = null,
@@ -195,6 +197,10 @@ data class Incoming(
     val replyToMe: Boolean = false,
     /** Set by the notification policy: show it without sound or vibration. */
     val silent: Boolean = false,
+    /** A Pager attention alert, with the message it came in. */
+    val attention: String? = null,
+    val msgId: String? = null,
+    val mxc: String? = null,
     /** Set by the notification policy: full | sender | hidden. */
     val preview: String = "full",
     /** Someone reacted to a message (the text says how). */

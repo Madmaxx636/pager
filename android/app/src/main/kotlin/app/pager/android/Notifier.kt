@@ -27,10 +27,13 @@ object Notifier {
     const val CH_VIBRATE = "messages_vibrate"
     const val CH_SILENT = "messages_silent"
     const val CH_SYNC = "sync"
+    const val CH_ATTN = "attention"
+    const val ATTN_ID = 0x41AA
     private const val GROUP = "pager.messages"
     private const val KEY_REPLY = "reply"
     const val ACTION_REPLY = "app.pager.android.REPLY"
     const val ACTION_READ = "app.pager.android.MARK_READ"
+    const val ACTION_DECLINE = "app.pager.android.ATTENTION_DECLINE"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -47,6 +50,11 @@ object Notifier {
         nm.createNotificationChannel(ch(CH_SOUND, "Messages (sound only)", NotificationManager.IMPORTANCE_HIGH, true, false))
         nm.createNotificationChannel(ch(CH_VIBRATE, "Messages (vibrate only)", NotificationManager.IMPORTANCE_HIGH, false, true))
         nm.createNotificationChannel(ch(CH_SILENT, "Messages (silent)", NotificationManager.IMPORTANCE_LOW, false, false))
+        // Rings and nudges: the phone's ringtone, loud, and allowed to take over the screen.
+        nm.createNotificationChannel(NotificationChannel(CH_ATTN, "Rings and nudges", NotificationManager.IMPORTANCE_HIGH).apply {
+            setSound(android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE), android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            enableVibration(true); vibrationPattern = longArrayOf(0, 600, 400, 600, 400); lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+        })
         nm.createNotificationChannel(ch(CH_SYNC, "Background sync", NotificationManager.IMPORTANCE_MIN, false, false))
     }
 
@@ -222,6 +230,31 @@ object Notifier {
         }
     }
 
+    /** A ring or nudge while Pager is not on screen: a loud notification that opens a full screen over the lock screen where Android allows it. */
+    fun attention(context: Context, store: Store, a: Attention.Alert) {
+        val calling = Attention.calling(a.kind)
+        val open = PendingIntent.getActivity(
+            context, ATTN_ID,
+            Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(android.net.Uri.parse("pager://chat/" + android.net.Uri.encode(a.roomId))).putExtra("roomId", a.roomId).putExtra("attention", a.id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val decline = PendingIntent.getBroadcast(context, ATTN_ID, Intent(context, NotificationActionReceiver::class.java).setAction(ACTION_DECLINE).putExtra("roomId", a.roomId), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val text = when (a.kind) { "nudge" -> "wants your attention"; "image" -> "sent you something to look at"; "video" -> "is video-ringing you"; else -> "is ringing you" }
+        val b = NotificationCompat.Builder(context, CH_ATTN)
+            .setSmallIcon(R.drawable.ic_notif).setContentTitle(a.sender).setContentText(text)
+            .setPriority(NotificationCompat.PRIORITY_MAX).setCategory(if (calling) NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_ALARM)
+            .setContentIntent(open).setFullScreenIntent(open, true).setAutoCancel(true).setTimeoutAfter(if (calling) 45_000 else 12_000)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(NotificationCompat.Action.Builder(R.drawable.ic_notif, if (calling) "Answer" else "Open", open).build())
+            .addAction(NotificationCompat.Action.Builder(R.drawable.ic_notif, if (calling) "Decline" else "Dismiss", decline).build())
+        val note = b.build()
+        if (calling) note.flags = note.flags or android.app.Notification.FLAG_INSISTENT // keeps ringing until answered or timed out
+        runCatching { NotificationManagerCompat.from(context).notify(ATTN_ID, note) }
+    }
+
+    fun clearAttention(context: Context) { NotificationManagerCompat.from(context).cancel(ATTN_ID) }
+
     fun clear(context: Context, roomId: String) {
         history.remove(roomId)
         NotificationManagerCompat.from(context).cancel(roomId.hashCode())
@@ -257,6 +290,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val store = (context.applicationContext as PagerApp).store
         val room = intent.getStringExtra("roomId") ?: return
+        if (intent.action == Notifier.ACTION_DECLINE) { Attention.dismiss(context); Notifier.clearAttention(context); return }
         when (intent.action) {
             Notifier.ACTION_REPLY -> {
                 Notifier.replyText(intent)?.takeIf { it.isNotBlank() }?.let { store.send(room, it.trim()) }

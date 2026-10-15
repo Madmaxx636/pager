@@ -1,4 +1,5 @@
 // Folds Matrix /sync and /messages responses into chat state. A direct port of the Android SyncReducer so both clients behave alike.
+import { attentionKindOf } from "./attention";
 import { registerEncrypted, type EncFile } from "./mediacrypt";
 import { ChatState, Incoming, Msg, PollAnswer, STATUS_SENT, StickerPack, displayName, emptyChat, isGroup, nameOf, previewOf } from "./types";
 
@@ -66,7 +67,7 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
         if (!initial && m.sender !== me) {
           const mine = pre.members[me] ?? me.replace(/^@/, "").split(":")[0];
           const mentioned = m.mentions.includes(me) || m.body.toLowerCase().includes(`@${mine}`.toLowerCase());
-          incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: isGroup(pre), mentioned, ts: m.ts, replyToMe: parentSender === me });
+          incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: isGroup(pre), mentioned, ts: m.ts, replyToMe: parentSender === me, attention: m.attention, mxc: m.mxc, id: m.id });
         }
       }, (sender, key, target) => {
         // Someone reacted to something you wrote: that is about you, so it alerts like a reply. In a one-to-one chat, or when the message is not loaded
@@ -371,7 +372,7 @@ export function toMsg(e: J): Msg | undefined {
     id, sender, ts: num(e.origin_server_ts) ?? 0, type, body, caption: cap?.text, captionHtml: cap?.html,
     sealed: content.pagerRaw ?? undefined,
     mxc: enc ? enc.url : str(content.url), enc, mime: str(info.mimetype), size: num(info.size), w: num(info.w), h: num(info.h),
-    durationMs: num(info.duration) ?? num(obj(content["org.matrix.msc1767.audio"]).duration), ...videoExtras(info),
+    durationMs: num(info.duration) ?? num(obj(content["org.matrix.msc1767.audio"]).duration), ...videoExtras(info), attention: attentionKindOf(content),
     replyTo: reply, txn: str(obj(e.unsigned).transaction_id), geo: str(content.geo_uri),
     voice: content["org.matrix.msc3245.voice"] != null || obj(content["org.matrix.msc1767.audio"]).waveform != null,
     mentions: arr(obj(content["m.mentions"]).user_ids).filter((u) => typeof u === "string"),

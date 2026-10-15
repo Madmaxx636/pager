@@ -1,6 +1,6 @@
 {
   "name": "pager-desktop",
-  "version": "0.5.53",
+  "version": "0.5.54",
   "private": true,
   "description": "Pager desktop app (Linux and Windows; a macOS build is configured but untested)",
   "author": "Pager contributors",

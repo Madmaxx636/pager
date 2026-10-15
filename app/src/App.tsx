@@ -1,3 +1,4 @@
+import { AttentionOverlay } from "./ui/AttentionOverlay";
 import type React from "react";
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { Mascot } from "./ui/Mascot";
@@ -126,6 +127,7 @@ export function App() {
       <main className="main">{main}</main>
       <KeySetup />
       <Tour nav={nav} />
+      <AttentionOverlay open={(id) => nav(`chat:${id}`)} />
       <ImportWatcher />
       {accounts && <AccountsModal onClose={() => setAccounts(false)} />}
       {palette && <Palette nav={nav} current={roomId ?? undefined} onClose={() => setPalette(false)} onSnooze={setSnoozing} />}

@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.Gif
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Poll
@@ -98,6 +99,7 @@ enum class Attach(val label: String, val icon: ImageVector, val color: Color) {
     POLL("Poll", Icons.Rounded.Poll, Color(0xFF8B5CF6)),
     CONTACT("Contact", Icons.Rounded.ContactPage, Color(0xFF0EA5E9)),
     LOCATION("Location", Icons.Rounded.LocationOn, Color(0xFFEF4444)),
+    ATTENTION("Get attention", Icons.Rounded.Notifications, Color(0xFFF43F5E)),
 }
 
 @Composable
