@@ -65,10 +65,12 @@ docker compose up -d --build
 ```
 Open `https://your-domain/`, sign up with the invite code printed by setup, then connect accounts from the app.
 
-- Bridges on by default: WhatsApp, Signal, Google Messages, Messenger, Slack, X (Twitter) DMs, Bluesky and LinkedIn. Opt-in (add to
-  `server/.env`, then re-run `setup.sh`): Telegram (`TELEGRAM_API_ID` + `TELEGRAM_API_HASH` from https://my.telegram.org) and Discord
-  (`ENABLE_DISCORD=1`; it is a legacy bridge whose login API doesn't match, so log in through its bot chat). iMessage needs a Mac and
-  isn't included.
+- Bridges on by default: WhatsApp, Signal, Google Messages, Messenger, Slack, X (Twitter) DMs, Bluesky, LinkedIn, GroupMe, Instagram (through the
+  Meta bridge; experimental, Meta can restrict accounts that use bridges), Google Voice and Microsoft Teams (experimental: personal accounts only;
+  built from source on first setup, there is no published image). Opt-in (add to `server/.env`, then re-run `setup.sh`): Telegram
+  (`TELEGRAM_API_ID` + `TELEGRAM_API_HASH` from https://my.telegram.org), Discord (`ENABLE_DISCORD=1`; it is a legacy bridge whose login API
+  doesn't match, so log in through its bot chat) and IRC through Heisenbridge (`HEISENBRIDGE_OWNER=@you:your.domain`; it has no connect screen:
+  message `@heisenbridge` and tell it which networks to join). iMessage needs a Mac and isn't included.
 - Every bridge gets the same defaults (`scripts/defaults.sh`): up to 2,000 messages of history per new chat, read and delivery state,
   and typing in both directions, plus double puppeting (`scripts/double-puppet.sh`) so messages you send from your phone show as sent by you.
 - **Admin:** sign up with the *admin* code that `setup.sh` prints to create an administrator, or run `scripts/make-admin.sh yourname`

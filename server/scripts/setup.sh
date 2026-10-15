@@ -50,7 +50,9 @@ BRIDGE_TABLE=(
   "twitter;X (Twitter) DMs;twitter;mautrix-twitter;;"
   "bluesky;Bluesky;bluesky;mautrix-bluesky;;"
   "linkedin;LinkedIn;linkedin;mautrix-linkedin;;"
-  "instagram;Instagram (experimental: no published bridge image at last check);instagram;mautrix-instagram;;ENABLE_INSTAGRAM"
+  "instagram;Instagram (experimental: Meta can restrict accounts that use bridges);meta;mautrix-meta;.network.mode = \"instagram\";"
+  "gvoice;Google Voice;gvoice;mautrix-gvoice;;"
+  "teams;Microsoft Teams (experimental: personal accounts only, built from source);pager/mautrix-teams:local;mautrix-teams;;"
   "messenger;Messenger;meta;mautrix-meta;;"
   "telegram;Telegram;telegram;mautrix-telegram;.network.api_id = ${TELEGRAM_API_ID:-0} | .network.api_hash = \"${TELEGRAM_API_HASH:-}\";TELEGRAM_API_HASH"
 )
@@ -92,7 +94,9 @@ for row in "${BRIDGE_TABLE[@]}"; do
   fi
   dir="data/bridges/$id"
   mkdir -p "$dir"
-  img="dock.mau.dev/mautrix/$image:latest"
+  # A name with a slash or a colon is a full image reference (the Teams bridge is built here, from source); anything else is a mautrix image.
+  case "$image" in */*|*:*) img="$image" ;; *) img="dock.mau.dev/mautrix/$image:latest" ;; esac
+  [ "$id" = teams ] && ./scripts/build-teams.sh >/dev/null
 
   if [ ! -f "$dir/config.yaml" ]; then
     # First run copies the example config and exits.
@@ -185,6 +189,31 @@ cat >> data/bridges.compose.yml <<YML
     networks: [pager]
 YML
 enabled+=("GroupMe")
+
+# --- IRC: Heisenbridge (a personal IRC "bouncer" for Matrix; not a mautrix bridge) --------------------------------
+# It has no connect screen in Pager: you message its bot (@heisenbridge) and tell it which IRC networks to join. It needs to know who owns it:
+# set HEISENBRIDGE_OWNER=@you:your.domain in .env. Without that it is skipped.
+if [ -n "${HEISENBRIDGE_OWNER:-}" ]; then
+  hid=heisenbridge; hdir="data/bridges/$hid"; mkdir -p "$hdir"
+  himg=docker.io/hif1/heisenbridge:latest
+  if [ ! -f "$hdir/registration.yaml" ]; then
+    docker run --rm $USERNS -u "$DOCKER_UID" -v "$PWD/$hdir:/data" "$himg" -c /data/registration.yaml --generate
+    yq -i '.url = "http://heisenbridge:9898"' "bridges/$hid/registration.yaml"
+  fi
+  cp "$hdir/registration.yaml" "data/synapse/appservice-$hid.yaml"
+  yq -i ".app_service_config_files += [\"/data/appservice-$hid.yaml\"]" synapse/homeserver.yaml
+  # Not added to bridges.json: it has no login screen, so the apps would list it as broken.
+  cat >> data/bridges.compose.yml <<YML
+  $hid:
+    image: $himg
+    restart: unless-stopped
+    user: "\${BRIDGE_UID:-1337}:\${BRIDGE_GID:-1337}"
+    command: ["-c", "/data/registration.yaml", "-l", "0.0.0.0", "-p", "9898", "--owner", "$HEISENBRIDGE_OWNER", "http://synapse:8008"]
+    volumes: ["./data/bridges/$hid:/data"]
+    networks: [pager]
+YML
+  enabled+=("IRC (Heisenbridge)")
+fi
 
 # Bridges act as your real user (sent-from-phone messages show as yours, reading on your phone clears unread in Pager).
 ./scripts/double-puppet.sh --no-restart >/dev/null
