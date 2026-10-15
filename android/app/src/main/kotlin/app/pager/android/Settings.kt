@@ -127,6 +127,8 @@ data class AppSettings(
     val openAtUnread: Boolean = false,
     val gifProvider: String = "giphy",         // giphy | tenor
     val gifKey: String = "",
+    /** Your GIF search keys by provider (giphy, klipy). gifProvider and gifKey are from before there were several sources. */
+    val gifKeys: Map<String, String> = emptyMap(),
     val quickReactions: List<String> = DEFAULT_QUICK_REACTIONS,
     val recentEmoji: List<String> = emptyList(),
 
@@ -187,7 +189,10 @@ class SettingsStore(context: Context) {
 
     private fun load(): AppSettings = runCatching {
         // The alert delay and the per-network settings were taken out of Settings, so whatever was saved for them is switched off.
-        json.decodeFromString(AppSettings.serializer(), prefs.getString("json", null) ?: return@runCatching AppSettings()).copy(notifDelaySec = 0, notifNetworkMode = emptyMap(), notifMutedNetworks = emptySet()).let { it.copy(bubbleStyle = migrateBubbleStyle(it.bubbleStyle), outStyle = if (it.outStyle.isEmpty()) "" else migrateBubbleStyle(it.outStyle)) }
+        json.decodeFromString(AppSettings.serializer(), prefs.getString("json", null) ?: return@runCatching AppSettings()).copy(notifDelaySec = 0, notifNetworkMode = emptyMap(), notifMutedNetworks = emptySet()).let { x ->
+            // One GIPHY key from before several sources existed moves into the new place. (A Tenor key is dropped: that service no longer exists.)
+            if (x.gifKey.isNotBlank() && x.gifProvider != "tenor" && x.gifKeys["giphy"].isNullOrBlank()) x.copy(gifKeys = x.gifKeys + ("giphy" to x.gifKey)) else x
+        }.let { it.copy(bubbleStyle = migrateBubbleStyle(it.bubbleStyle), outStyle = if (it.outStyle.isEmpty()) "" else migrateBubbleStyle(it.outStyle)) }
     }.getOrDefault(AppSettings())
 
     // ---- Syncing settings between your devices: only when you press the button -----------------------------------
@@ -206,6 +211,7 @@ class SettingsStore(context: Context) {
             Group("list", "Chat list", "What each row shows, filters, swipes, hidden networks", listOf("showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories", "swipeLeft", "swipeRight")),
             Group("notifications", "Notifications", "What alerts you, quiet hours, previews", listOf("notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin", "notifVibrate", "notifLockScreen", "notifAlertOnce", "notifActions")),
             Group("sounds", "Sounds", "Send, receive and reaction sounds", listOf("convoSounds", "sendSound", "receiveSound", "reactionSound")),
+            Group("gifs", "GIF search keys", "Your GIPHY and KLIPY keys (kept on your own server)", listOf("gifKeys")),
             Group("behaviour", "Chat behaviour", "Read marks, typing, downloads, link previews, confirmations", listOf("markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider", "enterSends", "imageQuality")),
         )
     }

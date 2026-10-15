@@ -134,7 +134,10 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const ro = new ResizeObserver(pin); if (el.firstElementChild) ro.observe(el.firstElementChild); ro.observe(el);
     return () => { el.removeEventListener("load", pin, true); el.removeEventListener("loadedmetadata", pin, true); ro.disconnect(); };
   }, [roomId, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
-  const mayMark = () => st.markReadMode === "open" || (st.markReadMode === "scrolled" && stick.current && document.hasFocus());
+  // A message only counts as read while you can see it: the window is in front and focused. Otherwise a message that arrives while Pager sits
+  // in the tray (or behind another window) with this page open would be marked read at once, and the page list would never show it.
+  const looking = () => document.hasFocus() && document.visibilityState === "visible";
+  const mayMark = () => looking() && (st.markReadMode === "open" || (st.markReadMode === "scrolled" && stick.current));
   useEffect(() => { if (mayMark()) markRead(roomId); }, [roomId, messages.length, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const f = () => mayMark() && markRead(roomId); window.addEventListener("focus", f); return () => window.removeEventListener("focus", f); }, [roomId, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -496,7 +499,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
         </form>
       )}
       {emoji && <EmojiPicker recent={st.recentEmoji} onPick={(e) => { setText(text + e); setEmoji(false); ta.current?.focus(); }} onClose={() => setEmoji(false)} />}
-      {sheet === "gif" && <GifModal onPick={(g) => { void gifFile(g).then((f) => onFiles([f], false, g)).catch((e) => setError(e.message)); setSheet(undefined); }} onSettings={() => { setSheet(undefined); nav("settings/media"); }} onClose={() => setSheet(undefined)} />}
+      {sheet === "gif" && <GifModal onPick={(g) => { void gifFile(g).then((f) => onFiles([f], false, g)).catch((e) => setError(e.message)); }} onSettings={() => { setSheet(undefined); nav("settings/media"); }} onClose={() => setSheet(undefined)} />}
       {sheet === "stickers" && <StickerModal roomId={roomId} onPick={(s) => { sendSticker(target, s); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
       {sheet === "poll" && <PollModal onCreate={(q, a, max, disclosed) => { sendPoll(target, q, a, max, disclosed); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}
       {sheet === "contact" && <ContactModal onSend={(n, p) => { sendContact(target, n, p); setSheet(undefined); }} onClose={() => setSheet(undefined)} />}

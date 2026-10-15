@@ -108,8 +108,11 @@ export interface AppSettings {
   markReadMode: "open" | "scrolled" | "manual";
   /** Open a chat at its 'New messages' line instead of at the newest message. */
   openAtUnread: boolean;
+  /** Old single-provider setting (Tenor is gone); kept only so older saved settings still load. Use gifKeys. */
   gifProvider: "giphy" | "tenor";
   gifKey: string;
+  /** Your GIF search keys, by provider (giphy, klipy). */
+  gifKeys: Record<string, string>;
   doubleTapReact: boolean;
   /** Swipe a message to the right to reply (touch, or two fingers on a trackpad). */
   swipeToReply: boolean;
@@ -179,7 +182,7 @@ export const DEFAULTS: AppSettings = {
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
   enterToSend: true, sendReadReceipts: true, sendTyping: true, linkPreviews: true, autoDownload: "always", unarchiveOnMessage: true,
-  doubleTapEmoji: "👍", confirmDelete: true, greetings: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtUnread: false, gifProvider: "giphy", gifKey: "", doubleTapReact: true, swipeToReply: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
+  doubleTapEmoji: "👍", confirmDelete: true, greetings: true, mentionSuggestions: true, markdown: true, largeEmoji: true, autoPlayGifs: true, groupGapMin: 5, markReadMode: "scrolled", openAtUnread: false, gifProvider: "giphy", gifKey: "", gifKeys: {}, doubleTapReact: true, swipeToReply: true, quickReactions: DEFAULT_QUICK_REACTIONS, recentEmoji: [],
   notifEnabled: true, convoSounds: true, sendSound: "swoosh", receiveSound: "pop", convoSoundVolume: 0.5, notifPreview: "full", notifSound: true, notifGroupMentionsOnly: false, notifScope: "all", notifMutedNetworks: [], notifNetworkMode: {}, notifChat: {}, notifKeywords: [], notifQuietDays: [0, 1, 2, 3, 4, 5, 6], notifQuietBreakThrough: false, notifDelaySec: 0, notifBadge: "unmuted", notifDirectMode: "all", notifGroupMode: "all", notifSoundId: "chime", notifSoundVolume: 0.7, notifNetworkSound: {}, dndUntil: 0,
   quietHoursEnabled: false, quietStartMin: 22 * 60, quietEndMin: 7 * 60,
   hiddenNetworks: [],
@@ -214,7 +217,9 @@ function load(): AppSettings {
   try {
     const x = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") } as AppSettings;
     // "Do not disturb", the alert delay and the per-network settings were taken out of Settings, so whatever was saved for them is switched off.
-    return { ...x, dndUntil: 0, notifDelaySec: 0, notifNetworkMode: {}, notifMutedNetworks: [], bubbleStyle: migrateBubbleStyle(x.bubbleStyle), outStyle: x.outStyle ? migrateBubbleStyle(x.outStyle) : "" };
+    // One GIPHY key from before several sources existed moves into the new place. (A Tenor key is dropped: that service no longer exists.)
+    if (x.gifKey && x.gifProvider !== "tenor" && !x.gifKeys?.giphy) x.gifKeys = { ...(x.gifKeys ?? {}), giphy: x.gifKey };
+    return { ...x, gifKeys: x.gifKeys ?? {}, dndUntil: 0, notifDelaySec: 0, notifNetworkMode: {}, notifMutedNetworks: [], bubbleStyle: migrateBubbleStyle(x.bubbleStyle), outStyle: x.outStyle ? migrateBubbleStyle(x.outStyle) : "" };
   } catch { return { ...DEFAULTS }; }
 }
 
@@ -249,6 +254,7 @@ export const SYNC_GROUPS: SyncGroup[] = [
   { id: "list", label: "Chat list", hint: "What each row shows, filters, hidden networks", keys: ["showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories"] },
   { id: "notifications", label: "Notifications", hint: "What alerts you, quiet hours, previews", keys: ["notifEnabled", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin"] },
   { id: "sounds", label: "Sounds", hint: "Send, receive and reaction sounds", keys: ["convoSounds", "sendSound", "receiveSound", "reactionSound"] },
+  { id: "gifs", label: "GIF search keys", hint: "Your GIPHY and KLIPY keys (kept on your own server)", keys: ["gifKeys"] },
   { id: "behaviour", label: "Chat behaviour", hint: "Read marks, typing, downloads, link previews, confirmations", keys: ["markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider"] },
   { id: "desktop", label: "Desktop style", hint: "The desktop look and extra motion (computers only)", keys: ["skin", "skinAccent", "fancyMotion"] },
 ];

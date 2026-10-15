@@ -1,4 +1,5 @@
 import { FONTS, PALETTES, PALETTE_GROUPS } from "../core/palettes";
+import { GIF_SOURCES, KEY_PROVIDERS, searchGifs } from "../core/gifs";
 import { WALLPAPERS, wallpaperCss, importPhoto, removePhoto, loadPhoto } from "../core/wallpapers";
 import { EFFECT_TRIGGERS } from "../core/effects";
 import { SKINS, SKIN_GROUPS, accentsFor, skinById } from "../core/skins";
@@ -372,9 +373,8 @@ function Media() {
   const input = useState<HTMLInputElement | null>(null);
   return (
     <>
-      <Group title="GIF search" footer="GIF search uses your own free API key from Giphy (developers.giphy.com) or Tenor. Pager doesn't ship a shared key.">
-        <Select title="Provider" value={s.gifProvider} options={[["giphy", "Giphy"], ["tenor", "Tenor"]]} onChange={(v) => updateSettings({ gifProvider: v })} />
-        <Row title="API key"><input type="password" placeholder="Paste your key" value={s.gifKey} onChange={(e) => updateSettings({ gifKey: e.target.value.trim() })} /></Row>
+      <Group title="GIF search" footer="Add a free key from either (or both) and each gets its own tab in the GIF picker. Pager doesn't ship a shared key. Tenor shut down in June 2026, so a Tenor key no longer works. Keys stay on each device; use Backup & reset > Sync settings > GIF search keys to copy them to another one.">
+        {KEY_PROVIDERS.map((p) => <GifKeyRow key={p.id} provider={p} />)}
       </Group>
       <Group title="History" footer="Pager loads older messages as you scroll. This fetches all of them now, so they are on this device. It can take a while and uses data.">
         <Row title={bulk ? (bulk.done >= bulk.total ? `Done: ${bulk.total} pages loaded` : `Loading… ${bulk.done} of ${bulk.total} pages`) : "Load every page's full history"} onClick={() => { if (bulk && bulk.done < bulk.total) return; setBulk({ done: 0, total: 1 }); void loadEveryHistory((done, total) => setBulk({ done, total })); }} />
@@ -830,6 +830,27 @@ function AppSounds({ off }: { off: boolean }) {
         {canAdd.length ? <Plus size={18} /> : <small className="muted">No more connected apps</small>}
       </Row>
       {adding && canAdd.map((b) => <Row key={b.id} title={b.name} onClick={() => { set(b.id, s.notifSoundId); setAdding(false); }}><small className="accent">Add</small></Row>)}
+    </>
+  );
+}
+
+/** One GIF provider's key, with a button that tries it and says in words what is wrong. */
+function GifKeyRow({ provider }: { provider: (typeof KEY_PROVIDERS)[number] }) {
+  const s = useRawSettings();
+  const key = s.gifKeys[provider.id] ?? "";
+  const [state, setState] = useState<"" | "testing" | "ok" | string>("");
+  async function test() {
+    setState("testing");
+    try { const r = await searchGifs(GIF_SOURCES.find((x) => x.keyOf === provider.id)!, key, ""); setState(r.length ? "ok" : "The key was accepted but nothing came back."); } catch (e) { setState((e as Error).message); }
+  }
+  return (
+    <>
+      <Row title={`${provider.name} key`} hint={`Free from ${provider.where}`}>
+        <input type="password" placeholder="Paste your key" value={key} onChange={(e) => { setState(""); updateSettings({ gifKeys: { ...s.gifKeys, [provider.id]: e.target.value.trim() } }); }} />
+        <button className="pill" disabled={!key || state === "testing"} onClick={test}>{state === "testing" ? "Trying…" : "Try it"}</button>
+      </Row>
+      {state === "ok" && <p className="accent pad">{provider.name} works.</p>}
+      {state && state !== "ok" && state !== "testing" && <p className="error pad">{state}</p>}
     </>
   );
 }

@@ -84,7 +84,7 @@ class MainActivity : FragmentActivity() {
 
     private fun handleIntent(i: Intent?) {
         i ?: return
-        i.getStringExtra("roomId")?.let { openRoom = it }
+        (i.getStringExtra("roomId") ?: i.data?.takeIf { it.scheme == "pager" && it.host == "chat" }?.lastPathSegment)?.let { openRoom = it }
         when (i.action) {
             Intent.ACTION_SEND -> {
                 val uri = if (Build.VERSION.SDK_INT >= 33) i.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java) else @Suppress("DEPRECATION") i.getParcelableExtra(Intent.EXTRA_STREAM)
@@ -106,6 +106,8 @@ class MainActivity : FragmentActivity() {
         super.onStart()
         store.appInForeground = true
         store.ensureSyncing()
+        // Coming back to a page that got messages while you were away: you can see them now, so they count as read.
+        store.openRoom?.let { id -> if (store.settings.value.markReadMode != "manual") store.markRead(id) }
         val s = store.settings.value
         if (s.appLock && stoppedAt > 0 && System.currentTimeMillis() - stoppedAt >= s.lockAfterSec * 1000L) locked = true
     }

@@ -135,6 +135,8 @@ class Store(private val context: Context) {
     @Volatile var appInForeground = false
     /** The page you are looking at: sending and receiving make a little sound there (and only there). */
     @Volatile var openRoom: String? = null
+    /** True when [roomId] is the page on screen, or is shown merged with it (one conversation across several networks). */
+    private fun isOpenRoom(roomId: String): Boolean { val o = openRoom ?: return false; return o == roomId || Links.groupOf(_links.value, o)?.contains(roomId) == true }
     private var syncJob: Job? = null
     /** When the last update from the server arrived. The long wait for news returns every half minute or so, so a long silence means sync has stopped. */
     @Volatile private var lastSyncOk = 0L
@@ -583,9 +585,12 @@ class Store(private val context: Context) {
                     for (m in r.incoming) {
                         val c = r.chats[m.roomId]
                         // Inside that page you get a small sound instead of a notification.
-                        if (st.convoSounds && appInForeground && m.roomId == openRoom) { ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume); continue }
+                        // The page you are looking at (or one merged with it) gets a small sound instead of a notification.
+                        if (appInForeground && isOpenRoom(m.roomId)) { if (st.convoSounds) ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume); continue }
                         val d = NotifyPolicy.decide(m, quiet = m.roomId in muted || c?.lowPriority == true, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st)
                         if (!d.show) continue
+                        // In the app but on another page: no pop-up (you are in Pager), but the alert sound still plays.
+                        if (appInForeground) { if (!d.silent && st.convoSounds) ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume); continue }
                         val out = m.copy(silent = d.silent, preview = d.preview)
                         // The same message can reach us more than once (a refetched page, two sync passes); alert for it only once.
                         if (firstTimeSeen(out)) _incoming.tryEmit(out)

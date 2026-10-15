@@ -270,7 +270,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
             if (divider >= 0) list.scrollToItem(divider) else list.scrollToItem(0)
         // (a day label, a typing row or an unread line can sit above the old newest message, so a few items from the end still counts)
         } else if (newestId != null && (newestMine || list.firstVisibleItemIndex <= 4)) { if (s.reduceMotion) list.scrollToItem(0) else list.animateScrollToItem(0) }
-        if (s.markReadMode == "open" || (s.markReadMode == "scrolled" && list.firstVisibleItemIndex <= 2)) store.markRead(roomId)
+        // Only while the app is on screen: a message that arrives while the phone is in your pocket with this page open is not read yet.
+        if (store.appInForeground && (s.markReadMode == "open" || (s.markReadMode == "scrolled" && list.firstVisibleItemIndex <= 2))) store.markRead(roomId)
     }
     LaunchedEffect(roomId) {
         snapshotFlow { list.firstVisibleItemIndex > 4 }.collect { up -> groupIds.forEach { id -> store.readingOlder(id, up) } }
@@ -285,7 +286,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     // arrived. Ask for older messages directly whenever there are few to show.
     val fewMessages = chat?.let { !it.reachedStart && it.messages.size < 30 } == true
     LaunchedEffect(roomId, fewMessages, chat?.messages?.size) { if (fewMessages) groupIds.forEach { id -> store.loadOlder(id) } }
-    LaunchedEffect(roomId, s.markReadMode) { if (s.markReadMode == "scrolled") snapshotFlow { list.firstVisibleItemIndex <= 1 }.collect { atEnd -> if (atEnd) store.markRead(roomId) } }
+    LaunchedEffect(roomId, s.markReadMode) { if (s.markReadMode == "scrolled") snapshotFlow { list.firstVisibleItemIndex <= 1 }.collect { atEnd -> if (atEnd && store.appInForeground) store.markRead(roomId) } }
     val showJump by remember { derivedStateOf { list.firstVisibleItemIndex > 3 } }
 
     fun send() {
@@ -426,7 +427,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
 
             if (merged) ViaPick(groupIds, sendRoom) { via = it }
             // Composer
-            val canHold by rememberUpdatedState(text.isBlank() && !recording && hasPermission(context, Manifest.permission.RECORD_AUDIO))
+            val canHold by rememberUpdatedState(text.isBlank() && (staged.isEmpty() || editing != null) && !recording && hasPermission(context, Manifest.permission.RECORD_AUDIO))
             Box(Modifier.fillMaxWidth().background(scheme.surface).navigationBarsPadding()
                 .onGloballyPositioned { composerCoords = it }
                 .pointerInput(Unit) {

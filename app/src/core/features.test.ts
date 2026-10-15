@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applySync } from "./reducer";
 import { isEmojiOnly, markdownToHtml } from "./format";
-import { parseGifs } from "./gifs";
 import { isLowPriority, labelsOf, previewOf } from "./types";
 
 const me = "@me:x", alex = "@alex:x";
@@ -70,11 +69,5 @@ describe("formatting", () => {
   it("detects emoji-only messages", () => {
     expect(isEmojiOnly("😀")).toBe(true); expect(isEmojiOnly("😀 🎉 ❤️")).toBe(true); expect(isEmojiOnly("👍🏽")).toBe(true);
     expect(isEmojiOnly("hi 😀")).toBe(false); expect(isEmojiOnly("😀😀😀😀")).toBe(false); expect(isEmojiOnly("")).toBe(false); expect(isEmojiOnly("hello")).toBe(false);
-  });
-  it("parses Giphy and Tenor results", () => {
-    expect(parseGifs("giphy", { data: [{ id: "1", title: "cat", images: { original: { url: "https://g/o.gif", width: "480", height: "270" }, fixed_height_small: { url: "https://g/s.gif" } } }] }))
-      .toEqual([{ id: "1", title: "cat", previewUrl: "https://g/s.gif", url: "https://g/o.gif", w: 480, h: 270 }]);
-    expect(parseGifs("tenor", { results: [{ id: "2", content_description: "dog", media_formats: { gif: { url: "https://t/g.gif", dims: [320, 240] }, tinygif: { url: "https://t/tiny.gif" } } }] }))
-      .toEqual([{ id: "2", title: "dog", previewUrl: "https://t/tiny.gif", url: "https://t/g.gif", w: 320, h: 240 }]);
   });
 });
