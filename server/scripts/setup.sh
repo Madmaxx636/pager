@@ -50,7 +50,7 @@ BRIDGE_TABLE=(
   "twitter;X (Twitter) DMs;twitter;mautrix-twitter;;"
   "bluesky;Bluesky;bluesky;mautrix-bluesky;;"
   "linkedin;LinkedIn;linkedin;mautrix-linkedin;;"
-  "instagram;Instagram (experimental: Meta can restrict accounts that use bridges);meta;mautrix-meta;.network.mode = \"instagram\";"
+  "instagram;Instagram (experimental: Meta can restrict accounts that use bridges);dock.mau.dev/mautrix/meta:ig-latest;mautrix-meta;;"
   "gvoice;Google Voice;gvoice;mautrix-gvoice;;"
   "teams;Microsoft Teams (experimental: personal accounts only, built from source);pager/mautrix-teams:local;mautrix-teams;;"
   "messenger;Messenger;meta;mautrix-meta;;"
