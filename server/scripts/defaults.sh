@@ -3,6 +3,7 @@
 # Bridges only read chats that already exist on the phone: nothing here starts a chat.
 # Message status events and error notices are off: every bridge sees every message you send (so double puppeting works), and with them on each bridge
 # that does not own the chat tried to join it just to say "no portal", hundreds of refused joins that kept Synapse busy during big syncs.
+# Bridges log at "info" (the generated configs ask for "debug", which writes every message event to the log and keeps the processor busy).
 # Applies to every bridge (new and existing). Safe to re-run. Restarts the bridges unless called with --no-restart.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -31,6 +32,8 @@ EXPR='
   | (select(.bridge | has("send_presence_on_typing")) | .bridge.send_presence_on_typing) = true
   | (select(.network.history_sync) | .network.history_sync.request_full_sync) = true
   | (select(.network.history_sync) | .network.history_sync.max_initial_conversations) = -1
+  | (select(.logging | has("min_level")) | .logging.min_level) = "info"
+  | (select(.logging.writers) | .logging.writers[] | select(has("min_level")) | .min_level) = "info"
 '
 for dir in data/bridges/*/; do
   id="$(basename "$dir")"
