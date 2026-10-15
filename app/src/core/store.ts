@@ -1013,6 +1013,7 @@ declare global {
       setBadge(n: number): void;
       getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean; smoothGraphics?: boolean; lowEnd?: boolean }): void; setZoom(z: number): void;
       onOpenRoom(cb: (roomId: string) => void): void;
+      onWindowActive?(cb: (active: boolean) => void): void;
       onMemory?(cb: (level: string) => void): void;
       setTitleBar?(o: { color: string; symbolColor: string }): void;
       setIcon?(png: string): void;

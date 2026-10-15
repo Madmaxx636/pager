@@ -105,6 +105,10 @@ function createWindow() {
     if (!quitting && prefs.closeToTray && tray) { e.preventDefault(); win.hide(); }
   });
   win.on("closed", () => { win = null; });
+  // Whether the window is really in front of you: the page can't tell when another window sits on top of it (Wayland especially).
+  const sendActive = () => { if (win && !win.isDestroyed()) win.webContents.send("window-active", win.isVisible() && !win.isMinimized() && win.isFocused()); };
+  for (const ev of ["focus", "blur", "show", "hide", "minimize", "restore"]) win.on(ev, sendActive);
+  win.webContents.on("did-finish-load", sendActive);
 }
 
 // Which server this app talks to is kept by the web app inside the window; ask it.
