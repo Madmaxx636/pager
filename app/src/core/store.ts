@@ -1,3 +1,4 @@
+import { attended } from "./presence";
 import { KEEP_MESSAGES, LOW_END_KEEP, poolClearMs } from "./memory";
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
@@ -442,7 +443,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
         const when = new Date();
         for (const m of r.incoming) {
           const c = r.chats[m.roomId];
-          if (st.convoSounds && looking(m.roomId) && document.hasFocus()) { playSound(m.reaction ? st.reactionSound : st.receiveSound, st.convoSoundVolume); continue; }
+          if (st.convoSounds && looking(m.roomId) && attended()) { playSound(m.reaction ? st.reactionSound : st.receiveSound, st.convoSoundVolume); continue; }
           const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text,
             quiet: muted.includes(m.roomId) || (c ? isLowPriority(c) : false), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
           if (!d.show) continue;
@@ -491,7 +492,7 @@ async function signOutLocal() {
 // ---- Notifications ----------------------------------------------------------------------
 
 function notify(m: Incoming, d: Decision) {
-  const inApp = document.hasFocus() && document.visibilityState === "visible";
+  const inApp = attended();
   // The alert sound plays for a page you are not looking at even while you are in Pager; the pop-up only appears when you are not.
   if (inApp) { if (!d.silent) playSound(m.reaction ? getSettings().reactionSound : d.sound, getSettings().notifSoundVolume); return; }
   const body = d.preview === "full" ? (m.isGroup ? `${m.sender}: ${m.text}` : m.text) : d.preview === "sender" ? m.sender : "New message";
