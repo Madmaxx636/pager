@@ -661,3 +661,10 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .icon-pick { width: 72px; display: grid; justify-items: center; gap: 4px; background: none; border: 0; padding: 0; color: var(--muted); }
 .icon-pick i { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; border: 2px solid transparent; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 .icon-pick.on i { border-color: var(--accent); } .icon-pick small { font-size: .68rem; text-align: center; }
+
+/* Dragging a pinned page: the others slide into place, the lifted one follows the pointer. */
+.pin-chip.shifting:not(.dragging) { transition: transform .22s cubic-bezier(.3, 1.2, .5, 1); }
+.pin-chip.dragging { opacity: 1; cursor: grabbing; background: var(--panel-2); position: relative; touch-action: none; }
+.pin-chip { touch-action: manipulation; user-select: none; }
+.pins:has(.dragging) .pin-chip { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .pin-chip.shifting:not(.dragging) { transition: none; } }
