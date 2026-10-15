@@ -223,7 +223,7 @@ function applyEdit(msgs: Msg[], e: J): Msg[] {
     const info = obj(nc.info);
     Object.assign(next, {
       enc: encFile, type: str(nc.msgtype) ?? prev.type, mxc: url, mime: str(info.mimetype), size: num(info.size), w: num(info.w), h: num(info.h),
-      durationMs: num(info.duration) ?? prev.durationMs, edited: prev.edited, // adding the media isn't an edit the reader should see
+      durationMs: num(info.duration) ?? prev.durationMs, ...videoExtras(info), edited: prev.edited, // adding the media isn't an edit the reader should see
     });
   } else if (str(nc.msgtype) && str(nc.msgtype) !== prev.type && !prev.mxc) next.type = str(nc.msgtype)!;
   if (nc.format === "org.matrix.html" && !cap) next.html = str(nc.formatted_body);
@@ -341,6 +341,15 @@ export function captionOf(type: string | undefined, body: string, filename: stri
   if (!type || !MEDIA_TYPES.includes(type) || !filename || !body || body === filename) return undefined;
   return { name: filename, text: body, html: content.format === "org.matrix.html" ? str(content.formatted_body) : undefined };
 }
+/** The preview picture of a video, plain or encrypted, and whether the sender marked it as a GIF (mautrix: fi.mau.gif / loop / autoplay). */
+export function videoExtras(info: J): { poster?: string; gifLike?: boolean } {
+  const tf = obj(info.thumbnail_file);
+  const enc = str(tf.url) && tf.key ? (tf as unknown as EncFile) : undefined;
+  if (enc) registerEncrypted(enc, str(obj(info.thumbnail_info).mimetype));
+  const poster = enc ? enc.url : str(info.thumbnail_url);
+  const gifLike = info["fi.mau.gif"] === true || info["fi.mau.loop"] === true || info["fi.mau.autoplay"] === true || info["fi.mau.hide_controls"] === true || info["xyz.amorgan.silent"] === true ? true : undefined;
+  return { poster, gifLike };
+}
 export function toMsg(e: J): Msg | undefined {
   if (e.type !== "m.room.message") return undefined;
   const content = obj(e.content);
@@ -362,7 +371,7 @@ export function toMsg(e: J): Msg | undefined {
     id, sender, ts: num(e.origin_server_ts) ?? 0, type, body, caption: cap?.text, captionHtml: cap?.html,
     sealed: content.pagerRaw ?? undefined,
     mxc: enc ? enc.url : str(content.url), enc, mime: str(info.mimetype), size: num(info.size), w: num(info.w), h: num(info.h),
-    durationMs: num(info.duration) ?? num(obj(content["org.matrix.msc1767.audio"]).duration),
+    durationMs: num(info.duration) ?? num(obj(content["org.matrix.msc1767.audio"]).duration), ...videoExtras(info),
     replyTo: reply, txn: str(obj(e.unsigned).transaction_id), geo: str(content.geo_uri),
     voice: content["org.matrix.msc3245.voice"] != null || obj(content["org.matrix.msc1767.audio"]).waveform != null,
     mentions: arr(obj(content["m.mentions"]).user_ids).filter((u) => typeof u === "string"),

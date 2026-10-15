@@ -236,6 +236,7 @@ object SyncReducer {
             next = next.copy(
                 enc = encFile, type = nc["msgtype"].str() ?: prev.type, mxc = url, mime = info["mimetype"].str(),
                 size = (info["size"] as? JsonPrimitive)?.longOrNull, w = (info["w"] as? JsonPrimitive)?.intOrNull, h = (info["h"] as? JsonPrimitive)?.intOrNull,
+                poster = videoExtras(info).first, gifLike = videoExtras(info).second,
                 edited = prev.edited, // adding the media isn't an edit the reader should see
             )
         } else if (nc["msgtype"].str() != null && nc["msgtype"].str() != prev.type && prev.mxc == null) next = next.copy(type = nc["msgtype"].str()!!)
@@ -400,6 +401,7 @@ object SyncReducer {
             w = info["w"].int(),
             h = info["h"].int(),
             durationMs = info["duration"].long() ?: content["org.matrix.msc1767.audio"].obj()["duration"].long(),
+            poster = videoExtras(info).first, gifLike = videoExtras(info).second,
             replyTo = reply,
             txn = e["unsigned"].obj()["transaction_id"].str(),
             geo = content["geo_uri"].str(),
@@ -407,6 +409,17 @@ object SyncReducer {
             mentions = content["m.mentions"].obj()["user_ids"].arr().mapNotNull { it.str() },
             html = if (content["format"].str() == "org.matrix.html") content["formatted_body"].str() else null,
         )
+    }
+
+    /** The preview picture of a video (plain or encrypted) and whether the sender marked it as a GIF (mautrix: fi.mau.gif / loop / autoplay). */
+    fun videoExtras(info: JsonObject): Pair<String?, Boolean> {
+        val tf = info["thumbnail_file"].obj()
+        val enc = tf["url"].str()?.let { u ->
+            val k = tf["key"].obj()["k"].str(); val iv = tf["iv"].str(); val sha = tf["hashes"].obj()["sha256"].str()
+            if (k != null && iv != null && sha != null) EncFile(u, k, iv, sha).also { MediaCrypt.register(it) } else null
+        }
+        fun flag(k: String) = (info[k] as? JsonPrimitive)?.booleanOrNull == true
+        return (enc?.url ?: info["thumbnail_url"].str()) to (flag("fi.mau.gif") || flag("fi.mau.loop") || flag("fi.mau.autoplay") || flag("fi.mau.hide_controls"))
     }
 
     /** Puts a message that could not be read before (it was waiting for its key) in place of its placeholder. */
