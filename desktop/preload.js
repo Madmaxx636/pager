@@ -20,5 +20,6 @@ contextBridge.exposeInMainWorld("pagerDesktop", {
   setZoom: (z) => ipcRenderer.send("zoom", z),
   onMemory: (cb) => ipcRenderer.on("memory", (_e, level) => cb(level)),
   memory: () => ipcRenderer.invoke("memory:get"),
+  onWindowActive: (cb) => ipcRenderer.on("window-active", (_e, on) => cb(!!on)),
   onOpenRoom: (cb) => ipcRenderer.on("open-room", (_e, id) => cb(id)),
 });
