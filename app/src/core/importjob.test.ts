@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advance, fraction, ImportJob, QUIET_MS, stuck, NOTHING_MS, importBusy } from "./importjob";
+import { advance, fraction, ImportJob, linked, QUIET_MS, stuck, NOTHING_MS, importBusy } from "./importjob";
 
 const base: ImportJob = { network: "whatsapp", name: "WhatsApp", mode: "all", startedAt: 0, baseChats: 0, chats: 0, messages: 0, changedAt: 0, phase: "linking" };
 
@@ -33,5 +33,20 @@ describe("import job", () => {
     expect(fraction(base, 5)).toBe(0);
     expect(fraction({ ...base, phase: "importing", chats: 1, changedAt: 0 }, QUIET_MS * 5)).toBe(0.95);
     expect(fraction({ ...base, phase: "done" }, 0)).toBe(1);
+  });
+  it("an account linked again (no new chats) still finishes", () => {
+    let j = advance(base, 0, 0, 1000);
+    expect(j.phase).toBe("linking"); // still waiting for the link itself
+    j = linked(j, 5000);
+    expect(j.phase).toBe("importing");
+    expect(stuck(j, 5000 + NOTHING_MS)).toBe(false); // linked, so there is nothing to "stop waiting" for
+    j = advance(j, 0, 0, 5000 + QUIET_MS - 1); expect(j.phase).toBe("importing");
+    j = advance(j, 0, 0, 5000 + QUIET_MS); expect(j.phase).toBe("done");
+    expect(importBusy(j)).toBe(false);
+  });
+  it("choose mode with nothing new skips the pick", () => {
+    let j = linked({ ...base, mode: "choose" }, 0);
+    j = advance(j, 0, 0, QUIET_MS);
+    expect(j.phase).toBe("done");
   });
 });

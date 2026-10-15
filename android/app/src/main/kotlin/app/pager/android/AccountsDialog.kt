@@ -94,7 +94,7 @@ fun AccountsDialog(store: Store, initial: Network? = null, onClose: () -> Unit) 
                 } else if (net != null) {
                     LoginFlowView(store, net,
                         onCancel = { if (store.importJob.value?.phase == "linking") store.setImport(null); asked = false; if (initial != null) onClose() else active = null },
-                        onDone = { asked = false; active = null; refresh(); scope.launch { store.refreshBridges() }; if (initial != null) onClose() })
+                        onDone = { store.importJob.value?.let { store.setImport(it.linked(System.currentTimeMillis())) }; asked = false; active = null; refresh(); scope.launch { store.refreshBridges() }; if (initial != null) onClose() })
                 } else {
                     Text("Accounts", fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Text("Connect the apps you use. You can add more than one account per app.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
@@ -304,10 +304,10 @@ fun ImportProgressCard(store: Store) {
         Column(Modifier.padding(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(j.name, fontWeight = FontWeight.Bold)
-                Text(when (j.phase) { "linking" -> "Waiting for you to finish linking…"; "importing" -> "Importing…"; "choosing" -> "Choose the chats to keep"; else -> "Done" }, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(when (j.phase) { "linking" -> "Waiting for you to finish linking…"; "importing" -> if (j.chats == 0) "Linked. Checking for chats…" else "Importing…"; "choosing" -> "Choose the chats to keep"; else -> if (j.chats == 0 && j.linkedAt > 0L) "Linked. Your existing chats are kept" else "Done" }, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             LinearProgressIndicator(progress = { if (j.phase == "linking" || j.chats == 0) 0.04f else j.fraction(now) }, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
-            Text("${j.chats} chats, ${"%,d".format(j.messages)} messages so far", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (j.chats == 0 && j.linkedAt > 0L) "No new chats needed: your existing ones carry on" else "${j.chats} new chats, ${"%,d".format(j.messages)} messages so far", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (j.phase == "choosing") {
                 LazyColumn(Modifier.heightIn(max = 320.dp)) {
                     items(mine, key = { it.id }) { c ->
