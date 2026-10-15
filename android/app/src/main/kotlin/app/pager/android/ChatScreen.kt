@@ -273,7 +273,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
         // (a day label, a typing row or an unread line can sit above the old newest message, so a few items from the end still counts)
         } else if (newestId != null && (newestMine || list.firstVisibleItemIndex <= 4)) { if (s.reduceMotion) list.scrollToItem(0) else list.animateScrollToItem(0) }
         // Only while the app is on screen: a message that arrives while the phone is in your pocket with this page open is not read yet.
-        if (store.appInForeground && (s.markReadMode == "open" || (s.markReadMode == "scrolled" && list.firstVisibleItemIndex <= 2))) store.markRead(roomId)
+        if (store.attended && (s.markReadMode == "open" || (s.markReadMode == "scrolled" && list.firstVisibleItemIndex <= 2))) store.markRead(roomId)
     }
     LaunchedEffect(roomId) {
         snapshotFlow { list.firstVisibleItemIndex > 4 }.collect { up -> groupIds.forEach { id -> store.readingOlder(id, up) } }
@@ -288,7 +288,10 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     // arrived. Ask for older messages directly whenever there are few to show.
     val fewMessages = chat?.let { !it.reachedStart && it.messages.size < 30 } == true
     LaunchedEffect(roomId, fewMessages, chat?.messages?.size) { if (fewMessages) groupIds.forEach { id -> store.loadOlder(id) } }
-    LaunchedEffect(roomId, s.markReadMode) { if (s.markReadMode == "scrolled") snapshotFlow { list.firstVisibleItemIndex <= 1 }.collect { atEnd -> if (atEnd && store.appInForeground) store.markRead(roomId) } }
+    LaunchedEffect(roomId, s.markReadMode) { if (s.markReadMode == "scrolled") snapshotFlow { list.firstVisibleItemIndex <= 1 }.collect { atEnd -> if (atEnd && store.attended) store.markRead(roomId) } }
+    // Coming back to the phone after it sat idle: what arrived meanwhile is read now.
+    val interacting by store.interacting.collectAsState()
+    LaunchedEffect(roomId, interacting, s.markReadMode) { if (interacting && store.appInForeground && (s.markReadMode == "open" || (s.markReadMode == "scrolled" && list.firstVisibleItemIndex <= 2))) store.markRead(roomId) }
     val showJump by remember { derivedStateOf { list.firstVisibleItemIndex > 3 } }
 
     fun send() {

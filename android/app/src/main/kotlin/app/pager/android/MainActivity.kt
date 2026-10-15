@@ -51,12 +51,15 @@ class MainActivity : FragmentActivity() {
 
     /** Flip phones have two soft keys under the screen: right goes back, left acts as the Menu key (the list and message menus). */
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        store.touch()
         if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) when (event.keyCode) {
             android.view.KeyEvent.KEYCODE_SOFT_RIGHT -> { onBackPressedDispatcher.onBackPressed(); return true }
             android.view.KeyEvent.KEYCODE_SOFT_LEFT -> return super.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MENU))
         }
         return super.dispatchKeyEvent(event)
     }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean { if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) store.touch(); return super.dispatchTouchEvent(ev) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -110,12 +113,14 @@ class MainActivity : FragmentActivity() {
         store.appInForeground = true
         store.ensureSyncing()
         // Coming back to a page that got messages while you were away: you can see them now, so they count as read.
-        store.openRoom?.let { id -> if (store.settings.value.markReadMode != "manual") store.markRead(id) }
+        // Opened by you (icon or notification tap) counts as being here; a ring over the lock screen does not.
+        if (intent?.hasExtra("attention") != true) store.touch()
+        if (store.attended) store.openRoom?.let { id -> if (store.settings.value.markReadMode != "manual") store.markRead(id) }
         val s = store.settings.value
         if (s.appLock && stoppedAt > 0 && System.currentTimeMillis() - stoppedAt >= s.lockAfterSec * 1000L) locked = true
     }
 
-    override fun onStop() { if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(false); setTurnScreenOn(false) }; store.appInForeground = false; stoppedAt = System.currentTimeMillis(); super.onStop() }
+    override fun onStop() { store.untouch(); if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(false); setTurnScreenOn(false) }; store.appInForeground = false; stoppedAt = System.currentTimeMillis(); super.onStop() }
 
     private fun unlock() {
         val allowed = BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL
