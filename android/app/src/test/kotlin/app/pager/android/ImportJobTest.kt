@@ -31,4 +31,19 @@ class ImportJobTest {
     @Test fun offersAWayOutWhenNothingShowsUp() {
         assertFalse(base.stuck(ImportJob.NOTHING_MS - 1)); assertTrue(base.stuck(ImportJob.NOTHING_MS))
     }
+
+    @Test fun anAccountLinkedAgainStillFinishes() {
+        var j = base.advance(0, 0, 1000)
+        assertEquals("linking", j.phase) // still waiting for the link itself
+        j = j.linked(5000)
+        assertEquals("importing", j.phase)
+        assertFalse(j.stuck(5000 + ImportJob.NOTHING_MS)) // linked, so there is nothing to "stop waiting" for
+        j = j.advance(0, 0, 5000 + ImportJob.QUIET_MS - 1); assertEquals("importing", j.phase)
+        j = j.advance(0, 0, 5000 + ImportJob.QUIET_MS); assertEquals("done", j.phase); assertFalse(j.busy)
+    }
+
+    @Test fun chooseModeWithNothingNewSkipsThePick() {
+        val j = base.copy(mode = "choose").linked(0).advance(0, 0, ImportJob.QUIET_MS)
+        assertEquals("done", j.phase)
+    }
 }

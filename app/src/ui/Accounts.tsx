@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { Login, LoginFlow, LoginStep, Network, pager, parseCookies } from "../core/api";
 import { networkMeta } from "../core/emoji";
 import { refreshBridges, setTag, useStore } from "../core/store";
-import { advance, fraction, importBusy, setImport, stuck, useImport } from "../core/importjob";
+import { advance, currentImport, fraction, importBusy, linked, setImport, stuck, useImport } from "../core/importjob";
 import { updateSettings, useSettings } from "../core/settings";
 import { Eye, EyeOff, MoreVertical } from "lucide-react";
 import { IconButton, Modal } from "./common";
@@ -230,12 +230,12 @@ export function ImportProgress() {
   const mine = Object.values(chats).filter((c) => c.network === job.network && !isArchived(c)).sort((a, b) => a.name.localeCompare(b.name));
   const chosen = keep ?? new Set(mine.map((c) => c.id));
   const pct = Math.round(fraction(job, now) * 100);
-  const label = job.phase === "linking" ? "Waiting for you to finish linking…" : job.phase === "importing" ? "Importing…" : job.phase === "choosing" ? "Choose the chats to keep" : "Done";
+  const label = job.phase === "linking" ? "Waiting for you to finish linking…" : job.phase === "importing" ? (job.chats === 0 ? "Linked. Checking for chats…" : "Importing…") : job.phase === "choosing" ? "Choose the chats to keep" : job.chats === 0 ? "Linked. Your existing chats are kept" : "Done";
   return (
     <div className="import-card">
       <div className="import-head"><b>{job.name}</b><span className="muted">{label}</span></div>
       <div className="bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${job.phase === "linking" || job.chats === 0 ? 4 : pct}%` }} /></div>
-      <small className="muted">{job.chats} chats, {job.messages.toLocaleString()} messages so far</small>
+      <small className="muted">{job.chats === 0 && job.linkedAt ? "No new chats needed: your existing ones carry on" : `${job.chats} new chats, ${job.messages.toLocaleString()} messages so far`}</small>
       {job.phase === "choosing" && <>
         <ul className="sync-list">
           {mine.map((c) => <li key={c.id}><label><input type="checkbox" checked={chosen.has(c.id)} onChange={(e) => { const n = new Set(chosen); e.target.checked ? n.add(c.id) : n.delete(c.id); setKeep(n); }} /> {c.name}</label></li>)}
@@ -277,7 +277,7 @@ export function AccountsModal({ onClose, initial }: { onClose: () => void; initi
       {active && !asked ? (
         <ImportOptions network={active} onStart={(mode) => begin(active, mode)} onCancel={() => (initial ? onClose() : setActive(undefined))} />
       ) : active ? (
-        <LoginFlowView network={active} onCancel={() => { abandon(); setAsked(false); if (initial) onClose(); else setActive(undefined); }} onDone={() => { setAsked(false); setActive(undefined); void refreshBridges(); if (initial) onClose(); }} />
+        <LoginFlowView network={active} onCancel={() => { abandon(); setAsked(false); if (initial) onClose(); else setActive(undefined); }} onDone={() => { const j = currentImport(); if (j) setImport(linked(j, Date.now())); setAsked(false); setActive(undefined); void refreshBridges(); if (initial) onClose(); }} />
       ) : (
         <>
           <h2>Accounts</h2>

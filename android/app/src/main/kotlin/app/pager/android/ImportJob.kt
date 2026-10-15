@@ -17,27 +17,33 @@ data class ImportJob(
     val changedAt: Long = startedAt,
     /** linking, importing, choosing or done. */
     val phase: String = "linking",
+    /** When the account finished linking. After that the import can end even if no new chat turns up (linking an account again brings none). */
+    val linkedAt: Long = 0L,
 ) {
     val busy get() = phase != "done"
 
     /** A rough fraction for the bar: the bridges never say how much is coming, so it fills as the pace slows down. */
     fun fraction(now: Long): Float = when {
         phase == "done" || phase == "choosing" -> 1f
-        phase == "linking" || chats == 0 -> 0f
+        phase == "linking" || (chats == 0 && linkedAt == 0L) -> 0f
         else -> ((now - changedAt).toFloat() / QUIET_MS).coerceIn(0.05f, 0.95f)
     }
 
     /** True when the wait for chats to show up has gone on for too long, so the user is offered a way out. */
-    fun stuck(now: Long) = phase != "done" && chats == 0 && now - startedAt >= NOTHING_MS
+    fun stuck(now: Long) = phase != "done" && chats == 0 && linkedAt == 0L && now - startedAt >= NOTHING_MS
 
     /** Advances the job given how many chats and messages the network has now. */
     fun advance(chatsNow: Int, messagesNow: Int, now: Long): ImportJob {
         if (phase == "choosing" || phase == "done") return this
         var next = this
-        if (chatsNow != chats || messagesNow != messages) next = copy(chats = chatsNow, messages = messagesNow, changedAt = now, phase = if (chatsNow > 0) "importing" else phase)
-        if (next.phase == "importing" && now - next.changedAt >= QUIET_MS) return next.copy(phase = if (mode == "choose") "choosing" else "done")
+        if (chatsNow != chats || messagesNow != messages) next = copy(chats = chatsNow, messages = messagesNow, changedAt = now, phase = if (chatsNow > 0 || linkedAt > 0L) "importing" else phase)
+        // Chats came in: wait for the quiet spell, then let you choose (or finish). Linked but nothing new came in (an account linked again): finish too.
+        if (next.phase == "importing" && now - next.changedAt >= QUIET_MS) return next.copy(phase = if (mode == "choose" && next.chats > 0) "choosing" else "done")
         return next
     }
+
+    /** The account finished linking: from here the import is counted as running. */
+    fun linked(now: Long): ImportJob = copy(linkedAt = now, changedAt = now, phase = if (phase == "linking") "importing" else phase)
 
     companion object {
         /** The import counts as finished when nothing new has arrived for this long. */
