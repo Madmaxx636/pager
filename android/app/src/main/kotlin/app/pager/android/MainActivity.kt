@@ -71,6 +71,7 @@ class MainActivity : FragmentActivity() {
                         CompositionLocalProvider(LocalStore provides store) {
                             if (locked && settings.appLock) LockScreen(onUnlock = { unlock() }) else Root()
                             GreetingOverlay()
+                            AttentionOverlay(onAnswer = { id -> openRoom = id })
                         }
                     }
                     if (settings.eink && settings.screenClean != "off") ScreenCleanOverlay(settings.screenClean, settings.screenCleanSec)
@@ -84,6 +85,8 @@ class MainActivity : FragmentActivity() {
 
     private fun handleIntent(i: Intent?) {
         i ?: return
+        // A ring or nudge may take over a locked screen, only for as long as it is showing.
+        if (i.hasExtra("attention") && Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true) }
         (i.getStringExtra("roomId") ?: i.data?.takeIf { it.scheme == "pager" && it.host == "chat" }?.lastPathSegment)?.let { openRoom = it }
         when (i.action) {
             Intent.ACTION_SEND -> {
@@ -112,7 +115,7 @@ class MainActivity : FragmentActivity() {
         if (s.appLock && stoppedAt > 0 && System.currentTimeMillis() - stoppedAt >= s.lockAfterSec * 1000L) locked = true
     }
 
-    override fun onStop() { store.appInForeground = false; stoppedAt = System.currentTimeMillis(); super.onStop() }
+    override fun onStop() { if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(false); setTurnScreenOn(false) }; store.appInForeground = false; stoppedAt = System.currentTimeMillis(); super.onStop() }
 
     private fun unlock() {
         val allowed = BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL

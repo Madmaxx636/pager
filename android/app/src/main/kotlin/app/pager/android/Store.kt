@@ -584,6 +584,13 @@ class Store(private val context: Context) {
                     val day = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
                     for (m in r.incoming) {
                         val c = r.chats[m.roomId]
+                        // A nudge, ring or picture meant to get your attention (only fresh ones, and never from a muted page).
+                        if (m.attention != null && m.msgId != null && !initial && m.roomId !in muted && Attention.fresh(m.ts)) {
+                            val a = Attention.Alert(m.msgId, m.roomId, m.chat, m.sender, m.attention, if (m.attention == "image") m.mxc else null)
+                            Attention.raise(context, a, appInForeground)
+                            if (!appInForeground) Notifier.attention(context, store = this, a)
+                            continue
+                        }
                         // Inside that page you get a small sound instead of a notification.
                         // The page you are looking at (or one merged with it) gets a small sound instead of a notification.
                         if (appInForeground && isOpenRoom(m.roomId)) { if (st.convoSounds) ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume); continue }
@@ -647,6 +654,20 @@ class Store(private val context: Context) {
         setDraft(roomId, "")
         scope.launch {
             runCatching { matrix.send(roomId, "m.room.message", txn, textContent(text, replyTo, mentions, html)) }
+                .onSuccess { setStatus(roomId, localId, STATUS_SENT, it) }
+                .onFailure { setStatus(roomId, localId, STATUS_FAILED) }
+        }
+    }
+
+    /** A nudge, ring or picture: an ordinary message to other apps, an alert on Pager. */
+    fun sendAttention(roomId: String, kind: String) {
+        val me = _session.value?.userId ?: return
+        val txn = UUID.randomUUID().toString()
+        val localId = "local-$txn"
+        val text = Attention.text(kind)
+        addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), "m.text", text, txn = txn, status = STATUS_SENDING, attention = kind))
+        scope.launch {
+            runCatching { matrix.send(roomId, "m.room.message", txn, buildJsonObject { put("msgtype", "m.text"); put("body", text); putJsonObject(Attention.FIELD) { put("kind", kind) } }) }
                 .onSuccess { setStatus(roomId, localId, STATUS_SENT, it) }
                 .onFailure { setStatus(roomId, localId, STATUS_FAILED) }
         }
@@ -802,19 +823,19 @@ class Store(private val context: Context) {
     }
 
     /** [viewOnce]: Signal shows the picture or video once and then it is gone (the bridge turns this into Signal's own view-once). */
-    fun sendFile(roomId: String, uri: Uri, viewOnce: Boolean = false, caption: String? = null) {
+    fun sendFile(roomId: String, uri: Uri, viewOnce: Boolean = false, caption: String? = null, attention: String? = null) {
         val me = _session.value?.userId ?: return
         val p = describe(uri)
         // "High" quality shrinks big photos (2048px, JPEG) before upload; GIFs, WebP and other files are never touched.
         if (settings.value.imageQuality == "high" && (p.mime == "image/jpeg" || p.mime == "image/png")) {
             scope.launch {
                 val shrunk = runCatching { shrink(uri) }.getOrNull()
-                if (shrunk != null) sendBytes(roomId, shrunk.first, p.name.substringBeforeLast('.') + ".jpg", "image/jpeg", "m.image", shrunk.second, shrunk.third, viewOnce, caption)
-                else sendOriginal(roomId, uri, p, viewOnce, caption)
+                if (shrunk != null) sendBytes(roomId, shrunk.first, p.name.substringBeforeLast('.') + ".jpg", "image/jpeg", "m.image", shrunk.second, shrunk.third, viewOnce, caption, attention)
+                else sendOriginal(roomId, uri, p, viewOnce, caption, attention)
             }
             return
         }
-        sendOriginal(roomId, uri, p, viewOnce, caption)
+        sendOriginal(roomId, uri, p, viewOnce, caption, attention)
     }
 
     private fun shrink(uri: Uri): Triple<ByteArray, Int, Int> {
@@ -828,7 +849,7 @@ class Store(private val context: Context) {
         return Triple(out.toByteArray(), bmp.width, bmp.height)
     }
 
-    private fun sendOriginal(roomId: String, uri: Uri, p: Picked, viewOnce: Boolean = false, caption: String? = null) {
+    private fun sendOriginal(roomId: String, uri: Uri, p: Picked, viewOnce: Boolean = false, caption: String? = null, attention: String? = null) {
         val me = _session.value?.userId ?: return
         val type = when { p.mime.startsWith("image/") -> "m.image"; p.mime.startsWith("video/") -> "m.video"; p.mime.startsWith("audio/") -> "m.audio"; else -> "m.file" }
         val txn = UUID.randomUUID().toString()
@@ -840,6 +861,7 @@ class Store(private val context: Context) {
                 matrix.send(roomId, "m.room.message", txn, buildJsonObject {
                     put("msgtype", type); put("body", caption?.trim()?.ifEmpty { null } ?: p.name); if (!caption.isNullOrBlank()) put("filename", p.name); putMedia(mxc, enc)
                     if (viewOnce && (type == "m.image" || type == "m.video")) putJsonObject("com.beeper.view_limited") { put("type", "count"); put("count", 1) }
+                    if (attention != null) putJsonObject(Attention.FIELD) { put("kind", attention) }
                     putJsonObject("info") {
                         put("mimetype", p.mime); put("size", p.size)
                         p.w?.let { put("w", it) }; p.h?.let { put("h", it) }
@@ -1113,7 +1135,7 @@ class Store(private val context: Context) {
         }
     }
 
-    private fun sendBytes(roomId: String, bytes: ByteArray, name: String, mime: String, type: String, w: Int? = null, h: Int? = null, viewOnce: Boolean = false, caption: String? = null) {
+    private fun sendBytes(roomId: String, bytes: ByteArray, name: String, mime: String, type: String, w: Int? = null, h: Int? = null, viewOnce: Boolean = false, caption: String? = null, attention: String? = null) {
         val me = _session.value?.userId ?: return
         val txn = UUID.randomUUID().toString()
         val localId = "local-$txn"
@@ -1124,6 +1146,7 @@ class Store(private val context: Context) {
                 matrix.send(roomId, "m.room.message", txn, buildJsonObject {
                     put("msgtype", type); put("body", caption?.trim()?.ifEmpty { null } ?: name); if (!caption.isNullOrBlank()) put("filename", name); putMedia(mxc, enc)
                     if (viewOnce && (type == "m.image" || type == "m.video")) putJsonObject("com.beeper.view_limited") { put("type", "count"); put("count", 1) }
+                    if (attention != null) putJsonObject(Attention.FIELD) { put("kind", attention) }
                     putJsonObject("info") { put("mimetype", mime); put("size", bytes.size.toLong()); w?.let { put("w", it) }; h?.let { put("h", it) } }
                 })
             }.onSuccess { setStatus(roomId, localId, STATUS_SENT, it) }.onFailure { setStatus(roomId, localId, STATUS_FAILED) }

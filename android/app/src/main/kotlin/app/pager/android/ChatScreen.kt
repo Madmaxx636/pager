@@ -212,6 +212,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     var gifSheet by remember { mutableStateOf(false) }
     var stickerSheet by remember { mutableStateOf(false) }
     var pollSheet by remember { mutableStateOf(false) }
+    var attentionSheet by remember { mutableStateOf(false) }
+    val pickAttentionPicture = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) store.sendFile(sendRoom, uri, caption = "\uD83D\uDD14 Look at this!", attention = "image") }
     var emojiForText by remember { mutableStateOf(false) }
     var pickerFor by remember { mutableStateOf<Msg?>(null) }
     var whoFor by remember { mutableStateOf<Pair<Msg, String>?>(null) }
@@ -541,6 +543,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
             Attach.EMOJI -> emojiForText = true
             Attach.FILE -> pickFile.launch("*/*")
             Attach.POLL -> pollSheet = true
+            Attach.ATTENTION -> attentionSheet = true
             Attach.CONTACT -> pickContact.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI))
             Attach.LOCATION ->
                 if (hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) || hasPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION))
@@ -550,6 +553,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     })
     if (gifSheet) GifSheet(onPick = { staged.add(StagedItem(gif = it, name = "${it.title.ifBlank { "GIF" }}", mime = "image/gif")); gifSheet = false }, onSettings = { gifSheet = false; onSettings("media") }, onDismiss = { gifSheet = false })
     if (stickerSheet) StickerSheet(roomId, onPick = { store.sendSticker(sendRoom, it); stickerSheet = false }, onAdd = { pickStickerImages.launch("image/*") }, onDismiss = { stickerSheet = false })
+    if (attentionSheet) AttentionSheet(onSend = { store.sendAttention(sendRoom, it); attentionSheet = false }, onPicture = { attentionSheet = false; pickAttentionPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, onDismiss = { attentionSheet = false })
     if (pollSheet) PollSheet(onCreate = { q, a, max, disclosed -> store.sendPoll(sendRoom, q, a, max, disclosed); pollSheet = false }, onDismiss = { pollSheet = false })
     if (emojiForText) EmojiPickerDialog(s.recentEmoji, onPick = { e -> text += e; emojiForText = false }, onDismiss = { emojiForText = false })
 
