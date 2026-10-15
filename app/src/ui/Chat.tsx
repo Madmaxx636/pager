@@ -1,3 +1,4 @@
+import { attended, onAttended } from "../core/presence";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Gif } from "../core/gifs";
 import { setInfoPanelOpen } from "../core/layout";
@@ -136,10 +137,10 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   }, [roomId, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
   // A message only counts as read while you can see it: the window is in front and focused. Otherwise a message that arrives while Pager sits
   // in the tray (or behind another window) with this page open would be marked read at once, and the page list would never show it.
-  const looking = () => document.hasFocus() && document.visibilityState === "visible";
+  const looking = () => attended();
   const mayMark = () => looking() && (st.markReadMode === "open" || (st.markReadMode === "scrolled" && stick.current));
   useEffect(() => { if (mayMark()) markRead(roomId); }, [roomId, messages.length, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { const f = () => mayMark() && markRead(roomId); window.addEventListener("focus", f); return () => window.removeEventListener("focus", f); }, [roomId, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => onAttended(() => { if (mayMark()) markRead(roomId); }), [roomId, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onScroll = () => {
     const el = scroller.current; if (!el) return;
