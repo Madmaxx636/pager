@@ -660,9 +660,11 @@ private fun StickersAndGifsPage(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> -> if (uris.isNotEmpty()) scope.launch { store.addStickers(uris) } }
     SettingsPage("Stickers & GIFs", onBack) {
-        SettingsGroup("GIF search", footer = "GIF search uses your own free API key from Giphy (developers.giphy.com) or Tenor. Pager doesn't ship a shared key.") {
-            ChoiceRow("Provider", listOf("giphy" to "Giphy", "tenor" to "Tenor"), s.gifProvider) { v -> store.settings.update { copy(gifProvider = v) } }; GroupDivider()
-            TextFieldRow("API key", s.gifKey, "Paste your key", secret = true) { v -> store.settings.update { copy(gifKey = v) } }
+        SettingsGroup("GIF search", footer = "Add a free key from either (or both) and each gets its own tab in the GIF picker. Pager doesn't ship a shared key. Tenor shut down in June 2026, so a Tenor key no longer works. Keys stay on each device; use Storage > Sync settings > GIF search keys to copy them to another one.") {
+            GIF_KEY_PROVIDERS.forEachIndexed { i, (id, name, where) ->
+                if (i > 0) GroupDivider()
+                GifKeyRow(id, name, where)
+            }
         }
         SettingsGroup("My stickers", footer = "Stickers are saved to your Matrix account, so they follow you to other devices. Pages you share a sticker pack with appear in the sticker tray too.") {
             ButtonRow("Add stickers from photos…") { pick.launch("image/*") }
@@ -1343,5 +1345,28 @@ private fun SystemSettings() {
     SettingsGroup("Extras") {
         SwitchRow("Hide Stories", "Removes the Stories row (WhatsApp status updates) from the list", s.hideStories) { v -> set { copy(hideStories = v) } }; GroupDivider()
         SwitchRow("Silly hello", "The pager says something goofy when you open the app", s.greetings) { v -> set { copy(greetings = v) } }
+    }
+}
+
+/** One GIF provider's key, with a button that tries it and says in words what is wrong. */
+@Composable
+private fun GifKeyRow(id: String, name: String, where: String) {
+    val store = LocalStore.current
+    val s = LocalRawSettings.current
+    val scope = rememberCoroutineScope()
+    val key = s.gifKeys[id].orEmpty()
+    var state by remember { mutableStateOf("") }
+    Column {
+        TextFieldRow("$name key (free from $where)", key, "Paste your key", secret = true) { v -> state = ""; store.settings.update { copy(gifKeys = gifKeys + (id to v.trim())) } }
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(enabled = key.isNotBlank() && state != "testing", onClick = {
+                state = "testing"
+                scope.launch {
+                    val src = GIF_SOURCES.first { it.keyOf == id }
+                    state = runCatching { store.gifs.search(src, key, "") }.fold({ if (it.isNotEmpty()) "ok" else "The key was accepted but nothing came back." }, { it.message ?: "That didn't work." })
+                }
+            }) { Text(if (state == "testing") "Trying…" else "Try it") }
+            when (state) { "ok" -> Text("$name works.", color = MaterialTheme.colorScheme.primary); "", "testing" -> {}; else -> Text(state, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        }
     }
 }

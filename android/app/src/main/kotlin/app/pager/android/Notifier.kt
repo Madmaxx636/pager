@@ -167,8 +167,13 @@ object Notifier {
         val prio = s.notifChat[m.roomId]?.level == "priority"
         lines.forEach { style.addMessage(it.text, it.ts, if (m.isGroup) Person.Builder().setName(it.sender).setKey(it.sender).build() else chatPerson) }
 
+        // Tapping opens this page whether Pager is closed, in the background or already open on another page (a unique address per page keeps
+        // each notification's intent separate, so one can never be mistaken for another).
         val open = PendingIntent.getActivity(
-            context, id, Intent(context, MainActivity::class.java).putExtra("roomId", m.roomId), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            context, id,
+            Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(android.net.Uri.parse("pager://chat/" + android.net.Uri.encode(m.roomId))).putExtra("roomId", m.roomId)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val parent = channelFor(s, quiet, m.roomId)
         val b = NotificationCompat.Builder(context, parent)

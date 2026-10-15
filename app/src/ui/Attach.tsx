@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { EyeOff, BarChart3, ContactRound, File as FileIcon, Image as ImageIcon, MapPin, Plus, Smile, Sticker as StickerIcon, X, Camera } from "lucide-react";
-import { Gif, searchGifs } from "../core/gifs";
+import { Gif, searchGifs, sourcesWithKeys } from "../core/gifs";
 import { Sticker } from "../core/types";
 import { addStickers, stickerPacks, toggleFavoriteGif, useStore } from "../core/store";
 import { useSettings } from "../core/settings";
@@ -37,41 +37,58 @@ export function AttachMenu({ onPick, onClose, canViewOnce }: { onPick: (k: Attac
 export function GifModal({ onPick, onSettings, onClose }: { onPick: (g: Gif) => void; onSettings: () => void; onClose: () => void }) {
   const st = useSettings();
   const favorites = useStore((s) => s.favoriteGifs);
-  const [tab, setTab] = useState<"favorites" | "search">(favorites.length || !st.gifKey ? "favorites" : "search");
+  const sources = sourcesWithKeys(st.gifKeys);
+  const [tab, setTab] = useState<string>(favorites.length || !sources.length ? "favorites" : sources[0].id);
   const [q, setQ] = useState("");
   const [gifs, setGifs] = useState<Gif[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // You can pick several: each one goes into the message box and the picker stays open until you press Done.
+  const [picked, setPicked] = useState<string[]>([]);
+  const source = sources.find((x) => x.id === tab);
+  const key = source ? (st.gifKeys[source.keyOf] ?? "") : "";
   useEffect(() => {
-    if (!st.gifKey || tab !== "search") return;
+    if (!source) return;
     let live = true; setBusy(true); setErr("");
-    const t = setTimeout(() => searchGifs(st.gifProvider, st.gifKey, q.trim()).then((r) => live && setGifs(r)).catch((e) => live && (setErr(e.message), setGifs([]))).finally(() => live && setBusy(false)), q ? 350 : 0);
+    const t = setTimeout(() => searchGifs(source, key, q.trim()).then((r) => live && setGifs(r)).catch((e) => live && (setErr(e.message), setGifs([]))).finally(() => live && setBusy(false)), q ? 350 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [q, st.gifKey, st.gifProvider, tab]);
+  }, [q, tab, key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pick = (g: Gif) => { onPick(g); setPicked((p) => [...p, g.url]); };
   const grid = (list: Gif[]) => (
-    <div className="gif-grid">{list.map((g) => (
-      <div key={g.id + g.url} className="gif-cell" style={{ aspectRatio: g.w && g.h ? String(Math.min(2, Math.max(0.6, g.w / g.h))) : "1.4" }}>
-        <button onClick={() => onPick(g)}><img src={g.previewUrl} alt={g.title} loading="lazy" /></button>
-        <button className="gif-star" title={favorites.some((x) => x.url === g.url) ? "Remove from favorites" : "Add to favorites"} onClick={() => toggleFavoriteGif(g)}>{favorites.some((x) => x.url === g.url) ? "★" : "☆"}</button>
-      </div>))}</div>
+    <div className="gif-grid">{list.map((g) => {
+      const n = picked.filter((u) => u === g.url).length;
+      return (
+        <div key={g.id + g.url} className="gif-cell" style={{ aspectRatio: g.w && g.h ? String(Math.min(2, Math.max(0.6, g.w / g.h))) : "1.4" }}>
+          <button onClick={() => pick(g)}><img src={g.previewUrl} alt={g.title} loading="lazy" /></button>
+          {n > 0 && <span className="gif-added">✓{n > 1 ? ` ${n}` : ""}</span>}
+          <button className="gif-star" title={favorites.some((x) => x.url === g.url) ? "Remove from favorites" : "Add to favorites"} onClick={() => toggleFavoriteGif(g)}>{favorites.some((x) => x.url === g.url) ? "★" : "☆"}</button>
+        </div>
+      );
+    })}</div>
   );
   return (
     <Modal title="GIFs" onClose={onClose} wide>
-      <div className="tabs pad"><button className={"tab" + (tab === "favorites" ? " on" : "")} onClick={() => setTab("favorites")}>Favorites{favorites.length ? ` (${favorites.length})` : ""}</button><button className={"tab" + (tab === "search" ? " on" : "")} onClick={() => setTab("search")}>Search</button></div>
+      <div className="tabs pad">
+        <button className={"tab" + (tab === "favorites" ? " on" : "")} onClick={() => setTab("favorites")}>Favorites{favorites.length ? ` (${favorites.length})` : ""}</button>
+        {sources.map((x) => <button key={x.id} className={"tab" + (tab === x.id ? " on" : "")} onClick={() => { setTab(x.id); setGifs([]); }}>{x.name}</button>)}
+      </div>
       {tab === "favorites" ? (
         favorites.length ? grid(favorites) : <EmptyState icon={ImageIcon} title="No favorite GIFs yet" body="Search for a GIF and tap ☆ to keep it here. Your favorites follow your account to every device." />
-      ) : !st.gifKey ? (
-        <EmptyState icon={ImageIcon} title="Set up GIF search" body="Add a free Giphy or Tenor API key in Settings → Stickers & GIFs. Pager doesn't ship a shared key.">
+      ) : !source ? (
+        <EmptyState icon={ImageIcon} title="Set up GIF search" body="Add a free GIPHY or KLIPY API key in Settings → Stickers & GIFs. Pager doesn't ship a shared key. (Tenor shut down in June 2026.)">
           <button className="primary" onClick={onSettings}>Open settings</button>
         </EmptyState>
       ) : (
         <>
-          <div className="pill-search"><input autoFocus placeholder={`Search ${st.gifProvider === "tenor" ? "Tenor" : "GIPHY"}`} value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          {err && <div className="error pad">{err}</div>}
+          <div className="pill-search"><input autoFocus placeholder={`Search ${source.name}`} value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          {err && <div className="error pad">{err} <button className="link" onClick={onSettings}>Open settings</button></div>}
           {busy && !gifs.length && <p className="muted pad">Loading…</p>}
+          {!busy && !err && !gifs.length && <p className="muted pad">Nothing found{q ? ` for “${q}”` : ""}.</p>}
           {grid(gifs)}
+          {source.keyOf === "klipy" && <p className="fine pad">Powered by KLIPY</p>}
         </>
       )}
+      {picked.length > 0 && <div className="row-end"><span className="muted">{picked.length} added to your message</span><button className="primary" onClick={onClose}>Done</button></div>}
     </Modal>
   );
 }

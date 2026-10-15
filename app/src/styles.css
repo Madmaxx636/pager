@@ -649,3 +649,5 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 
 .quote.tappable { cursor: pointer; } .quote.tappable:hover { opacity: 1; } .quote.tappable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .msg.flash .bubble { outline: 2px solid var(--accent); outline-offset: 2px; transition: outline-color .6s; }
+.gif-added { position: absolute; left: 6px; top: 6px; background: var(--accent); color: var(--accent-ink); font-size: .75rem; font-weight: 700; padding: 1px 7px; border-radius: 10px; pointer-events: none; }
+.tabs { flex-wrap: wrap; }

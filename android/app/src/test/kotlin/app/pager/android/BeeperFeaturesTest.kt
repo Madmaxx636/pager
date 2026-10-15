@@ -97,10 +97,24 @@ class BeeperFeaturesTest {
     }
 
     @Test fun gifResultsParseForBothProviders() {
-        val c = GifClient(okhttp3.OkHttpClient())
-        val giphy = c.parse("giphy", parse("""{"data":[{"id":"1","title":"cat","images":{"original":{"url":"https://g/o.gif","width":"480","height":"270"},"fixed_height_small":{"url":"https://g/s.gif"}}}]}"""))
-        assertEquals(Gif("1", "cat", "https://g/s.gif", "https://g/o.gif", 480, 270), giphy.single())
-        val tenor = c.parse("tenor", parse("""{"results":[{"id":"2","content_description":"dog","media_formats":{"gif":{"url":"https://t/g.gif","dims":[320,240]},"tinygif":{"url":"https://t/tiny.gif"}}}]}"""))
-        assertEquals(Gif("2", "dog", "https://t/tiny.gif", "https://t/g.gif", 320, 240), tenor.single())
+        val giphy = GifApi.parseGiphy(parse("""{"data":[{"id":"1","title":"cat","images":{"original":{"url":"https://g/o.gif","width":"480","height":"270"},"fixed_height_small":{"url":"https://g/s.gif"}}},{"id":"2","images":{}}]}"""))
+        assertEquals(Gif("1", "cat", "https://g/s.gif", "https://g/o.gif", 480, 270, "giphy"), giphy.single())
+        val klipy = GifApi.parseKlipy(parse("""{"result":true,"data":{"data":[{"id":8041071659142944,"slug":"hello","title":"Hello","file":{"hd":{"gif":{"url":"https://static.klipy.com/hd.gif","width":498,"height":498}},"md":{"gif":{"url":"https://static.klipy.com/md.gif","width":320,"height":320}},"sm":{"webp":{"url":"https://static.klipy.com/sm.webp","width":160,"height":160}}}},{"id":2,"file":{}}]}}"""))
+        assertEquals(Gif("8041071659142944", "Hello", "https://static.klipy.com/sm.webp", "https://static.klipy.com/md.gif", 320, 320, "klipy"), klipy.single())
+    }
+
+    @Test fun gifSourcesNeedTheirProvidersKey() {
+        assertTrue(sourcesWithKeys(emptyMap()).isEmpty())
+        assertEquals(listOf("giphy", "giphy-stickers"), sourcesWithKeys(mapOf("giphy" to "k")).map { it.id })
+        assertEquals(4, sourcesWithKeys(mapOf("giphy" to "a", "klipy" to "b")).size)
+        assertTrue(sourcesWithKeys(mapOf("klipy" to "  ")).isEmpty())
+        assertEquals("https://api.giphy.com/v1/gifs/search?api_key=K&limit=30&rating=pg-13&q=cat+dance", GifApi.requestFor(GIF_SOURCES[0], "K", "cat dance"))
+        assertTrue(GifApi.requestFor(GIF_SOURCES[3], "K", "").startsWith("https://api.klipy.com/api/v1/K/stickers/trending?"))
+        assertTrue(GifApi.explain(GIF_SOURCES[0], 403).startsWith("GIPHY rejected the key"))
+    }
+
+    @Test fun anOldGiphyKeyMovesToTheNewPlace() {
+        val moved = AppSettings(gifKey = "old", gifProvider = "giphy")
+        assertEquals("old", (if (moved.gifKey.isNotBlank() && moved.gifProvider != "tenor") moved.gifKeys + ("giphy" to moved.gifKey) else moved.gifKeys)["giphy"])
     }
 }

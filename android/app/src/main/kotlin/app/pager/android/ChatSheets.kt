@@ -127,46 +127,59 @@ fun GifSheet(onPick: (Gif) -> Unit, onSettings: () -> Unit, onDismiss: () -> Uni
     val store = LocalStore.current
     val s = LocalSettings.current
     val favorites by store.favoriteGifs.collectAsState()
-    var tab by remember { mutableStateOf(if (favorites.isNotEmpty() || s.gifKey.isBlank()) "favorites" else "search") }
+    val sources = sourcesWithKeys(s.gifKeys)
+    var tab by remember { mutableStateOf(if (favorites.isNotEmpty() || sources.isEmpty()) "favorites" else sources.first().id) }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Gif>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    LaunchedEffect(query, s.gifKey, s.gifProvider, tab) {
-        if (s.gifKey.isBlank() || tab != "search") return@LaunchedEffect
+    // You can pick several: each goes into the message box and the sheet stays open until you press Done.
+    val picked = remember { mutableStateListOf<String>() }
+    val source = sources.firstOrNull { it.id == tab }
+    val key = source?.let { s.gifKeys[it.keyOf].orEmpty() }.orEmpty()
+    LaunchedEffect(query, tab, key) {
+        if (source == null) return@LaunchedEffect
         delay(if (query.isEmpty()) 0 else 350)
         busy = true; error = null
-        runCatching { store.gifs.search(s.gifProvider, s.gifKey, query.trim()) }.onSuccess { results = it }.onFailure { error = it.message; results = emptyList() }
+        runCatching { store.gifs.search(source, key, query.trim()) }.onSuccess { results = it }.onFailure { error = it.message; results = emptyList() }
         busy = false
     }
     Sheet(onDismiss) {
         Column(Modifier.heightIn(min = 420.dp, max = 560.dp).padding(horizontal = 16.dp)) {
-            Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                androidx.compose.material3.FilterChip(selected = tab == "favorites", onClick = { tab = "favorites" }, label = { Text("Favorites" + if (favorites.isNotEmpty()) " (${favorites.size})" else "") })
-                androidx.compose.material3.FilterChip(selected = tab == "search", onClick = { tab = "search" }, label = { Text("Search") })
+            androidx.compose.foundation.lazy.LazyRow(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item { androidx.compose.material3.FilterChip(selected = tab == "favorites", onClick = { tab = "favorites" }, label = { Text("Favorites" + if (favorites.isNotEmpty()) " (${favorites.size})" else "") }) }
+                items(sources) { x -> androidx.compose.material3.FilterChip(selected = tab == x.id, onClick = { tab = x.id; results = emptyList() }, label = { Text(x.name) }) }
             }
             val grid: @Composable (List<Gif>) -> Unit = { list ->
-                LazyVerticalGrid(GridCells.Fixed(2), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxSize()) {
-                    items(list, key = { it.id + it.url }) { g -> GifTile(g, starred = favorites.any { it.url == g.url }, onStar = { store.toggleFavoriteGif(g) }) { onPick(g) } }
+                LazyVerticalGrid(GridCells.Fixed(2), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    items(list, key = { it.id + it.url }) { g -> GifTile(g, starred = favorites.any { it.url == g.url }, count = picked.count { it == g.url }, onStar = { store.toggleFavoriteGif(g) }) { onPick(g); picked.add(g.url) } }
                 }
             }
-            when {
-                tab == "favorites" -> if (favorites.isEmpty()) EmptyState(Icons.Rounded.Gif, "No favorite GIFs yet", "Search for a GIF and tap the star to keep it here. Your favorites follow your account to every device.") else grid(favorites)
-                s.gifKey.isBlank() -> EmptyState(Icons.Rounded.Gif, "Set up GIF search", "Add a free Giphy or Tenor API key in Settings → Stickers & GIFs. Pager doesn't ship a shared key.") { Button(onClick = onSettings) { Text("Open settings") } }
-                else -> {
-                    SearchPill(query, { query = it }, "Search ${if (s.gifProvider == "tenor") "Tenor" else "GIPHY"}")
-                    Spacer(Modifier.height(10.dp))
-                    error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp)) }
-                    if (busy && results.isEmpty()) Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
-                    grid(results)
+            Column(Modifier.weight(1f)) {
+                when {
+                    tab == "favorites" -> if (favorites.isEmpty()) EmptyState(Icons.Rounded.Gif, "No favorite GIFs yet", "Search for a GIF and tap the star to keep it here. Your favorites follow your account to every device.") else grid(favorites)
+                    source == null -> EmptyState(Icons.Rounded.Gif, "Set up GIF search", "Add a free GIPHY or KLIPY API key in Settings → Stickers & GIFs. Pager doesn't ship a shared key. (Tenor shut down in June 2026.)") { Button(onClick = onSettings) { Text("Open settings") } }
+                    else -> {
+                        SearchPill(query, { query = it }, "Search ${source.name}")
+                        Spacer(Modifier.height(10.dp))
+                        error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(8.dp)) }
+                        if (busy && results.isEmpty()) Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                        else if (!busy && error == null && results.isEmpty()) Text("Nothing found" + if (query.isNotBlank()) " for “$query”" else ".", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp))
+                        grid(results)
+                        if (source.keyOf == "klipy") Text("Powered by KLIPY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    }
                 }
+            }
+            if (picked.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("${picked.size} added to your message", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick = onDismiss) { Text("Done") }
             }
         }
     }
 }
 
 @Composable
-private fun GifTile(g: Gif, starred: Boolean, onStar: () -> Unit, onClick: () -> Unit) {
+private fun GifTile(g: Gif, starred: Boolean, count: Int, onStar: () -> Unit, onClick: () -> Unit) {
     val store = LocalStore.current
     val bmp by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, g.previewUrl) {
         value = runCatching { store.gifs.download(g.previewUrl).let { b -> BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() } }.getOrNull()
@@ -174,6 +187,7 @@ private fun GifTile(g: Gif, starred: Boolean, onStar: () -> Unit, onClick: () ->
     val ratio = if (g.w > 0 && g.h > 0) (g.w.toFloat() / g.h).coerceIn(0.6f, 2f) else 1.4f
     Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable(onClick = onClick)) {
         bmp?.let { Image(it, g.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+        if (count > 0) Text(if (count > 1) "✓ $count" else "✓", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.align(Alignment.TopStart).padding(6.dp).background(MaterialTheme.colorScheme.primary, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp))
         Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(32.dp).clip(CircleShape).background(Color(0x99000000)).dpadFocus().clickable(onClick = onStar), contentAlignment = Alignment.Center) {
             Icon(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, if (starred) "Remove from favorites" else "Add to favorites", tint = Color(0xFFFFD54A), modifier = Modifier.size(20.dp))
         }
