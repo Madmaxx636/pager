@@ -133,6 +133,14 @@ class Store(private val context: Context) {
     val bridges: StateFlow<List<Network>> = _bridges.asStateFlow()
 
     @Volatile var appInForeground = false
+    // You are really at the phone: the app is on screen and you touched it in the last two minutes. An app left open on a table does not read for you.
+    private val _interacting = MutableStateFlow(false)
+    val interacting: StateFlow<Boolean> = _interacting
+    val attended get() = appInForeground && _interacting.value
+    private val idleHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val goIdle = Runnable { _interacting.value = false }
+    fun touch() { idleHandler.removeCallbacks(goIdle); _interacting.value = true; idleHandler.postDelayed(goIdle, 120_000) }
+    fun untouch() { idleHandler.removeCallbacks(goIdle); _interacting.value = false }
     /** The page you are looking at: sending and receiving make a little sound there (and only there). */
     @Volatile var openRoom: String? = null
     /** True when [roomId] is the page on screen, or is shown merged with it (one conversation across several networks). */
