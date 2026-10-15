@@ -107,7 +107,7 @@ fun AccountsDialog(store: Store, initial: Network? = null, onClose: () -> Unit) 
                             NetDot(meta, n.id)
                             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                                 Text(n.name, fontWeight = FontWeight.SemiBold)
-                                if (n.unavailable) Text("Unavailable right now", fontSize = 12.sp, color = Color(0xFFF5B85A))
+                                if (n.unavailable) Text(if (n.id == "discord") "No connect screen: send \"help\" to @discordbot in a chat to log in" else "Unavailable right now", fontSize = 12.sp, color = if (n.id == "discord") MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFFF5B85A))
                                 n.logins.forEach { l ->
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(l.name, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -115,7 +115,7 @@ fun AccountsDialog(store: Store, initial: Network? = null, onClose: () -> Unit) 
                                     }
                                 }
                             }
-                            Button(enabled = !n.unavailable && !busy, onClick = { active = n }) { Text(if (n.logins.isEmpty()) "Connect" else "Add another") }
+                            Button(enabled = !n.unavailable && !busy && n.id != "discord", onClick = { active = n }) { Text(if (n.logins.isEmpty()) "Connect" else "Add another") }
                         }
                     }
                     Text(

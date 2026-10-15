@@ -212,3 +212,13 @@ describe("messages that never get their key", () => {
     expect(relabelUnreadable(other, 99_999_999)).toBe(other);
   });
 });
+
+describe("chats with the Discord and IRC bridge bots", () => {
+  it("keeps them visible: they are where you log in", async () => {
+    const { isBotRoom } = await import("./types");
+    const room = (bot: string) => ({ joined: ["@me:x", bot], memberCount: 2, network: "matrix" }) as any;
+    expect(isBotRoom(room("@signalbot:x"), "@me:x")).toBe(true);
+    expect(isBotRoom(room("@discordbot:x"), "@me:x")).toBe(false);
+    expect(isBotRoom(room("@heisenbridge:x"), "@me:x")).toBe(false);
+  });
+});
