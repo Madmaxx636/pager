@@ -24,6 +24,10 @@ app.commandLine.appendSwitch("js-flags", `--max-old-space-size=${prefs.lowEnd ? 
 // Low-end device mode (Settings > System): draw without the graphics chip and without smooth scrolling, and keep a smaller memory budget.
 if (prefs.lowEnd) { app.disableHardwareAcceleration(); app.commandLine.appendSwitch("disable-smooth-scrolling"); }
 app.commandLine.appendSwitch("enable-low-end-device-mode");
+// A window behind another one must keep drawing: otherwise new messages only show up once you click it (the page's own animations pause when it is unfocused).
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+app.commandLine.appendSwitch("disable-renderer-backgrounding");
+app.commandLine.appendSwitch("disable-background-timer-throttling");
 // Alert sounds are played by the page itself; without this the browser engine keeps them silent until you have clicked in the window,
 // which is why a message that arrived while Pager sat in the tray sometimes made no sound.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -74,7 +78,7 @@ function createWindow() {
     // and Electron adds the minimize, maximize and close buttons on top of it, the same whether the window is maximized or not.
     ...(process.platform === "linux" ? { titleBarStyle: "hidden", titleBarOverlay: { color: "#0b0e13", symbolColor: "#c9d1d9", height: 36 } } : {}),
     icon: prefs.iconPng ? currentIcon() : path.join(__dirname, "build", "icon.png"),
-    webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });
   win.loadFile(path.join(__dirname, "app-dist", "index.html"));
   win.once("ready-to-show", () => { if (!(hidden || prefs.startMinimized) || !tray) win.show(); });
