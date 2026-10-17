@@ -109,6 +109,8 @@ function createWindow() {
     if (!quitting && prefs.closeToTray && tray) { e.preventDefault(); win.hide(); }
   });
   win.on("closed", () => { win = null; });
+  ipcMain.removeAllListeners("repaint");
+  ipcMain.on("repaint", () => { if (win && !win.isDestroyed() && win.isVisible()) win.webContents.invalidate(); });
   // Whether the window is really in front of you: the page can't tell when another window sits on top of it (Wayland especially).
   const sendActive = () => { if (win && !win.isDestroyed()) win.webContents.send("window-active", win.isVisible() && !win.isMinimized() && win.isFocused()); };
   for (const ev of ["focus", "blur", "show", "hide", "minimize", "restore"]) win.on(ev, sendActive);
