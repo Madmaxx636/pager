@@ -569,6 +569,9 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
             ChoiceRow("On the lock screen", listOf("show" to "Show content", "hide_content" to "Hide content", "hide" to "Don't show"), s.notifLockScreen, s.notifEnabled) { v -> set { copy(notifLockScreen = v) } }; GroupDivider()
             SwitchRow("Reply & Mark read buttons", "Act on a message right from the notification", s.notifActions, s.notifEnabled) { v -> set { copy(notifActions = v) } }
         }
+        SettingsGroup("Accounts") {
+            SwitchRow("Warn me when an account disconnects", "A notification when Google Messages, WhatsApp or another account loses its login", s.accountAlerts, s.notifEnabled) { v -> set { copy(accountAlerts = v) } }
+        }
         SettingsGroup("Sound & vibration", footer = "For a custom ringtone, vibration pattern or light, open the system settings for Pager's messages.") {
             SwitchRow("Sound", checked = s.notifSound, enabled = s.notifEnabled) { v -> set { copy(notifSound = v) } }; GroupDivider()
             SwitchRow("Vibrate", checked = s.notifVibrate, enabled = s.notifEnabled) { v -> set { copy(notifVibrate = v) } }; GroupDivider()

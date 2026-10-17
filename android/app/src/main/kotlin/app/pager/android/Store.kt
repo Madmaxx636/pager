@@ -1339,7 +1339,16 @@ class Store(private val context: Context) {
 
     suspend fun refreshBridges() {
         if (_session.value == null) return
-        runCatching { pager.networks() }.onSuccess { applyIdentity(it); _bridges.value = it; scope.launch { loadPhonebook(it) } }
+        runCatching { pager.networks() }.onSuccess { applyIdentity(it); _bridges.value = it; scope.launch { loadPhonebook(it) }; warnLost(it) }
+    }
+
+    private val lostSer get() = kotlinx.serialization.builtins.SetSerializer(kotlinx.serialization.serializer<String>())
+    /** A login that just broke (Google ended the pairing, say) raises a notification, once, whether or not the app is open. */
+    private fun warnLost(nets: List<Network>) {
+        val (remembered, fresh) = AccountAlerts.newlyLost(readJson("lostLogins", lostSer, emptySet()), nets)
+        writeJson("lostLogins", lostSer, remembered)
+        val s = settings.value
+        if (fresh.isNotEmpty() && s.accountAlerts && s.notifEnabled) fresh.forEach { Notifier.accountLost(context, it) }
     }
 
     // Names for bare phone numbers come from your phone's contacts and your bridges' contact lists (WhatsApp, Signal and Google Messages know your address book).

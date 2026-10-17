@@ -253,6 +253,16 @@ object Notifier {
         runCatching { NotificationManagerCompat.from(context).notify(ATTN_ID, note) }
     }
 
+    /** One of your accounts lost its login: tapping opens Pager. */
+    fun accountLost(context: Context, l: AccountAlerts.Lost) {
+        val open = PendingIntent.getActivity(context, ("lost" + l.key).hashCode(), Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val b = NotificationCompat.Builder(context, CH_ALL)
+            .setSmallIcon(R.drawable.ic_notif).setContentTitle(AccountAlerts.title(l)).setContentText(AccountAlerts.body(l))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(AccountAlerts.body(l)))
+            .setContentIntent(open).setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_STATUS)
+        runCatching { NotificationManagerCompat.from(context).notify(("lost" + l.key).hashCode(), b.build()) }
+    }
+
     fun clearAttention(context: Context) { NotificationManagerCompat.from(context).cancel(ATTN_ID) }
 
     fun clear(context: Context, roomId: String) {

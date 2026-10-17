@@ -306,6 +306,7 @@ function Notifications() {
       <Group><SwitchRow title="Notifications" hint="Master switch for message alerts" checked={s.notifEnabled} onChange={(v) => updateSettings({ notifEnabled: v })} />
         {perm === "default" && <Row title="Allow browser notifications"><button className="pill" onClick={async () => setPerm(await Notification.requestPermission())}>Allow</button></Row>}
         {perm === "denied" && <Row title="Notifications are blocked in your browser settings." />}
+        <SwitchRow title="Warn me when an account disconnects" hint="A notification when Google Messages, WhatsApp or another account loses its login" checked={s.accountAlerts} disabled={off} onChange={(v) => updateSettings({ accountAlerts: v })} />
         <Row title="Send a test notification" hint="Check sound and how it looks" onClick={off ? undefined : test}><span className="accent">Test</span></Row></Group>
       <Group title="What to notify" footer="Muted and Low priority pages stay quiet except for @mentions, replies to your messages and your keywords.">
         <Select title="Notify me about" value={s.notifScope} disabled={off} options={[["all", "Every message"], ["dm_mentions", "Direct messages and mentions"], ["favorites", "Pinned pages and mentions"]]} onChange={(v) => updateSettings({ notifScope: v })} />
