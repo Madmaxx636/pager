@@ -306,6 +306,8 @@ fun AdminScreen(onBack: () -> Unit) {
     var renameFor by remember { mutableStateOf<AdminUser?>(null) }
     var deleteFor by remember { mutableStateOf<AdminUser?>(null) }
     var logFor by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var schedules by remember { mutableStateOf<Map<String, Pair<String, String>>>(emptyMap()) }
+    var scheduleFor by remember { mutableStateOf<AdminBridge?>(null) }
     var busy by remember { mutableStateOf("") }
     var err by remember { mutableStateOf("") }
     fun load() = scope.launch {
@@ -313,6 +315,7 @@ fun AdminScreen(onBack: () -> Unit) {
         runCatching { store.pager.adminOverview() }.onSuccess { people = it }.onFailure { err = it.message ?: "Couldn't load" }
         runCatching { store.pager.adminBridgeList() }.onSuccess { bridges = it }
         runCatching { store.pager.adminControl() }.onSuccess { control = it }
+        runCatching { store.pager.adminSchedules() }.onSuccess { schedules = it }
         runCatching { store.pager.adminServer() }.onSuccess { server = it }
     }
     LaunchedEffect(Unit) { load() }
@@ -401,6 +404,7 @@ fun AdminScreen(onBack: () -> Unit) {
                         TextButton(enabled = control && busy.isEmpty(), onClick = { busy = b.id; scope.launch { runCatching { store.pager.adminBridgeAction(b.id, "restart") }.onFailure { err = it.message ?: "Failed" }; kotlinx.coroutines.delay(2500); busy = ""; load() } }) { Text(if (busy == b.id) "Working…" else "Restart") }
                         if (running) TextButton(enabled = control && busy.isEmpty(), onClick = { busy = b.id; scope.launch { runCatching { store.pager.adminBridgeAction(b.id, "stop") }.onFailure { err = it.message ?: "Failed" }; kotlinx.coroutines.delay(1500); busy = ""; load() } }) { Text("Stop", color = MaterialTheme.colorScheme.error) }
                         else TextButton(enabled = control && busy.isEmpty(), onClick = { busy = b.id; scope.launch { runCatching { store.pager.adminBridgeAction(b.id, "start") }.onFailure { err = it.message ?: "Failed" }; kotlinx.coroutines.delay(2500); busy = ""; load() } }) { Text("Start") }
+                        TextButton(enabled = control, onClick = { scheduleFor = b }) { Text(scheduleText(schedules[b.id])) }
                         TextButton(enabled = control, onClick = { scope.launch { logFor = b.name to (runCatching { store.pager.adminBridgeLog(b.id) }.getOrElse { it.message ?: "No log" }) } }) { Text("Log") }
                     }
                 }
@@ -485,6 +489,26 @@ fun AdminScreen(onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("Cancel") } },
         )
     }
+    scheduleFor?.let { b ->
+        val cur = schedules[b.id] ?: ("off" to "04:00")
+        var every by remember(b.id) { mutableStateOf(cur.first) }
+        var at by remember(b.id) { mutableStateOf(utcToLocal(cur.second)) }
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        AlertDialog(
+            onDismissRequest = { scheduleFor = null }, title = { Text("${b.name}: restart on a timer") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    listOf("off" to "Never (only when I press Restart)", "6h" to "Every 6 hours", "12h" to "Every 12 hours", "daily" to "Once a day").forEach { (id, label) ->
+                        Row(Modifier.fillMaxWidth().clickable { every = id }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) { androidx.compose.material3.RadioButton(selected = every == id, onClick = { every = id }); Text(label) }
+                    }
+                    if (every == "daily") TextButton(onClick = { val (h, m) = at.split(":").map { it.toInt() }; android.app.TimePickerDialog(ctx, { _, hh, mm -> at = "%02d:%02d".format(hh, mm) }, h, m, true).show() }) { Text("At $at (your time)") }
+                    Text("The bridge restarts by itself; its accounts stay linked, and messages are delayed about 10 to 25 seconds. Turning this on never restarts it right away. A restart can't bring back a login that the other service ended.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = { TextButton(onClick = { val id = b.id; scheduleFor = null; act { store.pager.adminSaveSchedule(id, every, localToUtc(at)) } }) { Text("Save") } },
+            dismissButton = { TextButton(onClick = { scheduleFor = null }) { Text("Cancel") } },
+        )
+    }
     logFor?.let { (name, log) ->
         AlertDialog(
             onDismissRequest = { logFor = null }, title = { Text("$name log") },
@@ -493,3 +517,17 @@ fun AdminScreen(onBack: () -> Unit) {
         )
     }
 }
+
+private fun utcToLocal(at: String): String {
+    val (h, m) = at.split(":").map { it.toInt() }
+    val c = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { set(java.util.Calendar.HOUR_OF_DAY, h); set(java.util.Calendar.MINUTE, m) }
+    val l = java.util.Calendar.getInstance().apply { timeInMillis = c.timeInMillis }
+    return "%02d:%02d".format(l.get(java.util.Calendar.HOUR_OF_DAY), l.get(java.util.Calendar.MINUTE))
+}
+private fun localToUtc(at: String): String {
+    val (h, m) = at.split(":").map { it.toInt() }
+    val l = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, h); set(java.util.Calendar.MINUTE, m) }
+    val u = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = l.timeInMillis }
+    return "%02d:%02d".format(u.get(java.util.Calendar.HOUR_OF_DAY), u.get(java.util.Calendar.MINUTE))
+}
+private fun scheduleText(s: Pair<String, String>?) = when (s?.first) { "6h" -> "Auto-restart: every 6 h"; "12h" -> "Auto-restart: every 12 h"; "daily" -> "Auto-restart: daily ${utcToLocal(s.second)}"; else -> "Auto-restart: off" }
