@@ -90,6 +90,9 @@ class PagerApi(private val http: Http) {
         AdminBridge(o["id"].str().orEmpty(), o["name"].str().orEmpty(), (o["up"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true, c["state"].str(), c["status"].str())
     }
     /** Automatic restarts: bridge id to (every = off|6h|12h|daily, time as HH:MM in UTC). */
+    suspend fun adminBridgeUpdates(): List<AccountAlerts.Update> = http.request("GET", "/api/admin/bridge-updates")["entries"].arr().map { e ->
+        val o = e.obj(); AccountAlerts.Update(o["at"].str().orEmpty(), o["updated"].arr().mapNotNull { it.str() }, o["putBack"].arr().mapNotNull { it.str() })
+    }
     suspend fun adminSchedules(): Map<String, Pair<String, String>> = http.request("GET", "/api/admin/schedules")["schedules"].obj().entries.associate { (k, v) -> k to ((v.obj()["every"].str() ?: "off") to (v.obj()["at"].str() ?: "04:00")) }
     suspend fun adminSaveSchedule(id: String, every: String, atUtc: String) { http.request("PUT", "/api/admin/bridges/${enc(id)}/schedule", buildJsonObject { put("every", every); put("at", atUtc) }) }
     suspend fun adminBridgeAction(id: String, action: String) { http.request("POST", "/api/admin/bridges/${enc(id)}/$action", JsonObject(emptyMap())) }

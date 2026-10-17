@@ -20,4 +20,18 @@ object AccountAlerts {
         val why = if (l.state == "BAD_CREDENTIALS" || l.state == "LOGGED_OUT") "The service ended the login, so Pager can't get your messages until you sign in again." else "Pager lost the connection and can't recover it on its own."
         return "$why$who Open Settings \u2192 Accounts to sign in again."
     }
+
+    class Update(val at: String, val updated: List<String>, val putBack: List<String>)
+
+    /** The updates an admin has not been told about: newer than the last one reported, and not older than a day. */
+    fun freshUpdates(seenAt: String?, entries: List<Update>, now: Long = System.currentTimeMillis()): List<Update> {
+        val seen = seenAt?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() } ?: 0L
+        return entries.filter { e -> runCatching { java.time.Instant.parse(e.at).toEpochMilli() }.getOrNull()?.let { t -> t > seen && now - t < 86_400_000L } == true }
+    }
+
+    fun updateTitle(u: Update) = if (u.putBack.isNotEmpty()) "Bridge update needs a look" else "Bridges updated"
+    fun updateBody(u: Update, nameOf: (String) -> String): String = buildList {
+        if (u.updated.isNotEmpty()) add("Updated to the newest version: ${u.updated.joinToString(", ", transform = nameOf)}.")
+        if (u.putBack.isNotEmpty()) add("${u.putBack.joinToString(", ", transform = nameOf)} would not start on the new version and was put back.")
+    }.joinToString(" ")
 }

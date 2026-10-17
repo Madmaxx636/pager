@@ -17,7 +17,7 @@ for k,v in sorted(json.load(sys.stdin)['services'].items()):
     i=v.get('image','')
     if i.startswith('dock.mau.dev/') or i.startswith('docker.io/hif1/heisenbridge'): print(k)")
 SERVICES=("${@:-${ALL[@]}}")
-changed=0; failed=0
+changed=0; failed=0; UPDATED=(); PUTBACK=()
 for svc in "${SERVICES[@]}"; do
   cid=$(docker compose ps -q "$svc" 2>/dev/null | head -1)
   [ -n "$cid" ] || { echo "-- $svc: not running here, skipped"; continue; }
@@ -32,11 +32,22 @@ for svc in "${SERVICES[@]}"; do
   sleep 40
   ncid=$(docker compose ps -q "$svc" | head -1)
   if [ -n "$ncid" ] && [ "$(docker inspect --format '{{.State.Running}} {{.RestartCount}}' "$ncid")" = "true 0" ]; then
-    echo "   $svc is running the new version"; docker rmi "pager-rollback/$svc:prev" >/dev/null 2>&1
+    echo "   $svc is running the new version"; UPDATED+=("$svc"); docker rmi "pager-rollback/$svc:prev" >/dev/null 2>&1
   else
-    echo "   $svc did NOT start cleanly: putting the old version back"; failed=$((failed+1))
+    echo "   $svc did NOT start cleanly: putting the old version back"; failed=$((failed+1)); PUTBACK+=("$svc")
     docker tag "pager-rollback/$svc:prev" "$img"; docker compose up -d --no-deps "$svc" >/dev/null 2>&1; docker rmi "pager-rollback/$svc:prev" >/dev/null 2>&1
   fi
 done
 docker image prune -f >/dev/null 2>&1
+# What happened, for the apps: admins get a notification the next time they check (the Pager API reads this file).
+if [ "${#UPDATED[@]}" -gt 0 ] || [ "${#PUTBACK[@]}" -gt 0 ]; then
+  UPD="${UPDATED[*]:-}" PUT="${PUTBACK[*]:-}" python3 - <<'PY'
+import json, os, datetime
+p = "data/api/bridge-updates.json"
+try: rows = json.load(open(p))
+except Exception: rows = []
+rows.append({"at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "updated": os.environ["UPD"].split(), "putBack": os.environ["PUT"].split()})
+json.dump(rows[-20:], open(p, "w"))
+PY
+fi
 echo "== done: $changed updated, $failed put back"

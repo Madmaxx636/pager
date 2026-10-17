@@ -20,3 +20,20 @@ export function lostText(l: Lost): { title: string; body: string } {
   const why = l.state === "BAD_CREDENTIALS" || l.state === "LOGGED_OUT" ? "The service ended the login, so Pager can't get your messages until you sign in again." : "Pager lost the connection and can't recover it on its own.";
   return { title: `${l.network} disconnected`, body: `${why}${who} Open Settings → Accounts to sign in again.` };
 }
+
+export interface BridgeUpdate { at: string; updated: string[]; putBack: string[] }
+const DAY = 86_400_000;
+
+/** The updates an admin has not been told about: newer than the last one reported, and not older than a day (a long-forgotten one is not news). */
+export function freshUpdates(seenAt: string | undefined, entries: BridgeUpdate[], now = Date.now()): BridgeUpdate[] {
+  const seen = seenAt ? Date.parse(seenAt) : 0;
+  return entries.filter((e) => Date.parse(e.at) > seen && now - Date.parse(e.at) < DAY);
+}
+
+export function updateText(u: BridgeUpdate, nameOf: (id: string) => string): { title: string; body: string } {
+  const names = (ids: string[]) => ids.map(nameOf).join(", ");
+  const parts: string[] = [];
+  if (u.updated.length) parts.push(`Updated to the newest version: ${names(u.updated)}.`);
+  if (u.putBack.length) parts.push(`${names(u.putBack)} would not start on the new version and was put back.`);
+  return { title: u.putBack.length ? "Bridge update needs a look" : "Bridges updated", body: parts.join(" ") };
+}

@@ -1,3 +1,4 @@
+import { readBridgeUpdates } from "./bridgeupdates.ts";
 import { EVERIES, clean, parseAt, runDue, type Sched } from "./schedule.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Config } from "./config.ts";
@@ -321,6 +322,7 @@ export function createApp(cfg: Config) {
         await control(c.id, parts[3] as "restart" | "stop" | "start");
         return send(res, 200, { ok: true });
       }
+      if (parts[1] === "bridge-updates" && method === "GET") return send(res, 200, { entries: readBridgeUpdates(cfg.stateFile) });
       if (parts[1] === "schedules" && method === "GET") return send(res, 200, { schedules, canSave: !!cfg.stateFile, docker: dockerAvailable() });
       if (parts[1] === "bridges" && parts[2] && parts[3] === "schedule" && method === "PUT") {
         const b = bridgeById(parts[2]);

@@ -140,6 +140,8 @@ data class AppSettings(
     val notifEnabled: Boolean = true,
     /** A notification when one of your accounts (Google Messages, WhatsApp…) loses its login. */
     val accountAlerts: Boolean = true,
+    /** Admins: a notification when the weekly bridge update changed something. */
+    val updateAlerts: Boolean = true,
     val notifPreview: String = "full",         // full | sender | hidden
     /** The alert sound: "system" (Android's own, set in its notification settings) or "custom" (the file you chose). */
     val alertSound: String = "system",
@@ -217,7 +219,7 @@ class SettingsStore(context: Context) {
             Group("bubbles", "Bubbles and messages", "Bubble style, fill, depth, animations, effects", listOf("bubbleStyle", "bubbleFill", "bubbleBorder", "bubbleBorderColor", "outStyle", "outRadius", "outBorder", "outBorderColor", "bubbleMineDark", "bubbleTheirsDark", "bubbleMineText", "bubbleTheirsText", "bubbleMineTextDark", "bubbleTheirsTextDark", "bubbleNative", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle")),
             Group("reactions", "Reactions", "Double-tap and triple-tap reactions, swipe to reply", listOf("doubleTapReact", "doubleTapEmoji", "tripleTapReact", "tripleTapEmoji", "swipeToReply")),
             Group("list", "Chat list", "What each row shows, filters, swipes, hidden networks", listOf("showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories", "swipeLeft", "swipeRight")),
-            Group("notifications", "Notifications", "What alerts you, quiet hours, previews", listOf("notifEnabled", "accountAlerts", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin", "notifVibrate", "notifLockScreen", "notifAlertOnce", "notifActions")),
+            Group("notifications", "Notifications", "What alerts you, quiet hours, previews", listOf("notifEnabled", "accountAlerts", "updateAlerts", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin", "notifVibrate", "notifLockScreen", "notifAlertOnce", "notifActions")),
             Group("sounds", "Sounds", "Send, receive and reaction sounds", listOf("convoSounds", "sendSound", "receiveSound", "reactionSound")),
             Group("gifs", "GIF search keys", "Your GIPHY and KLIPY keys (kept on your own server)", listOf("gifKeys")),
             Group("behaviour", "Chat behaviour", "Read marks, typing, downloads, link previews, confirmations", listOf("lowData", "lowEnd", "markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider", "enterSends", "imageQuality")),
