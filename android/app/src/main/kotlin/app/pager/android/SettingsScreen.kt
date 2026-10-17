@@ -571,6 +571,8 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
         }
         SettingsGroup("Accounts") {
             SwitchRow("Warn me when an account disconnects", "A notification when Google Messages, WhatsApp or another account loses its login", s.accountAlerts, s.notifEnabled) { v -> set { copy(accountAlerts = v) } }
+            val admin by LocalStore.current.isAdmin.collectAsState()
+            if (admin) { GroupDivider(); SwitchRow("Tell me when bridges update", "A notification after the weekly automatic update, and if one had to be put back", s.updateAlerts, s.notifEnabled) { v -> set { copy(updateAlerts = v) } } }
         }
         SettingsGroup("Sound & vibration", footer = "For a custom ringtone, vibration pattern or light, open the system settings for Pager's messages.") {
             SwitchRow("Sound", checked = s.notifSound, enabled = s.notifEnabled) { v -> set { copy(notifSound = v) } }; GroupDivider()

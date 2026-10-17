@@ -82,6 +82,7 @@ export const pager = {
     control: () => call<{ docker: boolean; settings: boolean }>("GET", "/api/admin/control"),
     bridgeList: () => call<{ bridges: AdminBridge[]; docker: boolean }>("GET", "/api/admin/bridges"),
     bridgeAction: (id: string, action: "restart" | "stop" | "start") => call("POST", `/api/admin/bridges/${enc(id)}/${action}`, {}),
+    bridgeUpdates: () => call<{ entries: { at: string; updated: string[]; putBack: string[] }[] }>("GET", "/api/admin/bridge-updates").then((r) => r.entries),
     schedules: () => call<{ schedules: Record<string, AdminSchedule>; canSave: boolean; docker: boolean }>("GET", "/api/admin/schedules"),
     saveSchedule: (id: string, every: AdminSchedule["every"], at: string) => call<{ schedule: AdminSchedule }>("PUT", `/api/admin/bridges/${enc(id)}/schedule`, { every, at }),
     bridgeLogs: (id: string, tail = 300) => call<{ log: string }>("GET", `/api/admin/bridges/${enc(id)}/logs?tail=${tail}`).then((r) => r.log),

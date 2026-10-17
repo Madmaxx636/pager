@@ -1,4 +1,4 @@
-import { lostText, newlyLost } from "./accountalerts";
+import { freshUpdates, lostText, newlyLost, updateText } from "./accountalerts";
 import { ATTENTION_FIELD, attentionText, isFresh, raise, type AttentionKind } from "./attention";
 import { attended } from "./presence";
 import { KEEP_MESSAGES, LOW_END_KEEP, poolClearMs } from "./memory";
@@ -920,7 +920,23 @@ function applyIdentity(nets: Network[]) {
 }
 export async function refreshBridges() {
   if (!state.session) return;
-  try { const nets = await pager.networks(); applyIdentity(nets); set({ bridges: nets }); void loadPhonebook(nets); warnLost(nets); } catch { /* bridge API may be down */ }
+  try { const nets = await pager.networks(); applyIdentity(nets); set({ bridges: nets }); void loadPhonebook(nets); warnLost(nets); void warnUpdates(nets); } catch { /* bridge API may be down */ }
+}
+/** Admins: the weekly bridge update changed something, so say so (once per update). */
+async function warnUpdates(nets: Network[]) {
+  if (!state.isAdmin || !getSettings().updateAlerts || !getSettings().notifEnabled) return;
+  try {
+    const entries = await pager.admin.bridgeUpdates();
+    const fresh = freshUpdates(lsGet<string | undefined>("pager.updatesSeen", undefined), entries);
+    if (entries.length) lsSet("pager.updatesSeen", entries[entries.length - 1].at);
+    for (const u of fresh) {
+      const { title, body } = updateText(u, (id) => nets.find((n) => n.id === id)?.name ?? id);
+      if (window.pagerDesktop) { window.pagerDesktop.notify({ title, body }); continue; }
+      if (typeof Notification === "undefined" || Notification.permission !== "granted") continue;
+      const n = new Notification(title, { body, tag: `update-${u.at}` });
+      n.onclick = () => { window.focus(); window.dispatchEvent(new CustomEvent("pager:nav", { detail: "settings/admin" })); };
+    }
+  } catch { /* not an admin, or the server is busy */ }
 }
 /** A login that just broke (Google ended the pairing, say) raises a notification, once, wherever Pager is running. */
 function warnLost(nets: Network[]) {

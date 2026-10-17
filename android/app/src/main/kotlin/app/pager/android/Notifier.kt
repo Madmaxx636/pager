@@ -263,6 +263,16 @@ object Notifier {
         runCatching { NotificationManagerCompat.from(context).notify(("lost" + l.key).hashCode(), b.build()) }
     }
 
+    /** The weekly bridge update changed something (admins only). */
+    fun bridgesUpdated(context: Context, u: AccountAlerts.Update, nameOf: (String) -> String) {
+        val open = PendingIntent.getActivity(context, ("upd" + u.at).hashCode(), Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val body = AccountAlerts.updateBody(u, nameOf)
+        val b = NotificationCompat.Builder(context, CH_SOUND)
+            .setSmallIcon(R.drawable.ic_notif).setContentTitle(AccountAlerts.updateTitle(u)).setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body)).setContentIntent(open).setAutoCancel(true).setCategory(NotificationCompat.CATEGORY_STATUS)
+        runCatching { NotificationManagerCompat.from(context).notify(("upd" + u.at).hashCode(), b.build()) }
+    }
+
     fun clearAttention(context: Context) { NotificationManagerCompat.from(context).cancel(ATTN_ID) }
 
     fun clear(context: Context, roomId: String) {

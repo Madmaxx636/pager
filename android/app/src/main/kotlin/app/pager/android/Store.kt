@@ -1339,7 +1339,18 @@ class Store(private val context: Context) {
 
     suspend fun refreshBridges() {
         if (_session.value == null) return
-        runCatching { pager.networks() }.onSuccess { applyIdentity(it); _bridges.value = it; scope.launch { loadPhonebook(it) }; warnLost(it) }
+        runCatching { pager.networks() }.onSuccess { applyIdentity(it); _bridges.value = it; scope.launch { loadPhonebook(it) }; warnLost(it); scope.launch { warnUpdates(it) } }
+    }
+
+    /** Admins: the weekly bridge update changed something, so say so (once per update). */
+    private suspend fun warnUpdates(nets: List<Network>) {
+        val s = settings.value
+        if (!_isAdmin.value || !s.updateAlerts || !s.notifEnabled) return
+        val entries = runCatching { pager.adminBridgeUpdates() }.getOrNull() ?: return
+        val seen = readJson("updatesSeen", kotlinx.serialization.serializer<String>(), "")
+        val fresh = AccountAlerts.freshUpdates(seen.ifEmpty { null }, entries)
+        entries.lastOrNull()?.let { writeJson("updatesSeen", kotlinx.serialization.serializer<String>(), it.at) }
+        fresh.forEach { Notifier.bridgesUpdated(context, it) { id -> nets.firstOrNull { n -> n.id == id }?.name ?: id } }
     }
 
     private val lostSer get() = kotlinx.serialization.builtins.SetSerializer(kotlinx.serialization.serializer<String>())

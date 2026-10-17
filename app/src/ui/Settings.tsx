@@ -293,6 +293,7 @@ function Notifications() {
   const [perm, setPerm] = useState(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
   const [word, setWord] = useState("");
   const off = !s.notifEnabled;
+  const isAdmin = useStore((x) => x.isAdmin);
   const chats = Object.entries(s.notifChat).filter(([, p]) => p && ((p.mode && p.mode !== "default") || (p.preview && p.preview !== "default") || (p.sound && p.sound !== "default")));
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const addWord = () => { const w = word.trim(); if (w && !s.notifKeywords.some((k) => k.toLowerCase() === w.toLowerCase())) updateSettings({ notifKeywords: [...s.notifKeywords, w] }); setWord(""); };
@@ -307,6 +308,7 @@ function Notifications() {
         {perm === "default" && <Row title="Allow browser notifications"><button className="pill" onClick={async () => setPerm(await Notification.requestPermission())}>Allow</button></Row>}
         {perm === "denied" && <Row title="Notifications are blocked in your browser settings." />}
         <SwitchRow title="Warn me when an account disconnects" hint="A notification when Google Messages, WhatsApp or another account loses its login" checked={s.accountAlerts} disabled={off} onChange={(v) => updateSettings({ accountAlerts: v })} />
+        {isAdmin && <SwitchRow title="Tell me when bridges update" hint="A notification after the weekly automatic update, and if one had to be put back" checked={s.updateAlerts} disabled={off} onChange={(v) => updateSettings({ updateAlerts: v })} />}
         <Row title="Send a test notification" hint="Check sound and how it looks" onClick={off ? undefined : test}><span className="accent">Test</span></Row></Group>
       <Group title="What to notify" footer="Muted and Low priority pages stay quiet except for @mentions, replies to your messages and your keywords.">
         <Select title="Notify me about" value={s.notifScope} disabled={off} options={[["all", "Every message"], ["dm_mentions", "Direct messages and mentions"], ["favorites", "Pinned pages and mentions"]]} onChange={(v) => updateSettings({ notifScope: v })} />
