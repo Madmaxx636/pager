@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AdminBridge, AdminInfo, AdminPerson, AdminSetting, pager } from "../core/api";
+import { AdminBridge, AdminSchedule, AdminInfo, AdminPerson, AdminSetting, pager } from "../core/api";
 import { networkMeta } from "../core/emoji";
 import { Group, Modal, Row, Select, Switch } from "./common";
 import { stateLabel } from "./Accounts";
@@ -133,9 +133,10 @@ function TextForm({ label, type = "text", min = 1, cta, note, initial = "", onSu
 function Bridges({ people, setErr }: { people?: AdminPerson[]; setErr: (m: string) => void }) {
   const [list, setList] = useState<{ bridges: AdminBridge[]; docker: boolean }>();
   const [ctl, setCtl] = useState<{ docker: boolean; settings: boolean }>();
-  const [modal, setModal] = useState<{ kind: "logs" | "settings" | "add"; bridge?: AdminBridge }>();
+  const [modal, setModal] = useState<{ kind: "logs" | "settings" | "add" | "schedule"; bridge?: AdminBridge }>();
   const [busy, setBusy] = useState("");
-  const load = useCallback(() => { pager.admin.bridgeList().then(setList).catch((e) => setErr(e.message)); pager.admin.control().then(setCtl).catch(() => {}); }, [setErr]);
+  const [sched, setSched] = useState<{ schedules: Record<string, AdminSchedule>; canSave: boolean }>();
+  const load = useCallback(() => { pager.admin.schedules().then(setSched).catch(() => {}); pager.admin.bridgeList().then(setList).catch((e) => setErr(e.message)); pager.admin.control().then(setCtl).catch(() => {}); }, [setErr]);
   useEffect(load, [load]);
   const counts = (id: string) => (people ?? []).reduce((n, p) => n + (p.networks.find((x) => x.id === id)?.logins.length ?? 0), 0);
   const run = async (b: AdminBridge, action: "restart" | "stop" | "start") => {
@@ -170,12 +171,14 @@ function Bridges({ people, setErr }: { people?: AdminPerson[]; setErr: (m: strin
                 {running ? <button className="pill danger" disabled={!ctl?.docker || !!busy} onClick={() => run(b, "stop")}>Stop</button> : <button className="pill" disabled={!ctl?.docker || !!busy} onClick={() => run(b, "start")}>Start</button>}
                 <button className="pill" disabled={!ctl?.docker} onClick={() => setModal({ kind: "logs", bridge: b })}>Log</button>
                 <button className="pill" disabled={!ctl?.settings} onClick={() => setModal({ kind: "settings", bridge: b })}>Settings</button>
+                <button className="pill" disabled={!ctl?.docker || !sched?.canSave} onClick={() => setModal({ kind: "schedule", bridge: b })} title="Restart this bridge by itself on a timer">{scheduleLabel(sched?.schedules[b.id])}</button>
               </footer>
             </section>
           );
         })}
       </div>
       {modal?.kind === "logs" && modal.bridge && <LogModal bridge={modal.bridge} onClose={() => setModal(undefined)} />}
+      {modal?.kind === "schedule" && modal.bridge && <ScheduleModal bridge={modal.bridge} current={sched?.schedules[modal.bridge.id]} onClose={() => { setModal(undefined); load(); }} />}
       {modal?.kind === "settings" && modal.bridge && <SettingsModal bridge={modal.bridge} onClose={() => { setModal(undefined); load(); }} />}
       {modal?.kind === "add" && (
         <Modal title="Add a bridge" onClose={() => setModal(undefined)} wide>
@@ -189,6 +192,33 @@ function Bridges({ people, setErr }: { people?: AdminPerson[]; setErr: (m: strin
         </Modal>
       )}
     </>
+  );
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+/** The server keeps times in UTC; the admin sees and types their own. */
+const utcToLocal = (at: string) => { const [h, m] = at.split(":").map(Number); const d = new Date(); d.setUTCHours(h, m, 0, 0); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const localToUtc = (at: string) => { const [h, m] = at.split(":").map(Number); const d = new Date(); d.setHours(h, m, 0, 0); return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; };
+const scheduleLabel = (s?: AdminSchedule) => !s || s.every === "off" ? "Auto-restart: off" : s.every === "daily" ? `Auto-restart: daily ${utcToLocal(s.at)}` : `Auto-restart: every ${s.every === "6h" ? "6" : "12"} h`;
+
+function ScheduleModal({ bridge, current, onClose }: { bridge: AdminBridge; current?: AdminSchedule; onClose: () => void }) {
+  const [every, setEvery] = useState<AdminSchedule["every"]>(current?.every ?? "off");
+  const [at, setAt] = useState(utcToLocal(current?.at ?? "04:00"));
+  const [err, setErr] = useState(""), [busy, setBusy] = useState(false);
+  const save = async () => { setBusy(true); setErr(""); try { await pager.admin.saveSchedule(bridge.id, every, localToUtc(at)); onClose(); } catch (e) { setErr((e as Error).message); setBusy(false); } };
+  return (
+    <Modal title={`${bridge.name}: restart on a timer`} onClose={onClose}>
+      <div className="stack">
+        <label>How often<select value={every} onChange={(e) => setEvery(e.target.value as AdminSchedule["every"])}>
+          <option value="off">Never (only when I press Restart)</option><option value="6h">Every 6 hours</option><option value="12h">Every 12 hours</option><option value="daily">Once a day</option>
+        </select></label>
+        {every === "daily" && <label>At (your time)<input type="time" value={at} onChange={(e) => setAt(e.target.value)} required /></label>}
+        <p className="muted">The bridge restarts by itself; its accounts stay linked, and messages are delayed for about 10 to 25 seconds. {every !== "off" ? "Turning this on never restarts it right away." : ""} A restart clears a stuck bridge but can't bring back a login that Google, WhatsApp or another service has ended.</p>
+        {current && current.every !== "off" && <p className="muted">Last automatic restart: {current.result ? `${new Date(current.last).toLocaleString()} (${current.result === "ok" ? "worked" : "failed"})` : "none yet"}</p>}
+        {err && <div className="error">{err}</div>}
+        <div className="row-end"><button className="link" onClick={onClose}>Cancel</button><button className="primary" disabled={busy || (every === "daily" && !at)} onClick={save}>{busy ? "Saving…" : "Save"}</button></div>
+      </div>
+    </Modal>
   );
 }
 

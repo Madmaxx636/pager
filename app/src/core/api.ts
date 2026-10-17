@@ -55,6 +55,7 @@ export function parseCookies(text: string): Record<string, string> {
 
 export interface AdminInfo { id: string; displayname: string; admin: boolean; deactivated: boolean; locked: boolean; created?: number; devices: { id: string; name: string; lastSeen: number; ip: string }[] }
 export interface AdminBridge { id: string; name: string; up: boolean; container?: { state: string; status: string; image: string } }
+export interface AdminSchedule { every: "off" | "6h" | "12h" | "daily"; at: string; last: number; result?: "ok" | "failed" }
 export interface AdminSetting { key: string; label: string; hint: string; kind: "bool" | "number"; value: boolean | number }
 export interface AdminPerson extends AdminUser { networks: (Network & { error?: string })[] }
 export interface AdminUser { id: string; displayname: string; admin: boolean; deactivated: boolean; created?: number; you: boolean }
@@ -81,6 +82,8 @@ export const pager = {
     control: () => call<{ docker: boolean; settings: boolean }>("GET", "/api/admin/control"),
     bridgeList: () => call<{ bridges: AdminBridge[]; docker: boolean }>("GET", "/api/admin/bridges"),
     bridgeAction: (id: string, action: "restart" | "stop" | "start") => call("POST", `/api/admin/bridges/${enc(id)}/${action}`, {}),
+    schedules: () => call<{ schedules: Record<string, AdminSchedule>; canSave: boolean; docker: boolean }>("GET", "/api/admin/schedules"),
+    saveSchedule: (id: string, every: AdminSchedule["every"], at: string) => call<{ schedule: AdminSchedule }>("PUT", `/api/admin/bridges/${enc(id)}/schedule`, { every, at }),
     bridgeLogs: (id: string, tail = 300) => call<{ log: string }>("GET", `/api/admin/bridges/${enc(id)}/logs?tail=${tail}`).then((r) => r.log),
     bridgeSettings: (id: string) => call<{ settings: AdminSetting[] }>("GET", `/api/admin/bridges/${enc(id)}/settings`).then((r) => r.settings),
     saveBridgeSettings: (id: string, values: Record<string, boolean | number>, restart: boolean) => call<{ changed: string[] }>("PUT", `/api/admin/bridges/${enc(id)}/settings`, { values, restart }),

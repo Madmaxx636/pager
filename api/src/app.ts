@@ -1,3 +1,4 @@
+import { EVERIES, clean, parseAt, runDue, type Sched } from "./schedule.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Config } from "./config.ts";
 import { HttpError, asUser, registerUser, synapseAdmin, verifyPassword, whoami } from "./synapse.ts";
@@ -54,15 +55,22 @@ function send(res: ServerResponse, status: number, body: unknown) {
 }
 
 export function createApp(cfg: Config) {
+  const schedules: Record<string, Sched> = {};
   // Settings changed from the admin page are kept in a small file so a restart doesn't undo them.
   if (cfg.stateFile && existsSync(cfg.stateFile)) {
     try {
       const st = JSON.parse(readFileSync(cfg.stateFile, "utf8"));
       if (["invite", "open", "closed"].includes(st.signupMode)) cfg.signup.mode = st.signupMode;
       if (typeof st.inviteCode === "string") cfg.signup.inviteCode = st.inviteCode;
+      if (st.schedules && typeof st.schedules === "object") for (const [id, v] of Object.entries(st.schedules)) schedules[id] = clean(v, Date.now());
     } catch { /* ignore a damaged file */ }
   }
-  const saveState = () => { if (cfg.stateFile) try { writeFileSync(cfg.stateFile, JSON.stringify({ signupMode: cfg.signup.mode, inviteCode: cfg.signup.inviteCode })); } catch { /* read-only */ } };
+  const saveState = () => { if (cfg.stateFile) try { writeFileSync(cfg.stateFile, JSON.stringify({ signupMode: cfg.signup.mode, inviteCode: cfg.signup.inviteCode, schedules })); } catch { /* read-only */ } };
+
+  // Once a minute: restart any bridge whose automatic restart is due.
+  const restartBridge = async (id: string) => { if (!dockerAvailable()) return false; const c = await findContainer(id); if (!c) return false; await control(c.id, "restart"); return true; };
+  const tick = () => { void runDue(schedules, Date.now(), restartBridge).then((tried) => { if (tried.length) saveState(); }).catch(() => {}); };
+  if (cfg.stateFile) setInterval(tick, 60_000).unref();
 
   const bridgeById = (id: string) => {
     const b = cfg.bridges.find((x) => x.id === id);
@@ -312,6 +320,18 @@ export function createApp(cfg: Config) {
         if (!c) throw new HttpError(404, `${b.name} isn't running on this server`);
         await control(c.id, parts[3] as "restart" | "stop" | "start");
         return send(res, 200, { ok: true });
+      }
+      if (parts[1] === "schedules" && method === "GET") return send(res, 200, { schedules, canSave: !!cfg.stateFile, docker: dockerAvailable() });
+      if (parts[1] === "bridges" && parts[2] && parts[3] === "schedule" && method === "PUT") {
+        const b = bridgeById(parts[2]);
+        if (!cfg.stateFile) throw new HttpError(409, "The server has nowhere to keep schedules (no state file)");
+        const body = await readJson(req);
+        if (!EVERIES.includes(body.every)) throw new HttpError(400, "Pick off, every 6 hours, every 12 hours or daily");
+        if (body.every === "daily" && !parseAt(body.at)) throw new HttpError(400, "Give the time as HH:MM");
+        // Starts counting from now, so turning it on never restarts the bridge straight away.
+        schedules[b.id] = clean({ every: body.every, at: body.at, last: Date.now() }, Date.now());
+        saveState();
+        return send(res, 200, { schedule: schedules[b.id] });
       }
       if (parts[1] === "bridges" && parts[2] && parts[3] === "logs" && method === "GET") {
         const b = bridgeById(parts[2]);
