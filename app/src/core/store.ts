@@ -443,6 +443,8 @@ async function syncLoop(s: Session, signal: AbortSignal) {
         r.invites.forEach((id) => void matrix.join(id).catch(() => {}));
         const muted = state.muted, st = getSettings();
         const when = new Date();
+        // A window that is open but not in front may not redraw by itself on some systems: ask the shell to paint it.
+        if (r.incoming.length && !document.hasFocus()) window.pagerDesktop?.repaint?.();
         for (const m of r.incoming) {
           const c = r.chats[m.roomId];
           if (m.attention && !initial && m.id && isFresh(m.ts) && !muted.includes(m.roomId)) raise({ id: m.id, roomId: m.roomId, chat: m.chat, sender: m.sender, kind: m.attention, mxc: m.attention === "image" ? m.mxc : undefined });
@@ -1045,6 +1047,7 @@ declare global {
       getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean; smoothGraphics?: boolean; lowEnd?: boolean }): void; setZoom(z: number): void;
       onOpenRoom(cb: (roomId: string) => void): void;
       onWindowActive?(cb: (active: boolean) => void): void;
+      repaint?(): void;
       onMemory?(cb: (level: string) => void): void;
       setTitleBar?(o: { color: string; symbolColor: string }): void;
       setIcon?(png: string): void;

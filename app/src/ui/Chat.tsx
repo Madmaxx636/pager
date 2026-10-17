@@ -112,17 +112,30 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   // Scroll: open at the unread divider (or bottom), stick to bottom for new messages, keep position when older ones load.
   const opened = useRef<string>("");
   const stick = useRef(true);
+  // Where we last scrolled to ourselves: a scroll event that lands there was not you moving, so it must not turn "stay at the newest" off
+  // (a picture loading between our scroll and its event used to make the page stop following new messages).
+  const ours = useRef(-1);
+  const toBottom = useCallback(() => {
+    const el = scroller.current; if (!el) return;
+    el.scrollTop = el.scrollHeight; ours.current = el.scrollTop;
+  }, []);
+  // Late layout (pictures, fonts, a window that was not drawing) can change the height after the first scroll: look again a few times.
+  const settle = useCallback(() => {
+    toBottom();
+    for (const ms of [60, 250, 800]) window.setTimeout(() => { if (stick.current) toBottom(); }, ms);
+    requestAnimationFrame(() => { if (stick.current) toBottom(); });
+  }, [toBottom]);
   const prevTop = useRef<{ first?: string; height: number }>({ height: 0 });
   useLayoutEffect(() => {
     const el = scroller.current; if (!el || !chat) return;
     if (opened.current !== roomId) {
       opened.current = roomId;
       const div = st.openAtUnread ? el.querySelector("#unread-divider") : null;
-      if (div) { (div as HTMLElement).scrollIntoView({ block: "center" }); stick.current = false; } else { el.scrollTop = el.scrollHeight; stick.current = true; }
+      if (div) { (div as HTMLElement).scrollIntoView({ block: "center" }); stick.current = false; } else { stick.current = true; settle(); }
     } else if (prevTop.current.first && messages[0]?.id !== prevTop.current.first && !stick.current) {
       el.scrollTop += el.scrollHeight - prevTop.current.height; // older messages were prepended
     } else if (stick.current || messages[messages.length - 1]?.sender === user) {
-      el.scrollTop = el.scrollHeight;
+      stick.current = true; settle();
     }
     prevTop.current = { first: messages[0]?.id, height: el.scrollHeight };
   }, [roomId, messages, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -130,7 +143,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   // Pictures and videos change the chat's height as they load: stay at the newest message while you haven't scrolled up.
   useEffect(() => {
     const el = scroller.current; if (!el) return;
-    const pin = () => { if (stick.current) el.scrollTop = el.scrollHeight; };
+    const pin = () => { if (stick.current) toBottom(); };
     el.addEventListener("load", pin, true); el.addEventListener("loadedmetadata", pin, true);
     const ro = new ResizeObserver(pin); if (el.firstElementChild) ro.observe(el.firstElementChild); ro.observe(el);
     return () => { el.removeEventListener("load", pin, true); el.removeEventListener("loadedmetadata", pin, true); ro.disconnect(); };
@@ -144,6 +157,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
 
   const onScroll = () => {
     const el = scroller.current; if (!el) return;
+    if (Math.abs(el.scrollTop - ours.current) < 2) return; // our own scroll, not yours
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (stick.current && st.markReadMode === "scrolled") markRead(roomId);
     groupIds.forEach((id) => readingOlder(id, !stick.current));
