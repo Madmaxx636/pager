@@ -58,9 +58,11 @@ export function App() {
   }, []);
   useEffect(() => {
     const open = (e: Event) => nav(`chat:${(e as CustomEvent<string>).detail}`);
+    const go = (e: Event) => nav((e as CustomEvent<string>).detail);
+    window.addEventListener("pager:nav", go);
     window.addEventListener("pager:open", open);
     window.pagerDesktop?.onOpenRoom((id) => nav(`chat:${id}`));
-    return () => window.removeEventListener("pager:open", open);
+    return () => { window.removeEventListener("pager:open", open); window.removeEventListener("pager:nav", go); };
   }, [nav]);
   useEffect(() => { if (session) requestNotifications(); }, [session]);
 

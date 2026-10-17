@@ -1,3 +1,4 @@
+import { lostText, newlyLost } from "./accountalerts";
 import { ATTENTION_FIELD, attentionText, isFresh, raise, type AttentionKind } from "./attention";
 import { attended } from "./presence";
 import { KEEP_MESSAGES, LOW_END_KEEP, poolClearMs } from "./memory";
@@ -919,7 +920,20 @@ function applyIdentity(nets: Network[]) {
 }
 export async function refreshBridges() {
   if (!state.session) return;
-  try { const nets = await pager.networks(); applyIdentity(nets); set({ bridges: nets }); void loadPhonebook(nets); } catch { /* bridge API may be down */ }
+  try { const nets = await pager.networks(); applyIdentity(nets); set({ bridges: nets }); void loadPhonebook(nets); warnLost(nets); } catch { /* bridge API may be down */ }
+}
+/** A login that just broke (Google ended the pairing, say) raises a notification, once, wherever Pager is running. */
+function warnLost(nets: Network[]) {
+  const { remembered, fresh } = newlyLost(lsGet<string[]>("pager.lostLogins", []), nets);
+  lsSet("pager.lostLogins", remembered);
+  if (!fresh.length || !getSettings().accountAlerts || !getSettings().notifEnabled) return;
+  for (const l of fresh) {
+    const { title, body } = lostText(l);
+    if (window.pagerDesktop) { window.pagerDesktop.notify({ title, body }); continue; }
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") continue;
+    const n = new Notification(title, { body, tag: `lost-${l.key}` });
+    n.onclick = () => { window.focus(); window.dispatchEvent(new CustomEvent("pager:nav", { detail: "settings/bridges" })); };
+  }
 }
 // Contacts you import sync to your account (Matrix account data, in chunks to stay under its size limit) so every device shows the same names.
 let contactChunks = 0;
@@ -942,7 +956,8 @@ async function loadPhonebook(nets: Network[]) {
   }
 }
 let bridgeTick = 0;
-window.setInterval(() => { if (document.visibilityState === "visible" && (!getSettings().lowData || ++bridgeTick % 5 === 0)) void refreshBridges(); }, 120_000);
+// Also while the window is hidden: that is when a lost login most needs to reach you.
+window.setInterval(() => { if (!getSettings().lowData || ++bridgeTick % 5 === 0) void refreshBridges(); }, 120_000);
 
 /** Gives a chat a name only you see (empty puts the real name back). Saved in your account. */
 export function setAlias(roomId: string, name: string) {

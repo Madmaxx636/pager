@@ -39,6 +39,8 @@ class SyncService : Service() {
                 if (!store.appInForeground) Notifier.show(this@SyncService, store, m)
             }
         }
+        // Every few minutes, also with the app closed: a lost login (Google ended the pairing) should reach you soon.
+        scope.launch { while (true) { kotlinx.coroutines.delay(if (store.settings.value.lowData) 15 * 60_000L else 3 * 60_000L); store.refreshBridges() } }
         return START_STICKY
     }
 
