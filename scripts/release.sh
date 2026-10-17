@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 PUBLISH_ONLY=0; BUILD_ONLY=0; KEEP_ANDROID=0; KEEP_WINDOWS=0
 # --build-only: build and sign everything but do not upload.  --publish-only: re-send what a previous run built.
 # --keep-windows: don't build the Windows installer (it needs Wine) and leave the Windows entry in the update list as it is on the server.
+# WIN_BUILD: a command to build the Windows installer instead of running Wine here (for example inside Docker).
 # --keep-android: leave the Android entry in the update list as it is on the server (while phones still carry an older signing key).
 while [[ "${1:-}" == --* ]]; do case "$1" in --publish-only) PUBLISH_ONLY=1;; --build-only) BUILD_ONLY=1;; --keep-android) KEEP_ANDROID=1;; --keep-windows) KEEP_WINDOWS=1;; *) echo "Unknown option $1" >&2; exit 1;; esac; shift; done
 V="${1:?Usage: $0 [--publish-only] <version like 0.4.1> \"notes\"}"; NOTES="${2:-}"
@@ -31,7 +32,7 @@ echo "== Android"
 cp android/app/build/outputs/apk/release/*.apk "$OUT/pager-android-$V.apk"
 echo "== Desktop"; (cd desktop && npm test --silent && npm run dist >/dev/null)
 cp "desktop/release/pager-desktop_${V}_amd64.deb" "$OUT/"
-if [ "$KEEP_WINDOWS" = 1 ]; then echo "== Windows (kept as it is on the server)"; else echo "== Windows"; (cd desktop && npx electron-builder --win --x64 >/dev/null); cp "desktop/release/pager-desktop-setup-${V}.exe" "$OUT/"; fi
+if [ "$KEEP_WINDOWS" = 1 ]; then echo "== Windows (kept as it is on the server)"; else echo "== Windows"; if [ -n "${WIN_BUILD:-}" ]; then (cd desktop && eval "$WIN_BUILD" >/dev/null); else (cd desktop && npx electron-builder --win --x64 >/dev/null); fi; cp "desktop/release/pager-desktop-setup-${V}.exe" "$OUT/"; fi
 
 CODE=$(awk -F. '{print $1*10000+$2*100+$3}' <<<"$V")
 # The key the Android app is signed with: phones refuse an update signed by any other key, so the apps compare this before downloading.
