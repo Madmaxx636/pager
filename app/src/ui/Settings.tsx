@@ -827,7 +827,7 @@ function System() {
     <>
       <Group title="Easy on your connection and your machine" footer="Both are overrides: your own settings are not changed, so switching one off brings everything back.">
         <SwitchRow title="Low data mode" hint="For a slow or limited connection: nothing downloads until you tap it, GIFs don't play by themselves, link previews and typing indicators are off, pictures arrive at half size, and less runs in the background" checked={s.lowData} onChange={(v) => updateSettings({ lowData: v })} />
-        <SwitchRow title="Low-end device mode" hint={`For an older or slower computer: no animations, effects, blur or shadows, plain bubbles, and fewer messages kept in memory.${window.pagerDesktop ? " Pager also draws the screen without your graphics chip. Takes full effect after you restart Pager" : ""}`} checked={s.lowEnd} onChange={(v) => { updateSettings({ lowEnd: v }); window.pagerDesktop?.setPrefs({ lowEnd: v }); }} />
+        <SwitchRow title="Low-end device mode" hint={`For an older or slower computer: no blur or glass, no full-screen effects, no glowing or endlessly looping animations (typing dots, message pops and small effects stay), and fewer messages kept in memory.${window.pagerDesktop ? " Pager also draws the screen without your graphics chip. Takes full effect after you restart Pager" : ""}`} checked={s.lowEnd} onChange={(v) => { updateSettings({ lowEnd: v }); window.pagerDesktop?.setPrefs({ lowEnd: v }); }} />
       </Group>
       <Group title="Time">
         <Select title="Time format" value={s.timeFormat} options={[["system", "Follow system"], ["12", "12-hour"], ["24", "24-hour"]]} onChange={(v) => updateSettings({ timeFormat: v })} />

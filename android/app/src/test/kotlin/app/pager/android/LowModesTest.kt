@@ -20,9 +20,13 @@ class LowModesTest {
         assertEquals("always", mine.autoDownload)
     }
 
-    @Test fun lowEndStopsMotionAndEffects() {
-        val e = eff(AppSettings(lowEnd = true, bubbleFill = "glass", wallpaper = "dusk", messageAnimation = "pop", bubbleDepth = "raised"))
-        assertTrue(e.reduceMotion); assertFalse(e.screenEffects)
-        assertEquals("none", e.messageAnimation); assertEquals("flat", e.bubbleDepth); assertEquals("solid", e.bubbleFill); assertEquals("none", e.wallpaper)
+    @Test fun lowEndDropsOnlyTheHeavyThings() {
+        val e = eff(AppSettings(lowEnd = true, bubbleFill = "glass", screenEffects = true))
+        assertFalse(e.screenEffects); assertEquals("solid", e.bubbleFill); assertFalse(e.autoPlayGifs)
+    }
+
+    @Test fun lowEndKeepsTheSmallThings() {
+        val e = eff(AppSettings(lowEnd = true, wallpaper = "dusk", messageAnimation = "pop", bubbleDepth = "raised", reduceMotion = false, greetings = true))
+        assertEquals("dusk", e.wallpaper); assertEquals("pop", e.messageAnimation); assertEquals("raised", e.bubbleDepth); assertFalse(e.reduceMotion); assertTrue(e.greetings)
     }
 }

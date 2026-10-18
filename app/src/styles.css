@@ -656,8 +656,9 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .tabs { flex-wrap: wrap; }
 
 /* Low-end device mode: nothing moves, no blur, no shadows */
-:root[data-lowend] *, :root[data-lowend] *::before, :root[data-lowend] *::after { animation: none !important; transition: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-:root[data-lowend] .bubble, :root[data-lowend] .menu, :root[data-lowend] .modal, :root[data-lowend] .hover-tools, :root[data-lowend] .composer .field { box-shadow: none !important; }
+/* Low-end device mode takes away only the heavy things: blur, and animations that never end (the mascot, the unread ring's pulse). Typing dots, spinners, message pops and hover motion stay. */
+:root[data-lowend] *, :root[data-lowend] *::before, :root[data-lowend] *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+:root[data-lowend] .mascot *, :root[data-lowend] .pulse::after { animation: none !important; }
 :root[data-lowend] .pulse::after { display: none; }
 
 .icon-picks { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 16px 14px; }

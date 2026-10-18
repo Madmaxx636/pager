@@ -1350,7 +1350,7 @@ private fun SystemSettings() {
     val set = store.settings::update
     SettingsGroup("Easy on your connection and your phone", footer = "Both are overrides: your own settings are not changed, so switching one off brings everything back.") {
         SwitchRow("Low data mode", "For a slow or limited connection: nothing downloads until you tap it, GIFs don't play by themselves, link previews and typing indicators are off, pictures arrive at half size, and less runs in the background", s.lowData) { v -> set { copy(lowData = v) } }; GroupDivider()
-        SwitchRow("Low-end device mode", "For an older or slower phone: no animations or effects, plain bubbles, and fewer messages kept in memory", s.lowEnd) { v -> set { copy(lowEnd = v) } }
+        SwitchRow("Low-end device mode", "For an older or slower phone: no glass or full-screen effects and no GIF autoplay (small animations stay), and fewer messages kept in memory", s.lowEnd) { v -> set { copy(lowEnd = v) } }
     }
     SettingsGroup("Time") { ChoiceRow("Time format", listOf("system" to "Follow system", "12" to "12-hour", "24" to "24-hour"), s.timeFormat) { v -> set { copy(timeFormat = v) } } }
     SettingsGroup("Motion") { SwitchRow("Reduce motion", "Fewer animations", s.reduceMotion) { v -> set { copy(reduceMotion = v) } } }

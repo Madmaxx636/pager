@@ -12,12 +12,16 @@ describe("low data and low-end switches", () => {
     expect(mine.autoDownload).toBe("always"); // your own settings are as you left them
     expect(effective({ ...mine, lowData: false }).autoDownload).toBe("always");
   });
-  it("low-end stops motion, effects, wallpaper, shadows and glass", () => {
-    const e = effective({ ...DEFAULTS, lowEnd: true, bubbleFill: "glass", wallpaper: "dusk", screenEffects: true, messageAnimation: "pop", bubbleDepth: "raised" });
-    expect(e).toMatchObject({ reduceMotion: true, fancyMotion: false, screenEffects: false, messageAnimation: "none", bubbleDepth: "flat", bubbleFill: "solid", wallpaper: "none" });
+  it("low-end drops only the heavy things", () => {
+    const e = effective({ ...DEFAULTS, lowEnd: true, bubbleFill: "glass", screenEffects: true, fancyMotion: true });
+    expect(e).toMatchObject({ fancyMotion: false, screenEffects: false, bubbleFill: "solid", autoPlayGifs: false });
+  });
+  it("low-end keeps the small things", () => {
+    const mine = { ...DEFAULTS, lowEnd: true, wallpaper: "dusk", messageAnimation: "pop" as const, bubbleDepth: "raised" as const, reduceMotion: false, greetings: true };
+    expect(effective(mine)).toMatchObject({ wallpaper: "dusk", messageAnimation: "pop", bubbleDepth: "raised", reduceMotion: false, greetings: true });
   });
   it("both together stack", () => {
     const e = effective({ ...DEFAULTS, lowEnd: true, lowData: true });
-    expect(e.autoDownload).toBe("never"); expect(e.reduceMotion).toBe(true);
+    expect(e.autoDownload).toBe("never"); expect(e.screenEffects).toBe(false);
   });
 });

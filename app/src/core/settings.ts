@@ -305,7 +305,8 @@ export const deviceLabel = () => (typeof window !== "undefined" && window.pagerD
 export function effective(r: AppSettings): AppSettings {
   let s = r;
   if (r.lowData) s = { ...s, autoDownload: "never", autoPlayGifs: false, linkPreviews: false, autoTranscribe: false, sendTyping: false, showMessageTimes: s.showMessageTimes };
-  if (r.lowEnd) s = { ...s, fancyMotion: false, reduceMotion: true, screenEffects: false, messageAnimation: "none", bubbleDepth: "flat", bubbleFill: s.bubbleFill === "glass" ? "solid" : s.bubbleFill, wallpaper: "none", skin: "default", autoPlayGifs: false, greetings: false };
+  // Low-end drops only what costs real processor time: blur and glass, full-screen effects, glowing/breathing, GIF autoplay. Small things (typing dots, message pops, hover and press motion, shadows, wallpaper, greetings) stay.
+  if (r.lowEnd) s = { ...s, fancyMotion: false, screenEffects: false, bubbleFill: s.bubbleFill === "glass" ? "solid" : s.bubbleFill, autoPlayGifs: false };
   return s;
 }
 
