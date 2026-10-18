@@ -22,8 +22,7 @@ app.commandLine.appendSwitch("disk-cache-size", String(64 * 1024 * 1024));
 // low-memory mode makes its caches and buffers smaller. gc is exposed so the memory watcher below can ask for a clean-up.
 app.commandLine.appendSwitch("js-flags", `--max-old-space-size=${prefs.lowEnd ? 160 : 256} --expose-gc`);
 // Low-end device mode (Settings > System): draw without the graphics chip and without smooth scrolling, and keep a smaller memory budget.
-if (prefs.lowEnd) { app.disableHardwareAcceleration(); app.commandLine.appendSwitch("disable-smooth-scrolling"); }
-app.commandLine.appendSwitch("enable-low-end-device-mode");
+if (prefs.lowEnd) { app.disableHardwareAcceleration(); app.commandLine.appendSwitch("disable-smooth-scrolling"); app.commandLine.appendSwitch("enable-low-end-device-mode"); }
 // A window behind another one must keep drawing: otherwise new messages only show up once you click it (the page's own animations pause when it is unfocused).
 app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
