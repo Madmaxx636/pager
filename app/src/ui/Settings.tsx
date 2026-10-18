@@ -213,7 +213,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
     );
     case "about": return (
       <>
-        <Group title="Pager"><Row title={`Version ${import.meta.env.VITE_APP_VERSION ?? "0.3.0"}`} hint={window.pagerDesktop ? `Desktop app (${window.pagerDesktop.platform})` : "Web app"} /><Row title="An open-source, self-hosted unified messenger." />{window.pagerDesktop?.memory && <MemoryRow />}<Row title="Show the welcome tour again" hint="The mascot walks you through Pager" onClick={() => setTouring(true)} chevron /></Group>
+        <Group title="Pager"><Row title={`Version ${import.meta.env.VITE_APP_VERSION ?? "0.3.0"}`} hint={window.pagerDesktop ? `Desktop app (${window.pagerDesktop.platform})` : "Web app"} /><Row title="An open-source, self-hosted unified messenger." />{window.pagerDesktop?.memory && <MemoryRow />}<PerfRow /><Row title="Show the welcome tour again" hint="The mascot walks you through Pager" onClick={() => setTouring(true)} chevron /></Group>
         <Group title="Account"><Row title={me()} hint={http.base || window.location.origin} /><Row title="Sign out" onClick={() => signOut()}><span className="danger">Sign out</span></Row><Row title="Delete my profile" hint="Removes your account and everything on this server. This can't be undone" onClick={() => setDeleting(true)}><span className="danger">Delete</span></Row></Group>
         {deleting && <DeleteProfile onClose={() => setDeleting(false)} />}
         {touring && <Tour nav={nav} forceOpen onClose={() => setTouring(false)} />}
@@ -667,6 +667,26 @@ function SyncSettingsDialog({ onClose }: { onClose: () => void }) {
       <div className="row-end"><button className="link" onClick={onClose}>Close</button></div>
     </Modal>
   );
+}
+
+/** What is moving on screen right now. Click to copy the details; handy when the app is using more processor than it should. */
+function PerfRow() {
+  const read = () => {
+    const anims = document.getAnimations().filter((a) => a.playState === "running");
+    const where = (a: Animation) => { const t = (a.effect as KeyframeEffect | null)?.target as Element | null; return `${(a as CSSAnimation).animationName ?? a.constructor.name} on ${t ? `${t.tagName.toLowerCase()}${t.className && typeof t.className === "string" ? "." + t.className.split(" ")[0] : ""}` : "?"}`; };
+    const counts = new Map<string, number>(); anims.forEach((a) => counts.set(where(a), (counts.get(where(a)) ?? 0) + 1));
+    const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize;
+    return {
+      version: import.meta.env.VITE_APP_VERSION, running: anims.length, byKind: Object.fromEntries([...counts].sort((a, b) => b[1] - a[1]).slice(0, 12)),
+      domNodes: document.getElementsByTagName("*").length, jsHeapMB: heap ? Math.round(heap / 1048576) : undefined,
+      blurred: [...document.querySelectorAll("*")].filter((e) => getComputedStyle(e).backdropFilter !== "none").length,
+      idleAttr: document.documentElement.hasAttribute("data-idle"), lowEnd: document.documentElement.hasAttribute("data-lowend"), motion: document.documentElement.dataset.motion ?? "full",
+      dpr: window.devicePixelRatio, window: `${innerWidth}x${innerHeight}`,
+    };
+  };
+  const [r, setR] = useState(read);
+  useEffect(() => { const t = window.setInterval(() => setR(read()), 3000); return () => window.clearInterval(t); }, []);
+  return <Row title={`Moving on screen: ${r.running} animation${r.running === 1 ? "" : "s"}`} hint="Click to copy the details" onClick={() => void navigator.clipboard?.writeText(JSON.stringify(read(), null, 2))} />;
 }
 
 /** Desktop only: what the app is using right now, by part. */

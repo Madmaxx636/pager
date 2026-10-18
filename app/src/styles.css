@@ -640,9 +640,12 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-idle] *, :root[data-idle] *::before, :root[data-idle] *::after { animation-play-state: paused !important; }
 .av-pulse { position: relative; display: inline-flex; flex: none; }
 /* The pulse is a ring around the whole picture that grows and fades. Only transform and opacity change, so the screen is not repainted for it. */
-.pulse::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--accent); pointer-events: none; opacity: 0; animation: av-pulse 2.6s ease-out infinite; will-change: transform, opacity; }
+.pulse::before { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--accent); pointer-events: none; opacity: .55; }
+/* The ring pulses a few times when something new arrives, then rests as a still ring: an animation that never ends keeps the whole window redrawing. */
+.pulse::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--accent); pointer-events: none; opacity: 0; animation: av-pulse 2.6s ease-out 3; will-change: transform, opacity; }
+.pulse:hover::after { animation: av-pulse 2.6s ease-out 1; }
 @keyframes av-pulse { 0% { transform: scale(.96); opacity: .75; } 70%, 100% { transform: scale(1.22); opacity: 0; } }
-:root[data-motion="reduced"] .pulse::after { animation: none; opacity: .55; }
+:root[data-motion="reduced"] .pulse::after { animation: none; opacity: 0; }
 .pin-chip .pin-dot { display: grid; place-items: center; min-width: 22px; width: auto; height: 22px; padding: 0 5px; border-radius: 11px; top: -2px; right: -2px; color: var(--accent-ink); font-size: .72rem; font-weight: 700; line-height: 1; }
 .pin-chip .pin-dot:empty { min-width: 16px; width: 16px; height: 16px; padding: 0; }
 .pin-chip .pin-dot.muted { color: var(--bg); }
