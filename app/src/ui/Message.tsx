@@ -52,8 +52,8 @@ function useSwipeToReply(enabled: boolean, onReply: () => void) {
   };
 }
 
-export function MessageRow({ chat, msg, first, last, group, mine, read, delivered, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply, onVote, onEndPoll, onJump }: {
-  chat: ChatState; msg: Msg; first: boolean; last: boolean; group: boolean; mine: boolean; read: boolean; delivered?: boolean; reply?: Msg; st: AppSettings; starred: boolean;
+export function MessageRow({ chat, msg, first, last, group, mine, read, delivered, latestMine, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply, onVote, onEndPoll, onJump }: {
+  chat: ChatState; msg: Msg; first: boolean; last: boolean; group: boolean; mine: boolean; read: boolean; delivered?: boolean; latestMine?: boolean; reply?: Msg; st: AppSettings; starred: boolean;
   onMenu: (x: number, y: number) => void; onOpen: () => void; onWho: (key: string) => void; onReact: (key: string) => void; onReply: () => void; onVote: (ids: string[]) => void; onEndPoll: () => void; onJump?: (id: string) => void;
 }) {
   const reactions = chat.reactions[msg.id] ?? {};
@@ -79,6 +79,7 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
     <div className={"msg" + (mine ? " mine" : "") + (first ? " first" : "") + (last ? " last" : "") + (Date.now() - msg.ts < 4000 ? " fresh" : "")} data-id={msg.id}
       data-shape={skinned ? "round" : look.style} data-border={skinned || look.border === "none" ? undefined : look.border} data-colored={bg || col.text ? "" : undefined} style={Object.keys(sideStyle).length ? (sideStyle as React.CSSProperties) : undefined}>
       {group && !mine && first && <div className="msg-sender" style={st.colorSenderNames ? { color: `hsl(${senderHue(author)} 60% 62%)` } : undefined}>{author}</div>}
+      {st.look === "hangouts" && !mine && first && <span className="msg-avatar"><Avatar name={author} mxc={group ? undefined : chat.avatarMxc} size={34} /></span>}
       <div className="msg-line swipe-line" {...swipe.bind}>
         <span className="swipe-cue" style={{ opacity: swipe.progress, transform: `scale(${0.6 + 0.4 * swipe.progress})` }} aria-hidden>↩</span>
         <div className={"bubble" + (bare ? " bare" : "") + (msg.type === "m.image" && !msg.sticker ? " media-bubble" : "") + (msg.status === STATUS_FAILED ? " failed" : "")}
@@ -100,6 +101,7 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
           <button title="More" onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); onMenu(r.left, r.bottom); }}><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg></button>
         </div>
       </div>
+      {st.look === "imessage" && mine && latestMine && msg.status === STATUS_SENT && st.showReadTicks && <div className="im-status">{read ? `Read${chat.receiptTs ? "" : ""}` : delivered ? "Delivered" : "Sent"}</div>}
       {msg.status === STATUS_FAILED && <div className="failed-note">Not sent · click the message to retry</div>}
       {Object.keys(reactions).length > 0 && (
         <div className="reactions">

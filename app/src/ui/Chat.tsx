@@ -97,6 +97,8 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const r = chat?.receipts ?? {};
     return Math.max(-1, ...Object.entries(r).filter(([u]) => isBridgeBot(u)).map(([, id]) => messages.findIndex((m) => m.id === id)));
   }, [chat?.receipts, messages]);
+  // The newest message you sent: the iPhone look says Delivered or Read under it.
+  const latestMine = useMemo(() => { for (let i = messages.length - 1; i >= 0; i--) if (messages[i].sender === user && messages[i].status === STATUS_SENT) return messages[i].id; return undefined; }, [messages, user]);
   const group = chat ? isGroup(chat) || new Set(messages.map((m) => m.sender)).size > 2 : false;
 
   // Where the unread messages begin; computed once when the chat opens.
@@ -240,7 +242,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
         <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll}>
           {items.map((it) => it.kind === "day" ? <div key={it.key} className="day"><span>{it.label}</span></div>
             : it.kind === "unread" ? <div key={it.key} id="unread-divider" className="unread-divider"><span>New messages</span></div>
-            : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} last={it.last} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} delivered={it.index <= deliveredIndex} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}
+            : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} last={it.last} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} delivered={it.index <= deliveredIndex} latestMine={it.msg.id === latestMine} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}
                 st={st} starred={stars.some((s) => s.eventId === it.msg.id)} onMenu={(x, y) => setMenu({ msg: it.msg, x, y })} onOpen={() => openMsg(it.msg)} onWho={(key) => setWho({ msg: it.msg, key })}
                 onReact={(key) => react(roomId, it.msg.id, key)} onReply={() => { setReplyTo(it.msg); setEditing(undefined); }}
                 onVote={(ids) => votePoll(roomId, it.msg.id, ids)} onEndPoll={() => endPoll(roomId, it.msg.id)} onJump={jumpTo} />)}

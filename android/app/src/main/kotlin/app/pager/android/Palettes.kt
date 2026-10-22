@@ -51,6 +51,9 @@ fun fontFamilyFor(id: String): FontFamily? = when (id) {
     "mono" -> FontFamily.Monospace
     "rounded" -> FontFamily(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL))
     "humanist" -> FontFamily(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.NORMAL))
+    "sf" -> FontFamily(android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL))
+    "googlesans" -> FontFamily(android.graphics.Typeface.create("google-sans", android.graphics.Typeface.NORMAL))
+    "roboto" -> FontFamily(android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL))
     "readable" -> FontFamily(android.graphics.Typeface.create("casual", android.graphics.Typeface.NORMAL))
     else -> null
 }

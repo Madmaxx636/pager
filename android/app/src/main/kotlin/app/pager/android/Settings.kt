@@ -87,6 +87,8 @@ data class AppSettings(
     val screenCleanSec: Int = 20,
     val palette: String = "none",              // a ready-made look (see Palettes.kt), or none
     val fontFamily: String = "system",
+    /** A whole messenger look (see Looks.kt): none | imessage | hangouts | gmessages. */
+    val look: String = "none",
     val reactionStyle: String = "filled",      // filled | outline
     val hideStories: Boolean = false,
     /** Deleting a chat in Pager also deletes it on its own network (Signal, WhatsApp, Google Messages). Off unless you turn it on, because it cannot be undone. */
@@ -215,7 +217,7 @@ class SettingsStore(context: Context) {
     companion object {
         const val TYPE = "app.pager.sync.mobile"
         val GROUPS = listOf(
-            Group("look", "Colours and theme", "Mode, accent, looks, wallpaper, font, text size, avatars", listOf("themeMode", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat")),
+            Group("look", "Colours and theme", "Mode, accent, looks, wallpaper, font, text size, avatars", listOf("themeMode", "look", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat")),
             Group("bubbles", "Bubbles and messages", "Bubble style, fill, depth, animations, effects", listOf("bubbleStyle", "bubbleFill", "bubbleBorder", "bubbleBorderColor", "outStyle", "outRadius", "outBorder", "outBorderColor", "bubbleMineDark", "bubbleTheirsDark", "bubbleMineText", "bubbleTheirsText", "bubbleMineTextDark", "bubbleTheirsTextDark", "bubbleNative", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle")),
             Group("reactions", "Reactions", "Double-tap and triple-tap reactions, swipe to reply", listOf("doubleTapReact", "doubleTapEmoji", "tripleTapReact", "tripleTapEmoji", "swipeToReply")),
             Group("list", "Chat list", "What each row shows, filters, swipes, hidden networks", listOf("showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories", "swipeLeft", "swipeRight")),

@@ -458,6 +458,10 @@ private fun AppearancePage() {
     }
     var pickingColor by remember { mutableStateOf(false) }
     if (pickingColor) ColorPickerDialog(parseHex(s.accentCustom) ?: Color(0xFF0D9488), { pickingColor = false }) { c -> set { copy(accent = "custom", accentCustom = c.toHex()) }; pickingColor = false }
+    SettingsGroup("App look", footer = if (s.look != "none") "This look sets colours, bubbles, type and motion for the whole app. Your own choices are kept and come back when you pick Pager." else null) {
+        ChoiceRow("Look", listOf("none" to "Pager (your own settings)") + LOOKS.map { it.id to it.name }, s.look) { v -> set { copy(look = v) } }
+        LOOKS.firstOrNull { it.id == s.look }?.let { Text(it.blurb, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
     SettingsGroup("Theme") {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text("Ready-made looks"); Text("A whole colour set for the app. The first circle goes back to your own mode and accent.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
