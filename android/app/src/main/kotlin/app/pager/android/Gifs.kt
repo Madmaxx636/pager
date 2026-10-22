@@ -51,6 +51,17 @@ object GifApi {
         }
     }
 
+    /** What the service itself said when it refused (it tells apart a wrong key from a limit or a blocked address). */
+    fun providerSays(code: Int, body: String): String {
+        val m = runCatching {
+            val j = json.parseToJsonElement(body).jsonObject
+            (j["meta"].obj()["msg"].str() ?: j["message"].str() ?: j["error"].obj()["message"].str() ?: j["error"].str()).orEmpty()
+        }.getOrElse { body }.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim().take(140)
+        return if (m.isNotEmpty()) " It said: \u201c$m\u201d (code $code)." else " (code $code)"
+    }
+    /** Lets you compare a key across devices without showing it: its length and last four characters. */
+    fun fingerprint(key: String): String { val k = key.trim(); return if (k.isEmpty()) "empty" else "${k.length} characters, ends \u2026${k.takeLast(4)}" }
+
     fun parseGiphy(o: JsonObject, source: String = "giphy"): List<Gif> = o["data"].arr().mapNotNull {
         val r = it.obj(); val img = r["images"].obj(); val orig = img["original"].obj(); val small = img["fixed_height_small"].obj().takeIf { s -> s["url"] != null } ?: img["fixed_height"].obj()
         val u = orig["url"].str() ?: return@mapNotNull null
@@ -75,7 +86,7 @@ class GifClient(private val client: OkHttpClient) {
     suspend fun search(source: GifSource, key: String, query: String): List<Gif> = withContext(Dispatchers.IO) {
         val body = try {
             client.newCall(Request.Builder().url(GifApi.requestFor(source, key, query)).build()).execute().use { r ->
-                if (!r.isSuccessful) throw ApiException(r.code, GifApi.explain(source, r.code))
+                if (!r.isSuccessful) throw ApiException(r.code, GifApi.explain(source, r.code) + GifApi.providerSays(r.code, r.body?.string().orEmpty()))
                 r.body?.string().orEmpty()
             }
         } catch (e: java.io.IOException) { throw ApiException(0, "Couldn't reach ${if (source.keyOf == "klipy") "KLIPY" else "GIPHY"}. Check your connection.") }

@@ -973,6 +973,8 @@ async function loadPhonebook(nets: Network[]) {
     try { addToPhonebook((await pager.contacts(n.id, l.id)).filter((c) => c.detail).map((c) => ({ number: c.detail!, name: c.name }))); } catch { /* this network has no contact list */ }
   }
 }
+// The window came back from hidden or behind another one: show what arrived meanwhile, and look at the bridges right away.
+window.addEventListener("pager:wake", () => { emit(); void refreshBridges(); });
 let bridgeTick = 0;
 // Also while the window is hidden: that is when a lost login most needs to reach you.
 window.setInterval(() => { if (!getSettings().lowData || ++bridgeTick % 5 === 0) void refreshBridges(); }, 120_000);

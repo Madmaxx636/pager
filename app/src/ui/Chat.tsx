@@ -148,6 +148,8 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const ro = new ResizeObserver(pin); if (el.firstElementChild) ro.observe(el.firstElementChild); ro.observe(el);
     return () => { el.removeEventListener("load", pin, true); el.removeEventListener("loadedmetadata", pin, true); ro.disconnect(); };
   }, [roomId, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Back from the tray or behind another window: show the newest message again.
+  useEffect(() => { const w = () => { if (stick.current) settle(); }; window.addEventListener("pager:wake", w); return () => window.removeEventListener("pager:wake", w); }, [settle]);
   // A message only counts as read while you can see it: the window is in front and focused. Otherwise a message that arrives while Pager sits
   // in the tray (or behind another window) with this page open would be marked read at once, and the page list would never show it.
   const looking = () => attended();

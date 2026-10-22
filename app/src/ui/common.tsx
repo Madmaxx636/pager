@@ -1,8 +1,9 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRight, MessageCircle, MessageSquare, Phone, Send, Camera, Gamepad2, MessagesSquare, User, X } from "lucide-react";
 import { cachedMedia, mediaUrl } from "../core/store";
 import { EMOJI_CATEGORIES, networkMeta } from "../core/emoji";
+import { searchEmoji } from "../core/emojisearch";
 import { useSettings } from "../core/settings";
 
 /** Simple original glyphs for each network (no brand marks). */
@@ -155,17 +156,28 @@ export function WhenModal({ title, onPick, onClose }: { title: string; onPick: (
 
 export function EmojiPicker({ recent, onPick, onClose }: { recent: string[]; onPick: (e: string) => void; onClose: () => void }) {
   const cats: [string, string, string[]][] = [...(recent.length ? [["🕘", "Recent", recent] as [string, string, string[]]] : []), ...EMOJI_CATEGORIES];
+  const [q, setQ] = useState("");
+  const found = useMemo(() => searchEmoji(q), [q]);
   return (
     <Modal onClose={onClose}>
-      <div className="emoji-tabs">{cats.map(([icon, name]) => <button key={name} title={name} onClick={() => document.getElementById(`emo-${name}`)?.scrollIntoView({ block: "start" })}>{icon}</button>)}</div>
-      <div className="emoji-grid-wrap">
-        {cats.map(([, name, list]) => (
-          <section key={name} id={`emo-${name}`}>
-            <h4>{name}</h4>
-            <div className="emoji-grid">{list.map((e) => <button key={e} onClick={() => onPick(e)}>{e}</button>)}</div>
-          </section>
-        ))}
-      </div>
+      <input className="emoji-search" type="search" placeholder="Search emoji: fire, heart, laugh…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+      {q.trim() ? (
+        <div className="emoji-grid-wrap">
+          {found.length ? <div className="emoji-grid">{found.map((e) => <button key={e} onClick={() => onPick(e)}>{e}</button>)}</div> : <p className="muted pad">No emoji match “{q.trim()}”.</p>}
+        </div>
+      ) : (
+        <>
+          <div className="emoji-tabs">{cats.map(([icon, name]) => <button key={name} title={name} onClick={() => document.getElementById(`emo-${name}`)?.scrollIntoView({ block: "start" })}>{icon}</button>)}</div>
+          <div className="emoji-grid-wrap">
+            {cats.map(([, name, list]) => (
+              <section key={name} id={`emo-${name}`}>
+                <h4>{name}</h4>
+                <div className="emoji-grid">{list.map((e) => <button key={e} onClick={() => onPick(e)}>{e}</button>)}</div>
+              </section>
+            ))}
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

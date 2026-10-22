@@ -25,7 +25,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -61,19 +65,33 @@ fun EmojiPickerDialog(recent: List<String>, onPick: (String) -> Unit, onDismiss:
     // Where each tab's header lands in the flat grid.
     val offsets = remember(tabs) { var at = 0; tabs.map { (_, list) -> at.also { at += 1 + list.size } } }
 
+    var query by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val found by produceState(emptyList<String>(), query) { value = if (query.isBlank()) emptyList() else withContext(Dispatchers.Default) { EmojiSearch.search(context, query) } }
     Dialog(onDismissRequest = onDismiss) {
         Surface(Modifier.einkFilter(LocalSettings.current.eink), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
-            Column(Modifier.height(420.dp)) {
+            Column(Modifier.height(480.dp)) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = query, onValueChange = { query = it }, singleLine = true, placeholder = { Text("Search emoji: fire, heart, laugh…") },
+                    shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                )
+                if (query.isNotBlank()) {
+                    if (found.isEmpty()) Text("No emoji match \u201c${query.trim()}\u201d.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    LazyVerticalGrid(GridCells.Adaptive(52.dp), modifier = Modifier.padding(horizontal = 8.dp)) {
+                        items(found) { e -> Box(Modifier.height(52.dp).clip(RoundedCornerShape(10.dp)).dpadFocus().clickable { onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 32.sp) } }
+                    }
+                    return@Column
+                }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     tabs.forEachIndexed { i, (icon, _) ->
                         Box(
                             Modifier.clip(CircleShape).background(if (i == tab) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else androidx.compose.ui.graphics.Color.Transparent)
                                 .dpadFocus().clickable { tab = i; scope.launch { grid.animateScrollToItem(offsets[i]) } }.padding(6.dp),
                             contentAlignment = Alignment.Center,
-                        ) { Text(icon, fontSize = 18.sp) }
+                        ) { Text(icon, fontSize = 22.sp) }
                     }
                 }
-                LazyVerticalGrid(GridCells.Adaptive(44.dp), state = grid, modifier = Modifier.padding(horizontal = 8.dp)) {
+                LazyVerticalGrid(GridCells.Adaptive(52.dp), state = grid, modifier = Modifier.padding(horizontal = 8.dp)) {
                     tabs.forEach { (icon, list) ->
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Text(
@@ -83,7 +101,7 @@ fun EmojiPickerDialog(recent: List<String>, onPick: (String) -> Unit, onDismiss:
                             )
                         }
                         items(list) { e ->
-                            Box(Modifier.height(44.dp).clip(RoundedCornerShape(10.dp)).dpadFocus().clickable { onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 26.sp) }
+                            Box(Modifier.height(52.dp).clip(RoundedCornerShape(10.dp)).dpadFocus().clickable { onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 32.sp) }
                         }
                     }
                 }

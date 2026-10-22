@@ -446,7 +446,7 @@ private fun AppearancePage() {
     SettingsGroup("Display") {
         SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }
         if (s.eink) {
-            GroupDivider(); SliderRow("Darkness", s.einkDark.toFloat(), 1f..4f, listOf("", "Dark gray", "Darker", "Very dark", "Black")[s.einkDark.coerceIn(1, 4)]) { v -> set { copy(einkDark = Math.round(v).coerceIn(1, 4)) } }
+            GroupDivider(); SliderRow("Darkness", s.einkDark.toFloat(), 1f..5f, listOf("", "Dark gray", "Darker", "Very dark", "Black", "Heavy black: bold text, thick lines")[s.einkDark.coerceIn(1, 5)]) { v -> set { copy(einkDark = Math.round(v).coerceIn(1, 5)) } }
             GroupDivider(); ChoiceRow("Screen clean", listOf("off" to "Off", "chats" to "When opening or leaving a chat", "timed" to "Every few seconds"), s.screenClean) { v -> set { copy(screenClean = v) } }
             if (s.screenClean == "timed") { GroupDivider(); SliderRow("Every", s.screenCleanSec.toFloat(), 5f..120f, "${s.screenCleanSec} seconds") { v -> set { copy(screenCleanSec = (Math.round(v / 5f) * 5).coerceIn(5, 120)) } } }
         }
@@ -1369,7 +1369,7 @@ private fun GifKeyRow(id: String, name: String, where: String) {
     val key = s.gifKeys[id].orEmpty()
     var state by remember { mutableStateOf("") }
     Column {
-        TextFieldRow("$name key (free from $where)", key, "Paste your key", secret = true) { v -> state = ""; store.settings.update { copy(gifKeys = gifKeys + (id to v.trim())) } }
+        TextFieldRow("$name key (free from $where)" + if (key.isNotBlank()) " · this device has: ${GifApi.fingerprint(key)}" else "", key, "Paste your key", secret = true) { v -> state = ""; store.settings.update { copy(gifKeys = gifKeys + (id to v.trim())) } }
         Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(enabled = key.isNotBlank() && state != "testing", onClick = {
                 state = "testing"

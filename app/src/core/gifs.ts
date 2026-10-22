@@ -58,10 +58,22 @@ export function explainFailure(source: GifSource, status: number): string {
   return `${who} search failed (${status}).`;
 }
 
+/** What the service itself said when it refused (it tells apart a wrong key from a limit or a blocked address). */
+export async function providerSays(res: Response): Promise<string> {
+  try {
+    const t = await res.text(); let m = "";
+    try { const j = JSON.parse(t); m = String(j?.meta?.msg ?? j?.message ?? j?.error?.message ?? j?.error ?? j?.errors?.[0]?.message ?? ""); } catch { m = t; }
+    m = m.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 140);
+    return m ? ` It said: “${m}” (code ${res.status}).` : ` (code ${res.status})`;
+  } catch { return ` (code ${res.status})`; }
+}
+/** Lets you compare a key across devices without showing it: its length and last four characters. */
+export const keyFingerprint = (key: string) => { const k = key.trim(); return k ? `${k.length} characters, ends …${k.slice(-4)}` : "empty"; };
+
 export async function searchGifs(source: GifSource, key: string, query: string): Promise<Gif[]> {
   let res: Response;
   try { res = await fetch(requestFor(source, key, query)); } catch { throw new Error(`Couldn't reach ${source.keyOf === "klipy" ? "KLIPY" : "GIPHY"}. Check your connection.`); }
-  if (!res.ok) throw new Error(explainFailure(source, res.status));
+  if (!res.ok) throw new Error(explainFailure(source, res.status) + await providerSays(res));
   const o = await res.json();
   return source.keyOf === "klipy" ? parseKlipy(o, source.id) : parseGiphy(o, source.id);
 }

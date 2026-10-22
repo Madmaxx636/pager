@@ -18,7 +18,8 @@ export function installPresence() {
   };
   for (const ev of ["pointerdown", "keydown", "touchstart", "wheel"]) window.addEventListener(ev, touch, { capture: true, passive: true });
   const away = () => { lastInput = 0; };
-  window.pagerDesktop?.onWindowActive?.((on) => { windowActive = on; if (!on) away(); });
+  window.pagerDesktop?.onWindowActive?.((on) => { windowActive = on; if (!on) away(); else window.dispatchEvent(new Event("pager:wake")); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") window.dispatchEvent(new Event("pager:wake")); });
   window.addEventListener("blur", away);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState !== "visible") away(); });
 }
