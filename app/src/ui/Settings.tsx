@@ -1,7 +1,7 @@
 import { FONTS, PALETTES, PALETTE_GROUPS } from "../core/palettes";
 import { hasCustomSound, importSound, onCustomSoundChange, playCustom, removeCustomSound } from "../core/customsound";
 import { APP_ICONS } from "../core/appicons";
-import { GIF_SOURCES, KEY_PROVIDERS, searchGifs } from "../core/gifs";
+import { GIF_SOURCES, KEY_PROVIDERS, keyFingerprint, searchGifs } from "../core/gifs";
 import { WALLPAPERS, wallpaperCss, importPhoto, removePhoto, loadPhoto } from "../core/wallpapers";
 import { EFFECT_TRIGGERS } from "../core/effects";
 import { SKINS, SKIN_GROUPS, accentsFor, skinById } from "../core/skins";
@@ -876,7 +876,7 @@ function GifKeyRow({ provider }: { provider: (typeof KEY_PROVIDERS)[number] }) {
   }
   return (
     <>
-      <Row title={`${provider.name} key`} hint={`Free from ${provider.where}`}>
+      <Row title={`${provider.name} key`} hint={`Free from ${provider.where}${key ? ` · this device has: ${keyFingerprint(key)}` : ""}`}>
         <input type="password" placeholder="Paste your key" value={key} onChange={(e) => { setState(""); updateSettings({ gifKeys: { ...s.gifKeys, [provider.id]: e.target.value.trim() } }); }} />
         <button className="pill" disabled={!key || state === "testing"} onClick={test}>{state === "testing" ? "Trying…" : "Try it"}</button>
       </Row>

@@ -387,13 +387,15 @@ fun MessageRow(
                     // New reactions pop in.
                     val pop = remember(key) { androidx.compose.animation.core.Animatable(if (s.reduceMotion) 1f else 0.4f) }
                     LaunchedEffect(key) { if (!s.reduceMotion) pop.animateTo(1f, androidx.compose.animation.core.spring(androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, androidx.compose.animation.core.Spring.StiffnessMedium)) }
+                    // E-ink: a clean white pill with a solid black edge; a reaction you gave has a double edge, so it is clear at a glance without extra marks.
+                    val ink = s.eink
                     Row(
                         Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }.clip(CircleShape)
-                            .let { if (s.eink || s.reactionStyle == "outline") it else it.background(if (minePicked) scheme.primary.copy(alpha = 0.22f) else scheme.surface) }
-                            .let { if (s.eink) it.border(inkDp(2f), inkColor(), CircleShape) else if (s.reactionStyle == "outline") it.border(if (minePicked) 3.dp else 1.5.dp, if (minePicked) scheme.primary else scheme.onSurface, CircleShape) else it }
-                            .dpadFocus().combinedClickable(onClick = { onReact(key) }, onLongClick = { onWho(key) }).padding(horizontal = if (s.eink) 12.dp else 9.dp, vertical = if (s.eink) 6.dp else 3.dp),
+                            .let { if (ink || s.reactionStyle == "outline") it else it.background(if (minePicked) scheme.primary.copy(alpha = 0.22f) else scheme.surface) }
+                            .let { if (ink) it.background(Color.White).border(inkDp(2f), inkColor(), CircleShape).let { b -> if (minePicked) b.padding(inkDp(3f)).border(inkDp(2f), inkColor(), CircleShape) else b } else if (s.reactionStyle == "outline") it.border(if (minePicked) 3.dp else 1.5.dp, if (minePicked) scheme.primary else scheme.onSurface, CircleShape) else it }
+                            .dpadFocus().combinedClickable(onClick = { onReact(key) }, onLongClick = { onWho(key) }).padding(horizontal = if (ink) 12.dp else 9.dp, vertical = if (ink) 6.dp else 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                    ) { EmojiGlyph(key, if (s.eink) 24f else 14f); if (s.eink && minePicked) Text(" ●", fontSize = 9.sp, color = inkColor()); if (who.size > 1) Text(" ${who.size}", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant) }
+                    ) { EmojiGlyph(key, if (s.eink) (if (Ink.heavy) 30f else 26f) else 19f); if (who.size > 1) Text(" ${who.size}", fontWeight = FontWeight.ExtraBold, style = if (s.eink) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium, color = if (s.eink) inkColor() else scheme.onSurfaceVariant) }
                 }
             }
         }

@@ -195,11 +195,13 @@ fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int, k
 }
 
 /** True while E-ink mode is on. Lets plain helpers (no composition access) make faint things solid. */
-object Ink { @Volatile var on = false; @Volatile var dark = 4 }
+object Ink { @Volatile var on = false; @Volatile var dark = 4
+    /** The heaviest level (5): pure black, bold text, thick lines. For screens where even black looks washed out. */
+    val heavy get() = on && dark >= 5 }
 /** The colour of E-ink text and lines: from dark gray to pure black. Darkness is the only thing the setting changes; lines stay thin. */
 fun inkColor(): Color = when (Ink.dark) { 1 -> Color(0xFF5A5A5A); 2 -> Color(0xFF383838); 3 -> Color(0xFF1C1C1C); else -> Color.Black }
 /** A thin line width for E-ink drawings (never more than about 1.5 dp, however dark). */
-fun inkDp(base: Float) = (minOf(base, 2f) * 0.75f).dp
+fun inkDp(base: Float) = if (Ink.heavy) (minOf(base, 3f) * 1.25f).dp else (minOf(base, 2f) * 0.75f).dp
 
 /** Like Color.copy(alpha) for text, icons and lines, but never faint in E-ink mode: faded gray disappears on a fast-refresh screen. */
 fun Color.dim(alpha: Float): Color = if (Ink.on && alpha >= 0.4f) copy(alpha = 1f) else copy(alpha = alpha)
@@ -274,7 +276,7 @@ private val PagerTypography = Typography(
 /** E-ink typography: every style at least semi-bold, titles and labels bold, so thin strokes don't vanish. */
 private fun einkTypography(base: Typography) = base.let { t ->
     // Text gets a touch heavier than normal so it stays readable, but never bold: the setting makes it darker, not thicker.
-    fun TextStyle.bold(w: FontWeight) = copy(fontWeight = if (w.weight >= 600) FontWeight.SemiBold else FontWeight.Medium)
+    fun TextStyle.bold(w: FontWeight) = copy(fontWeight = if (Ink.heavy) (if (w.weight >= 600) FontWeight.ExtraBold else FontWeight.Bold) else if (w.weight >= 600) FontWeight.SemiBold else FontWeight.Medium)
     Typography(
         displayLarge = t.displayLarge.bold(FontWeight.Bold), displayMedium = t.displayMedium.bold(FontWeight.Bold), displaySmall = t.displaySmall.bold(FontWeight.Bold),
         headlineLarge = t.headlineLarge.bold(FontWeight.ExtraBold), headlineMedium = t.headlineMedium.bold(FontWeight.ExtraBold), headlineSmall = t.headlineSmall.bold(FontWeight.Bold),
@@ -322,7 +324,7 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
     val config = androidx.compose.ui.platform.LocalConfiguration.current
     val keypad = rawSettings.keypad == "on" || (rawSettings.keypad == "auto" && keypadDevice(config))
     val settings = effectiveSettings(rawSettings, config.screenWidthDp, config.screenHeightDp, keypad)
-    Ink.on = settings.eink; Ink.dark = settings.einkDark.coerceIn(1, 4)
+    Ink.on = settings.eink; Ink.dark = settings.einkDark.coerceIn(1, 5)
     val dark = isDarkTheme(settings)
     val context = LocalContext.current
     // The app has its own light/dark setting, so the system bars must follow it, not the phone's theme

@@ -113,6 +113,8 @@ function createWindow() {
   // Whether the window is really in front of you: the page can't tell when another window sits on top of it (Wayland especially).
   const sendActive = () => { if (win && !win.isDestroyed()) win.webContents.send("window-active", win.isVisible() && !win.isMinimized() && win.isFocused()); };
   for (const ev of ["focus", "blur", "show", "hide", "minimize", "restore"]) win.on(ev, sendActive);
+  // Coming back from the tray, the taskbar or behind another window: the page may still show what it drew before it was hidden (Windows especially).
+  for (const ev of ["show", "restore", "focus"]) win.on(ev, () => { if (win && !win.isDestroyed()) { win.webContents.invalidate(); setTimeout(() => { if (win && !win.isDestroyed()) win.webContents.invalidate(); }, 250); } });
   win.webContents.on("did-finish-load", sendActive);
 }
 

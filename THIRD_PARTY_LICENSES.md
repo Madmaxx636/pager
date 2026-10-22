@@ -64,6 +64,10 @@ Pager itself is AGPL-3.0-only. It includes the packages below, each under its ow
 Main libraries (all Apache-2.0 unless noted): Jetpack Compose and AndroidX, Material 3 and its icons, Kotlin and kotlinx.serialization / coroutines, OkHttp,
 ZXing (QR codes), the matrix-rust-sdk crypto bindings (`org.matrix.rustcomponents:crypto-android`, Apache-2.0) and JNA (Apache-2.0 / LGPL-2.1 dual).
 
+## Emoji names (web, desktop and Android)
+
+The emoji search uses names and keywords from Emojibase data (`emojibase-data`, MIT licence, © Miles Johnson), shipped as `app/src/core/emojinames.tsv` and `android/app/src/main/assets/emoji_names.tsv`. The underlying emoji annotations are from the Unicode CLDR (Unicode licence).
+
 ## Bridges (separate programs run by the server)
 
 WhatsApp, Signal, Google Messages, Messenger, Slack, X, Bluesky and LinkedIn use the open-source mautrix bridges (AGPL-3.0), run as unmodified container images.
