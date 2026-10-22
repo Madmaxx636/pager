@@ -1,3 +1,4 @@
+import { withLook } from "./looks";
 import { FONTS, paletteById } from "./palettes";
 import { wallpaperCss } from "./wallpapers";
 import { skinById } from "./skins";
@@ -22,6 +23,8 @@ export interface AppSettings {
   /** A ready-made look (see palettes.ts), or "none" to use the mode and accent. */
   palette: string;
   fontFamily: string;
+  /** A whole messenger look (see looks.ts): colours, bubbles, type and motion together. "none" uses your own settings. */
+  look: "none" | "imessage" | "hangouts" | "gmessages";
   reactionStyle: "filled" | "outline";
   hideStories: boolean;
   /** Desktop app only: a ready-made look (see skins.ts). "default" is the look Pager always had. */
@@ -187,7 +190,7 @@ export interface AppSettings {
 export const DEFAULT_QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 export const DEFAULTS: AppSettings = {
-  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", reactionStyle: "filled", hideStories: false, skin: "default", skinAccent: "", fancyMotion: true, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleBorder: "none", bubbleBorderColor: "", outStyle: "", outRadius: -1, outBorder: "", outBorderColor: "", bubbleMineDark: "", bubbleTheirsDark: "", bubbleMineText: "", bubbleTheirsText: "", bubbleMineTextDark: "", bubbleTheirsTextDark: "", bubbleNative: false, bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0, wallpaperDim: 0, bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
+  themeMode: "system", accent: "teal", accentCustom: "#0d9488", fontScale: 1, uiScale: "medium", palette: "none", fontFamily: "system", look: "none", reactionStyle: "filled", hideStories: false, skin: "default", skinAccent: "", fancyMotion: true, deleteAtSource: false, autoTranscribe: false, reactionSound: "tick", bubbleStyle: "round", bubbleFill: "solid", bubbleBorder: "none", bubbleBorderColor: "", outStyle: "", outRadius: -1, outBorder: "", outBorderColor: "", bubbleMineDark: "", bubbleTheirsDark: "", bubbleMineText: "", bubbleTheirsText: "", bubbleMineTextDark: "", bubbleTheirsTextDark: "", bubbleNative: false, bubbleMine: "", bubbleTheirs: "", bubbleRadius: 0, bubbleWidth: 0, wallpaperDim: 0, bubbleDepth: "soft", messageAnimation: "pop", screenEffects: true, wallpaper: "none", timeFormat: "system", colorSenderNames: true,
   density: "comfortable", showAvatars: true, showNetworkBadges: true, showNetworkNameInRows: false, showPreviews: true, showFilterBar: true,
   showReadTicks: true, showMessageTimes: true, inboxStyle: "pro", showPinsRow: true, sortUnreadFirst: false, defaultTab: "inbox",
   avatarShape: "circle", showLabelsInFilterBar: true, reduceMotion: false, sidebarWidth: 360, themeFollowSystem: true, rowAction1: "read", rowAction2: "archive",
@@ -258,7 +261,7 @@ export function bubbleColorsFor(s: AppSettings, mine: boolean, dark: boolean): {
 // to load onto it. Computers and browsers share one saved set; phones and tablets keep their own.
 export interface SyncGroup { id: string; label: string; hint: string; keys: (keyof AppSettings)[] }
 export const SYNC_GROUPS: SyncGroup[] = [
-  { id: "look", label: "Colours and theme", hint: "Mode, accent, looks, wallpaper, font, text size, avatars", keys: ["themeMode", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat"] },
+  { id: "look", label: "Colours and theme", hint: "Mode, accent, looks, wallpaper, font, text size, avatars", keys: ["themeMode", "look", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat"] },
   { id: "bubbles", label: "Bubbles and messages", hint: "Bubble style, fill, depth, animations, effects", keys: ["bubbleStyle", "bubbleFill", "bubbleBorder", "bubbleBorderColor", "outStyle", "outRadius", "outBorder", "outBorderColor", "bubbleMineDark", "bubbleTheirsDark", "bubbleMineText", "bubbleTheirsText", "bubbleMineTextDark", "bubbleTheirsTextDark", "bubbleNative", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle"] },
   { id: "reactions", label: "Reactions", hint: "Double-click reaction and swipe to reply", keys: ["doubleTapReact", "doubleTapEmoji", "swipeToReply"] },
   { id: "list", label: "Chat list", hint: "What each row shows, filters, hidden networks", keys: ["showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories"] },
@@ -303,7 +306,7 @@ export const deviceLabel = () => (typeof window !== "undefined" && window.pagerD
  * so switching one off puts everything back as it was.
  */
 export function effective(r: AppSettings): AppSettings {
-  let s = r;
+  let s = withLook(r);
   if (r.lowData) s = { ...s, autoDownload: "never", autoPlayGifs: false, linkPreviews: false, autoTranscribe: false, sendTyping: false, showMessageTimes: s.showMessageTimes };
   // Low-end drops only what costs real processor time: blur and glass, full-screen effects, glowing/breathing, GIF autoplay. Small things (typing dots, message pops, hover and press motion, shadows, wallpaper, greetings) stay.
   if (r.lowEnd) s = { ...s, fancyMotion: false, screenEffects: false, bubbleFill: s.bubbleFill === "glass" ? "solid" : s.bubbleFill, autoPlayGifs: false };
@@ -430,6 +433,7 @@ export function applyTheme(s: AppSettings) {
   }
   r.dataset.uiScale = s.uiScale;
   r.toggleAttribute("data-lowend", getRawSettings().lowEnd);
+  if (getRawSettings().look !== "none") r.dataset.look = getRawSettings().look; else delete r.dataset.look;
   r.dataset.reactions = s.reactionStyle;
   const fam = FONTS.find((f) => f[0] === s.fontFamily)?.[2];
   if (fam) r.style.setProperty("--font", fam); else r.style.removeProperty("--font");

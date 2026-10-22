@@ -44,5 +44,8 @@ export const FONTS: [string, string, string][] = [
   ["rounded", "Rounded", `ui-rounded, "SF Pro Rounded", "Nunito", "Varela Round", "Segoe UI", system-ui, sans-serif`],
   ["humanist", "Humanist", `"Gill Sans", "Trebuchet MS", "Noto Sans", Candara, sans-serif`],
   ["mono", "Monospace", `ui-monospace, "SF Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace`],
+  ["sf", "iPhone style", `-apple-system, "SF Pro Text", "Helvetica Neue", system-ui, "Segoe UI", sans-serif`],
+  ["googlesans", "Google style", `"Google Sans", "Product Sans", "Google Sans Text", Roboto, "Segoe UI", system-ui, sans-serif`],
+  ["roboto", "Roboto", `Roboto, "Segoe UI", "Helvetica Neue", Arial, sans-serif`],
   ["readable", "Easy to read", `Verdana, "Atkinson Hyperlegible", "DejaVu Sans", Tahoma, sans-serif`],
 ];

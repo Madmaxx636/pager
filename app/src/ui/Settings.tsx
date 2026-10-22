@@ -1,4 +1,5 @@
 import { FONTS, PALETTES, PALETTE_GROUPS } from "../core/palettes";
+import { LOOKS } from "../core/looks";
 import { hasCustomSound, importSound, onCustomSoundChange, playCustom, removeCustomSound } from "../core/customsound";
 import { APP_ICONS } from "../core/appicons";
 import { GIF_SOURCES, KEY_PROVIDERS, keyFingerprint, searchGifs } from "../core/gifs";
@@ -246,6 +247,7 @@ function Appearance() {
   return (
     <>
       {window.pagerDesktop && <StyleGroup />}
+      <LookGroup />
       <Group title="Theme">
         <Row title="Ready-made looks" hint="A whole colour set for the app, in every colour: on white, on black, or solid. Choose “Mode and accent” to go back to your own mix.">
           <button className={"look-none" + (s.palette === "none" ? " on" : "")} onClick={() => updateSettings({ palette: "none" })}>{s.palette === "none" ? <Check size={14} /> : null} Mode and accent</button>
@@ -666,6 +668,24 @@ function SyncSettingsDialog({ onClose }: { onClose: () => void }) {
       {note && <p className="accent">{note}</p>}
       <div className="row-end"><button className="link" onClick={onClose}>Close</button></div>
     </Modal>
+  );
+}
+
+/** A whole messenger look at once: pick one and colours, bubbles, type and motion change together. "None" gives your own settings back. */
+function LookGroup() {
+  const s = useRawSettings();
+  return (
+    <Group title="App look">
+      <div className="look-cards">
+        <button className={"look-card" + (s.look === "none" ? " on" : "")} onClick={() => updateSettings({ look: "none" })}><span className="look-sw"><i style={{ background: "var(--accent)" }} /><i style={{ background: "var(--theirs)" }} /><i style={{ background: "var(--panel-2)" }} /></span><b>Pager</b><small>Your own colours, bubbles and settings</small></button>
+        {LOOKS.map((l) => (
+          <button key={l.id} className={"look-card" + (s.look === l.id ? " on" : "")} onClick={() => updateSettings({ look: l.id })}>
+            <span className="look-sw">{l.swatch.map((c) => <i key={c} style={{ background: c }} />)}</span><b>{l.name}</b><small>{l.blurb}</small>
+          </button>
+        ))}
+      </div>
+      {s.look !== "none" && <p className="muted pad">This look sets colours, bubbles, type and motion for the whole app. Your own choices below are kept and come back when you pick “Pager”.</p>}
+    </Group>
   );
 }
 

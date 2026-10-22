@@ -715,3 +715,131 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .reactions button { font-size: 1.15rem; padding: 3px 11px; line-height: 1.3; } .reactions button small { font-size: .8rem; margin-left: 4px; }
 .quick button { width: 44px !important; height: 44px !important; font-size: 1.7rem; }
 .quick-edit button { width: 46px !important; height: 46px !important; font-size: 1.6rem !important; }
+
+/* ===================================================================================================================
+   Messenger looks (Settings > Appearance > App look). Each is drawn fresh in the style of a well-known messenger.
+   The settings in core/looks.ts choose colours, bubble shapes and type; this adds headers, composer, reactions, lists and motion.
+   =================================================================================================================== */
+.look-cards { display: grid; gap: 8px; padding: 6px 16px 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.look-card { display: grid; gap: 4px; text-align: left; padding: 12px; border-radius: 14px; background: var(--panel-2); border: 2px solid transparent; color: var(--text); cursor: pointer; align-content: start; }
+.look-card.on { border-color: var(--accent); } .look-card small { color: var(--muted); font-size: .78rem; line-height: 1.3; }
+.look-sw { display: flex; gap: 4px; margin-bottom: 4px; } .look-sw i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(128, 128, 128, .35); }
+.fab, .im-status, .msg-avatar { display: none; }
+
+/* ---------- iPhone Messages ---------- */
+:root[data-look="imessage"] { --bg: #ffffff; --panel: #f7f7f8; --panel-2: #ececef; --line: #d9d9de; --text: #000000; --muted: #8a8a8e; --theirs: #e9e9eb; --accent: #0a84ff; --accent-ink: #ffffff; --radius: 18px; --tight: 18px; --ease: cubic-bezier(.2, 1.25, .4, 1); }
+:root[data-look="imessage"][data-theme="dark"], :root[data-look="imessage"][data-theme="black"] { --bg: #000000; --panel: #1c1c1e; --panel-2: #2c2c2e; --line: #38383a; --text: #ffffff; --muted: #98989f; --theirs: #26262a; }
+:root[data-look="imessage"][data-theme="black"] { --panel: #0b0b0c; }
+:root[data-look="imessage"] body { letter-spacing: -.01em; }
+:root[data-look="imessage"] .chat-head { background: color-mix(in srgb, var(--panel) 86%, transparent); backdrop-filter: blur(18px) saturate(1.6); border-bottom: .5px solid var(--line); }
+:root[data-look="imessage"] .head-id { flex-direction: column; gap: 1px; flex: 0 1 auto; margin: 0 auto; align-items: center; text-align: center; padding: 2px 10px; }
+:root[data-look="imessage"] .chat-head .avatar { width: 38px !important; height: 38px !important; }
+:root[data-look="imessage"] .chat-title { font-size: .78rem; font-weight: 500; } :root[data-look="imessage"] .chat-title::after { content: " ›"; color: var(--muted); }
+:root[data-look="imessage"] .chat-sub { font-size: .7rem; justify-content: center; }
+:root[data-look="imessage"] .timeline { padding: 12px 14px; overflow-x: hidden; }
+:root[data-look="imessage"] .day span { background: none; color: var(--muted); font-weight: 600; font-size: .72rem; }
+:root[data-look="imessage"] .msg { max-width: var(--msg-max, 74%); } :root[data-look="imessage"] .msg.first { margin-top: 8px; } :root[data-look="imessage"] .msg { margin-top: 1.5px; }
+:root[data-look="imessage"] .bubble { padding: 7px 12px; font-size: 1.04rem; line-height: 1.28; box-shadow: none; }
+:root[data-look="imessage"] .msg .bubble { border-radius: 18px !important; }
+:root[data-look="imessage"] .msg.last .bubble:not(.bare):not(.media-bubble)::before { content: ""; position: absolute; bottom: 0; left: -7px; width: 20px; height: 18px; background: var(--bubble-bg, var(--bubble-theirs, var(--theirs))); border-bottom-right-radius: 16px 14px; z-index: -1; }
+:root[data-look="imessage"] .msg.last .bubble:not(.bare):not(.media-bubble)::after { content: ""; position: absolute; bottom: 0; left: -26px; width: 26px; height: 18px; background: var(--bg); border-bottom-right-radius: 10px; z-index: 0; }
+:root[data-look="imessage"] .msg.mine.last .bubble:not(.bare):not(.media-bubble)::before { left: auto; right: -7px; border-bottom-right-radius: 0; border-bottom-left-radius: 16px 14px; background: var(--bubble-bg, var(--mine, var(--accent))); }
+:root[data-look="imessage"] .msg.mine.last .bubble:not(.bare):not(.media-bubble)::after { left: auto; right: -26px; border-bottom-right-radius: 0; border-bottom-left-radius: 10px; }
+:root[data-look="imessage"] .bubble .meta { display: none; }
+:root[data-look="imessage"] .im-status { display: block; align-self: flex-end; margin: 2px 4px 0; font-size: .68rem; font-weight: 600; color: var(--muted); }
+:root[data-look="imessage"] .reactions { margin: -9px 10px 0; position: relative; z-index: 2; }
+:root[data-look="imessage"] .msg.mine .reactions { align-self: flex-start; margin-left: -6px; }
+:root[data-look="imessage"] .reactions button { background: var(--panel-2); border: 2px solid var(--bg); border-radius: 999px; padding: 2px 8px; font-size: 1.05rem; box-shadow: none; }
+:root[data-look="imessage"] .reactions button.mine { background: var(--accent); color: #fff; }
+:root[data-look="imessage"] .composer-wrap { background: var(--bg); border-top: none; }
+:root[data-look="imessage"] .composer { padding: 8px 12px 10px; align-items: flex-end; }
+:root[data-look="imessage"] .composer .field { background: var(--bg); border: 1px solid var(--line); border-radius: 19px; padding: 0 4px 0 14px; }
+:root[data-look="imessage"] .composer textarea { padding: 8px 0; font-size: 1.02rem; }
+:root[data-look="imessage"] .send { width: 32px; height: 32px; margin-bottom: 1px; }
+:root[data-look="imessage"] .send-group .send { border-radius: 50%; width: 32px; } :root[data-look="imessage"] .send-more { display: none; }
+:root[data-look="imessage"] .side-head h1 { font-size: 2rem; font-weight: 800; letter-spacing: -.035em; }
+:root[data-look="imessage"] .pill-search { border-radius: 10px; height: 38px; margin: 2px 16px 10px; background: var(--panel-2); }
+:root[data-look="imessage"] .chat-row { border-radius: 0; padding: 9px 14px 9px 24px; position: relative; border-bottom: .5px solid var(--line); align-items: flex-start; }
+:root[data-look="imessage"] .chat-row.sel { background: var(--accent); color: #fff; } :root[data-look="imessage"] .chat-row.sel .chat-preview, :root[data-look="imessage"] .chat-row.sel .chat-time { color: rgba(255, 255, 255, .85); }
+:root[data-look="imessage"] .chat-name { font-weight: 600; font-size: 1.02rem; } :root[data-look="imessage"] .chat-preview { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
+:root[data-look="imessage"] .chat-row:has(.unread:not(.muted-badge))::before { content: ""; position: absolute; left: 7px; top: 24px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); }
+:root[data-look="imessage"] .unread:not(.muted-badge) { font-size: 0; min-width: 0; width: 0; height: 0; padding: 0; background: none; }
+:root[data-look="imessage"] .tab { background: transparent; color: var(--accent); font-weight: 500; } :root[data-look="imessage"] .tab.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+:root[data-look="imessage"] .msg.fresh .bubble { animation: im-send .42s var(--ease) both; transform-origin: bottom right; }
+:root[data-look="imessage"] .msg:not(.mine).fresh .bubble { animation-name: im-recv; transform-origin: bottom left; }
+:root[data-look="imessage"] .chat { animation: im-push .34s cubic-bezier(.2, .8, .2, 1); }
+:root[data-look="imessage"] .typing-bubble { background: var(--theirs); border-radius: 18px !important; padding: 11px 15px !important; }
+:root[data-look="imessage"] .typing-dots i { animation: im-dot 1.2s infinite ease-in-out; opacity: .5; }
+@keyframes im-send { 0% { transform: translateY(18px) scale(.55); opacity: 0; } 55% { transform: translateY(-2px) scale(1.04); opacity: 1; } 100% { transform: none; } }
+@keyframes im-recv { 0% { transform: translateY(10px) scale(.6); opacity: 0; } 60% { transform: scale(1.03); opacity: 1; } 100% { transform: none; } }
+@keyframes im-push { from { transform: translateX(26px); opacity: .4; } to { transform: none; opacity: 1; } }
+@keyframes im-dot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+/* ---------- Hangouts (classic) ---------- */
+:root[data-look="hangouts"] { --bg: #eceff1; --panel: #ffffff; --panel-2: #f1f3f4; --line: #dadce0; --text: #212121; --muted: #757575; --theirs: #ffffff; --accent: #0f9d58; --accent-ink: #ffffff; --radius: 4px; --tight: 4px; --hd-head: #0f9d58; --ease: cubic-bezier(0, 0, .2, 1); }
+:root[data-look="hangouts"][data-theme="dark"], :root[data-look="hangouts"][data-theme="black"] { --bg: #263238; --panel: #2e3b42; --panel-2: #37474f; --line: #455a64; --text: #eceff1; --muted: #b0bec5; --theirs: #37474f; --accent: #26a65b; --hd-head: #0b8043; }
+:root[data-look="hangouts"] .chat-head { background: var(--hd-head); color: #fff; border: 0; box-shadow: 0 2px 4px rgba(0, 0, 0, .25); z-index: 2; }
+:root[data-look="hangouts"] .chat-head .icon, :root[data-look="hangouts"] .chat-head .head-id, :root[data-look="hangouts"] .chat-head button { color: #fff; } :root[data-look="hangouts"] .chat-sub { color: rgba(255, 255, 255, .8); }
+:root[data-look="hangouts"] .chat-title { font-weight: 500; font-size: 1.08rem; }
+:root[data-look="hangouts"] .side-head { background: var(--panel); } :root[data-look="hangouts"] .side-head h1 { font-size: 1.35rem; font-weight: 500; color: var(--accent); letter-spacing: 0; }
+:root[data-look="hangouts"] .chat-row { border-radius: 0; padding: 10px 16px; } :root[data-look="hangouts"] .chat-row:hover { background: var(--panel-2); } :root[data-look="hangouts"] .chat-row.sel { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+:root[data-look="hangouts"] .chat-name { font-weight: 500; } :root[data-look="hangouts"] .unread { background: var(--accent); }
+:root[data-look="hangouts"] .pill-search { border-radius: 2px; background: var(--panel); border-bottom: 2px solid var(--line); height: 40px; margin: 2px 12px 8px; }
+:root[data-look="hangouts"] .tab { border-radius: 2px; background: transparent; border-bottom: 2px solid transparent; padding: 7px 12px; } :root[data-look="hangouts"] .tab.on { background: transparent; color: var(--accent); border-bottom-color: var(--accent); }
+:root[data-look="hangouts"] .timeline { padding: 12px 16px; }
+:root[data-look="hangouts"] .day { display: flex; align-items: center; gap: 10px; } :root[data-look="hangouts"] .day::before, :root[data-look="hangouts"] .day::after { content: ""; flex: 1; height: 1px; background: var(--line); } :root[data-look="hangouts"] .day span { background: none; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: .68rem; }
+:root[data-look="hangouts"] .msg { position: relative; } :root[data-look="hangouts"] .msg:not(.mine) { padding-left: 44px; } :root[data-look="hangouts"] .msg-sender { margin-left: 2px; font-weight: 500; }
+:root[data-look="hangouts"] .msg-avatar { display: block; position: absolute; left: 0; top: 2px; } :root[data-look="hangouts"] .msg-avatar .avatar { box-shadow: 0 1px 2px rgba(0, 0, 0, .3); border-radius: 50%; }
+:root[data-look="hangouts"] .bubble { box-shadow: 0 1px 2px rgba(0, 0, 0, .22); padding: 8px 12px; font-size: .98rem; }
+:root[data-look="hangouts"] .msg.mine .bubble { box-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+:root[data-look="hangouts"] .reactions button { border-radius: 2px; background: var(--panel); box-shadow: 0 1px 2px rgba(0, 0, 0, .2); border: 0; padding: 2px 8px; }
+:root[data-look="hangouts"] .composer-wrap { background: var(--panel); border-top: 0; box-shadow: 0 -1px 3px rgba(0, 0, 0, .15); }
+:root[data-look="hangouts"] .composer .field { background: transparent; border-radius: 0; border-bottom: 2px solid var(--accent); padding: 0 4px; }
+:root[data-look="hangouts"] .send { background: transparent; color: var(--accent); width: 44px; } :root[data-look="hangouts"] .send-group .send { border-radius: 50%; } :root[data-look="hangouts"] .send-more { display: none; }
+:root[data-look="hangouts"] .fab, :root[data-look="gmessages"] .fab { display: inline-flex; position: absolute; right: 18px; bottom: 18px; z-index: 6; align-items: center; gap: 10px; border: 0; cursor: pointer; }
+:root[data-look="hangouts"] .fab { width: 56px; height: 56px; border-radius: 50%; justify-content: center; background: var(--accent); color: #fff; box-shadow: 0 3px 6px rgba(0, 0, 0, .3), 0 3px 10px rgba(0, 0, 0, .2); transition: box-shadow .2s var(--ease), transform .2s var(--ease); }
+:root[data-look="hangouts"] .fab span { display: none; } :root[data-look="hangouts"] .fab:hover { box-shadow: 0 6px 10px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .22); } :root[data-look="hangouts"] .fab:active { transform: scale(.94); }
+:root[data-look="hangouts"] .msg.fresh .bubble { animation: hd-in .22s var(--ease) both; } :root[data-look="hangouts"] .chat { animation: hd-in .22s var(--ease); }
+:root[data-look="hangouts"] .icon, :root[data-look="hangouts"] .pill, :root[data-look="hangouts"] .tab, :root[data-look="hangouts"] .chat-row, :root[data-look="hangouts"] .fab { position: relative; overflow: hidden; }
+:root[data-look="hangouts"] .fab { position: absolute; overflow: visible; }
+:root[data-look="hangouts"] .icon:active::after, :root[data-look="hangouts"] .chat-row:active::after, :root[data-look="hangouts"] .tab:active::after { content: ""; position: absolute; inset: 0; margin: auto; width: 20px; height: 20px; border-radius: 50%; background: currentColor; opacity: .18; animation: hd-ripple .45s var(--ease) forwards; pointer-events: none; }
+:root[data-look="hangouts"] .typing-bubble { border-radius: 4px !important; }
+@keyframes hd-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes hd-ripple { to { transform: scale(24); opacity: 0; } }
+
+/* ---------- Google Messages ---------- */
+:root[data-look="gmessages"] { --bg: #ffffff; --panel: #ffffff; --panel-2: #e9eef6; --line: #e0e3e8; --text: #1f1f1f; --muted: #5f6368; --theirs: #e9eef6; --accent: #0b57d0; --accent-ink: #ffffff; --radius: 20px; --tight: 4px; --sel: #d3e3fd; --chip: #c2e7ff; --ease: cubic-bezier(.2, 0, 0, 1); }
+:root[data-look="gmessages"][data-theme="dark"], :root[data-look="gmessages"][data-theme="black"] { --bg: #131314; --panel: #131314; --panel-2: #2b2f33; --line: #3c4043; --text: #e3e3e3; --muted: #9aa0a6; --theirs: #2b2f33; --accent: #a8c7fa; --accent-ink: #062e6f; --sel: #0842a0; --chip: #004a77; }
+:root[data-look="gmessages"] .side-head { padding: 22px 18px 8px; } :root[data-look="gmessages"] .side-head h1 { font-size: 1.75rem; font-weight: 400; letter-spacing: 0; }
+:root[data-look="gmessages"] .pill-search { height: 52px; border-radius: 28px; background: var(--panel-2); margin: 6px 14px 10px; padding-left: 20px; }
+:root[data-look="gmessages"] .tab { background: transparent; border: 1px solid var(--line); border-radius: 8px; color: var(--text); font-weight: 500; } :root[data-look="gmessages"] .tab.on { background: var(--chip); border-color: transparent; color: var(--text); }
+:root[data-look="gmessages"] .chat-row { border-radius: 28px; padding: 10px 14px; margin: 0 6px; width: calc(100% - 12px); } :root[data-look="gmessages"] .chat-row:hover { background: color-mix(in srgb, var(--text) 6%, transparent); } :root[data-look="gmessages"] .chat-row.sel { background: var(--sel); }
+:root[data-look="gmessages"] .chat-name { font-weight: 500; font-size: 1.02rem; } :root[data-look="gmessages"] .unread-name { font-weight: 700; } :root[data-look="gmessages"] .chat-preview { font-size: .88rem; }
+:root[data-look="gmessages"] .unread:not(.muted-badge) { font-size: 0; min-width: 12px; width: 12px; height: 12px; padding: 0; border-radius: 50%; }
+:root[data-look="gmessages"] .chat-head { background: var(--bg); border: 0; min-height: 68px; } :root[data-look="gmessages"] .chat-title { font-size: 1.12rem; font-weight: 500; } :root[data-look="gmessages"] .chat-sub { font-size: .76rem; }
+:root[data-look="gmessages"] .timeline { padding: 8px 14px 14px; }
+:root[data-look="gmessages"] .day span { background: none; font-size: .74rem; font-weight: 500; color: var(--muted); }
+:root[data-look="gmessages"] .msg { --tight: 4px; max-width: var(--msg-max, 78%); } :root[data-look="gmessages"] .msg.first { margin-top: 12px; } :root[data-look="gmessages"] .msg { margin-top: 2px; }
+:root[data-look="gmessages"] .bubble { padding: 9px 14px; font-size: 1rem; line-height: 1.35; box-shadow: none; }
+:root[data-look="gmessages"] .bubble .meta { display: none; } :root[data-look="gmessages"] .msg.last .bubble .meta { display: flex; }
+:root[data-look="gmessages"] .reactions { margin: -10px 12px 0; position: relative; z-index: 2; }
+:root[data-look="gmessages"] .reactions button { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 1px 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, .18); font-size: 1.05rem; }
+:root[data-look="gmessages"] .reactions button.mine { background: var(--chip); border-color: transparent; }
+:root[data-look="gmessages"] .composer-wrap { background: var(--bg); border: 0; } :root[data-look="gmessages"] .composer { padding: 8px 10px 12px; }
+:root[data-look="gmessages"] .composer .field { background: var(--panel-2); border-radius: 28px; padding: 3px 6px 3px 18px; min-height: 52px; align-items: center; }
+:root[data-look="gmessages"] .composer textarea { padding: 10px 0; font-size: 1rem; }
+:root[data-look="gmessages"] .send { width: 48px; height: 48px; } :root[data-look="gmessages"] .send-group .send { border-radius: 50%; width: 48px; } :root[data-look="gmessages"] .send-more { display: none; }
+:root[data-look="gmessages"] .fab { height: 56px; padding: 0 22px 0 18px; border-radius: 16px; background: var(--chip); color: var(--text); font-weight: 600; font-size: .95rem; box-shadow: 0 2px 6px rgba(0, 0, 0, .22); transition: box-shadow .3s var(--ease), transform .3s var(--ease); }
+:root[data-look="gmessages"] .fab:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, .28); } :root[data-look="gmessages"] .fab:active { transform: scale(.96); }
+:root[data-look="gmessages"] .icon:hover, :root[data-look="gmessages"] .pill:hover, :root[data-look="gmessages"] .send:hover { filter: none; background-image: linear-gradient(color-mix(in srgb, currentColor 9%, transparent), color-mix(in srgb, currentColor 9%, transparent)); transform: none; }
+:root[data-look="gmessages"] .icon:active, :root[data-look="gmessages"] .send:active { transform: scale(.94); }
+:root[data-look="gmessages"] .msg.fresh .bubble { animation: gm-in .3s var(--ease) both; transform-origin: bottom right; } :root[data-look="gmessages"] .msg:not(.mine).fresh .bubble { transform-origin: bottom left; }
+:root[data-look="gmessages"] .chat { animation: gm-axis .3s var(--ease); }
+:root[data-look="gmessages"] .typing-bubble { background: var(--theirs); border-radius: 20px !important; }
+@keyframes gm-in { from { opacity: 0; transform: scale(.88) translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes gm-axis { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
+
+/* Low-end and reduced motion keep these looks but drop their motion and the blur. */
+:root[data-lowend][data-look] .chat-head { backdrop-filter: none; }
+:root[data-motion="reduced"][data-look] .msg.fresh .bubble, :root[data-motion="reduced"][data-look] .chat { animation: none !important; }
+@media (max-width: 760px) { :root[data-look] .fab { bottom: 84px; } }

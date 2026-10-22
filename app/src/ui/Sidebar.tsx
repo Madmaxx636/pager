@@ -211,6 +211,8 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
         </header>
       )}
 
+      {(st.look === "hangouts" || st.look === "gmessages") && <button className="fab" onClick={() => nav("new")} aria-label="Start chat"><SquarePen size={st.look === "hangouts" ? 24 : 20} /><span>Start chat</span></button>}
+
       <div className="pill-search">
         <Search size={18} />
         <input ref={search} placeholder="Search pages" value={query} onChange={(e) => setQuery(e.target.value)} />

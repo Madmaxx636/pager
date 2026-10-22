@@ -178,7 +178,7 @@ val LocalRawSettings = staticCompositionLocalOf { AppSettings() }
 
 /** What the app actually uses: your settings, with E-ink mode and the small-screen layout applied on top. */
 fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int, keypad: Boolean = false): AppSettings {
-    var e = s
+    var e = withLook(s)
     // Keypad phones are slow and have no gestures: calm, light and plain.
     if (keypad) e = e.copy(reduceMotion = true, screenEffects = false, autoPlayGifs = false)
     if (s.eink) e = e.copy(
