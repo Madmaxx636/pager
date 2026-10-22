@@ -270,9 +270,9 @@ fun ActionsSheet(
     onSave: (() -> Unit)? = null, onOpen: (() -> Unit)? = null, onShare: (() -> Unit)? = null, onSelectText: (() -> Unit)? = null,
 ) {
     Sheet(onDismiss) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            quick.forEach { e -> Box(Modifier.size(46.dp).clip(CircleShape).dpadFocus().clickable { onReact(e) }, contentAlignment = Alignment.Center) { EmojiGlyph(e, 26f) } }
-            Box(Modifier.size(42.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable(onClick = onMore), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, "More reactions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+            quick.forEach { e -> Box(Modifier.weight(1f).heightIn(max = 52.dp).aspectRatio(1f).clip(CircleShape).dpadFocus().clickable { onReact(e) }, contentAlignment = Alignment.Center) { EmojiGlyph(e, if (LocalSettings.current.eink) 32f else 30f) } }
+            Box(Modifier.weight(1f).heightIn(max = 46.dp).aspectRatio(1f).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).let { if (LocalSettings.current.eink) it.border(inkDp(2f), inkColor(), CircleShape) else it }.dpadFocus().clickable(onClick = onMore), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Add, "More reactions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         SheetItem(Icons.AutoMirrored.Rounded.Reply, "Reply", onReply)
         SheetItem(Icons.AutoMirrored.Rounded.Forward, "Forward", onForward)

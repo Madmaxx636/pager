@@ -150,7 +150,12 @@ class Store(private val context: Context) {
     @Volatile private var lastSyncOk = 0L
 
     /** Called every few minutes by the watchdog (and when the app opens): starts sync again if it has stopped or gone quiet, so notifications keep coming. */
+    /** Debug builds only (see src/debug): made-up chats and no server, so screens can be previewed on an emulator. Never set in a release build. */
+    @Volatile var demo = false
+    fun loadDemo(s: Session, chats: Map<String, ChatState>) { demo = true; _session.value = s; _chats.value = chats }
+
     fun ensureSyncing() {
+        if (demo) return
         val s = _session.value ?: return
         val quiet = lastSyncOk > 0 && System.currentTimeMillis() - lastSyncOk > 150_000
         if (syncJob?.isActive == true && !quiet) return
