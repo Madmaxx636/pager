@@ -20,6 +20,7 @@ KEY="$HOME/.config/pager/update-signing.pem"
 cmp -s <(openssl pkey -in "$KEY" -pubout) desktop/update-pubkey.pem || { echo "The release key doesn't match desktop/update-pubkey.pem, installed apps would reject this release" >&2; exit 1; }
 ssh_() { ssh -i "$SSH_KEY" -o IdentitiesOnly=yes "$SERVER" "$@"; }
 
+OUT=release-out
 if [ "$PUBLISH_ONLY" = 0 ]; then
 echo "$V" > VERSION
 (cd desktop && node -e 'const f="package.json",p=JSON.parse(require("fs").readFileSync(f));p.version=process.argv[1];require("fs").writeFileSync(f,JSON.stringify(p,null,2)+"\n")' "$V")
