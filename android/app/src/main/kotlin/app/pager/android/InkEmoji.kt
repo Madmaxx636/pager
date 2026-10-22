@@ -43,10 +43,13 @@ fun Modifier.einkFilter(on: Boolean): Modifier = if (!on) this else drawWithCont
 }
 
 private val lineCache = HashMap<String, ImageBitmap>()
+/** How many pixels each line is widened by (the picture is 128 wide): thicker lines read better on an E-ink screen, and most at the Heavy level. */
+private fun inkGrow() = if (Ink.heavy) 2 else 1
 
 /** An emoji redrawn as a black outline on nothing: its edge and the lines inside it, no colour and no fill. */
 private fun lineArt(emoji: String): ImageBitmap {
-    synchronized(lineCache) { lineCache[emoji]?.let { return it } }
+    val key = "$emoji|${inkGrow()}"
+    synchronized(lineCache) { lineCache[key]?.let { return it } }
     val n = 128
     val bmp = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = n * 0.78f; textAlign = Paint.Align.CENTER }
@@ -67,8 +70,15 @@ private fun lineArt(emoji: String): ImageBitmap {
     }
     val out = IntArray(n * n)
     for (y in 1 until n - 1) for (x in 1 until n - 1) if (edge(alpha, x, y) > 300 || edge(lum, x, y) > 130) out[y * n + x] = 0xFF000000.toInt()
-    val res = Bitmap.createBitmap(out, n, n, Bitmap.Config.ARGB_8888).asImageBitmap()
-    synchronized(lineCache) { lineCache[emoji] = res }
+    // Widen the lines: every dot next to a line dot joins it.
+    var lines = out
+    repeat(inkGrow()) {
+        val g = lines.copyOf()
+        for (y in 1 until n - 1) for (x in 1 until n - 1) if (lines[y * n + x] != 0 || lines[y * n + x - 1] != 0 || lines[y * n + x + 1] != 0 || lines[(y - 1) * n + x] != 0 || lines[(y + 1) * n + x] != 0) g[y * n + x] = 0xFF000000.toInt()
+        lines = g
+    }
+    val res = Bitmap.createBitmap(lines, n, n, Bitmap.Config.ARGB_8888).asImageBitmap()
+    synchronized(lineCache) { lineCache[key] = res }
     return res
 }
 

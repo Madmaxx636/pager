@@ -64,6 +64,10 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // A debug build can be started with made-up chats for previewing screens (the DemoData class only exists in debug builds).
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 && intent?.getBooleanExtra("demo", false) == true) {
+            runCatching { Class.forName("app.pager.android.DemoData").getMethod("load", Store::class.java, Intent::class.java).invoke(null, store, intent) }
+        }
         handleIntent(intent)
         locked = store.settings.value.appLock
         setContent {

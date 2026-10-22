@@ -78,7 +78,7 @@ fun EmojiPickerDialog(recent: List<String>, onPick: (String) -> Unit, onDismiss:
                 if (query.isNotBlank()) {
                     if (found.isEmpty()) Text("No emoji match \u201c${query.trim()}\u201d.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     LazyVerticalGrid(GridCells.Adaptive(52.dp), modifier = Modifier.padding(horizontal = 8.dp)) {
-                        items(found) { e -> Box(Modifier.height(52.dp).clip(RoundedCornerShape(10.dp)).dpadFocus().clickable { onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 32.sp) } }
+                        items(found) { e -> Box(Modifier.height(52.dp).clip(RoundedCornerShape(10.dp)).dpadFocus().clickable { onPick(e) }, contentAlignment = Alignment.Center) { EmojiGlyph(e, 32f) } }
                     }
                     return@Column
                 }
@@ -88,7 +88,7 @@ fun EmojiPickerDialog(recent: List<String>, onPick: (String) -> Unit, onDismiss:
                             Modifier.clip(CircleShape).background(if (i == tab) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else androidx.compose.ui.graphics.Color.Transparent)
                                 .dpadFocus().clickable { tab = i; scope.launch { grid.animateScrollToItem(offsets[i]) } }.padding(6.dp),
                             contentAlignment = Alignment.Center,
-                        ) { Text(icon, fontSize = 22.sp) }
+                        ) { EmojiGlyph(icon, 22f) }
                     }
                 }
                 LazyVerticalGrid(GridCells.Adaptive(52.dp), state = grid, modifier = Modifier.padding(horizontal = 8.dp)) {
@@ -101,7 +101,7 @@ fun EmojiPickerDialog(recent: List<String>, onPick: (String) -> Unit, onDismiss:
                             )
                         }
                         items(list) { e ->
-                            Box(Modifier.height(52.dp).clip(RoundedCornerShape(10.dp)).dpadFocus().clickable { onPick(e) }, contentAlignment = Alignment.Center) { Text(e, fontSize = 32.sp) }
+                            Box(Modifier.height(52.dp).clip(RoundedCornerShape(10.dp)).dpadFocus().clickable { onPick(e) }, contentAlignment = Alignment.Center) { EmojiGlyph(e, 32f) }
                         }
                     }
                 }

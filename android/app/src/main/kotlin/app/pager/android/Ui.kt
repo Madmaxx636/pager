@@ -104,7 +104,7 @@ fun GroupDivider() = HorizontalDivider(Modifier.padding(start = 16.dp), thicknes
 /** The tinted rounded-square icon used on the settings home and in lists. */
 @Composable
 fun IconTile(icon: ImageVector, color: Color, size: Int = 34) {
-    Box(Modifier.size(size.dp).clip(RoundedCornerShape((size * 0.28f).dp)).background(color), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(size.dp).clip(RoundedCornerShape((size * 0.28f).dp)).background(if (Ink.on) inkColor() else color), contentAlignment = Alignment.Center) {
         Icon(icon, null, tint = Color.White, modifier = Modifier.size((size * 0.58f).dp))
     }
 }
