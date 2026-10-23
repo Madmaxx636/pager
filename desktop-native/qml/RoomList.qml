@@ -34,6 +34,16 @@ Rectangle {
                 }
             }
         }
+        Label {   // first load of a big account takes a while: say so instead of showing nothing
+            visible: core.loading && list.count === 0
+            Layout.fillWidth: true; Layout.margins: 16; wrapMode: Text.Wrap; color: look.muted; font.pixelSize: Math.round(14 * look.textScale)
+            text: "Loading your chats… The first time can take a minute or two."
+        }
+        Label {
+            visible: core.problem.length > 0 && list.count === 0
+            Layout.fillWidth: true; Layout.margins: 16; wrapMode: Text.Wrap; color: look.danger; font.pixelSize: Math.round(12 * look.textScale)
+            text: core.problem
+        }
         ListView {
             id: list
             Layout.fillWidth: true; Layout.fillHeight: true

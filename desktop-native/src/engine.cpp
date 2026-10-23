@@ -1,5 +1,7 @@
 #include "engine.h"
 #include <QCoreApplication>
+#include <QDateTime>
+#include <QFile>
 #include <QFileInfo>
 #include <QJSEngine>
 #include <QQmlEngine>
@@ -10,6 +12,7 @@
 #include <QTimer>
 
 Engine::Engine(const QString &dataDir, bool demo, QObject *parent) : QObject(parent) {
+    m_logFile = dataDir.isEmpty() ? QString() : dataDir + QStringLiteral("/pager-native.log");
     if (demo) { loadDemo(); return; }
     m_core = pager_start(dataDir.toUtf8().constData(), &Engine::callback, this);
 }
@@ -24,7 +27,17 @@ void Engine::callback(void *user, const char *kind, const char *json) {
     QMetaObject::invokeMethod(QCoreApplication::instance(), [self, k, body] { if (self) self->handle(k, body); }, Qt::QueuedConnection);
 }
 
+void Engine::log(const QString &line) {
+    if (m_logFile.isEmpty()) return;
+    QFile f(m_logFile);
+    if (f.size() > 512 * 1024) f.remove();                       // keep it small
+    if (f.open(QIODevice::Append | QIODevice::Text)) f.write((QDateTime::currentDateTime().toString(Qt::ISODate) + QLatin1Char(' ') + line + QLatin1Char('\n')).toUtf8());
+}
+
 void Engine::handle(const QString &kind, const QJsonObject &b) {
+    if (kind == QLatin1String("problem")) log(b.value(QLatin1String("what")).toString() + QStringLiteral(": ") + b.value(QLatin1String("message")).toString());
+    else if (kind == QLatin1String("synced") && !m_synced) log(QStringLiteral("first sync done, %1 chats changed").arg(b.value(QLatin1String("rooms")).toInt()));
+    else if (kind == QLatin1String("state")) log(QStringLiteral("state: ") + QString::fromUtf8(QJsonDocument(b).toJson(QJsonDocument::Compact)));
     if (kind == QLatin1String("state")) {
         m_starting = false;
         m_signedIn = b.value(QLatin1String("signedIn")).toBool();
@@ -32,7 +45,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
             m_user = b.value(QLatin1String("user")).toString(m_user); m_store.setMe(m_user); m_error.clear();
             if (m_core) api(QStringLiteral("GET"), QStringLiteral("/api/me"), QVariant(), QJSValue());   // is this an admin? (answered below)
         }
-        else { m_user.clear(); m_error = b.value(QLatin1String("error")).toString(); }
+        else { m_user.clear(); m_synced = false; m_error = b.value(QLatin1String("error")).toString(); }
         m_working = false;
         emit stateChanged();
     } else if (kind == QLatin1String("rooms")) {
@@ -59,6 +72,8 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
         m_store.removeRoom(b.value(QLatin1String("id")).toString());
         if (m_current == b.value(QLatin1String("id")).toString()) { m_current.clear(); m_timeline.show({}); emit currentChanged(); }
         m_rooms.refresh();
+    } else if (kind == QLatin1String("synced")) {
+        if (!m_synced) { m_synced = true; emit stateChanged(); }
     } else if (kind == QLatin1String("recovery")) {
         m_recoveryMessage = QStringLiteral("Restoring messages… %1 of %2 chats").arg(b.value(QLatin1String("done")).toInt()).arg(b.value(QLatin1String("total")).toInt());
         emit recoveryChanged();
