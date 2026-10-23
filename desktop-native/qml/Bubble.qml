@@ -59,11 +59,13 @@ Item {
     readonly property bool bare: sticker || bigEmoji || ((kind === "image" || kind === "video") && caption.length === 0 && !sticker)
     width: ListView.view ? ListView.view.width : 400
     height: col.implicitHeight + (first ? 7 : 1.5)
-    readonly property color ink: mine ? look.accentInk : look.text
-    readonly property color softInk: mine ? Qt.rgba(look.accentInk.r, look.accentInk.g, look.accentInk.b, 0.72) : look.muted
-    readonly property color bubbleColor: mine ? look.accent : look.theirs
+    readonly property color bubbleColor: settings.bubbleStyle === "outline" ? "transparent" : (mine ? look.accent : look.theirs)
+    readonly property bool outlined: settings.bubbleStyle === "outline"
+    readonly property color ink: outlined ? look.text : (mine ? look.accentInk : look.text)
+    readonly property color softInk: outlined ? look.muted : (mine ? Qt.rgba(look.accentInk.r, look.accentInk.g, look.accentInk.b, 0.72) : look.muted)
+    readonly property real tailRadius: settings.bubbleStyle === "tail" ? 3 : settings.bubbleStyle === "curved" ? 7 : 5
 
-    Component.onCompleted: if ((kind === "image" || kind === "video") && media.length === 0 && poster.length === 0 && eventId.length && !local) core.fetchMedia(eventId)
+    Component.onCompleted: if ((kind === "image" || kind === "video") && media.length === 0 && poster.length === 0 && eventId.length && !local && settings.autoDownload === "always") core.fetchMedia(eventId)
 
     Column {
         id: col
@@ -82,8 +84,8 @@ Item {
         }
         Label {
             visible: row.showName && !row.mine && row.first
-            leftPadding: 18 + 40; text: row.senderName
-            color: Qt.hsla(((row.sender).split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)) / 360, 0.6, look.dark ? 0.68 : 0.40, 1)
+            leftPadding: 18 + (settings.showAvatars ? 40 : 0); text: row.senderName
+            color: !settings.colorSenderNames ? look.muted : Qt.hsla(((row.sender).split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)) / 360, 0.6, look.dark ? 0.68 : 0.40, 1)
             font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.DemiBold
         }
         Item {
@@ -92,20 +94,20 @@ Item {
             HoverHandler { id: lineHover }
 
             Avatar {   // the other person's picture, level with the start of their run
-                visible: row.showName && !row.mine && row.first
+                visible: settings.showAvatars && row.showName && !row.mine && row.first
                 x: 12; y: 0; size: 32; source: row.senderAvatar; letter: row.senderName.length ? row.senderName[0].toUpperCase() : "?"; seed: row.sender
             }
 
             Rectangle {
                 id: bubble
-                x: row.mine ? row.width - width - 14 : 14 + (row.showName && !row.mine ? 40 : 0)
+                x: row.mine ? row.width - width - 14 : 14 + (row.showName && !row.mine && settings.showAvatars ? 40 : 0)
                 width: Math.max(contentLoader.implicitWidth + (row.bare ? 0 : 26), metaRow.visible && !row.bare ? metaRow.implicitWidth + 26 : 0)
                 height: contentLoader.implicitHeight + (row.bare ? 0 : 14 + (metaRow.visible ? metaRow.implicitHeight + 1 : 0) + (quote.visible ? quote.height + 5 : 0))
                 radius: row.bare ? 14 : 18
-                topLeftRadius: row.bare ? 14 : (!row.mine && !row.first ? 5 : 18); bottomLeftRadius: row.bare ? 14 : (!row.mine && !row.last ? 5 : 18)
-                topRightRadius: row.bare ? 14 : (row.mine && !row.first ? 5 : 18); bottomRightRadius: row.bare ? 14 : (row.mine && !row.last ? 5 : 18)
+                topLeftRadius: row.bare ? 14 : (!row.mine && !row.first ? 5 : 18); bottomLeftRadius: row.bare ? 14 : (!row.mine && !row.last ? 5 : (!row.mine && row.last && settings.bubbleStyle !== "round" && settings.bubbleStyle !== "outline" ? row.tailRadius : 18))
+                topRightRadius: row.bare ? 14 : (row.mine && !row.first ? 5 : 18); bottomRightRadius: row.bare ? 14 : (row.mine && !row.last ? 5 : (row.mine && row.last && settings.bubbleStyle !== "round" && settings.bubbleStyle !== "outline" ? row.tailRadius : 18))
                 color: row.bare ? "transparent" : row.bubbleColor
-                border.width: row.mentioned && !row.bare ? 2 : (row.status === 2 ? 1 : 0); border.color: row.status === 2 ? look.danger : look.accent
+                border.width: row.mentioned && !row.bare ? 2 : (row.status === 2 ? 1 : (row.outlined && !row.bare ? 1.5 : 0)); border.color: row.status === 2 ? look.danger : (row.outlined && !row.mentioned ? (row.mine ? look.accent : look.line) : look.accent)
                 opacity: row.local && row.status !== 2 ? 0.72 : 1
 
                 Rectangle {   // the message this one answers
@@ -131,16 +133,16 @@ Item {
                     visible: row.last && !row.bare && row.kind !== "poll"
                     anchors.right: parent.right; anchors.rightMargin: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 5; spacing: 4
                     Label { visible: row.edited; text: "edited"; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale); font.italic: true }
-                    Label { text: row.time; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale)
+                    Label { visible: settings.showMessageTimes; text: row.time; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale)
                         ToolTip.visible: tipHover.hovered; ToolTip.text: row.fullTime; ToolTip.delay: 500; HoverHandler { id: tipHover } }
-                    Label { visible: row.mine && row.tick > 0; font.pixelSize: Math.round(11 * look.textScale)
+                    Label { visible: row.mine && row.tick > 0 && settings.showReadTicks; font.pixelSize: Math.round(11 * look.textScale)
                         text: row.tick === 1 ? "⏱" : row.tick === 2 ? "!" : row.tick === 5 ? "✓✓" : row.tick === 4 ? "✓✓" : "✓"
                         color: row.tick === 5 ? (row.mine ? "#9be7ff" : look.accent) : (row.tick === 2 ? look.danger : row.softInk) }
                 }
                 TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = bubble.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
                 TapHandler { acceptedButtons: Qt.LeftButton; enabled: row.status === 2; onTapped: core.retry(row.eventId) }
                 TapHandler { acceptedDevices: PointerDevice.TouchScreen; longPressThreshold: 0.45; onLongPressed: { const g = bubble.mapToItem(null, point.position.x, point.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
-                TapHandler { acceptedButtons: Qt.LeftButton; gesturePolicy: TapHandler.ReleaseWithinBounds; onDoubleTapped: row.reactionTapped(row.eventId, "👍") }
+                TapHandler { acceptedButtons: Qt.LeftButton; gesturePolicy: TapHandler.ReleaseWithinBounds; onDoubleTapped: if (settings.doubleTapReact) row.reactionTapped(row.eventId, settings.doubleTapEmoji) }
             }
 
             Row {   // hover tools
@@ -160,7 +162,7 @@ Item {
         Label { visible: row.status === 2; x: row.mine ? row.width - width - 16 : 56; text: "Not sent · click the message to try again"; color: look.danger; font.pixelSize: Math.round(11 * look.textScale) }
         Flow {   // reactions
             visible: row.reactions.length > 0
-            x: row.mine ? Math.max(14, row.width - width - 16) : 14 + (row.showName ? 40 : 0)
+            x: row.mine ? Math.max(14, row.width - width - 16) : 14 + (row.showName && settings.showAvatars ? 40 : 0)
             width: row.maxW; spacing: 4
             Repeater {
                 model: row.reactions
@@ -214,7 +216,7 @@ Item {
                 readonly property real ratio: row.imgWidth > 0 && row.imgHeight > 0 ? Math.min(2.2, Math.max(0.4, row.imgHeight / row.imgWidth)) : 0.75
                 width: Math.min(row.maxW, 340); height: Math.max(90, Math.min(width * ratio, 420))
                 Rectangle { id: ph; anchors.fill: parent; radius: 14; color: row.bubbleColor; opacity: 0.8; visible: pic.status !== Image.Ready
-                    Label { anchors.centerIn: parent; text: row.media.length ? "" : "Loading…"; color: row.softInk; font.pixelSize: 13 } }
+                    Label { anchors.centerIn: parent; text: row.media.length ? "" : (settings.autoDownload === "always" ? "Loading…" : "Tap to load"); color: row.softInk; font.pixelSize: 13 } }
                 Image { id: pic; anchors.fill: parent; visible: false; source: row.media.length ? "file://" + row.media : ""; fillMode: Image.PreserveAspectCrop; asynchronous: true; cache: false; sourceSize.width: 720
                     autoTransform: true }
                 MultiEffect { anchors.fill: parent; source: pic; visible: pic.status === Image.Ready; maskEnabled: true; maskSource: picMask; maskThresholdMin: 0.5; maskSpreadAtMin: 1.0 }
@@ -224,7 +226,7 @@ Item {
                 Row {   // time over the picture when there are no words with it
                     visible: row.caption.length === 0; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 6
                     Label { text: row.time + (row.mine ? (row.tick === 5 ? "  ✓✓" : "  ✓") : ""); color: "white"; font.pixelSize: 11; leftPadding: 7; rightPadding: 7; topPadding: 2; bottomPadding: 2; background: Rectangle { radius: 9; color: "#99000000" } } }
-                TapHandler { acceptedButtons: Qt.LeftButton; onTapped: row.openMedia(row.eventId) }
+                TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { if (row.media.length === 0) core.fetchMedia(row.eventId); row.openMedia(row.eventId) } }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
             Text { visible: row.caption.length > 0; width: Math.min(implicitWidth, frame.width); text: rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent

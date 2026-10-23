@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQml.Models
+import "Shortcuts.js" as SC
 
 ApplicationWindow {
     id: win
@@ -20,16 +22,40 @@ ApplicationWindow {
 
     Component.onCompleted: { if (startupDialog === "info") infoOpen = true }
     Recovery { id: recovery }
+    WhenDialog { id: snoozeDialog; heading: "Snooze until"; onPicked: (ms) => core.snooze(core.currentRoom, ms) }
+    function runShortcut(id) {
+        const info = core.roomInfo(core.currentRoom), has = core.currentRoom.length > 0
+        switch (id) {
+        case "newChat": newChat.open(); break
+        case "search": searchDlg.openFor("", "", ""); break
+        case "inChatSearch": if (has) searchDlg.openFor(core.currentRoom, core.currentName, ""); break
+        case "settings": rootSettings(); break
+        case "prevChat": core.stepChat(-1, false); break
+        case "nextChat": core.stepChat(1, false); break
+        case "nextUnread": core.stepChat(1, true); break
+        case "archive": if (has) core.archive(core.currentRoom, !info.archived); break
+        case "markUnread": if (has) core.markUnread(core.currentRoom, true); break
+        case "mute": if (has) core.setMuted(core.currentRoom, !info.muted); break
+        case "pin": if (has) core.pin(core.currentRoom, !info.pinned); break
+        case "snooze": if (has) snoozeDialog.open(); break
+        case "info": win.infoOpen = !win.infoOpen; break
+        case "quit": Qt.quit(); break
+        }
+    }
+    signal settingsRequested()
+    property var sidebarRef: null
+    function rootSettings() { if (sidebarRef) sidebarRef.openSettings() }
+    Instantiator {
+        model: SC.ALL
+        delegate: Shortcut { sequence: SC.keysFor(modelData.id, settings.shortcuts); enabled: core.signedIn; onActivated: win.runShortcut(modelData.id) }
+    }
     NewChat { id: newChat }
     SearchDialog { id: searchDlg; onChosen: (roomId, eventId) => core.openAt(roomId, eventId) }
     Connections { target: core; function onJumpRequested(id) { win.pendingJump = id } }
     property string pendingJump: ""
     Connections { target: core; function onRoomOpened(id) { win.showingChat = true } }
-    Shortcut { sequence: "Ctrl+N"; onActivated: newChat.open() }
-    Shortcut { sequence: "Ctrl+Shift+F"; onActivated: searchDlg.openFor("", "", "") }
-    Shortcut { sequence: "Ctrl+F"; onActivated: searchDlg.openFor(core.currentRoom, core.currentName, "") }
-    Shortcut { sequence: "Ctrl+Q"; onActivated: Qt.quit() }
-    Shortcut { sequence: "Ctrl+I"; onActivated: win.infoOpen = !win.infoOpen }
+
+
 
     Loader {
         anchors.fill: parent
@@ -42,7 +68,9 @@ ApplicationWindow {
         RowLayout {
             spacing: 0
             RoomList {
-                Layout.preferredWidth: win.wide ? 340 : win.width
+                id: sidebar
+                Component.onCompleted: win.sidebarRef = sidebar
+                Layout.preferredWidth: win.wide ? Math.max(280, Math.min(settings.sidebarWidth, win.width * 0.45)) : win.width
                 Layout.fillHeight: true
                 visible: win.wide || !win.showingChat
                 onOpened: win.showingChat = true
