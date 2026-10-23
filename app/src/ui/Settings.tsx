@@ -13,7 +13,7 @@ import { AppSettings, BubbleBorder, bubbleColorsFor, bubbleLook, SYNC_GROUPS, gr
 import { Tour } from "./Tour";
 import { comboOf } from "../core/combo";
 import { RecoveryKeyDialog, RestoreDialog } from "./KeyDialogs";
-import { addStickers, cancelReminder, retryEncryptionStart, enableEncryptionForAll, exportKeyFile, importKeyFile, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore, loadEveryHistory, loadSavedSettings, saveSettingsToAccount } from "../core/store";
+import { addStickers, cancelReminder, retryEncryptionStart, enableEncryptionForAll, exportKeyFile, importKeyFile, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore, loadEveryHistory, loadSavedSettings, saveSettingsToAccount, resyncFromServer } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
@@ -91,6 +91,7 @@ export const SETTINGS_INDEX: { page: string; title: string; where: string; keywo
   { page: "shortcuts", title: "Keyboard shortcuts", where: "Shortcuts", keywords: "keys hotkeys bindings" },
   { page: "storage", title: "Export / import settings", where: "Backup & reset", keywords: "backup restore" },
   { page: "storage", title: "Reset all settings", where: "Backup & reset", keywords: "defaults" },
+  { page: "advanced", title: "Reload everything from the server", where: "Advanced", keywords: "resync sync reload refresh missing chats cache" },
   { page: "advanced", title: "Developer mode", where: "Advanced", keywords: "event ids source debug" },
   { page: "desktop", title: "Launch at login", where: "Desktop", keywords: "startup autostart tray" },
   { page: "starred", title: "Starred messages", where: "Saved", keywords: "bookmarks" },
@@ -209,9 +210,14 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
     case "desktop": return <Desktop />;
     case "storage": return <Backup />;
     case "advanced": return (
+      <>
+      <Group title="Sync" footer="Use this if a chat is missing, a message never showed up, or this device is out of step with your other devices. Your account and the server are not touched.">
+        <Row title="Reload everything from the server" hint="Forgets what this device saved and downloads your chats again" onClick={() => { if (confirm("Reload everything from the server? Your chats are downloaded again, which can take a minute.")) { void resyncFromServer(); nav("home"); } }} />
+      </Group>
       <Group title="Developer" footer="Adds event IDs and a 'Copy event ID' action to messages.">
         <SwitchRow title="Developer mode" checked={s.developerMode} onChange={(v) => u({ developerMode: v })} />
       </Group>
+      </>
     );
     case "about": return (
       <>

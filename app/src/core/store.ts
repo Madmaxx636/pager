@@ -927,6 +927,18 @@ function applyIdentity(nets: Network[]) {
   // Messages already loaded were attributed before we knew who you are on each network: start over once.
   if (state.session) { since = undefined; set({ chats: {}, synced: false }); syncAbort?.abort(); syncAbort = new AbortController(); void syncLoop(state.session, syncAbort.signal); }
 }
+/** Throws away what this device saved and loads everything from the server again: the fix for a chat list that is missing something or out of step. */
+export async function resyncFromServer() {
+  const s = state.session; if (!s) return;
+  window.clearTimeout(saveTimer);
+  syncAbort?.abort();
+  await dbDel("cache");
+  since = undefined;
+  set({ chats: {}, synced: false });
+  waiting.clear(); memberCache.clear();
+  syncAbort = new AbortController();
+  void syncLoop(s, syncAbort.signal);
+}
 export async function refreshBridges() {
   if (!state.session) return;
   try { const nets = await pager.networks(); applyIdentity(nets); set({ bridges: nets }); void loadPhonebook(nets); warnLost(nets); void warnUpdates(nets); } catch { /* bridge API may be down */ }
