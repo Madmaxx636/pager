@@ -1,0 +1,4 @@
+# Adds Wine and a virtual screen to the build image, to start the Windows program once as a smoke test. Remove with: docker rmi pager-native-winwine
+FROM localhost/pager-native-win
+RUN dnf -y install --setopt=install_weak_deps=False wine-core wine-common xorg-x11-server-Xvfb && dnf clean all
+RUN dnf -y install --setopt=install_weak_deps=False wine-core.i686 && dnf clean all
