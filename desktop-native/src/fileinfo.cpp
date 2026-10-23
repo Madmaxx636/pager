@@ -1,3 +1,5 @@
+#include <QUrl>
+#include <QFileInfo>
 #include <cmath>
 #include "fileinfo.h"
 #include <QClipboard>
@@ -71,3 +73,12 @@ QString FileInfo::soundFile(const QString &id) const { return Sounds::file(id); 
 
 #include "screeneffects.h"
 QVariantList FileInfo::effectTriggers() const { return ScreenEffects::triggers(); }
+
+QString FileInfo::importFile(const QString &from, const QString &dir, const QString &baseName) const {
+    const QString src = from.startsWith(QLatin1String("file://")) ? QUrl(from).toLocalFile() : from;
+    if (!QFileInfo::exists(src)) return {};
+    QDir().mkpath(dir);
+    const QString dest = dir + QLatin1Char('/') + baseName + QLatin1Char('.') + QFileInfo(src).suffix();
+    for (const QString &old : QDir(dir).entryList({baseName + QStringLiteral(".*")}, QDir::Files)) QFile::remove(dir + QLatin1Char('/') + old);
+    return QFile::copy(src, dest) ? dest : QString();
+}

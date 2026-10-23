@@ -250,6 +250,15 @@ private slots:
         QSignalSpy fetched(&e, &Engine::syncFetched); e.fetchSyncedSettings(); QTRY_VERIFY_WITH_TIMEOUT(fetched.count() >= 1, 20000);
         QVERIFY(fetched.first().first().toMap().value("groups").toStringList().contains("bubbles"));
         QVERIFY(e.loadSyncedSettings({"bubbles"}) >= 1); QCOMPARE(st.value("bubbleDepth").toString(), QString("raised"));
+        // encryption: this device, a new recovery key, a key file
+        e.refreshEncryption(); QTRY_VERIFY_WITH_TIMEOUT(e.encryption().contains("device_id"), 20000);
+        QVERIFY(e.encryption().value("fingerprint").toString().size() > 20);
+        QSignalSpy made(&e, &Engine::recoveryKeyCreated); e.createRecoveryKey(); QTRY_VERIFY_WITH_TIMEOUT(made.count() == 1, 60000);
+        QVERIFY(made.first().at(0).toBool()); QVERIFY(made.first().at(1).toString().contains(' '));
+        QTRY_VERIFY_WITH_TIMEOUT(e.encryption().value("backup_on_server").toBool(), 20000);
+        const QString keyFile = dir.path() + "/keys.txt";
+        QSignalSpy out(&e, &Engine::keysExported); e.exportKeys(keyFile, "a good passphrase"); QTRY_VERIFY_WITH_TIMEOUT(out.count() == 1, 60000); QVERIFY(out.first().at(0).toBool());
+        QSignalSpy in(&e, &Engine::keysImported); e.importKeys(keyFile, "wrong one"); QTRY_VERIFY_WITH_TIMEOUT(in.count() == 1, 60000); QVERIFY(!in.first().at(0).toBool());
         // mute for a while, then it ends by itself
         e.muteFor(a, 1000); QVERIFY(e.roomInfo(a).value("muted").toBool()); QVERIFY(e.muteLeftMs(a) > 0);
         QTRY_VERIFY_WITH_TIMEOUT(!e.roomInfo(a).value("muted").toBool(), 8000);

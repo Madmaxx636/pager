@@ -71,6 +71,8 @@ export interface ChatState {
   receipts: Record<string, string>;
   /** When each user's read receipt was sent (ms). */
   receiptTs?: Record<string, number>;
+  /** When each event that is not a message (a reaction, an edit, a status report, a join...) happened, so a read receipt that points at one still counts for the message before it. */
+  eventTs?: Record<string, number>;
   /** Message event id -> who it was delivered to, as the bridge reports it (the second tick in the other app). */
   deliveredTo?: Record<string, string[]>;
   /** The bridge sends delivery reports in this chat, so its own receipt only means "sent". */
@@ -201,6 +203,16 @@ export function displayName(c: ChatState, me: string): string {
 export function lastTs(c: ChatState) { return c.messages.length ? c.messages[c.messages.length - 1].ts : 0; }
 export const lastPreview = (c: ChatState) => (c.messages.length ? previewOf(c.messages[c.messages.length - 1]) : "");
 
+/** Where a read or delivery receipt points in the message list. A receipt can name an event that is not a message (the other person's app reacted, edited or joined last); it then counts up to the newest message before that event. */
+export function receiptIndex(messages: Msg[], eventTs: Record<string, number> | undefined, eventId: string): number {
+  const i = messages.findIndex((m) => m.id === eventId);
+  if (i >= 0) return i;
+  const t = eventTs?.[eventId];
+  if (t === undefined) return -1;
+  for (let k = messages.length - 1; k >= 0; k--) if (messages[k].ts <= t) return k;
+  return -1;
+}
+
 /** Who has read a message, and when: anyone whose read receipt is at or after it. The time is when they read up to that point. */
 export function readersOf(chat: ChatState, msgId: string, sender: string): { user: string; ts?: number }[] {
   const idx = chat.messages.findIndex((m) => m.id === msgId);
@@ -208,7 +220,7 @@ export function readersOf(chat: ChatState, msgId: string, sender: string): { use
   const out: { user: string; ts?: number }[] = [];
   for (const [user, ev] of Object.entries(chat.receipts)) {
     if (user === sender || isBridgeBot(user)) continue;
-    const at = chat.messages.findIndex((m) => m.id === ev);
+    const at = receiptIndex(chat.messages, chat.eventTs, ev);
     if (at >= idx) out.push({ user, ts: chat.receiptTs?.[user] });
   }
   return out;

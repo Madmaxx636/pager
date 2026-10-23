@@ -130,8 +130,10 @@ object SyncReducer {
         val ended = start.pollEnded.toMutableSet()
         val deliveredTo = start.deliveredTo.toMutableMap()
         var statusSeen = start.statusSeen
+        val eventTs = start.eventTs.toMutableMap()
 
         for (e in events) {
+            run { val eid = e["event_id"].str(); val ets = e["origin_server_ts"].long(); if (eid != null && ets != null) eventTs[eid] = ets }
             if (e["state_key"] != null) {
                 if (applyStates) chat = applyState(chat, e)
                 continue
@@ -190,7 +192,7 @@ object SyncReducer {
                     // The bridge's own report on a message you sent: it reached the other network, and (when it knows) who it was delivered to.
                     val target = content["m.relates_to"].obj()["event_id"].str() ?: continue
                     statusSeen = true
-                    val who = content["delivered_to"].arr().mapNotNull { it.str() }
+                    val who = (content["delivered_to_users"] ?: content["delivered_to"]).arr().mapNotNull { it.str() }
                     if (who.isNotEmpty()) deliveredTo[target] = who
                 }
                 "m.room.redaction" -> {
@@ -204,8 +206,10 @@ object SyncReducer {
             }
         }
         msgs.sortBy { it.ts }
+        if (eventTs.size > 600) { val keep = eventTs.entries.sortedByDescending { it.value }.take(500).map { it.key }.toHashSet(); eventTs.keys.retainAll(keep) }
         return chat.copy(
             messages = msgs,
+            eventTs = eventTs,
             reactions = reactions.mapValues { (_, v) -> v.mapValues { it.value.toList() } }.filterValues { it.isNotEmpty() },
             reactionRefs = refs,
             pollVotes = votes.mapValues { (_, v) -> v.toMap() },

@@ -86,6 +86,8 @@ data class ChatState(
     val receipts: Map<String, String> = emptyMap(),
     /** When each user's read receipt was sent (ms). */
     val receiptTs: Map<String, Long> = emptyMap(),
+    /** When each event that is not a message (a reaction, an edit, a status report, a join...) happened: a receipt can point at one, and then counts for the message before it. */
+    val eventTs: Map<String, Long> = emptyMap(),
     /** Message event id -> who it was delivered to, as the bridge reports it (the second tick in the other app). */
     val deliveredTo: Map<String, List<String>> = emptyMap(),
     /** The bridge sends delivery reports in this chat, so its own receipt only means "sent". */
@@ -110,11 +112,18 @@ data class ChatState(
     val lastTs get() = messages.lastOrNull()?.ts ?: 0L
     /** Bridged rooms always hold the bridge bot and your own puppet, so raw member counts overstate. */
     /** Who has read a message, and when: anyone whose read receipt is at or after it. The time is when they read up to that point. */
+    /** Where a receipt points in [messages]: the message itself, or the newest message before the event it names (-1: unknown). */
+    fun receiptIndex(eventId: String): Int {
+        val i = messages.indexOfFirst { it.id == eventId }
+        if (i >= 0) return i
+        val t = eventTs[eventId] ?: return -1
+        return messages.indexOfLast { it.ts <= t }
+    }
     fun readersOf(msgId: String, sender: String): List<Pair<String, Long?>> {
         // (bridge bots only mean "delivered")
         val idx = messages.indexOfFirst { it.id == msgId }
         if (idx < 0) return emptyList()
-        return receipts.filter { (user, ev) -> user != sender && !isBridgeBot(user) && messages.indexOfFirst { it.id == ev } >= idx }.map { (user, _) -> user to receiptTs[user] }
+        return receipts.filter { (user, ev) -> user != sender && !isBridgeBot(user) && receiptIndex(ev) >= idx }.map { (user, _) -> user to receiptTs[user] }
     }
     val isGroup get() = roomType?.takeIf { it.isNotEmpty() }?.let { it != "dm" } ?: (memberCount > 2)
     val peopleCount get() = if (!roomType.isNullOrEmpty()) (memberCount - 2).coerceAtLeast(2) else memberCount

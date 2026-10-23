@@ -5,12 +5,18 @@ import "../qml"
 
 Item {
     id: root
-    width: 380; height: 700
+    width: 380; height: 420
     RoomList { id: pane; anchors.fill: parent }
 
     TestCase {
         name: "Pins"; when: windowShown
         function names() { return core.pins.map(p => p.name) }
+        function findList(item) { for (let i = 0; i < item.children.length; i++) { const c = item.children[i]; if (c.hasOwnProperty("headerItem") && c.hasOwnProperty("atYBeginning")) return c; const r = findList(c); if (r) return r } return null }
+        function test_the_pinned_chats_are_in_view_when_the_app_opens() {
+            wait(300); const lv = findList(pane); verify(lv !== null)
+            console.log("contentY", lv.contentY, "originY", lv.originY, "headerH", lv.headerItem.height, "contentH", lv.contentHeight, "h", lv.height)
+            verify(lv.contentY - lv.originY < 4, "the list starts at its top, pinned chats showing")
+        }
         function test_pins_are_in_a_grid_of_three() {
             compare(names().length, 4)
         }

@@ -70,7 +70,7 @@ object Links {
             messages = messages, unread = all.sumOf { it.unread }, markedUnread = all.any { it.markedUnread },
             reactions = all.fold(emptyMap()) { a, c -> a + c.reactions }, reactionRefs = all.fold(emptyMap()) { a, c -> a + c.reactionRefs },
             pollVotes = all.fold(emptyMap()) { a, c -> a + c.pollVotes }, pollEnded = all.flatMap { it.pollEnded }.toSet(),
-            receipts = all.fold(emptyMap()) { a, c -> a + c.receipts }, members = all.fold(emptyMap()) { a, c -> a + c.members },
+            receipts = all.fold(emptyMap()) { a, c -> a + c.receipts }, eventTs = all.fold(emptyMap()) { a, c -> a + c.eventTs }, members = all.fold(emptyMap()) { a, c -> a + c.members },
             typing = all.flatMap { it.typing }.toSet(), encrypted = all.all { it.encrypted }, reachedStart = all.all { it.reachedStart },
         )
     }

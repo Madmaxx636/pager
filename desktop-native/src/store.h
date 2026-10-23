@@ -55,6 +55,9 @@ struct Room {
     QHash<QString, QHash<QString, QStringList>> votes;   // poll id -> who -> chosen answer ids
     QHash<QString, qint64> voteTs;                        // poll id + who -> when, so an old vote never beats a newer one
     QSet<QString> ended;                                  // polls that were closed
+    QHash<QString, qint64> eventTs;                       // when each event happened (any kind): a receipt can point at one that is not a message
+    /// Where a receipt points in the message list: the message itself, or the newest message before the event it names (-1: unknown).
+    int receiptIndex(const QString &eventId) const;
     QVector<QJsonObject> stickerPacks;                    // this chat's sticker packs: {key, name, stickers:[{shortcode, url, body, w, h, mime}]}
     qint64 lastTs() const { return msgs.isEmpty() ? 0 : msgs.last().ts; }
     QString preview() const;
@@ -122,6 +125,8 @@ public:
     LinkAgg linkAgg(const Room &r) const;
     /// The chat to show for [id]; with [merged] and a group, one chat made of every member's messages (valid until the next call that rebuilds).
     const Room *view(const QString &id, bool merged, bool rebuild = true) const;
+    /// How far others have read ([readPos]) and how far the bridge says messages reached the other network ([deliveredPos]), as indexes into the oldest-first list (-1: nothing).
+    void receiptPositions(const Room &r, int &readPos, int &deliveredPos) const;
     bool mine(const Msg &m) const { return !m_me.isEmpty() && m.sender == m_me; }
     /// "h:mm AP" or "HH:mm" depending on [format] (system, 12 or 24)
     /// What an unreadable message says: first it waits for its key; after ten minutes it was most likely sent before this device existed.

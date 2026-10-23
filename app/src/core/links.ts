@@ -86,7 +86,7 @@ export function buildMerged(chats: Record<string, ChatState>, links: Links, room
     ...prim, messages, unread: all.reduce((n, c) => n + c.unread, 0), markedUnread: all.some((c) => c.markedUnread),
     reactions: Object.assign({}, ...all.map((c) => c.reactions)), reactionRefs: Object.assign({}, ...all.map((c) => c.reactionRefs)),
     pollVotes: Object.assign({}, ...all.map((c) => c.pollVotes)), pollEnded: all.flatMap((c) => c.pollEnded),
-    receipts: Object.assign({}, ...all.map((c) => c.receipts)), members: Object.assign({}, ...all.map((c) => c.members)),
+    receipts: Object.assign({}, ...all.map((c) => c.receipts)), eventTs: Object.assign({}, ...all.map((c) => c.eventTs ?? {})), members: Object.assign({}, ...all.map((c) => c.members)),
     typing: [...new Set(all.flatMap((c) => c.typing))], encrypted: all.every((c) => c.encrypted), reachedStart: all.every((c) => c.reachedStart),
   };
 }

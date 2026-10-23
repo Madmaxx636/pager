@@ -126,9 +126,18 @@ private slots:
         s.applyRooms({o});
         QVERIFY(s.mine(s.room("!r")->msgs[0]));
     }
+    void aReceiptThatPointsAtAReactionStillCountsForTheMessageBefore() {
+        Store s; s.setMe("@me:x");
+        const QJsonObject react{{"event_id", "$r"}, {"type", "m.reaction"}, {"sender", "@maya:x"}, {"origin_server_ts", 3000.0}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"rel_type", "m.annotation"}, {"event_id", "$1"}, {"key", "x"}}}}}};
+        QJsonObject r = room("!r", "R", {msg("$1", "@me:x", "a", 1000), msg("$2", "@me:x", "b", 2000), react, msg("$4", "@me:x", "c", 4000)});
+        r.insert("ephemeral", QJsonArray{QJsonObject{{"type", "m.receipt"}, {"content", QJsonObject{{"$r", QJsonObject{{"m.read", QJsonObject{{"@maya:x", QJsonObject{{"ts", 5000.0}}}}}}}}}}});
+        s.applyRooms({r});
+        int read, delivered; s.receiptPositions(*s.room("!r"), read, delivered);
+        QCOMPARE(read, 1);                                     // up to the second message, not the third
+    }
     void deliveryReportsAndCaptionsAndStickers() {
         Store s; s.setMe("@me:x");
-        QJsonObject status{{"event_id", "$st"}, {"type", "com.beeper.message_send_status"}, {"sender", "@bot:x"}, {"origin_server_ts", 2000.0}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"event_id", "$1"}}}, {"delivered_to", QJsonArray{"@maya:x"}}}}};
+        QJsonObject status{{"event_id", "$st"}, {"type", "com.beeper.message_send_status"}, {"sender", "@bot:x"}, {"origin_server_ts", 2000.0}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"event_id", "$1"}}}, {"delivered_to_users", QJsonArray{"@maya:x"}}}}};
         QJsonObject img = msg("$i", "@maya:x", "look at this", 3000, {{"msgtype", "m.image"}, {"filename", "cat.png"}, {"url", "mxc://x/c"}, {"info", QJsonObject{{"w", 10}, {"h", 20}, {"mimetype", "image/png"}, {"size", 99}}}});
         QJsonObject stk{{"event_id", "$s"}, {"type", "m.sticker"}, {"sender", "@maya:x"}, {"origin_server_ts", 4000.0}, {"content", QJsonObject{{"body", "wave"}, {"url", "mxc://x/s"}, {"info", QJsonObject{{"w", 100}, {"h", 100}}}}}};
         s.applyRooms({room("!r", "R", {msg("$1", "@me:x", "hello", 1000), status, img, stk})});

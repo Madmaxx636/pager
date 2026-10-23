@@ -122,8 +122,10 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
   const ended = new Set(start.pollEnded);
   const deliveredTo: Record<string, string[]> = { ...(start.deliveredTo ?? {}) };
   let statusSeen = !!start.statusSeen;
+  const eventTs: Record<string, number> = { ...(start.eventTs ?? {}) };
 
   for (const e of events) {
+    { const eid = str(e.event_id), ets = num(e.origin_server_ts); if (eid && ets) eventTs[eid] = ets; }
     if (e.state_key != null) { if (applyStates) chat = applyState(chat, e); continue; }
     const content = obj(e.content);
     switch (e.type) {
@@ -185,7 +187,7 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
         const target = str(obj(content["m.relates_to"]).event_id);
         if (!target) break;
         statusSeen = true;
-        const who = arr(content.delivered_to).filter((u): u is string => typeof u === "string");
+        const who = arr(content.delivered_to_users ?? content.delivered_to).filter((u): u is string => typeof u === "string");
         if (who.length) deliveredTo[target] = who;
         break;
       }
@@ -211,7 +213,10 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
   msgs.sort((a, b) => a.ts - b.ts);
   const cleaned: Record<string, Record<string, string[]>> = {};
   for (const [t, byKey] of Object.entries(reactions)) if (Object.keys(byKey).length) cleaned[t] = byKey;
-  return { ...chat, messages: msgs, reactions: cleaned, reactionRefs: refs, pollVotes: votes, pollEnded: [...ended], deliveredTo, statusSeen };
+  // keep the times of the newest few hundred events (enough for receipts), not of everything ever seen
+  const keys = Object.keys(eventTs);
+  if (keys.length > 600) { keys.sort((a, b) => eventTs[b] - eventTs[a]); for (const k of keys.slice(500)) delete eventTs[k]; }
+  return { ...chat, messages: msgs, reactions: cleaned, reactionRefs: refs, pollVotes: votes, pollEnded: [...ended], deliveredTo, statusSeen, eventTs };
 }
 
 function applyEdit(msgs: Msg[], e: J): Msg[] {

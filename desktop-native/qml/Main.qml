@@ -59,7 +59,7 @@ ApplicationWindow {
         onLoaded: item.play(pendingFile, pendingVolume) }
     Connections { target: core
         function onPlaySound(id, volume) {
-            const f = files.soundFile(id); if (!f.length || volume <= 0) return
+            const f = id === "custom" ? (settings.customSoundPath.length ? settings.customSoundPath : files.soundFile("ding")) : files.soundFile(id); if (!f.length || volume <= 0) return
             if (soundLoader.active && soundLoader.item) soundLoader.item.play(f, volume)
             else { soundLoader.pendingFile = f; soundLoader.pendingVolume = volume; soundLoader.active = true } } }
     CommandBar { id: palette; onNewChat: newChat.open(); onSearchAll: searchDlg.openFor("", "", ""); onOpenSettingsPage: (id) => { if (sidebarRef) sidebarRef.openSettingsPage(id) }; onSnoozeCurrent: snoozeDialog.open() }
