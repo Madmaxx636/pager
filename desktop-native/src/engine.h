@@ -1,5 +1,6 @@
 #pragma once
 #include <QHash>
+#include <QJSValue>
 #include <QSet>
 #include <QObject>
 #include <QPointer>
@@ -59,6 +60,10 @@ public:
     /// Picks (or un-picks, in polls that allow several) an answer.
     Q_INVOKABLE void vote(const QString &pollId, const QString &answerId);
     Q_INVOKABLE void endPoll(const QString &pollId);
+    /// Calls the Pager server (/api/...). [callback](status, body) runs when it answers; status 0 means it could not be reached. [body] is a JS object, or null.
+    Q_INVOKABLE void api(const QString &method, const QString &path, const QVariant &body, const QJSValue &callback);
+    /// A QR code for [text]: {size, rows:["0101…"]}.
+    Q_INVOKABLE QVariantMap qr(const QString &text) const;
     /// Text of one of your messages in the open chat (to edit it).
     Q_INVOKABLE QString bodyOf(const QString &eventId) const;
     Q_INVOKABLE void loadOlder();
@@ -91,6 +96,8 @@ private:
     bool m_signedIn = false, m_starting = true, m_working = false;
     bool m_firstRooms = true;
     QSet<QString> m_fetching;
+    QHash<QString, QJSValue> m_calls;
+    int m_callCounter = 0;
     QHash<QString, QString> m_seen;      // room -> id of the newest message we have already looked at
     bool m_active = true, m_recovering = false, m_recoveryDone = false;
     QString m_user, m_error, m_problem, m_current, m_recoveryMessage, m_lastRead;

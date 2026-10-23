@@ -233,3 +233,32 @@ fn reactions_files_and_pictures_work_in_an_encrypted_chat() {
     pager_stop(engine);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_engine_can_call_the_server_api_and_draw_qr_codes() {
+    let qr = unsafe { CStr::from_ptr(pager_qr(c"https://example.com/pair?code=123".as_ptr())) }.to_string_lossy().into_owned();
+    let q: Value = serde_json::from_str(&qr).unwrap();
+    let n = q["size"].as_u64().unwrap() as usize;
+    assert!(n >= 21 && q["rows"].as_array().unwrap().iter().all(|r| r.as_str().unwrap().len() == n), "a square QR code");
+    let (Ok(server), Some((alice, apw))) = (std::env::var("PAGER_TEST_SERVER"), creds("PAGER_TEST_ALICE")) else { eprintln!("no test server given: skipping the api part"); return };
+    let dir = std::env::temp_dir().join(format!("pager-http-{}", std::process::id())); let _ = std::fs::remove_dir_all(&dir);
+    let (tx, rx) = channel::<(String, Value)>(); let tx = Box::leak(Box::new(tx));
+    let dirc = CString::new(dir.to_str().unwrap()).unwrap();
+    let engine = pager_start(dirc.as_ptr(), on_event, tx as *mut _ as *mut c_void);
+    assert!(wait_for(&rx, 20, |k, v| k == "state" && v["signedIn"] == false).is_some());
+    pager_http(engine, c"early".as_ptr(), c"GET".as_ptr(), c"/_matrix/client/v3/account/whoami".as_ptr(), c"".as_ptr());
+    let early = wait_for(&rx, 20, |k, v| k == "http" && v["key"] == "early").unwrap();
+    assert_eq!(early["status"], 0, "not signed in yet: {early}");
+    let (hs, u, p) = (CString::new(server).unwrap(), CString::new(alice.clone()).unwrap(), CString::new(apw).unwrap());
+    pager_login(engine, hs.as_ptr(), u.as_ptr(), p.as_ptr());
+    assert!(wait_for(&rx, 60, |k, v| k == "state" && v["signedIn"] == true).is_some());
+    pager_http(engine, c"k1".as_ptr(), c"GET".as_ptr(), c"/_matrix/client/v3/account/whoami".as_ptr(), c"".as_ptr());
+    let r = wait_for(&rx, 20, |k, v| k == "http" && v["key"] == "k1").unwrap();
+    assert_eq!(r["status"], 200, "{r}");
+    assert!(r["body"]["user_id"].as_str().unwrap().starts_with(&format!("@{alice}:")));
+    pager_http(engine, c"k2".as_ptr(), c"GET".as_ptr(), c"/api/definitely-not-there".as_ptr(), c"".as_ptr());
+    let r = wait_for(&rx, 20, |k, v| k == "http" && v["key"] == "k2").unwrap();
+    assert_eq!(r["status"], 404, "{r}");
+    pager_stop(engine);
+    let _ = std::fs::remove_dir_all(&dir);
+}

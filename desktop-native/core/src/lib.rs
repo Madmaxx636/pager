@@ -374,6 +374,54 @@ pub extern "C" fn pager_stop(h: *mut Arc<Engine>) {
     e.rt.block_on(async move { drop(client); tokio::time::sleep(Duration::from_millis(50)).await; });
 }
 
+/// Talks to the Pager server (sign-in to chat apps, admin, updates) with this account's access token. [path] starts with "/api/...".
+/// [body_json] may be empty. The answer is "http" {key, status, body} where body is the JSON the server sent (or its text).
+#[no_mangle]
+pub extern "C" fn pager_http(h: *mut Arc<Engine>, key: *const c_char, method: *const c_char, path: *const c_char, body_json: *const c_char) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (key, method, path, body) = (s(key), s(method), s(path), s(body_json));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let fail = |why: String| e2.tell.say("http", &json!({ "key": key, "status": 0, "body": { "error": why } }));
+        let Some(client) = e2.client() else { return fail("Not signed in".into()) };
+        let Some(token) = client.access_token() else { return fail("Not signed in".into()) };
+        let url = format!("{}/{}", client.homeserver().as_str().trim_end_matches('/'), path.trim_start_matches('/'));
+        let m = match method.to_uppercase().as_str() { "GET" => matrix_sdk::reqwest::Method::GET, "PUT" => matrix_sdk::reqwest::Method::PUT, "DELETE" => matrix_sdk::reqwest::Method::DELETE, _ => matrix_sdk::reqwest::Method::POST };
+        let mut req = client.http_client().request(m.clone(), url).bearer_auth(token).timeout(Duration::from_secs(120));
+        if m != matrix_sdk::reqwest::Method::GET && m != matrix_sdk::reqwest::Method::DELETE {
+            req = req.header("content-type", "application/json").body(if body.is_empty() { "{}".to_string() } else { body });
+        }
+        match req.send().await {
+            Ok(r) => {
+                let status = r.status().as_u16();
+                let text = r.text().await.unwrap_or_default();
+                let parsed: Value = serde_json::from_str(&text).unwrap_or_else(|_| json!({ "text": text }));
+                e2.tell.say("http", &json!({ "key": key, "status": status, "body": parsed }));
+            }
+            Err(err) => fail(err.to_string()),
+        }
+    });
+}
+
+/// Draws [text] as a QR code: {"size": N, "rows": ["0110…", …]} (1 = dark). Free the answer with pager_free_string.
+#[no_mangle]
+pub extern "C" fn pager_qr(text: *const c_char) -> *mut c_char {
+    let code = qrcode::QrCode::new(s(text).as_bytes());
+    let out = match code {
+        Ok(c) => {
+            let w = c.width();
+            let colors = c.to_colors();
+            let rows: Vec<String> = (0..w).map(|y| (0..w).map(|x| if colors[y * w + x] == qrcode::Color::Dark { '1' } else { '0' }).collect()).collect();
+            json!({ "size": w, "rows": rows })
+        }
+        Err(_) => json!({ "size": 0, "rows": [] }),
+    };
+    CString::new(out.to_string()).unwrap().into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn pager_free_string(p: *mut c_char) { if !p.is_null() { drop(unsafe { CString::from_raw(p) }); } }
+
 /// The engine's version, for the About page.
 #[no_mangle]
 pub extern "C" fn pager_core_version() -> *const c_char { concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char }
