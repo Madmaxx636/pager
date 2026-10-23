@@ -203,6 +203,10 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     if (el && typingCount && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTo({ top: el.scrollHeight });
   }, [typingCount]);
 
+  // (All hooks stay above the early return below: a chat that disappears mid-update must not change how many hooks run.)
+  // Pictures, videos, files and GIFs wait in the message box until you press send, so you can add more and write something with them.
+  const [staged, setStaged] = useState<Staged[]>([]);
+  useEffect(() => { setStaged((cur) => { cur.forEach((x) => x.preview && URL.revokeObjectURL(x.preview)); return []; }); }, [roomId]);
   // A page that never arrives (removed, or you left it) must say so instead of waiting forever.
   const [gaveUp, setGaveUp] = useState(false);
   useEffect(() => { if (chat) { setGaveUp(false); return; } const t = window.setTimeout(() => setGaveUp(true), 12_000); return () => window.clearTimeout(t); }, [chat, roomId]);
@@ -215,9 +219,6 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const name = displayName(chat, user);
   const meta = networkMeta(chat.network);
   const typingNames = chat.typing.map((u) => nameOf(chat, u));
-  // Pictures, videos, files and GIFs wait in the message box until you press send, so you can add more and write something with them.
-  const [staged, setStaged] = useState<Staged[]>([]);
-  useEffect(() => { setStaged((cur) => { cur.forEach((x) => x.preview && URL.revokeObjectURL(x.preview)); return []; }); }, [roomId]);
   const attachFiles = (files: FileList | Array<File | Blob>, viewOnce = false, gif?: Gif) => setStaged((cur) => [...cur, ...Array.from(files).map((f) => stageOf(f, viewOnce, gif))]);
   const unstage = (id: string) => setStaged((cur) => { cur.filter((x) => x.id === id).forEach((x) => x.preview && URL.revokeObjectURL(x.preview)); return cur.filter((x) => x.id !== id); });
   const clearStaged = () => setStaged([]);
