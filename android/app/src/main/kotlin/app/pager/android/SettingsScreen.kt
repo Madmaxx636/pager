@@ -781,7 +781,7 @@ private fun AboutSettings(navigate: (String) -> Unit) {
             val ctx = androidx.compose.ui.platform.LocalContext.current; val updScope = rememberCoroutineScope()
             val updMsg by Updater.message.collectAsState(); val updStage by Updater.stage.collectAsState()
             Text("Version ${Updater.currentName(ctx)}", Modifier.padding(16.dp)); GroupDivider()
-            NavRow("Check for updates", updMsg ?: when (updStage) { Updater.Stage.CHECKING -> "Checking…"; Updater.Stage.DOWNLOADING -> "Downloading…"; Updater.Stage.INSTALLING -> "Installing…"; else -> "Updates come from your own server" }, Icons.Rounded.Refresh) {
+            NavRow("Check for updates", updMsg ?: when (updStage) { Updater.Stage.CHECKING -> "Checking…"; Updater.Stage.DOWNLOADING -> downloadingText(Updater.progress.collectAsState().value); Updater.Stage.INSTALLING -> "Installing…"; else -> "Updates come from your own server" }, Icons.Rounded.Refresh) {
                 val server = session?.baseUrl; if (server != null) updScope.launch { Updater.check(ctx, server, force = true) }
             }; GroupDivider()
             Text("An open-source, self-hosted unified messenger.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant); GroupDivider()
@@ -1097,7 +1097,7 @@ fun UpdateGate() {
     AlertDialog(
         onDismissRequest = { if (stage == Updater.Stage.IDLE) Updater.later() },
         title = { Text("Pager ${i.version} is ready") },
-        text = { Text(if (stage == Updater.Stage.DOWNLOADING) "Downloading…" else if (stage == Updater.Stage.INSTALLING) "Installing…" else i.notes.ifBlank { "A new version is available from your server." }) },
+        text = { Text(if (stage == Updater.Stage.DOWNLOADING) downloadingText(Updater.progress.collectAsState().value) else if (stage == Updater.Stage.INSTALLING) "Installing…" else i.notes.ifBlank { "A new version is available from your server." }) },
         confirmButton = { TextButton(enabled = stage == Updater.Stage.IDLE, onClick = { scope.launch { Updater.install(ctx, i) } }) { Text("Update now") } },
         dismissButton = { TextButton(enabled = stage == Updater.Stage.IDLE, onClick = { Updater.later() }) { Text("Later") } },
     )
@@ -1427,3 +1427,5 @@ private fun AppIconSettings() {
         }
     }
 }
+
+private fun downloadingText(percent: Int) = if (percent in 0..100) "Downloading… $percent%" else "Downloading…"

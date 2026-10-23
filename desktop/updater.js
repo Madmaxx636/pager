@@ -20,15 +20,15 @@ function verify(manifest, signature, publicKeyPem) {
   try { return crypto.verify(null, manifest, publicKeyPem, signature); } catch { return false; }
 }
 
-function get(url, { toFile, maxBytes = 300 * 1024 * 1024 } = {}) {
+function get(url, { toFile, maxBytes = 300 * 1024 * 1024, onProgress } = {}) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith("https:") ? https : http;
-    const req = lib.get(url, { timeout: 20000 }, (res) => {
+    const req = lib.get(url, { timeout: 30000 }, (res) => {
       if (res.statusCode === 404) { res.resume(); return resolve(null); }
       if (res.statusCode !== 200) { res.resume(); return reject(new Error(`server said ${res.statusCode}`)); }
-      const hash = crypto.createHash("sha256"); let size = 0;
+      const hash = crypto.createHash("sha256"); let size = 0; const total = Number(res.headers["content-length"]) || 0;
       const out = toFile ? fs.createWriteStream(toFile) : null; const chunks = [];
-      res.on("data", (c) => { size += c.length; if (size > maxBytes) { req.destroy(new Error("file too large")); return; } hash.update(c); out ? out.write(c) : chunks.push(c); });
+      res.on("data", (c) => { size += c.length; onProgress?.(size, total); if (size > maxBytes) { req.destroy(new Error("file too large")); return; } hash.update(c); out ? out.write(c) : chunks.push(c); });
       res.on("end", () => { const done = () => resolve({ sha256: hash.digest("hex"), body: out ? null : Buffer.concat(chunks) }); out ? out.end(done) : done(); });
       res.on("error", reject);
     });
@@ -43,7 +43,7 @@ async function checkForUpdates({ server, win, quiet }) {
   if (busy || !server) return;
   const win32 = process.platform === "win32";
   if (!(win32 || process.platform === "linux") || process.env.APPIMAGE || !app.isPackaged) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: "This copy of Pager doesn't update itself. Install the .deb from your server to get automatic updates." }); return; }
-  busy = true;
+  busy = true; let accepted = false;
   try {
     const base = server.replace(/\/+$/, "") + "/updates/";
     const man = await get(base + "latest.json", { maxBytes: 1024 * 1024 });
@@ -55,14 +55,22 @@ async function checkForUpdates({ server, win, quiet }) {
     if (!newer(d.version, app.getVersion())) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: `You're up to date (${app.getVersion()}).` }); return; }
     const asked = await dialog.showMessageBox(win ?? undefined, { type: "info", message: `Pager ${d.version} is available`, detail: (d.notes || "") + (win32 ? "\n\nPager will close, update and reopen." : "\n\nYour computer will ask for your password to install it."), buttons: ["Update now", "Later"], defaultId: 0, cancelId: 1 });
     if (asked.response !== 0) return;
+    accepted = true; // from here on a failure is shown even when the check was automatic
     const dir = path.join(app.getPath("userData"), "updates"); fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, d.file);
-    const got = await get(base + d.file, { toFile: file });
+    // Show that something is happening: a bar on the taskbar icon and a note inside the window (a 100 MB download looks like a hang without it).
+    const tell = (state, percent) => { try { if (win && !win.isDestroyed()) { win.setProgressBar(state === "downloading" && percent >= 0 ? percent / 100 : -1); win.webContents.send("update-progress", { version: d.version, state, percent }); } } catch { /* the window may be gone */ } };
+    let got = null, last = 0;
+    for (let attempt = 1; attempt <= 3 && !got; attempt++) {
+      try { tell("downloading", 0); got = await get(base + d.file, { toFile: file, onProgress: (n, total) => { const pc = total ? Math.floor((n / total) * 100) : -1; if (pc !== last) { last = pc; tell("downloading", pc); } } }); }
+      catch (e) { tell("failed", 0); if (attempt === 3) throw new Error(`the download kept stopping (${e.message || e}). Check your connection and try again`); await new Promise((r) => setTimeout(r, 2000 * attempt)); }
+    }
+    tell("installing", 100);
     if (!got || got.sha256 !== String(d.sha256).toLowerCase()) { fs.rmSync(file, { force: true }); throw new Error("the download doesn't match its checksum, so it was not installed"); }
     if (win32) { await installWindows(file, win); return; }
     await install(file, win);
     app.relaunch(); app.exit(0);
-  } catch (e) { if (!quiet) dialog.showErrorBox("Update failed", e.message || String(e)); else console.warn("update check failed:", e.message); }
+  } catch (e) { try { if (win && !win.isDestroyed()) { win.setProgressBar(-1); win.webContents.send("update-progress", { state: "failed", percent: 0 }); } } catch {} if (!quiet || accepted) dialog.showErrorBox("Update failed", e.message || String(e)); else console.warn("update check failed:", e.message); }
   finally { busy = false; }
 }
 
