@@ -17,3 +17,6 @@ desktop/build
 server/updates/*
 !server/updates/.gitkeep
 release-out/
+server/data-moved-old/
+*.log
+.claude/

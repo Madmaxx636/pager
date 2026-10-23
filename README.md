@@ -13,8 +13,8 @@ On a Linux machine with Docker (or Podman) and about 4 GB of memory free:
 curl -fsSL https://raw.githubusercontent.com/Madmaxx636/pager/master/install.sh | bash
 ```
 It asks how people will reach your server (home network, your own domain, or a free DuckDNS name), creates your administrator
-account, and starts everything: WhatsApp, Signal, Google Messages, Messenger, Slack, X, Bluesky, LinkedIn and GroupMe, with end-to-end
-encryption switched on. The first time you sign in, the mascot walks you through it. After that, `pager status | logs | update | backup | doctor`.
+account, and starts everything: WhatsApp, Signal, Google Messages, Messenger, Slack, X, Bluesky, LinkedIn, Google Voice and GroupMe, with
+end-to-end encryption switched on. Instagram, Discord, IRC and (experimental) Microsoft Teams can be added; see `server/scripts/setup.sh`. The first time you sign in, the mascot walks you through it. After that, `pager status | logs | update | backup | doctor`.
 Telegram needs your own key from my.telegram.org; see below.
 
 ## What's here
@@ -35,9 +35,22 @@ Both clients share the same sync engine design (the web one is a port of the And
   replies; bridge-health banner when a login needs attention; Ctrl/Cmd+K command bar with searchable settings (web/desktop).
 - **Conversation:** replies, edits, delete, **reactions with a full emoji picker and customizable quick reactions**, who-reacted, forward, copy,
   star, @mentions, read ticks, typing indicators, "new messages" divider, date separators, infinite history, link previews,
-  photos/video/files, **voice messages**, location, **polls**, **GIF search** (your own Giphy/Tenor key), **stickers** (your pack, room packs),
+  photos/video/files (videos play in the chat, GIF-style clips loop by themselves), **voice messages**, location, **polls**, **GIF search** (your own GIPHY or KLIPY key; Tenor shut its API down), several GIFs per message, **stickers** (your pack, room packs),
   **contact cards**, formatted text (markdown out, HTML in), large emoji, search with photo/video/link/file filters, scheduled send
   (Synapse delayed events). The + menu offers Photos, Camera, GIF, Stickers, Emoji, File, Poll, Contact and Location.
+- **App looks:** besides your own colours, three whole looks (colours, bubbles, type, header, message field and motion): **iPhone Messages**,
+  **Hangouts (classic)** and **Google Messages**. Drawn fresh in their style, with no artwork from the originals. Android gets the colours, bubbles,
+  type and motion; the full layout is on web and desktop. Desktop also has operating-system styles (Windows, Mac, KDE, GNOME).
+- **Reactions:** a searchable emoji picker (names and keywords for every emoji) with big, clear reactions.
+- **E-ink mode (Android):** black and white, no animation, thicker lines, outline emoji, and a Darkness slider up to "Heavy black".
+- **Low data / Low-end modes:** stop automatic downloads and previews on a limited connection; drop only the heavy effects (blur, full-screen
+  effects, endless animations, GIF autoplay) on an older computer.
+- **Your own touches:** a custom alert sound, app icon choices, more greetings, "Get attention" (a nudge, a ring or a full-screen picture between
+  Pager users; an alert, not a real call).
+- **Alerts for you:** a notification when an account (say Google Messages) loses its login; admins also hear when the weekly bridge update
+  changes something.
+- **Admin:** accounts, bridges (restart, stop, log, settings, **restart on a timer**), signups. `server/scripts/update-bridges.sh` keeps every
+  bridge on the newest image, with rollback if one won't start (install the weekly job with `--install-cron`).
 - **Accounts:** sign-up and bridge login (QR codes, codes, forms) happen inside the app: no bot chats, no console. Start new chats by contact
   search or phone number.
 - **Settings (searchable):** theme (light/dark/AMOLED, 7 accents + Material You on Android), text size, bubble style, wallpapers, avatar
@@ -49,7 +62,7 @@ Both clients share the same sync engine design (the web one is a port of the And
   boot-safe reminders, foreground sync service.
 - **Desktop extras:** tray icon, native notifications, unread badge, close-to-tray, launch at login.
 
-Not possible through bridges (the networks don't expose them): voice/video calls, disappearing-message timers. Contact
+Not possible through bridges (the networks don't expose them): real voice/video calls, disappearing-message timers. Contact
 merging across networks and pinned messages are not built.
 Not built yet: iOS, push through Google/UnifiedPush, cross-signing and device verification (encrypted chats use a recovery key instead).
 
@@ -89,7 +102,7 @@ Open `https://your-domain/`, sign up with the invite code printed by setup, then
 
 **Linux desktop:**
 ```bash
-cd desktop && npm ci && npm run dist      # → release/Pager-0.3.0.AppImage and pager-desktop_0.3.0_amd64.deb
+cd desktop && npm ci && npm run dist      # → release/Pager-<version>.AppImage and pager-desktop_<version>_amd64.deb
 ```
 Enter your server address on the sign-in screen. (`npm start` runs it from source after `npm run web`.)
 
