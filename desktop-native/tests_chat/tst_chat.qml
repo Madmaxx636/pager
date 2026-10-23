@@ -49,6 +49,29 @@ Item {
             mouseWheel(lv, 200, 300, 0, -120); wait(400)         // and back down
             verify(Math.abs(lv.contentY - y0) < 20, "back where it was")
         }
+        function test_a_touchpad_swipe_carries_on_after_the_fingers_lift() {
+            open("!long")
+            const lv = messages(); lv.positionViewAtIndex(200, ListView.Center); wait(150)
+            const y0 = lv.contentY
+            for (let i = 0; i < 8; ++i) { mouseWheel(lv, 200, 300, 0, 40); wait(12) }         // small steps, the way a touchpad sends them (not whole wheel clicks)
+            const during = y0 - lv.contentY
+            verify(during > 100, "the view followed the fingers: " + during)
+            wait(700)
+            const after = y0 - lv.contentY
+            verify(after > during + 40, "and kept going after they lifted: " + during + " then " + after)
+            // the other way
+            const y1 = lv.contentY
+            for (let i = 0; i < 8; ++i) { mouseWheel(lv, 200, 300, 0, -40); wait(12) }
+            wait(700)
+            verify(lv.contentY > y1 + 150, "flicks the other way too")
+        }
+        function test_dragging_from_a_message_flicks_the_list() {
+            open("!long")
+            const lv = messages(); lv.positionViewAtIndex(200, ListView.Center); wait(150)
+            const y0 = lv.contentY
+            mousePress(lv, 300, 500); mouseMove(lv, 300, 450); mouseMove(lv, 300, 380); mouseMove(lv, 300, 300); mouseRelease(lv, 300, 300); wait(600)
+            verify(Math.abs(lv.contentY - y0) > 150, "dragging on a message scrolled the list: " + (lv.contentY - y0))
+        }
         function test_the_jump_to_newest_button_appears_only_when_away_from_the_bottom() {
             open("!long")
             const lv = messages(); lv.positionViewAtBeginning(); wait(100)
