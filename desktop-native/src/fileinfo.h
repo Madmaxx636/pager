@@ -29,6 +29,7 @@ public:
     Q_INVOKABLE bool writeText(const QString &path, const QString &text) const;
     Q_INVOKABLE QString humanSize(double bytes) const;
     /// A short alert sound made on the spot: "ring" (a phone-like double burst) or "nudge" (a sharp three-note alert). Returns the file.
+    Q_INVOKABLE QString importFile(const QString &from, const QString &dir, const QString &baseName) const;   // copies a file into [dir] as baseName.<its extension>; returns the new path
     Q_INVOKABLE QVariantList wallpapers() const;
     Q_INVOKABLE QString importWallpaper(const QString &file, const QString &dir) const;
     Q_INVOKABLE QVariantList effectTriggers() const;          // what sets off each full-screen effect

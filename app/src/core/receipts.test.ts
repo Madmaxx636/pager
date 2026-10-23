@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applySync } from "./reducer";
-import { isBridgeBot, readersOf } from "./types";
+import { isBridgeBot, readersOf, receiptIndex } from "./types";
 
 const me = "@me:x";
 const amy = "@amy:x";
@@ -41,14 +41,28 @@ describe("delivery reports from the bridge", () => {
   it("remembers who a message was delivered to, and that the bridge reports deliveries", () => {
     const r = applySync({}, sync([
       { type: "m.room.message", event_id: "$m", sender: "@me:s", origin_server_ts: 1, content: { msgtype: "m.text", body: "hi" } },
-      ev("com.beeper.message_send_status", "$s", { "m.relates_to": { rel_type: "m.reference", event_id: "$m" }, status: "SUCCESS", delivered_to: ["@them:s"] }),
+      ev("com.beeper.message_send_status", "$s", { "m.relates_to": { rel_type: "m.reference", event_id: "$m" }, status: "SUCCESS", delivered_to_users: ["@them:s"] }),
     ]), "@me:s", true);
     const chat = r.chats["!r:s"];
     expect(chat.statusSeen).toBe(true);
     expect(chat.deliveredTo).toEqual({ "$m": ["@them:s"] });
   });
-  it("a success without delivered_to still marks the chat as reporting", () => {
+  it("a success without delivered_to_users still marks the chat as reporting", () => {
     const r = applySync({}, sync([ev("com.beeper.message_send_status", "$s", { "m.relates_to": { event_id: "$m" }, status: "SUCCESS" })]), "@me:s", true);
     expect(r.chats["!r:s"].statusSeen).toBe(true); expect(r.chats["!r:s"].deliveredTo).toEqual({});
+  });
+});
+
+describe("a receipt that points at something that is not a message", () => {
+  const react = (id: string, target: string, ts: number) => ({ type: "m.reaction", event_id: id, sender: amy, origin_server_ts: ts, content: { "m.relates_to": { rel_type: "m.annotation", event_id: target, key: "👍" } } });
+  const sync = { rooms: { join: { "!r:x": {
+    timeline: { events: [text("$1", me, 1000), text("$2", me, 2000), react("$r", "$1", 3000), text("$4", me, 4000)] },
+    ephemeral: { events: [{ type: "m.receipt", content: { $r: { "m.read": { [amy]: { ts: 5000 } } } } }] },
+  } } } };
+  const chat = applySync({}, sync, me, true).chats["!r:x"];
+  it("counts for the newest message before it", () => {
+    expect(receiptIndex(chat.messages, chat.eventTs, "$r")).toBe(1);
+    expect(readersOf(chat, "$2", me)).toEqual([{ user: amy, ts: 5000 }]);
+    expect(readersOf(chat, "$4", me)).toEqual([]);
   });
 });

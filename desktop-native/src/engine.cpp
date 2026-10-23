@@ -70,7 +70,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
         if (m_signedIn) {
             m_server = b.value(QLatin1String("homeserver")).toString(m_server);
             m_user = b.value(QLatin1String("user")).toString(m_user); m_store.setMe(m_user); m_error.clear();
-            if (m_core) { api(QStringLiteral("GET"), QStringLiteral("/api/me"), QVariant(), QJSValue()); loadPushRules(); loadIdentity(); loadLinks(); loadExtras(); call(QStringLiteral("GET"), QStringLiteral("/_matrix/client/v3/user/%1/account_data/app.pager.aliases").arg(pct(m_user)), QVariant(), [this](int status, const QJsonValue &v) { if (status != 200 || !v.isObject()) return; QHash<QString, QString> a; const QJsonObject o = v.toObject().value(QLatin1String("names")).toObject(); for (auto it = o.begin(); it != o.end(); ++it) a.insert(it.key(), it.value().toString()); RoomListModel::s_aliases = a; refreshLists(); m_timeline.show(m_current); emit currentChanged(); }); }   // admin? muted chats? your own accounts on other networks?
+            if (m_core) { api(QStringLiteral("GET"), QStringLiteral("/api/me"), QVariant(), QJSValue()); loadPushRules(); loadIdentity(); loadLinks(); loadExtras(); refreshEncryption(); call(QStringLiteral("GET"), QStringLiteral("/_matrix/client/v3/user/%1/account_data/app.pager.aliases").arg(pct(m_user)), QVariant(), [this](int status, const QJsonValue &v) { if (status != 200 || !v.isObject()) return; QHash<QString, QString> a; const QJsonObject o = v.toObject().value(QLatin1String("names")).toObject(); for (auto it = o.begin(); it != o.end(); ++it) a.insert(it.key(), it.value().toString()); RoomListModel::s_aliases = a; refreshLists(); m_timeline.show(m_current); emit currentChanged(); }); }   // admin? muted chats? your own accounts on other networks?
         }
         else { m_user.clear(); m_synced = false; m_error = b.value(QLatin1String("error")).toString(); }
         m_working = false;
@@ -140,6 +140,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
         m_recoveryMessage = QStringLiteral("Restoring messages… %1 of %2 chats").arg(b.value(QLatin1String("done")).toInt()).arg(b.value(QLatin1String("total")).toInt());
         emit recoveryChanged();
     } else if (kind == QLatin1String("recovered")) {
+        refreshEncryption();
         m_recovering = false;
         m_recoveryDone = b.value(QLatin1String("ok")).toBool();
         m_recoveryMessage = m_recoveryDone ? QStringLiteral("Done. Your old messages are readable again.") : b.value(QLatin1String("error")).toString();
@@ -148,6 +149,14 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
             for (const QString &id : m_store.order()) { if (Room *r = m_store.mutableRoom(id)) { r->historyAsked = id == m_current; } }
             if (m_core && !m_current.isEmpty()) pager_load_history(m_core, m_current.toUtf8().constData(), "");
         }
+    } else if (kind == QLatin1String("encryption")) {
+        m_encryption = b.toVariantMap(); emit encryptionChanged();
+    } else if (kind == QLatin1String("recovery_created")) {
+        emit recoveryKeyCreated(b.value(QLatin1String("ok")).toBool(), b.value(QLatin1String("key")).toString(), b.value(QLatin1String("error")).toString()); refreshEncryption();
+    } else if (kind == QLatin1String("keys_exported")) {
+        emit keysExported(b.value(QLatin1String("ok")).toBool(), b.value(QLatin1String("error")).toString());
+    } else if (kind == QLatin1String("keys_imported")) {
+        emit keysImported(b.value(QLatin1String("ok")).toBool(), b.value(QLatin1String("imported")).toInt(), b.value(QLatin1String("total")).toInt(), b.value(QLatin1String("error")).toString());
     } else if (kind == QLatin1String("uploaded")) {
         const auto done = m_uploads.take(b.value(QLatin1String("key")).toString());
         if (done) done(b.value(QLatin1String("url")).toString());
@@ -1477,3 +1486,32 @@ void Engine::checkBridgeUpdates() {      // admins: tell me after the weekly bri
         if (!newest.isEmpty()) { m_saved.insert(QStringLiteral("updatesSeen"), newest); saveSaved(); }
     });
 }
+
+QVariantList Engine::messageInfo(const QString &id) const {
+    const QString roomId = evRoom(id); const Room *r = m_store.room(roomId); const Msg *m = r ? r->find(id) : nullptr;
+    if (!m) return {};
+    QVariantList out;
+    auto row = [&](const QString &k, const QString &v) { if (!v.isEmpty()) out << QVariant(QVariantList{k, v}); };
+    row(QStringLiteral("Sent"), QDateTime::fromMSecsSinceEpoch(m->ts).toString(QStringLiteral("dddd, MMMM d, yyyy h:mm:ss AP")));
+    row(QStringLiteral("From"), m_store.mine(*m) ? QStringLiteral("You") : r->nameOf(m->sender));
+    if (!m_store.mine(*m)) row(QStringLiteral("Their ID"), m->sender);
+    if (m_store.mine(*m)) {
+        QString st = m->status == 2 ? QStringLiteral("Not sent") : (m->status == 1 || m->local) ? QStringLiteral("Sending…") : QStringLiteral("Sent");
+        if (m->status == 0 && !m->local) {
+            int read, delivered; m_store.receiptPositions(*r, read, delivered); const int at = r->receiptIndex(id);
+            if (at >= 0 && read >= at) st = QStringLiteral("Read"); else if (at >= 0 && delivered >= at) st = QStringLiteral("Delivered");
+        }
+        row(QStringLiteral("Status"), st);
+    }
+    row(QStringLiteral("Chat"), RoomListModel::displayName(*r) + QStringLiteral(" · ") + r->network);
+    row(QStringLiteral("Type"), m->type);
+    if (m->edited) row(QStringLiteral("Edited"), QStringLiteral("Yes"));
+    if (m->size > 0) row(QStringLiteral("Size"), QStringLiteral("%1 KB").arg(qMax<qint64>(1, m->size / 1024)));
+    row(QStringLiteral("Event ID"), id);
+    return out;
+}
+
+void Engine::refreshEncryption() { if (m_core) pager_encryption_status(m_core); }
+void Engine::createRecoveryKey() { if (m_core) pager_recovery_create(m_core); else emit recoveryKeyCreated(false, QString(), QStringLiteral("Not signed in")); }
+void Engine::exportKeys(const QString &path, const QString &pass) { if (m_core) pager_keys_export(m_core, path.toUtf8().constData(), pass.toUtf8().constData()); }
+void Engine::importKeys(const QString &path, const QString &pass) { if (m_core) pager_keys_import(m_core, path.toUtf8().constData(), pass.toUtf8().constData()); }

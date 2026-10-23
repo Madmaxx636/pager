@@ -443,6 +443,73 @@ pub extern "C" fn pager_recover(h: *mut Arc<Engine>, recovery_key: *const c_char
     });
 }
 
+/// How this device stands with encryption: its id, its fingerprint, whether it is saving keys to the online backup and whether a backup exists. Answers "encryption".
+#[no_mangle]
+pub extern "C" fn pager_encryption_status(h: *mut Arc<Engine>) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let Some(client) = e2.client() else { return };
+        let enc = client.encryption();
+        let fp = enc.ed25519_key().await.unwrap_or_default();
+        let here = enc.backups().are_enabled().await;
+        let on_server = enc.backups().fetch_exists_on_server().await.unwrap_or(false);
+        e2.tell.say("encryption", &json!({ "device_id": client.device_id().map(|d| d.to_string()).unwrap_or_default(), "fingerprint": fp, "backup_here": here, "backup_on_server": on_server }));
+    });
+}
+
+/// Starts a new online key backup (replacing any old one) and answers "recovery_created" {ok, key} with the recovery key to show once.
+#[no_mangle]
+pub extern "C" fn pager_recovery_create(h: *mut Arc<Engine>) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let fail = |why: String| e2.tell.say("recovery_created", &json!({ "ok": false, "error": why }));
+        let Some(client) = e2.client() else { return fail("Sign in first".into()) };
+        let backups = client.encryption().backups();
+        if let Err(err) = backups.disable_and_delete().await { return fail(format!("Couldn't remove the old backup: {err}")); }
+        if let Err(err) = backups.create().await { return fail(format!("Couldn't start a new backup: {err}")); }
+        let key = {
+            let guard = client.olm_machine_for_testing().await;
+            let Some(machine) = guard.as_ref() else { return fail("Encryption isn't ready yet. Try again in a moment.".into()) };
+            match machine.backup_machine().get_backup_keys().await { Ok(k) => k.decryption_key.map(|d| d.to_base58()), Err(err) => return fail(err.to_string()) }
+        };
+        let Some(key) = key else { return fail("The new key could not be read back.".into()) };
+        let spaced: String = key.chars().collect::<Vec<_>>().chunks(4).map(|c| c.iter().collect::<String>()).collect::<Vec<_>>().join(" ");
+        e2.tell.say("recovery_created", &json!({ "ok": true, "key": spaced }));
+    });
+}
+
+/// Saves every message key of this device into a file protected by [passphrase] (Element's format). Answers "keys_exported" {ok, error}.
+#[no_mangle]
+pub extern "C" fn pager_keys_export(h: *mut Arc<Engine>, path: *const c_char, passphrase: *const c_char) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (path, pass) = (s(path), s(passphrase));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let Some(client) = e2.client() else { return e2.tell.say("keys_exported", &json!({ "ok": false, "error": "Sign in first" })) };
+        match client.encryption().export_room_keys(std::path::PathBuf::from(path), &pass, |_| true).await {
+            Ok(_) => e2.tell.say("keys_exported", &json!({ "ok": true })),
+            Err(err) => e2.tell.say("keys_exported", &json!({ "ok": false, "error": err.to_string() })),
+        }
+    });
+}
+
+/// Reads a key file (made here, on another Pager or by Element). Answers "keys_imported" {ok, imported, total, error}.
+#[no_mangle]
+pub extern "C" fn pager_keys_import(h: *mut Arc<Engine>, path: *const c_char, passphrase: *const c_char) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (path, pass) = (s(path), s(passphrase));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let Some(client) = e2.client() else { return e2.tell.say("keys_imported", &json!({ "ok": false, "error": "Sign in first" })) };
+        match client.encryption().import_room_keys(std::path::PathBuf::from(path), &pass).await {
+            Ok(r) => e2.tell.say("keys_imported", &json!({ "ok": true, "imported": r.imported_count, "total": r.total_count })),
+            Err(err) => e2.tell.say("keys_imported", &json!({ "ok": false, "error": err.to_string() })),
+        }
+    });
+}
+
 /// Tells people you have read up to [event_id] (only you and the server when [private_receipt]) in a room (and clears its unread count).
 #[no_mangle]
 pub extern "C" fn pager_mark_read(h: *mut Arc<Engine>, room_id: *const c_char, event_id: *const c_char, private_receipt: bool) {

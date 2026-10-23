@@ -14,7 +14,7 @@ import {
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory, setAlias, setSolo,
 } from "../core/store";
 import { addLink, buildMerged, groupOf, suggestLinks, unlink } from "../core/links";
-import { aliasOf } from "../core/types";
+import { aliasOf, receiptIndex } from "../core/types";
 import { groupFaces } from "../core/faces";
 import { SOUNDS, playSound } from "../core/sounds";
 import { Avatar, GroupAvatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
@@ -91,14 +91,14 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   // Read = a person read it. Delivered = the bridge says it reached the other network (its bot sends that receipt).
   const readIndex = useMemo(() => {
     const r = chat?.receipts ?? {};
-    return Math.max(-1, ...Object.entries(r).filter(([u]) => u !== user && !isBridgeBot(u)).map(([, id]) => messages.findIndex((m) => m.id === id)));
-  }, [chat?.receipts, messages, user]);
+    return Math.max(-1, ...Object.entries(r).filter(([u]) => u !== user && !isBridgeBot(u)).map(([, id]) => receiptIndex(messages, chat?.eventTs, id)));
+  }, [chat?.receipts, chat?.eventTs, messages, user]);
   const deliveredIndex = useMemo(() => {
     // Once the bridge reports deliveries in this chat, only those count (its own receipt then just means "sent"); until then its receipt is the best we have.
-    if (chat?.statusSeen) return Math.max(-1, ...Object.keys(chat.deliveredTo ?? {}).map((id) => messages.findIndex((m) => m.id === id)));
+    if (chat?.statusSeen) return Math.max(-1, ...Object.keys(chat.deliveredTo ?? {}).map((id) => receiptIndex(messages, chat.eventTs, id)));
     const r = chat?.receipts ?? {};
-    return Math.max(-1, ...Object.entries(r).filter(([u]) => isBridgeBot(u)).map(([, id]) => messages.findIndex((m) => m.id === id)));
-  }, [chat?.receipts, chat?.deliveredTo, chat?.statusSeen, messages]);
+    return Math.max(-1, ...Object.entries(r).filter(([u]) => isBridgeBot(u)).map(([, id]) => receiptIndex(messages, chat?.eventTs, id)));
+  }, [chat?.receipts, chat?.deliveredTo, chat?.statusSeen, chat?.eventTs, messages]);
   // The newest message you sent: the iPhone look says Delivered or Read under it.
   const latestMine = useMemo(() => { for (let i = messages.length - 1; i >= 0; i--) if (messages[i].sender === user && messages[i].status === STATUS_SENT) return messages[i].id; return undefined; }, [messages, user]);
   const group = chat ? isGroup(chat) || new Set(messages.map((m) => m.sender)).size > 2 : false;

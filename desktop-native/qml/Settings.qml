@@ -37,6 +37,10 @@ Dialog {
     ]
     property string find: ""
     property string encNote: ""
+    RecoveryKeyDialog { id: recoveryKeyDlg }
+    KeyFileDialog { id: keyFileDlg }
+    FileDialog { id: soundPick; title: "Choose a sound"; nameFilters: ["Sounds (*.wav *.mp3 *.ogg *.oga *.m4a *.flac *.opus)", "All files (*)"]
+        onAccepted: { const f = files.importFile(String(selectedFile), core.dataDir(), "custom-sound"); if (f.length) { settings.set("customSoundPath", f); core.previewSound("custom", settings.notifSoundVolume) } } }
     FileDialog { id: photoPick; title: "Choose a wallpaper photo"; nameFilters: ["Pictures (*.png *.jpg *.jpeg *.webp *.bmp)"]
         onAccepted: { const f = files.importWallpaper(String(selectedFile), core.dataDir()); if (f.length) { settings.set("wallpaperPhoto", f); settings.set("wallpaper", "custom") } } }
     FileDialog { id: stickerAdder; title: "Add stickers"; fileMode: FileDialog.OpenFiles; nameFilters: ["Pictures (*.png *.jpg *.jpeg *.gif *.webp)"]; onAccepted: core.addStickers(selectedFiles.map(u => String(u))) }
@@ -292,6 +296,8 @@ Dialog {
                 SChoice { key: "receiveSound"; title: "Receive sound"; options: files.sounds(); onPicked: (v) => core.previewSound(v, settings.convoSoundVolume) }
                 SSlider { key: "convoSoundVolume"; title: "Page sound volume"; from: 0; to: 1; step: 0.05; decimals: 2 }
                 SChoice { key: "notifSoundId"; title: "Alert sound"; options: files.sounds(); onPicked: (v) => core.previewSound(v, settings.notifSoundVolume) }
+                SAction { title: "Your own sound"; hint: settings.customSoundPath.length ? "Using " + settings.customSoundPath.split("/").pop() + ". Choose “Your own sound” in a list above to use it." : "Pick an audio file (wav, mp3, ogg…), then choose “Your own sound” in a list above"; button: settings.customSoundPath.length ? "Change…" : "Choose…"; onClicked: soundPick.open() }
+                SAction { visible: settings.customSoundPath.length > 0; title: "Remove your sound"; button: "Remove"; danger: true; onClicked: settings.set("customSoundPath", "") }
                 SSlider { key: "notifSoundVolume"; title: "Volume"; from: 0; to: 1; step: 0.05; decimals: 2 }
             }
             SGroup { title: "Quiet hours"; footer: "Messages still arrive, silently."
@@ -348,8 +354,16 @@ Dialog {
                 SToggle { key: "sendTyping"; title: "Send typing indicators" }
             }
             SGroup { title: "Encryption"; footer: "Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you."
-                SAction { title: "Recovery key"; hint: "Enter your recovery key to read messages from before this device was added"; button: "Enter key"; onClicked: { dlg.close(); dlg.restoreRequested() } }
+                SAction { title: "Encryption on this device"; hint: core.encryption.device_id ? "Ready · device " + core.encryption.device_id : "Starting…"; button: "Refresh"; onClicked: core.refreshEncryption() }
+                SAction { visible: !!core.encryption.fingerprint; title: "Device fingerprint"; hint: (core.encryption.fingerprint || "").replace(/(.{4})/g, "$1 ").trim(); button: "Copy"; onClicked: files.copy(core.encryption.fingerprint) }
+                SAction { title: "Recovery key"; hint: core.encryption.backup_here ? "On: your message keys are backed up" : core.encryption.backup_on_server ? "A backup exists. Enter the recovery key to read your history here" : "Not set up yet"
+                    button: core.encryption.backup_here ? "Replace" : core.encryption.backup_on_server ? "Enter key" : "Set up"
+                    onClicked: { if (core.encryption.backup_on_server && !core.encryption.backup_here) { dlg.close(); dlg.restoreRequested() } else recoveryKeyDlg.open() } }
+                SAction { visible: !!core.encryption.backup_on_server && !core.encryption.backup_here; title: "Make a new recovery key instead"; button: "New key"; onClicked: recoveryKeyDlg.open() }
                 SAction { title: "Encrypt all my pages"; hint: dlg.encNote.length ? dlg.encNote : "Turns on encryption for every page that can take it. Older messages stay readable on your server"; button: "Encrypt…"; onClicked: encryptAllConfirm.open() }
+                SAction { title: "Lost your recovery key?"; hint: core.encryption.backup_here ? "This device still has your keys: choose Replace above and it makes a new one" : "Use a key file below, or make a new key. Without either, older encrypted messages can't be read on this device"; button: "New key"; onClicked: recoveryKeyDlg.open() }
+                SAction { title: "Advanced: save keys to a file"; hint: "Not your recovery key. A separate file you protect with a passphrase you choose"; button: "Save…"; onClicked: keyFileDlg.openFor(true) }
+                SAction { title: "Advanced: restore keys from a file"; hint: "Only for a file made with the row above. Asks for that file's passphrase"; button: "Open…"; onClicked: keyFileDlg.openFor(false) }
             }
             SGroup { title: "Content"; footer: "Link previews are fetched by your own server, so the sites you link to never see your device."
                 SToggle { key: "linkPreviews"; title: "Link previews" }

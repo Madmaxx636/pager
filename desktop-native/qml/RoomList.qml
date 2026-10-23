@@ -130,10 +130,11 @@ Rectangle {
             Connections { target: core; function onListChanged() { storiesLoader.refresh() } }
             active: !settings.hideStories && !!info.id && core.tab === "inbox" && core.search.length === 0
             Layout.fillWidth: true; Layout.preferredHeight: active ? 62 : 0; visible: active
-            sourceComponent: Rectangle {
+            sourceComponent: Item {      // (the loader sizes its item to itself, so the padded row sits inside a plain one)
+              Rectangle {
                 property var info: storiesLoader.info
                 id: storiesRow
-                width: pane.width - 16; x: 8; height: 62; radius: 14; color: sh.hovered || core.currentRoom === info.id ? look.panel2 : "transparent"
+                x: 8; width: parent.width - 16; height: 62; radius: 14; color: sh.hovered || core.currentRoom === info.id ? look.panel2 : "transparent"
                 HoverHandler { id: sh; cursorShape: Qt.PointingHandCursor }
                 Row { x: 10; anchors.verticalCenter: parent.verticalCenter; spacing: 13
                     Rectangle { width: 46; height: 46; radius: 23; color: "transparent"; border.width: 2.5; border.color: storiesRow.info.unread > 0 ? look.accent : look.line
@@ -144,18 +145,29 @@ Rectangle {
                 Rectangle { visible: storiesRow.info.unread > 0; anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; height: 20; width: Math.max(20, sbt.implicitWidth + 12); radius: 10; color: look.muted
                     Label { id: sbt; anchors.centerIn: parent; text: storiesRow.info.unread > 99 ? "99+" : storiesRow.info.unread; color: look.bg; font.pixelSize: 12; font.weight: Font.Bold } }
                 TapHandler { onTapped: { core.openRoom(storiesRow.info.id); pane.opened() } }
+              }
             }
         }
         // ---- the chats (with the pinned ones as a row on top)
         ListView {
             id: list
             Layout.fillWidth: true; Layout.fillHeight: true; Layout.topMargin: 2
+            // The list stays at its top (pinned chats showing) until you scroll it yourself; late arrivals above it (pins, Stories) must not push it away.
+            property bool stick: true
+            function stickToTop() { if (stick) Qt.callLater(function () { if (list.stick) list.positionViewAtBeginning() }) }
+            onMovementStarted: stick = false
+            onAtYBeginningChanged: if (atYBeginning) stick = true
+            onHeightChanged: stickToTop()
+            onContentHeightChanged: stickToTop()
+            Component.onCompleted: positionViewAtBeginning()
             clip: true; model: core.rooms; boundsBehavior: Flickable.StopAtBounds; cacheBuffer: 400; reuseItems: true
             ScrollBar.vertical: ScrollBar { }
             SmoothWheel { view: list }
             header: Item {   // pinned chats: a grid of big pictures, three across, like the web app
                 visible: core.pins.length > 0
                 width: list.width; height: visible ? pinGrid.height + 12 : 0
+                // when the pinned chats first appear the list must stay at its top, not slide past them
+                onHeightChanged: list.stickToTop()
                 Grid {
                     id: pinGrid
                     x: 8; y: 8; columns: 3; rowSpacing: 6; columnSpacing: 4
@@ -245,7 +257,7 @@ Rectangle {
                         RowLayout {
                             visible: settings.inboxStyle !== "minimal"
                             Layout.fillWidth: true; spacing: 6
-                            Icon { visible: model.tick >= 3; name: model.tick === 5 ? "check-check" : "check"; size: 14; color: model.tick === 5 ? look.accent : look.muted }
+                            Icon { visible: model.tick >= 3; name: model.tick >= 4 ? "check-check" : "check"; size: 14; color: model.tick === 5 ? look.accent : look.muted; opacity: model.tick === 4 ? 0.6 : 1 }
                             Label {
                                 readonly property string dr: model.typing.length || row.current ? "" : core.draft(roomId)
                                 textFormat: dr.length ? Text.StyledText : Text.PlainText

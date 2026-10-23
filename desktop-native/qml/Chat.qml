@@ -33,6 +33,8 @@ Rectangle {
     }
     readonly property string barText: editing ? "Editing message" : (replyingTo ? "Replying to " + core.nameOfMessage(replyingTo) + ": " + core.bodyOf(replyingTo) : "")
     readonly property string roomId: core.currentRoom
+    BubbleLook { id: lookMine; mine: true; network: core.currentNetwork }       // how each side's bubbles look: one of each for the whole chat, not one per message
+    BubbleLook { id: lookTheirs; mine: false; network: core.currentNetwork }
 
     function openViewer(id) { viewer.show(id) }
     function jumpTo(id) {
@@ -132,11 +134,12 @@ Rectangle {
                 // the list is upside down (newest first), so the newest message stays at the bottom by itself
                 verticalLayoutDirection: ListView.BottomToTop
                 model: core.timeline
-                spacing: 0; cacheBuffer: 900
+                spacing: 0; cacheBuffer: 2400; reuseItems: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollBar { }
                 SmoothWheel { view: msgs }
                 delegate: Bubble {
+                    lk: mine ? lookMine : lookTheirs
                     showName: core.currentIsGroup
                     onMenuRequested: (id, mine, gx, gy) => { pane.target = id; pane.targetMine = mine; actions.popup() }
                     onReactionTapped: (id, key) => core.react(id, key)
@@ -321,10 +324,18 @@ Rectangle {
     Dialog { id: saveError; modal: true; anchors.centerIn: Overlay.overlay; title: "Couldn't save"; standardButtons: Dialog.Ok; background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
         Label { text: "The file couldn't be saved there."; color: look.text } }
     Dialog {
-        id: details; property string text_
-        modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420); title: "Message details"; standardButtons: Dialog.Close
-        background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
-        Label { text: details.text_; color: look.text; wrapMode: Text.Wrap; width: parent.width; font.pixelSize: Math.round(13 * look.textScale) }
+        id: details; property var rows: []
+        modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(460, Overlay.overlay ? Overlay.overlay.width - 32 : 460); title: "Message details"; standardButtons: Dialog.Close
+        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+        ColumnLayout { width: parent.width; spacing: 0
+            Repeater { model: details.rows
+                delegate: Rectangle { Layout.fillWidth: true; implicitHeight: dRow.implicitHeight + 16; color: "transparent"
+                    Rectangle { visible: index > 0; width: parent.width; height: 1; color: look.line }
+                    RowLayout { id: dRow; anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; spacing: 12
+                        Label { text: modelData[0]; color: look.muted; font.pixelSize: Math.round(13 * look.textScale); Layout.preferredWidth: 80; Layout.alignment: Qt.AlignTop }
+                        Label { text: modelData[1]; color: look.text; font.pixelSize: Math.round(13 * look.textScale); wrapMode: Text.WrapAnywhere; Layout.fillWidth: true; textFormat: Text.PlainText }
+                        IconButton { visible: modelData[0] === "Event ID" || modelData[0] === "Their ID"; ico: "copy"; iconSize: 15; implicitWidth: 28; implicitHeight: 28; onClicked: files.copy(modelData[1]); ToolTip.text: "Copy"; ToolTip.visible: hovered } } } }
+        }
     }
     ForwardDialog { id: forward }
     Dialog {
@@ -337,6 +348,7 @@ Rectangle {
 
     Menu {
         id: actions
+        width: 280
         Row {
             padding: 6; spacing: 2
             Repeater {
@@ -359,7 +371,7 @@ Rectangle {
             onTriggered: { saveDialog.event = pane.target; core.fetchFull(pane.target); saveDialog.currentFile = "file://" + files.downloadsDir() + "/" + core.fileNameOf(pane.target); saveDialog.open() } }
         MenuItem { icon.name: "pencil"; text: "Edit"; visible: pane.targetMine && !core.isMediaMessage(pane.target); height: visible ? implicitHeight : 0; onTriggered: { pane.replyingTo = ""; pane.editing = pane.target; input.text = core.bodyOf(pane.target); input.forceActiveFocus() } }
         MenuItem { icon.name: "code-xml"; text: "Copy event ID"; visible: settings.developerMode; height: visible ? implicitHeight : 0; onTriggered: files.copy(pane.target) }
-        MenuItem { icon.name: "info"; text: "Details"; onTriggered: { details.text_ = core.messageDetails(pane.target); details.open() } }
+        MenuItem { icon.name: "info"; text: "Details"; onTriggered: { details.rows = core.messageInfo(pane.target); details.open() } }
         MenuItem { icon.name: "trash-2"; text: "Delete"; visible: pane.targetMine; height: visible ? implicitHeight : 0; onTriggered: settings.confirmDelete ? confirmDelete.open() : core.deleteMessage(pane.target) }
     }
 }

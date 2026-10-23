@@ -178,9 +178,9 @@ QVariant RoomListModel::data(const QModelIndex &i, int role) const {
         const Msg &m = r->msgs.last();
         if (m.status == 1 || m.local) return 1;
         if (m.status == 2) return 2;
-        const QString id = m.id;
-        for (auto u = r->receipts.cbegin(); u != r->receipts.cend(); ++u) if (u.key() != m_store->me() && !Store::isBridgeBot(u.key())) { const int at = [&] { for (int k = 0; k < r->msgs.size(); ++k) if (r->msgs[k].id == u.value()) return k; return -1; }(); if (at >= r->msgs.size() - 1) return 5; }
-        return 3;
+        int readPos, deliveredPos; m_store->receiptPositions(*r, readPos, deliveredPos);
+        const int last = r->msgs.size() - 1;
+        return readPos >= last ? 5 : deliveredPos >= last ? 4 : 3;
     }
     }
     return {};
@@ -244,13 +244,7 @@ void TimelineModel::show(const QString &roomId) {
     const Room *r = m_store->view(roomId, m_merged, true);
     if (!r) { if (!m_ids.isEmpty()) { beginResetModel(); m_ids.clear(); m_rows.clear(); endResetModel(); } return; }
     const int n = r->msgs.size();
-    // How far the others have read and how far the bridge says it was delivered (as an index in the oldest-first list).
-    auto indexOf = [&](const QString &id) { for (int i = n - 1; i >= 0; --i) if (r->msgs[i].id == id) return i; return -1; };
-    int readPos = -1, deliveredPos = -1;
-    const QString me = m_store->me();
-    for (auto u = r->receipts.cbegin(); u != r->receipts.cend(); ++u) if (u.key() != me && !Store::isBridgeBot(u.key())) readPos = qMax(readPos, indexOf(u.value()));
-    if (r->statusSeen) { for (auto d = r->deliveredTo.cbegin(); d != r->deliveredTo.cend(); ++d) deliveredPos = qMax(deliveredPos, indexOf(d.key())); }
-    else for (auto u = r->receipts.cbegin(); u != r->receipts.cend(); ++u) if (Store::isBridgeBot(u.key())) deliveredPos = qMax(deliveredPos, indexOf(u.value()));
+    int readPos = -1, deliveredPos = -1; m_store->receiptPositions(*r, readPos, deliveredPos);      // how far the others have read, how far the bridge says it was delivered
     const bool group = r->isGroup();
     QStringList ids; QVector<Row> fresh; ids.reserve(n); fresh.reserve(n);
     for (int si = n - 1; si >= 0; --si) { ids << r->msgs[si].id; fresh << build(*r, si, readPos, deliveredPos, group); }

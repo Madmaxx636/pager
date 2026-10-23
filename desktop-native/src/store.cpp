@@ -204,6 +204,13 @@ void Store::applyEvent(Room &r, const QJsonObject &ev) {
     const QString type = ev.value(QLatin1String("type")).toString(), id = ev.value(QLatin1String("event_id")).toString();
     QString sender = ev.value(QLatin1String("sender")).toString();
     const qint64 ts = ev.value(QLatin1String("origin_server_ts")).toVariant().toLongLong();
+    if (!id.isEmpty() && ts) {
+        r.eventTs.insert(id, ts);
+        if (r.eventTs.size() > 700) {      // keep the newest few hundred: enough for receipts
+            QList<qint64> times = r.eventTs.values(); std::sort(times.begin(), times.end()); const qint64 cut = times[times.size() - 500];
+            for (auto it = r.eventTs.begin(); it != r.eventTs.end();) it = it.value() < cut ? r.eventTs.erase(it) : std::next(it);
+        }
+    }
     const QJsonObject content = ev.value(QLatin1String("content")).toObject();
     const QJsonObject rel = content.value(QLatin1String("m.relates_to")).toObject();
 
@@ -230,7 +237,8 @@ void Store::applyEvent(Room &r, const QJsonObject &ev) {
         const QString target = rel.value(QLatin1String("event_id")).toString();
         if (target.isEmpty()) return;
         r.statusSeen = true;
-        QStringList who; for (const QJsonValue &u : content.value(QLatin1String("delivered_to")).toArray()) if (u.isString()) who << u.toString();
+        QStringList who; const QJsonArray users = content.contains(QLatin1String("delivered_to_users")) ? content.value(QLatin1String("delivered_to_users")).toArray() : content.value(QLatin1String("delivered_to")).toArray();
+        for (const QJsonValue &u : users) if (u.isString()) who << u.toString();
         if (!who.isEmpty()) r.deliveredTo.insert(target, who);
         return;
     }
@@ -439,6 +447,7 @@ const Room *Store::view(const QString &id, bool merged, bool rebuild) const {
         if (x == id) continue;
         for (auto it = r->receipts.cbegin(); it != r->receipts.cend(); ++it) if (!v.receipts.contains(it.key()) || it.key() != m_me) v.receipts.insert(it.key(), it.value());
         for (auto it = r->deliveredTo.cbegin(); it != r->deliveredTo.cend(); ++it) v.deliveredTo.insert(it.key(), it.value());
+        for (auto it = r->eventTs.cbegin(); it != r->eventTs.cend(); ++it) v.eventTs.insert(it.key(), it.value());
         for (auto it = r->votes.cbegin(); it != r->votes.cend(); ++it) v.votes.insert(it.key(), it.value());
         for (auto it = r->members.cbegin(); it != r->members.cend(); ++it) if (!v.members.contains(it.key())) v.members.insert(it.key(), it.value());
         for (auto it = r->memberAvatars.cbegin(); it != r->memberAvatars.cend(); ++it) if (!v.memberAvatars.contains(it.key())) v.memberAvatars.insert(it.key(), it.value());
@@ -468,4 +477,20 @@ QJsonObject Store::parseStickerPack(const QString &key, const QString &fallbackN
 bool Store::isStoriesRoom(const Room &r) {
     static const QRegularExpression exact(QStringLiteral("^whatsapp status broadcast$"), QRegularExpression::CaseInsensitiveOption), fuzzy(QStringLiteral("status.?broadcast"), QRegularExpression::CaseInsensitiveOption);
     return exact.match(r.name.trimmed()).hasMatch() || (r.network == QLatin1String("whatsapp") && fuzzy.match(r.name).hasMatch());
+}
+
+int Room::receiptIndex(const QString &eventId) const {
+    for (int i = msgs.size() - 1; i >= 0; --i) if (msgs[i].id == eventId) return i;
+    const auto t = eventTs.constFind(eventId);
+    if (t == eventTs.cend()) return -1;
+    for (int i = msgs.size() - 1; i >= 0; --i) if (msgs[i].ts <= t.value()) return i;
+    return -1;
+}
+
+void Store::receiptPositions(const Room &r, int &readPos, int &deliveredPos) const {
+    readPos = -1; deliveredPos = -1;
+    for (auto u = r.receipts.cbegin(); u != r.receipts.cend(); ++u) if (u.key() != m_me && !isBridgeBot(u.key())) readPos = qMax(readPos, r.receiptIndex(u.value()));
+    // Once the bridge reports deliveries in this chat only those count (its own receipt then just means "sent"); until then its receipt is the best there is.
+    if (r.statusSeen) { for (auto d = r.deliveredTo.cbegin(); d != r.deliveredTo.cend(); ++d) deliveredPos = qMax(deliveredPos, r.receiptIndex(d.key())); }
+    else for (auto u = r.receipts.cbegin(); u != r.receipts.cend(); ++u) if (isBridgeBot(u.key())) deliveredPos = qMax(deliveredPos, r.receiptIndex(u.value()));
 }

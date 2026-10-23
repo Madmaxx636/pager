@@ -62,7 +62,7 @@ Item {
     width: ListView.view ? ListView.view.width : 400
     height: col.implicitHeight + (first ? 7 : 1.5)
     // ---- how this side's bubbles look: BubbleLook holds the rules, these are just short names for them
-    BubbleLook { id: lk; mine: row.mine; network: core.currentNetwork }
+    property var lk
     readonly property string shape: lk.shape
     readonly property int baseRadius: lk.baseRadius
     readonly property int tight: lk.tight
@@ -77,7 +77,9 @@ Item {
     readonly property color borderColorOf: lk.borderColorOf
     readonly property real tailRadius: lk.tailRadius
 
-    Component.onCompleted: if ((kind === "image" || kind === "video") && media.length === 0 && poster.length === 0 && eventId.length && !local && settings.autoDownload === "always" && !settings.lowData) core.fetchMedia(eventId)
+    function loadMedia() { if ((kind === "image" || kind === "video") && media.length === 0 && poster.length === 0 && eventId.length && !local && settings.autoDownload === "always" && !settings.lowData) core.fetchMedia(eventId) }
+    Component.onCompleted: loadMedia()
+    ListView.onReused: { loadMedia(); line.rewind() }
 
     Column {
         id: col
@@ -106,11 +108,14 @@ Item {
             readonly property bool animate: row.fresh && look.motion && settings.messageAnimation !== "none"
             opacity: animate && settings.messageAnimation === "fade" ? 0 : 1
             transform: [ Scale { id: popScale; origin.x: row.mine ? line.width : 0; origin.y: line.height; xScale: 1; yScale: 1 }, Translate { id: slideShift; y: 0 } ]
-            Component.onCompleted: if (animate) {
+            function rewind() { popScale.xScale = 1; popScale.yScale = 1; slideShift.y = 0; opacity = animate && settings.messageAnimation === "fade" ? 0 : 1; play() }
+            function play() {
+                if (!animate) return
                 if (settings.messageAnimation === "pop") { popScale.xScale = 0.85; popScale.yScale = 0.85; popIn.start() }
                 else if (settings.messageAnimation === "slide") { slideShift.y = 16; slideIn.start() }
                 else fadeIn.start()
             }
+            Component.onCompleted: play()
             NumberAnimation { id: popIn; target: popScale; properties: "xScale,yScale"; to: 1; duration: 280; easing.type: Easing.OutBack; easing.overshoot: 2 }
             NumberAnimation { id: slideIn; target: slideShift; property: "y"; to: 0; duration: 260; easing.type: Easing.OutCubic }
             NumberAnimation { id: fadeIn; target: line; property: "opacity"; to: 1; duration: 350 }

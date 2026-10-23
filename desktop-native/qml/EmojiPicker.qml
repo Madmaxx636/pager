@@ -11,9 +11,12 @@ Popup {
     anchors.centerIn: Overlay.overlay
     background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
     onOpened: { search.text = ""; search.forceActiveFocus() }
-    readonly property var groups: emoji.groups()
+    // the ones you used lately come first, then the usual groups
+    readonly property var recent: settings.recentEmoji || []
+    readonly property var groups: (recent.length ? [{ icon: "🕘", emoji: recent }] : []).concat(emoji.groups())
     property int group: 0
-    readonly property var shown: search.text.trim().length ? emoji.search(search.text) : (groups.length ? groups[group].emoji : [])
+    readonly property var shown: search.text.trim().length ? emoji.search(search.text) : (groups.length ? groups[Math.min(group, groups.length - 1)].emoji : [])
+    function remember(e) { const r = (settings.recentEmoji || []).filter(x => x !== e); r.unshift(e); settings.set("recentEmoji", r.slice(0, 24)) }
 
     contentItem: ColumnLayout {
         spacing: 8
@@ -43,7 +46,7 @@ Popup {
                 width: 40; height: 40; radius: 8; color: hov.hovered ? look.panel2 : "transparent"
                 HoverHandler { id: hov }
                 Label { anchors.centerIn: parent; text: modelData; font.pixelSize: Math.round(24 * look.textScale) }
-                TapHandler { onTapped: { pop.picked(modelData); pop.close() } }
+                TapHandler { onTapped: { pop.remember(modelData); pop.picked(modelData); pop.close() } }
             }
             Label { anchors.centerIn: parent; visible: pop.shown.length === 0; text: "Nothing found"; color: look.muted }
         }

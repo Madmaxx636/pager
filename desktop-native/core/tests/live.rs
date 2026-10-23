@@ -385,3 +385,43 @@ fn updates_are_checked_against_the_release_key_and_downloads_against_their_check
     pager_stop(engine);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn recovery_keys_and_key_files_work() {
+    let (Ok(server), Some((alice, apw))) = (std::env::var("PAGER_TEST_SERVER"), creds("PAGER_TEST_ALICE")) else { eprintln!("no test server given: skipping"); return };
+    let dir = std::env::temp_dir().join(format!("pager-keys-{}", std::process::id())); let _ = std::fs::remove_dir_all(&dir);
+    let (tx, rx) = channel::<(String, Value)>(); let tx = Box::leak(Box::new(tx));
+    let dirc = CString::new(dir.to_str().unwrap()).unwrap();
+    let engine = pager_start(dirc.as_ptr(), on_event, tx as *mut _ as *mut c_void);
+    assert!(wait_for(&rx, 20, |k, v| k == "state" && v["signedIn"] == false).is_some());
+    let (hs, u, p) = (CString::new(server).unwrap(), CString::new(alice).unwrap(), CString::new(apw).unwrap());
+    pager_login(engine, hs.as_ptr(), u.as_ptr(), p.as_ptr());
+    assert!(wait_for(&rx, 60, |k, v| k == "state" && v["signedIn"] == true).is_some());
+    pager_encryption_status(engine);
+    let st = wait_for(&rx, 30, |k, _| k == "encryption").expect("status");
+    assert!(st["device_id"].as_str().unwrap_or("").len() > 3 && st["fingerprint"].as_str().unwrap_or("").len() > 20, "{st}");
+    pager_recovery_create(engine);
+    let made = wait_for(&rx, 60, |k, _| k == "recovery_created").expect("recovery key");
+    assert_eq!(made["ok"], true, "{made}");
+    let key = made["key"].as_str().unwrap().to_string();
+    assert!(key.contains(' ') && key.replace(' ', "").len() > 40, "{key}");
+    // the key opens the backup it belongs to, with the same code the sign-in screen uses
+    let keyc = CString::new(key.clone()).unwrap();
+    pager_recover(engine, keyc.as_ptr());
+    let rec = wait_for(&rx, 60, |k, _| k == "recovered").expect("recovered");
+    assert_eq!(rec["ok"], true, "{rec}");
+    pager_encryption_status(engine);
+    let st = wait_for(&rx, 30, |k, _| k == "encryption").unwrap();
+    assert_eq!(st["backup_on_server"], true, "{st}");
+    // a key file and back
+    let f = dir.join("keys.txt"); let fc = CString::new(f.to_str().unwrap()).unwrap();
+    pager_keys_export(engine, fc.as_ptr(), c"correct horse".as_ptr());
+    let ex = wait_for(&rx, 60, |k, _| k == "keys_exported").unwrap(); assert_eq!(ex["ok"], true, "{ex}");
+    assert!(std::fs::read_to_string(&f).unwrap().contains("MEGOLM SESSION DATA"));
+    pager_keys_import(engine, fc.as_ptr(), c"wrong".as_ptr());
+    let bad = wait_for(&rx, 60, |k, _| k == "keys_imported").unwrap(); assert_eq!(bad["ok"], false, "{bad}");
+    pager_keys_import(engine, fc.as_ptr(), c"correct horse".as_ptr());
+    let good = wait_for(&rx, 60, |k, _| k == "keys_imported").unwrap(); assert_eq!(good["ok"], true, "{good}");
+    pager_stop(engine);
+    let _ = std::fs::remove_dir_all(&dir);
+}

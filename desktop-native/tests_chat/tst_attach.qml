@@ -43,6 +43,13 @@ Item {
             settings.set("hideStories", true); compare(core.storiesInfo().id, undefined)
             settings.set("hideStories", false); compare(core.storiesInfo().id, "!stories")
         }
+        function test_message_details_list_who_when_status_and_the_event() {
+            core.openRoom("!maya"); wait(150)
+            const id = core.timeline.data(core.timeline.index(0, 0), Qt.UserRole + 1)
+            const rows = core.messageInfo(id); const labels = rows.map(r => r[0])
+            for (const want of ["Sent", "From", "Chat", "Type", "Event ID"]) verify(labels.indexOf(want) >= 0, want)
+            compare(rows[labels.indexOf("Event ID")][1], id)
+        }
         function test_a_place_link_is_understood() {
             place.parse("https://www.openstreetmap.org/?mlat=48.858400&mlon=2.294500#map=16/48.8584/2.2945")
             verify(Math.abs(place.lat - 48.8584) < 0.0001); verify(Math.abs(place.lon - 2.2945) < 0.0001)
