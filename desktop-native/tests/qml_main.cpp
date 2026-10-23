@@ -6,7 +6,7 @@
 #include <QtQuickTest>
 #include "appearance.h"
 #include "fileinfo.h"
-#include "prefs.h"
+#include "appsettings.h"
 
 /// Answers server calls from a table the test fills in: "METHOD /path" -> {status, body}. Remembers every call.
 class MockCore : public QObject {
@@ -54,11 +54,11 @@ class Setup : public QObject {
     Q_OBJECT
 public slots:
     void qmlEngineAvailable(QQmlEngine *e) {
-        static MockCore core; static Appearance look(nullptr, QStringLiteral("/tmp/pager-qml-test-look.ini")); static FileInfo files; static Prefs prefs(nullptr, QStringLiteral("/tmp/pager-qml-test-prefs.ini"));
+        static MockCore core; static AppSettings settings(QStringLiteral("/tmp/pager-qml-test-settings.json")); static Appearance look(&settings); static FileInfo files;
         e->rootContext()->setContextProperty(QStringLiteral("core"), &core);
         e->rootContext()->setContextProperty(QStringLiteral("look"), &look);
         e->rootContext()->setContextProperty(QStringLiteral("files"), &files);
-        e->rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
+        e->rootContext()->setContextProperty(QStringLiteral("settings"), &settings);
         e->rootContext()->setContextProperty(QStringLiteral("startupDialog"), QString());
     }
 };

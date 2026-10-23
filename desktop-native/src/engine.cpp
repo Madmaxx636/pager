@@ -1,6 +1,7 @@
 #include "engine.h"
 #include "rich.h"
 #include "names.h"
+#include "notifypolicy.h"
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
@@ -73,8 +74,25 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
             if (m_seen.value(id) == last.id) continue;
             m_seen.insert(id, last.id);
             if (m_firstRooms || last.local || m_store.mine(last) || last.locked || (m_active && id == m_current)) continue;
-            const QString who = r->direct ? r->name : last.senderName;
-            emit notify(id, r->direct ? r->name : r->name + QStringLiteral(" · ") + who, last.kind == QLatin1String("image") ? QStringLiteral("Sent a photo") : last.kind == QLatin1String("file") ? QStringLiteral("Sent a file") : last.body);
+            if (m_store.isBotRoom(*r)) continue;
+            // what the rules say: about you? muted? quiet hours? do not disturb? per chat and per network overrides?
+            NotifyPolicy::Input in; in.roomId = id; in.network = r->network; in.isGroup = r->isGroup(); in.text = last.body;
+            const QString myName = r->nameOf(m_user).toLower();
+            in.mentioned = last.mentions.contains(m_user) || (!myName.isEmpty() && last.body.toLower().contains(QLatin1Char('@') + myName));
+            if (!last.replyTo.isEmpty()) if (const Msg *parent = r->find(last.replyTo)) in.replyToMe = m_store.mine(*parent);
+            in.quiet = m_store.muted(id) || r->lowPriority(); in.pinned = r->pinned();
+            const QDateTime now = QDateTime::currentDateTime(); in.nowMin = now.time().hour() * 60 + now.time().minute(); in.day = now.date().dayOfWeek() % 7; in.nowMs = now.toMSecsSinceEpoch();
+            NotifyPolicy::Decision d; d.show = true; d.silent = false; d.preview = QStringLiteral("full");
+            if (m_settings) d = NotifyPolicy::decide(in, m_settings->snapshot());
+            if (!d.show) continue;
+            const QString chatName = RoomListModel::displayName(*r);
+            const QString who = r->nameOf(last.sender);
+            QString what = last.kind == QLatin1String("image") ? QStringLiteral("Sent a photo") : last.kind == QLatin1String("video") ? QStringLiteral("Sent a video") : last.kind == QLatin1String("audio") ? (last.voice ? QStringLiteral("Voice message") : QStringLiteral("Sent audio")) : last.kind == QLatin1String("file") ? QStringLiteral("Sent a file")
+                         : last.kind == QLatin1String("poll") ? QStringLiteral("Poll: ") + last.poll.question : Rich::plain(last.html.isEmpty() ? last.body : last.html);
+            QString title = r->isGroup() ? chatName + QStringLiteral(" · ") + who : chatName;
+            if (d.preview == QLatin1String("hidden")) { title = QStringLiteral("New message"); what = QString(); }
+            else if (d.preview == QLatin1String("sender")) what = QString();
+            emit notify(id, title, what, d.silent);
         }
         m_firstRooms = false;
         emit unreadChanged(totalUnread());

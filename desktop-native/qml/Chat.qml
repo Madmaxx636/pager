@@ -29,7 +29,7 @@ Rectangle {
     }
     function sendIt() {
         if (!input.text.trim().length) return
-        if (editing) core.edit(editing, input.text); else core.send(input.text, replyingTo, prefs.markdown)
+        if (editing) core.edit(editing, input.text); else core.send(input.text, replyingTo, settings.markdown)
         input.clear(); editing = ""; replyingTo = ""
         msgs.positionViewAtBeginning()
     }
@@ -165,14 +165,14 @@ Rectangle {
                         placeholderText: "Message"; placeholderTextColor: look.muted; color: look.text; font.pixelSize: Math.round(15 * look.textScale); selectByMouse: true
                         wrapMode: TextArea.Wrap; leftPadding: 16; rightPadding: 40; topPadding: 9; bottomPadding: 9
                         background: Rectangle { radius: 20; color: look.panel2 }
-                        onTextChanged: { core.setTyping(text.length > 0 && prefs.sendTyping); draftTimer.restart() }
+                        onTextChanged: { core.setTyping(text.length > 0 && settings.sendTyping); draftTimer.restart() }
                         Keys.onPressed: (e) => {
                             if ((e.key === Qt.Key_V) && (e.modifiers & Qt.ControlModifier) && files.clipboardHasImage()) {
                                 e.accepted = true; const p = files.saveClipboardImage(); if (p.length) { const sz = files.imageSize(p); core.sendFile(p, "image/png", sz.width, sz.height) }
                                 return
                             }
                             if (e.key !== Qt.Key_Return && e.key !== Qt.Key_Enter) return
-                            const wantsSend = prefs.enterSends ? !(e.modifiers & Qt.ShiftModifier) : (e.modifiers & Qt.ControlModifier)
+                            const wantsSend = settings.enterToSend ? !(e.modifiers & Qt.ShiftModifier) : (e.modifiers & Qt.ControlModifier)
                             if (wantsSend) { e.accepted = true; pane.sendIt() }
                         }
                         Keys.onEscapePressed: { pane.replyingTo = ""; pane.editing = "" }
