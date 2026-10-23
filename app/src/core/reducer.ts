@@ -120,6 +120,8 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
   const votes: Record<string, Record<string, string[]>> = {};
   for (const [k, v] of Object.entries(start.pollVotes)) votes[k] = { ...v };
   const ended = new Set(start.pollEnded);
+  const deliveredTo: Record<string, string[]> = { ...(start.deliveredTo ?? {}) };
+  let statusSeen = !!start.statusSeen;
 
   for (const e of events) {
     if (e.state_key != null) { if (applyStates) chat = applyState(chat, e); continue; }
@@ -178,6 +180,15 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
         }
         break;
       }
+      case "com.beeper.message_send_status": {
+        // The bridge's own report on a message you sent: it reached the other network, and (when it knows) who it was delivered to.
+        const target = str(obj(content["m.relates_to"]).event_id);
+        if (!target) break;
+        statusSeen = true;
+        const who = arr(content.delivered_to).filter((u): u is string => typeof u === "string");
+        if (who.length) deliveredTo[target] = who;
+        break;
+      }
       case "m.room.redaction": {
         const target = str(e.redacts) ?? str(content.redacts);
         if (!target) break;
@@ -200,7 +211,7 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
   msgs.sort((a, b) => a.ts - b.ts);
   const cleaned: Record<string, Record<string, string[]>> = {};
   for (const [t, byKey] of Object.entries(reactions)) if (Object.keys(byKey).length) cleaned[t] = byKey;
-  return { ...chat, messages: msgs, reactions: cleaned, reactionRefs: refs, pollVotes: votes, pollEnded: [...ended] };
+  return { ...chat, messages: msgs, reactions: cleaned, reactionRefs: refs, pollVotes: votes, pollEnded: [...ended], deliveredTo, statusSeen };
 }
 
 function applyEdit(msgs: Msg[], e: J): Msg[] {

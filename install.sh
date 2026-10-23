@@ -131,6 +131,12 @@ if [ "$NO_ADMIN" = 0 ] && ! docker compose exec -T postgres psql -U pager -d syn
   fi
 fi
 
+# Keep the bridges tidy by themselves: update them weekly (rolling back one that will not start), and stop the ones nobody uses after the first week.
+if command -v crontab >/dev/null 2>&1; then
+  ./scripts/update-bridges.sh --install-cron >/dev/null 2>&1 || true
+  ./scripts/stop-unused-bridges.sh --install-cron >/dev/null 2>&1 || true
+fi
+
 # ---- 6. A handy command ----------------------------------------------------------------------------------------------------
 mkdir -p "$HOME/.local/bin" && ln -sf "$DIR/server/pager" "$HOME/.local/bin/pager" 2>/dev/null || true
 
