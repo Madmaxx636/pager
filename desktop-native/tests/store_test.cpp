@@ -1,0 +1,102 @@
+// Tests of the store: how events from the engine become messages, reactions, edits and previews. No screen needed.
+#include <QJsonDocument>
+#include <QtTest>
+#include "store.h"
+
+static QJsonObject msg(const QString &id, const QString &who, const QString &body, qint64 ts, const QJsonObject &extra = {}) {
+    QJsonObject c{{"msgtype", "m.text"}, {"body", body}};
+    for (auto it = extra.begin(); it != extra.end(); ++it) c.insert(it.key(), it.value());
+    return QJsonObject{{"event_id", id}, {"type", "m.room.message"}, {"sender", who}, {"origin_server_ts", double(ts)}, {"content", c}};
+}
+static QJsonObject room(const QString &id, const QString &name, const QJsonArray &events) { return QJsonObject{{"id", id}, {"name", name}, {"events", events}}; }
+
+class StoreTest : public QObject {
+    Q_OBJECT
+private slots:
+    void messagesAreOrderedAndNotDuplicated() {
+        Store s; s.setMe("@me:x");
+        s.applyRooms({room("!r", "Maya", {msg("$2", "@maya:x", "second", 2000), msg("$1", "@maya:x", "first", 1000)})});
+        s.applyRooms({room("!r", "Maya", {msg("$2", "@maya:x", "second", 2000)})});
+        const Room *r = s.room("!r");
+        QCOMPARE(r->msgs.size(), 2);
+        QCOMPARE(r->msgs[0].body, QString("first"));
+        QCOMPARE(r->preview(), QString("second"));
+    }
+    void editsReplaceTheTextOfTheirOwnMessageOnly() {
+        Store s; s.setMe("@me:x");
+        s.applyRooms({room("!r", "R", {msg("$1", "@maya:x", "helo", 1000)})});
+        QJsonObject edit = msg("$e", "@maya:x", "* hello", 2000, {{"m.new_content", QJsonObject{{"body", "hello"}}}, {"m.relates_to", QJsonObject{{"rel_type", "m.replace"}, {"event_id", "$1"}}}});
+        s.applyRooms({room("!r", "R", {edit})});
+        QCOMPARE(s.room("!r")->msgs.size(), 1);
+        QCOMPARE(s.room("!r")->msgs[0].body, QString("hello"));
+        QVERIFY(s.room("!r")->msgs[0].edited);
+        QJsonObject forged = msg("$f", "@evil:x", "* pwned", 3000, {{"m.new_content", QJsonObject{{"body", "pwned"}}}, {"m.relates_to", QJsonObject{{"rel_type", "m.replace"}, {"event_id", "$1"}}}});
+        s.applyRooms({room("!r", "R", {forged})});
+        QCOMPARE(s.room("!r")->msgs[0].body, QString("hello"));
+    }
+    void reactionsAddAndRedactionsRemoveThem() {
+        Store s; s.setMe("@me:x");
+        QJsonObject react{{"event_id", "$re"}, {"type", "m.reaction"}, {"sender", "@maya:x"}, {"origin_server_ts", 1500.0}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"rel_type", "m.annotation"}, {"event_id", "$1"}, {"key", "\U0001F44D"}}}}}};
+        s.applyRooms({room("!r", "R", {msg("$1", "@me:x", "hi", 1000), react})});
+        QCOMPARE(s.room("!r")->msgs[0].reactions.value("\U0001F44D").size(), 1);
+        QJsonObject undo{{"event_id", "$rd"}, {"type", "m.room.redaction"}, {"sender", "@maya:x"}, {"redacts", "$re"}, {"origin_server_ts", 1600.0}, {"content", QJsonObject{}}};
+        s.applyRooms({room("!r", "R", {undo})});
+        QVERIFY(s.room("!r")->msgs[0].reactions.isEmpty());
+    }
+    void redactedMessagesDisappear() {
+        Store s; s.setMe("@me:x");
+        s.applyRooms({room("!r", "R", {msg("$1", "@maya:x", "oops", 1000)})});
+        QJsonObject del{{"event_id", "$d"}, {"type", "m.room.redaction"}, {"sender", "@maya:x"}, {"redacts", "$1"}, {"origin_server_ts", 1100.0}, {"content", QJsonObject{}}};
+        s.applyRooms({room("!r", "R", {del})});
+        QVERIFY(s.room("!r")->msgs.isEmpty());
+    }
+    void lockedMessagesAreShownAsWaiting() {
+        Store s; s.setMe("@me:x");
+        QJsonObject enc{{"event_id", "$u"}, {"type", "m.room.encrypted"}, {"sender", "@maya:x"}, {"origin_server_ts", 1000.0}, {"locked", true}, {"content", QJsonObject{{"algorithm", "m.megolm.v1.aes-sha2"}}}};
+        s.applyRooms({room("!r", "R", {enc})});
+        QVERIFY(s.room("!r")->msgs[0].locked);
+        QVERIFY(s.room("!r")->preview().contains("waiting", Qt::CaseInsensitive));
+    }
+    void aLockedMessageBecomesReadableOnceTheKeyArrives() {
+        Store s; s.setMe("@me:x");
+        QJsonObject enc{{"event_id", "$u"}, {"type", "m.room.encrypted"}, {"sender", "@maya:x"}, {"origin_server_ts", 1000.0}, {"locked", true}, {"content", QJsonObject{{"algorithm", "m.megolm.v1.aes-sha2"}}}};
+        s.applyRooms({room("!r", "R", {enc})});
+        s.applyHistory(QJsonObject{{"room", "!r"}, {"events", QJsonArray{msg("$u", "@maya:x", "now readable", 1000)}}});
+        QCOMPARE(s.room("!r")->msgs.size(), 1);
+        QVERIFY(!s.room("!r")->msgs[0].locked);
+        QCOMPARE(s.room("!r")->msgs[0].body, QString("now readable"));
+    }
+    void ourOwnEchoReplacesTheMessageShownAtOnce() {
+        Store s; s.setMe("@me:x");
+        s.applyRooms({room("!r", "R", {msg("$1", "@maya:x", "hello", 1000)})});
+        s.addLocal("!r", "on my way");
+        QCOMPARE(s.room("!r")->msgs.size(), 2);
+        s.applyRooms({room("!r", "R", {msg("$2", "@me:x", "on my way", 5000)})});
+        QCOMPARE(s.room("!r")->msgs.size(), 2);
+        QVERIFY(!s.room("!r")->msgs.last().local);
+    }
+    void replyQuotesAreRemovedFromTheText() {
+        Store s; s.setMe("@me:x");
+        QJsonObject rel{{"m.relates_to", QJsonObject{{"m.in_reply_to", QJsonObject{{"event_id", "$1"}}}}}};
+        s.applyRooms({room("!r", "R", {msg("$1", "@a:x", "what time?", 1000), msg("$2", "@b:x", "> <@a:x> what time?\n\n7 pm", 2000, rel)})});
+        QCOMPARE(s.room("!r")->msgs[1].body, QString("7 pm"));
+        QCOMPARE(s.room("!r")->msgs[1].replyTo, QString("$1"));
+    }
+    void historyFillsInOlderMessagesAndRemembersWhereItEnded() {
+        Store s; s.setMe("@me:x");
+        s.applyRooms({room("!r", "R", {msg("$9", "@a:x", "new", 9000)})});
+        s.applyHistory(QJsonObject{{"room", "!r"}, {"events", QJsonArray{msg("$1", "@a:x", "old", 1000)}}, {"end", "tok1"}});
+        QCOMPARE(s.room("!r")->msgs.size(), 2);
+        QCOMPARE(s.room("!r")->msgs[0].body, QString("old"));
+        QCOMPARE(s.room("!r")->historyToken, QString("tok1"));
+        s.applyHistory(QJsonObject{{"room", "!r"}, {"events", QJsonArray{}}, {"end", ""}});
+        QVERIFY(s.room("!r")->reachedStart);
+    }
+    void roomsAreOrderedByTheirNewestMessage() {
+        Store s; s.setMe("@me:x");
+        s.applyRooms({room("!old", "Old", {msg("$1", "@a:x", "a", 1000)}), room("!new", "New", {msg("$2", "@a:x", "b", 9000)})});
+        QCOMPARE(s.order(), QStringList({"!new", "!old"}));
+    }
+};
+QTEST_APPLESS_MAIN(StoreTest)
+#include "store_test.moc"

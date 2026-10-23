@@ -6,3 +6,5 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; CACHE="$HOME/.cache/pager-native-build"; 
 USERNS=""; case "$(readlink -f "$(command -v docker)")" in *podman*) USERNS="--userns=keep-id" ;; esac
 docker run --rm $USERNS -u "$(id -u):$(id -g)" -e HOME=/tmp -e CARGO_HOME=/cargo -e CARGO_TARGET_DIR=/target \
   -v "$HERE/core:/work" -v "$CACHE/cargo:/cargo" -v "$CACHE/target:/target" -w /work docker.io/library/rust:1-bookworm cargo "${@:-build --release}"
+
+if [ -z "${1:-}" ] || [ "$1" = build ]; then mkdir -p "$HERE/build-core" && cp "$CACHE/target/release/libpager_core.so" "$HERE/build-core/"; fi
