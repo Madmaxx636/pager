@@ -18,6 +18,8 @@ V="${1:?Usage: $0 [--publish-only] <version like 0.4.1> \"notes\"}"; NOTES="${2:
 [ -f "$HOME/.config/pager/release.env" ] && . "$HOME/.config/pager/release.env"
 SERVER="${SERVER:-}"; SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"; REMOTE_DIR="${REMOTE_DIR:-pager/server/updates}"
 [ -n "$SERVER" ] || { echo "Say which server to publish to: set SERVER=user@host (and SSH_KEY) in ~/.config/pager/release.env" >&2; exit 1; }
+# Electron 44 no longer has a 32-bit Windows build, so the 32-bit installer uses the newest version that does (43.8.3, a major that still gets security fixes). Move this when 43 is retired.
+ELECTRON32="${ELECTRON32:-43.8.3}"
 KEY="$HOME/.config/pager/update-signing.pem"
 [ -f "$KEY" ] || { echo "No release key at $KEY" >&2; exit 1; }
 cmp -s <(openssl pkey -in "$KEY" -pubout) desktop/update-pubkey.pem || { echo "The release key doesn't match desktop/update-pubkey.pem, installed apps would reject this release" >&2; exit 1; }
@@ -46,7 +48,7 @@ echo "== Desktop"; (cd desktop && npm test --silent && npm run dist >/dev/null)
 cp "desktop/release/pager-desktop_${V}_amd64.deb" "$OUT/"
 if [ "$KEEP_WINDOWS" = 1 ]; then echo "== Windows (kept as it is on the server)"; else echo "== Windows"; if [ -n "${WIN_BUILD:-}" ]; then (cd desktop && eval "$WIN_BUILD" >/dev/null); else (cd desktop && npx electron-builder --win --x64 >/dev/null); fi; cp "desktop/release/pager-desktop-setup-${V}.exe" "$OUT/"
   # And for 32-bit Windows 10 or newer (older and smaller PCs). Same file name as above, so it is copied out before the next build and renamed.
-  echo "== Windows 32-bit"; if [ -n "${WIN_BUILD:-}" ]; then (cd desktop && eval "${WIN_BUILD/--x64/--ia32}" >/dev/null); else (cd desktop && npx electron-builder --win --ia32 >/dev/null); fi
+  echo "== Windows 32-bit"; if [ -n "${WIN_BUILD:-}" ]; then (cd desktop && eval "${WIN_BUILD/--x64/--ia32 --config.electronVersion=$ELECTRON32}" >/dev/null); else (cd desktop && npx electron-builder --win --ia32 --config.electronVersion=$ELECTRON32 >/dev/null); fi
   cp "desktop/release/pager-desktop-setup-${V}.exe" "$OUT/pager-desktop-setup-${V}-32bit.exe"
   file "$OUT/pager-desktop-setup-${V}-32bit.exe" | grep -q "PE32 executable" || { echo "The 32-bit Windows installer is not a 32-bit program" >&2; exit 1; }
 fi
