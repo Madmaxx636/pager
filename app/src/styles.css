@@ -847,3 +847,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 /* The message field with a picture or file waiting in it stacks its rows; the looks centre the field's contents, so keep the text row full width. */
 :root[data-look] .composer .field.has-tray { align-items: stretch; }
 :root[data-look] .composer .field .field-row { width: 100%; align-items: center; } :root[data-look] .composer .field .field-row textarea { flex: 1; min-width: 0; }
+
+/* Desktop update progress */
+.update-toast { position: fixed; right: 16px; bottom: 16px; z-index: 900; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); min-width: 220px; display: grid; gap: 8px; font-size: .9rem; }
+.update-toast i { display: block; height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; } .update-toast u { display: block; height: 100%; background: var(--accent); transition: width .3s; }

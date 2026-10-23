@@ -1058,6 +1058,7 @@ declare global {
       onWindowActive?(cb: (active: boolean) => void): void;
       repaint?(): void;
       log?(line: string): void;
+      onUpdateProgress?(cb: (p: { version?: string; state: "downloading" | "installing" | "failed"; percent: number }) => void): void;
       beat?(): void;
       onMemory?(cb: (level: string) => void): void;
       setTitleBar?(o: { color: string; symbolColor: string }): void;

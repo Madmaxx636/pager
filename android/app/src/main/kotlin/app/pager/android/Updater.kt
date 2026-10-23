@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -114,19 +115,40 @@ object Updater {
             val file = withContext(Dispatchers.IO) {
                 val dir = File(ctx.cacheDir, "updates").apply { deleteRecursively(); mkdirs() }
                 val f = File(dir, "pager.apk")
-                val c = URL(info.url).openConnection() as HttpURLConnection
-                c.connectTimeout = 15_000; c.readTimeout = 60_000
-                val md = MessageDigest.getInstance("SHA-256")
-                c.inputStream.use { i -> f.outputStream().use { o -> val buf = ByteArray(64 * 1024); while (true) { val n = i.read(buf); if (n < 0) break; md.update(buf, 0, n); o.write(buf, 0, n) } } }
-                val got = md.digest().joinToString("") { "%02x".format(it) }
-                if (got != info.sha256) { f.delete(); throw java.io.IOException("The download doesn't match its checksum, so it was not installed") }
+                // A download that stalls or drops starts again (up to three tries) instead of sitting there; the percentage shows it is moving.
+                var failure: Exception? = null
+                var ok = false
+                for (attempt in 1..3) {
+                    try {
+                        _progress.value = 0
+                        val c = URL(info.url).openConnection() as HttpURLConnection
+                        c.connectTimeout = 15_000; c.readTimeout = 30_000
+                        val total = c.contentLengthLong
+                        val md = MessageDigest.getInstance("SHA-256")
+                        c.inputStream.use { i -> f.outputStream().use { o ->
+                            val buf = ByteArray(64 * 1024); var done = 0L; var shown = -1
+                            while (true) {
+                                val n = i.read(buf); if (n < 0) break
+                                md.update(buf, 0, n); o.write(buf, 0, n); done += n
+                                val pc = if (total > 0) (done * 100 / total).toInt() else -1
+                                if (pc != shown) { shown = pc; _progress.value = pc }
+                            }
+                        } }
+                        val got = md.digest().joinToString("") { "%02x".format(it) }
+                        if (got != info.sha256) { f.delete(); throw java.io.IOException("The download doesn't match its checksum, so it was not installed") }
+                        ok = true; break
+                    } catch (e: java.io.IOException) { failure = e; f.delete(); if (e.message?.contains("checksum") == true) throw e; kotlinx.coroutines.delay(2_000L * attempt) }
+                }
+                if (!ok) throw java.io.IOException("The download kept stopping (${failure?.message ?: "no connection"}). Check your connection and try again")
                 f
             }
             if (!sameSigner(signers(ctx), signers(ctx, file.path))) throw java.io.IOException(wrongKey(info))
             _stage.value = Stage.INSTALLING
             withContext(Dispatchers.IO) { commit(ctx, file) }
             _available.value = null
-        } catch (e: Exception) { _message.value = "Update failed: ${e.message ?: e::class.java.simpleName}"; _stage.value = Stage.IDLE }
+            // Android answers through UpdateReceiver. If it never does, do not sit on "Installing…" forever.
+            watch.launch { kotlinx.coroutines.delay(180_000); if (_stage.value == Stage.INSTALLING) report("Android didn't finish the install. Open the update again, or use the install notification.") }
+        } catch (e: Exception) { _message.value = "Update failed: ${e.message ?: e::class.java.simpleName}"; _stage.value = Stage.IDLE; _progress.value = -1 }
     }
 
     private fun commit(ctx: Context, apk: File) {
@@ -144,6 +166,11 @@ object Updater {
     }
 
     internal fun report(text: String) { _message.value = text; _stage.value = Stage.IDLE }
+
+    /** How much of the download is done, in percent (-1 when the server did not say how big it is). */
+    private val _progress = kotlinx.coroutines.flow.MutableStateFlow(-1)
+    val progress: kotlinx.coroutines.flow.StateFlow<Int> = _progress
+    private val watch = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Default)
 }
 
 /** Android tells us here how the install went (and asks the person to confirm when it must). */
