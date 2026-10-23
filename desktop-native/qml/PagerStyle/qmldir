@@ -1,0 +1,18 @@
+module PagerStyle
+Button 1.0 Button.qml
+ToolButton 1.0 ToolButton.qml
+Menu 1.0 Menu.qml
+MenuItem 1.0 MenuItem.qml
+MenuSeparator 1.0 MenuSeparator.qml
+TextField 1.0 TextField.qml
+TextArea 1.0 TextArea.qml
+CheckBox 1.0 CheckBox.qml
+RadioButton 1.0 RadioButton.qml
+ScrollBar 1.0 ScrollBar.qml
+Dialog 1.0 Dialog.qml
+DialogButtonBox 1.0 DialogButtonBox.qml
+ProgressBar 1.0 ProgressBar.qml
+ToolTip 1.0 ToolTip.qml
+SpinBox 1.0 SpinBox.qml
+Popup 1.0 Popup.qml
+Label 1.0 Label.qml

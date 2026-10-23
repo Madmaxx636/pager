@@ -57,6 +57,15 @@ fn store_key(dir: &std::path::Path) -> std::io::Result<String> {
     Ok(k)
 }
 
+/// The SDK only reports what is new to it, so after a restart a sync would say nothing about chats it already knows. The screens are filled from what the server says,
+/// so what it remembers of chats (not its keys!) is thrown away each time Pager starts: the first sync then tells about every chat again, like the web app's does.
+fn wipe_chat_cache(dir: &std::path::Path) {
+    let store = store_dir(dir);
+    for name in ["matrix-sdk-state.sqlite3", "matrix-sdk-event-cache.sqlite3"] {
+        for suffix in ["", "-wal", "-shm"] { let _ = std::fs::remove_file(store.join(format!("{name}{suffix}"))); }
+    }
+}
+
 async fn build_client(dir: &std::path::Path, homeserver: &str) -> anyhow::Result<Client> {
     let key = store_key(dir)?;
     // A first sync of a big account can take well over the 30 seconds an HTTP request is allowed by default.
@@ -130,7 +139,7 @@ async fn run_sync(client: Client, tell: Tell) {
                 for id in resp.rooms.invited.keys() { if let Some(room) = client.get_room(id) { if let Err(e) = room.join().await { tell.problem("could not join an invitation", e); } } }
                 for id in resp.rooms.left.keys() { tell.say("left", &json!({ "id": id })); }
                 if !rooms.is_empty() { tell.say("rooms", &json!({ "rooms": rooms })); }
-                tell.say("synced", &json!({ "rooms": rooms.len() }));
+                tell.say("synced", &json!({ "rooms": rooms.len(), "joined": resp.rooms.joined.len(), "known": client.rooms().len() }));
                 LoopCtrl::Continue
             }
         }).await;
@@ -166,13 +175,13 @@ pub extern "C" fn pager_start(data_dir: *const c_char, cb: Callback, user: *mut 
         });
         match saved {
             None => e.tell.say("state", &json!({ "signedIn": false })),
-            Some((hs, session)) => match build_client(&e.dir, &hs).await {
+            Some((hs, session)) => { wipe_chat_cache(&e.dir); match build_client(&e.dir, &hs).await {
                 Ok(client) => match client.restore_session(session).await {
                     Ok(()) => e.start_sync(client),
                     Err(err) => { e.tell.problem("could not restore the sign-in", err); e.tell.say("state", &json!({ "signedIn": false })); }
                 },
                 Err(err) => { e.tell.problem("could not open the store", err); e.tell.say("state", &json!({ "signedIn": false })); }
-            },
+            } },
         }
     });
     Box::into_raw(Box::new(engine))
@@ -277,8 +286,8 @@ pub extern "C" fn pager_redact(h: *mut Arc<Engine>, room_id: *const c_char, even
 /// Sends a file or picture from this computer (encrypted automatically in encrypted chats). Answers like pager_send_event.
 /// [width] and [height] are the picture's size, or 0.
 #[no_mangle]
-pub extern "C" fn pager_send_file(h: *mut Arc<Engine>, room_id: *const c_char, path: *const c_char, mime_type: *const c_char, caption: *const c_char, width: u32, height: u32, txn: *const c_char) {
-    use matrix_sdk::attachment::{AttachmentConfig, AttachmentInfo, BaseImageInfo};
+pub extern "C" fn pager_send_file(h: *mut Arc<Engine>, room_id: *const c_char, path: *const c_char, mime_type: *const c_char, caption: *const c_char, width: u32, height: u32, txn: *const c_char, voice: bool, duration_ms: u64) {
+    use matrix_sdk::attachment::{AttachmentConfig, AttachmentInfo, BaseAudioInfo, BaseImageInfo};
     let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
     let (rid, path, mime_s, caption, txn) = (s(room_id), s(path), s(mime_type), s(caption), s(txn));
     let e2 = e.clone();
@@ -293,6 +302,10 @@ pub extern "C" fn pager_send_file(h: *mut Arc<Engine>, room_id: *const c_char, p
         let mut cfg = AttachmentConfig::new();
         if mime.type_() == mime::IMAGE && width > 0 && height > 0 {
             cfg = cfg.info(AttachmentInfo::Image(BaseImageInfo { width: Some(width.into()), height: Some(height.into()), size: matrix_sdk::ruma::UInt::new(data.len() as u64), blurhash: None, is_animated: None }));
+        }
+        if mime.type_() == mime::AUDIO {
+            let info = BaseAudioInfo { duration: Some(Duration::from_millis(duration_ms)), size: matrix_sdk::ruma::UInt::new(data.len() as u64), waveform: None };
+            cfg = cfg.info(if voice { AttachmentInfo::Voice(info) } else { AttachmentInfo::Audio(info) });
         }
         if !caption.is_empty() { cfg = cfg.caption(Some(matrix_sdk::ruma::events::room::message::TextMessageEventContent::plain(caption.clone()))); }
         match room.send_attachment(name, &mime, data, cfg).await {
@@ -388,12 +401,27 @@ pub extern "C" fn pager_mark_read(h: *mut Arc<Engine>, room_id: *const c_char, e
     });
 }
 
-/// Starts the sync again from nothing (a fresh first sync), for "reload everything from the server".
+/// Starts again from nothing (for "reload everything from the server"): the sync stops, what the SDK remembers of chats is dropped, and a fresh first sync begins.
 #[no_mangle]
 pub extern "C" fn pager_resync(h: *mut Arc<Engine>) {
     let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
     let e2 = e.clone();
-    e.rt.spawn(async move { if let Some(c) = e2.client() { e2.start_sync(c); } });
+    e.rt.spawn(async move {
+        let task = e2.sync.lock().unwrap().take();
+        if let Some(t) = task { t.abort(); }
+        let old = e2.client.lock().unwrap().take();
+        drop(old);
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let saved: Option<(String, MatrixSession)> = std::fs::read_to_string(session_file(&e2.dir)).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|v| {
+            Some((v.get("homeserver")?.as_str()?.to_string(), serde_json::from_value(v.get("session")?.clone()).ok()?))
+        });
+        let Some((hs, session)) = saved else { return };
+        wipe_chat_cache(&e2.dir);
+        match build_client(&e2.dir, &hs).await {
+            Ok(client) => match client.restore_session(session).await { Ok(()) => e2.start_sync(client), Err(err) => e2.tell.problem("could not restore the sign-in", err) },
+            Err(err) => e2.tell.problem("could not open the store", err),
+        }
+    });
 }
 
 #[no_mangle]

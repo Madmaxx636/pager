@@ -26,11 +26,17 @@ class Engine : public QObject {
     Q_PROPERTY(bool currentIsDirect READ currentIsDirect NOTIFY currentChanged)
     Q_PROPERTY(QString tab READ tab NOTIFY listChanged)
     Q_PROPERTY(QString search READ search NOTIFY listChanged)
+    Q_PROPERTY(int totalUnreadChats READ totalUnreadChats NOTIFY listChanged)    // all chats with something new, for the "N unread" under the title
     Q_PROPERTY(int unreadChats READ unreadChats NOTIFY listChanged)     // chats with something new (the badge on the Unread tab)
     Q_PROPERTY(QStringList labels READ labels NOTIFY listChanged)
+    Q_PROPERTY(QVariantList pins READ pins NOTIFY listChanged)           // the pinned chats, for the row above the list
+    Q_PROPERTY(QVariantMap filters READ filters NOTIFY listChanged)
+    Q_PROPERTY(int filterCount READ filterCount NOTIFY listChanged)
+    Q_PROPERTY(QStringList networks READ networks NOTIFY listChanged)    // the chat apps your chats are on
     Q_PROPERTY(QString server READ server NOTIFY stateChanged)
     Q_PROPERTY(QString logPath READ logPath CONSTANT)
     Q_PROPERTY(QString currentAvatar READ currentAvatar NOTIFY currentChanged)
+    Q_PROPERTY(QString currentNetworkLabel READ currentNetworkLabel NOTIFY currentChanged)
     Q_PROPERTY(QString currentNetwork READ currentNetwork NOTIFY currentChanged)
     Q_PROPERTY(bool currentIsGroup READ currentIsGroupChat NOTIFY currentChanged)
     Q_PROPERTY(QString currentTyping READ currentTyping NOTIFY currentChanged)
@@ -62,13 +68,19 @@ public:
     QString currentName() const;
     QString currentSub() const;
     bool currentIsDirect() const { const Room *r = m_store.room(m_current); return r && r->direct; }
+    QVariantList pins() const;
+    QVariantMap filters() const { return m_filters; }
+    int filterCount() const { int n = 0; for (const char *k : {"groups", "dms", "drafts", "unanswered"}) if (m_filters.value(QLatin1String(k)).toBool()) ++n; if (!m_filters.value("network").toString().isEmpty()) ++n; return n; }
+    QStringList networks() const;
     QString tab() const { return m_tab; }
     QString search() const { return m_search; }
     int unreadChats() const { return m_rooms.unreadChats(); }
+    int totalUnreadChats() const { return m_rooms.unreadChats(); }
     QStringList labels() const;
     QString server() const { return m_server; }
     QString logPath() const { return m_logFile; }
     QString currentAvatar() const { const Room *r = m_store.room(m_current); if (!r || r->avatar.isEmpty()) return {}; const QString p = m_store.mediaPath(QStringLiteral("av:") + r->avatar); if (p.isEmpty()) m_store.wantAvatar(r->avatar); return p; }
+    QString currentNetworkLabel() const;
     QString currentNetwork() const { const Room *r = m_store.room(m_current); return r ? r->network : QString(); }
     bool currentIsGroupChat() const { const Room *r = m_store.room(m_current); return r && r->isGroup(); }
     QString currentTyping() const;
@@ -100,7 +112,7 @@ public:
     Q_INVOKABLE QString fullPath(const QString &eventId) const { return m_store.mediaPath(QStringLiteral("full:") + eventId); }
     /// Copies a downloaded file somewhere the person chose.
     Q_INVOKABLE bool saveCopy(const QString &eventId, const QString &destination) const;
-    Q_INVOKABLE void sendFile(const QString &path, const QString &mime, int width, int height, const QString &caption = QString());
+    Q_INVOKABLE void sendFile(const QString &path, const QString &mime, int width, int height, const QString &caption = QString(), bool voice = false, double durationMs = 0);
     Q_INVOKABLE void createPoll(const QString &question, const QStringList &answers, int maxSelections, bool disclosed);
     /// Picks (or un-picks, in polls that allow several) an answer.
     Q_INVOKABLE void vote(const QString &pollId, const QString &answerId);
@@ -116,6 +128,8 @@ public:
     Q_INVOKABLE void updateInstalled(const QString &error);
     /// Which chats the list shows: tab is inbox, unread, pinned, low, archive or label:NAME; [search] matches names and what was said.
     Q_INVOKABLE void filter(const QString &tab, const QString &search);
+    Q_INVOKABLE void setFilters(const QVariantMap &f);
+    Q_INVOKABLE void clearFilters() { setFilters({}); }
     Q_INVOKABLE void setTag(const QString &roomId, const QString &tag, bool on, double order = 0);
     Q_INVOKABLE void pin(const QString &roomId, bool on);
     Q_INVOKABLE void archive(const QString &roomId, bool on) { setTag(roomId, QStringLiteral("u.archived"), on); }
@@ -172,6 +186,14 @@ public:
     Q_INVOKABLE void deleteLabel(const QString &name);
     /// The chat above or below the open one in the list ([dir] -1 or 1); with [unreadOnly] the next one with something new.
     Q_INVOKABLE void stepChat(int dir, bool unreadOnly);
+    /// What a web address looks like (title, description, picture), asked of your server once per address. [callback]({title, description, site, imageMxc}) or undefined.
+    Q_INVOKABLE void linkPreview(const QString &url, const QJSValue &callback);
+    /// A small copy of a picture on the server ([mxc] is its address) at about [width] px: the path when it is here, otherwise empty and mediaReady(key) when it arrives.
+    Q_INVOKABLE QString thumbPath(const QString &mxc, int width);
+    static QString thumbKey(const QString &mxc, int width) { return QStringLiteral("th%1:").arg(width) + mxc; }
+    /// For screenshots and tests: every chat id, and a chat's name.
+    QStringList chatIds() const { return m_store.order(); }
+    QString chatName(const QString &id) const { const Room *r = m_store.room(id); return r ? RoomListModel::displayName(*r) : QString(); }
     Q_INVOKABLE void retry(const QString &localId);
     Q_INVOKABLE QString draft(const QString &roomId) const { return m_drafts.value(roomId); }
     Q_INVOKABLE void setDraft(const QString &roomId, const QString &text);
@@ -235,9 +257,15 @@ private:
     void refreshLists() { m_rooms.refresh(); emit listChanged(); emit unreadChanged(totalUnread()); }
     QHash<QString, std::function<void(int, const QJsonValue &)>> m_internal;
     QString m_tab = QStringLiteral("inbox"), m_search, m_pendingOpen;
+    QVariantMap m_filters;
+    void applyListOptions();
+    QHash<QString, qint64> m_leftAt;     // when each chat was last on screen, so old history pulled in by scrolling can be let go
+    QTimer m_trimTimer;
     AppSettings *m_settings = nullptr;
+    QHash<QString, QVariant> m_previews; QSet<QString> m_previewing;
     QHash<QString, QString> m_drafts; QString m_dataDir;
     void saveDrafts();
+    void trimHistory();
     void saveSaved();
     void armReminders();
     QJsonObject m_saved; QHash<QString, QTimer *> m_reminderTimers;

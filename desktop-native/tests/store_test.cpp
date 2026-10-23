@@ -145,6 +145,14 @@ private slots:
         s.applyRooms({o});
         QCOMPARE(s.room("!r")->msgs.size(), 1); QCOMPARE(s.room("!r")->historyToken, QString("tok")); QVERIFY(!s.room("!r")->reachedStart);
     }
+    void trimmingKeepsTheNewestAndAllowsFetchingTheRestAgain() {
+        Store s; s.setMe("@me:x");
+        QJsonArray ev; for (int i = 0; i < 100; ++i) ev.append(msg(QString("$%1").arg(i), "@a:x", QString("m%1").arg(i), 1000 + i));
+        s.applyRooms({room("!r", "R", ev)}); s.mutableRoom("!r")->reachedStart = true;
+        QCOMPARE(s.trimRoom("!r", 60), 40);
+        const Room *r = s.room("!r"); QCOMPARE(r->msgs.size(), 60); QCOMPARE(r->msgs.first().body, QString("m40")); QCOMPARE(r->msgs.last().body, QString("m99"));
+        QVERIFY(!r->reachedStart); QCOMPARE(s.trimRoom("!r", 60), 0);
+    }
     void theClockFollowsTheChosenFormat() {
         const qint64 ts = QDateTime(QDate(2026, 3, 4), QTime(15, 7)).toMSecsSinceEpoch();
         Store::setTimeFormat("24"); QCOMPARE(Store::clock(ts), QString("15:07"));

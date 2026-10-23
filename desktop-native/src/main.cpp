@@ -7,10 +7,17 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QFontDatabase>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QCoreApplication>
 #include <QStandardPaths>
 #include <QTimer>
 #include "appearance.h"
 #include "emoji.h"
+#include "iconprovider.h"
+#include "roundedimage.h"
 #include "fileinfo.h"
 #include "appsettings.h"
 #include "rich.h"
@@ -19,14 +26,32 @@
 #include <QProcess>
 #include "engine.h"
 
+/// "Low-end mode" (Settings > Advanced) draws the screens with the processor instead of the graphics chip: less memory and no graphics-driver surprises on older computers.
+/// It has to be decided before the window system starts, so the saved settings are read early.
+static void chooseGraphics(int argc, char **argv) {
+    QString dir;
+    for (int i = 1; i + 1 < argc; ++i) if (QString::fromLocal8Bit(argv[i]) == QLatin1String("--data-dir")) dir = QString::fromLocal8Bit(argv[i + 1]);
+    if (dir.isEmpty()) {
+        QCoreApplication::setOrganizationName(QStringLiteral("Pager")); QCoreApplication::setApplicationName(QStringLiteral("pager-native"));
+        dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    }
+    QFile f(dir + QStringLiteral("/settings.json"));
+    bool low = qEnvironmentVariableIsSet("PAGER_LOW_END");
+    if (!low && f.open(QIODevice::ReadOnly)) low = QJsonDocument::fromJson(f.readAll()).object().value(QStringLiteral("lowEnd")).toBool();
+    if (low && !qEnvironmentVariableIsSet("QSG_RHI_BACKEND")) QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
+}
+
 int main(int argc, char *argv[]) {
+    chooseGraphics(argc, argv);
     QApplication app(argc, argv);
     QApplication::setQuitOnLastWindowClosed(false);   // closing the window leaves Pager in the tray (unless switched off in Settings), so messages still reach you
     QGuiApplication::setOrganizationName(QStringLiteral("Pager"));
     QGuiApplication::setApplicationName(QStringLiteral("pager-native"));
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Pager"));
     QGuiApplication::setDesktopFileName(QStringLiteral("pager-native"));
-    QQuickStyle::setStyle(QStringLiteral("Basic"));      // plain controls: every colour and shape comes from Pager's own screens, not from a system theme
+    const int inter = QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/Inter.ttf"));
+    if (inter >= 0) { QFont f(QFontDatabase::applicationFontFamilies(inter).value(0)); f.setPixelSize(15); QGuiApplication::setFont(f); }
+    QQuickStyle::setStyle(QStringLiteral("PagerStyle"));      // plain controls: every colour and shape comes from Pager's own screens, not from a system theme
 
     QCommandLineParser cli;
     cli.addHelpOption();
@@ -35,6 +60,9 @@ int main(int argc, char *argv[]) {
     QCommandLineOption shot(QStringLiteral("screenshot"), QStringLiteral("Save a picture of the window to this file and quit (used for checking the screens)."), QStringLiteral("file"));
     QCommandLineOption size(QStringLiteral("size"), QStringLiteral("Window size for --screenshot, like 1100x720."), QStringLiteral("WxH"));
     QCommandLineOption open(QStringLiteral("open"), QStringLiteral("Open a window on start (settings, emoji, poll) for screenshots."), QStringLiteral("which"));
+    QCommandLineOption wait(QStringLiteral("wait"), QStringLiteral("Milliseconds to wait before the --screenshot is taken."), QStringLiteral("ms"));
+    QCommandLineOption chat(QStringLiteral("chat"), QStringLiteral("Open the first chat whose name contains this (for screenshots)."), QStringLiteral("name"));
+    cli.addOption(wait); cli.addOption(chat);
     cli.addOption(open);
     cli.addOption(demo); cli.addOption(data); cli.addOption(shot); cli.addOption(size);
     cli.process(app);
@@ -44,12 +72,20 @@ int main(int argc, char *argv[]) {
     Engine engine(dir, cli.isSet(demo));
     AppSettings settings(dir + QStringLiteral("/settings.json"));
     engine.setSettings(&settings);
+    // For trying the app against a test server without typing: PAGER_AUTOLOGIN="https://server,user,password" signs in once (the sign-in is then remembered).
+    if (qEnvironmentVariableIsSet("PAGER_AUTOLOGIN")) {
+        const QStringList a = qEnvironmentVariable("PAGER_AUTOLOGIN").split(QLatin1Char(','));
+        if (a.size() == 3) QTimer::singleShot(1500, &engine, [&engine, a] { if (!engine.signedIn()) engine.login(a[0], a[1], a[2]); });
+    }
     Appearance look(&settings);
     Emoji emoji;
     FileInfo files;
     Rich rich;
 
     QQmlApplicationEngine qml;
+    qml.addImageProvider(QStringLiteral("icon"), new IconProvider);
+    qmlRegisterType<RoundedImage>("Pager.Items", 1, 0, "RoundedImage");
+    qml.addImportPath(QStringLiteral("qrc:/qml"));
     qml.rootContext()->setContextProperty(QStringLiteral("core"), &engine);
     qml.rootContext()->setContextProperty(QStringLiteral("look"), &look);
     qml.rootContext()->setContextProperty(QStringLiteral("emoji"), &emoji);
@@ -106,7 +142,14 @@ int main(int argc, char *argv[]) {
     if (cli.isSet(shot)) {
         QQuickWindow *w = win;
         if (cli.isSet(size)) { const QStringList wh = cli.value(size).split('x'); if (wh.size() == 2) w->resize(wh[0].toInt(), wh[1].toInt()); }
-        QTimer::singleShot(1500, &app, [&] { w->grabWindow().save(cli.value(shot)); app.quit(); });
+        if (cli.isSet(chat)) {
+            auto *poll = new QTimer(&app); poll->setInterval(400);
+            QObject::connect(poll, &QTimer::timeout, &app, [&engine, poll, text = cli.value(chat)] {
+                for (const QString &id : engine.chatIds()) if (engine.chatName(id).contains(text, Qt::CaseInsensitive)) { engine.openRoom(id); poll->stop(); return; }
+            });
+            poll->start();
+        }
+        QTimer::singleShot(cli.isSet(wait) ? cli.value(wait).toInt() : 1500, &app, [&] { w->grabWindow().save(cli.value(shot)); app.quit(); });
     }
     return app.exec();
 }

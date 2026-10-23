@@ -110,7 +110,8 @@ private slots:
         QVERIFY(e.searchLocal("dinner", "!work", "all").isEmpty());                   // not in that chat
         QVERIFY(e.searchLocal("", "", "all").isEmpty());                              // nothing to look for
         QVERIFY(!e.searchLocal("", "!maya", "files").isEmpty());                      // a file in the chat
-        QVERIFY(e.searchLocal("", "!maya", "images").isEmpty());
+        QVERIFY(!e.searchLocal("", "!maya", "images").isEmpty());                     // the demo photo
+        QVERIFY(e.searchLocal("", "!maya", "videos").isEmpty());
     }
     void popUpsFollowTheNotificationSettings() {      // needs no server
         Engine e(QString(), true); AppSettings s; e.setSettings(&s);

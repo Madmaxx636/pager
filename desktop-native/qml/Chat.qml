@@ -50,32 +50,27 @@ Rectangle {
             Layout.fillWidth: true; height: 64; color: look.panel
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: look.line }
             RowLayout {
-                anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 12; spacing: 10
-                ToolButton {
-                    id: backBtn; visible: pane.showBack; onClicked: pane.back()
-                    contentItem: Label { text: "←"; color: look.text; font.pixelSize: 22; horizontalAlignment: Text.AlignHCenter }
-                    background: Rectangle { color: "transparent" }
-                }
-                RowLayout {
-                    Layout.fillWidth: true; spacing: 10; visible: core.currentRoom.length > 0
-                    Avatar { source: core.currentAvatar; letter: core.currentName.length ? core.currentName[0].toUpperCase() : "?"; seed: core.currentName; size: 42; network: core.currentNetwork }
-                    ColumnLayout {
-                        spacing: 0; Layout.fillWidth: true
-                        Label { text: core.currentName; color: look.text; font.pixelSize: Math.round(16 * look.textScale); font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.fillWidth: true }
-                        Label {
-                            Layout.fillWidth: true; elide: Text.ElideRight; font.pixelSize: Math.round(12 * look.textScale)
-                            text: core.currentTyping.length ? core.currentTyping : core.currentSub; color: core.currentTyping.length ? look.accent : look.muted; font.italic: core.currentTyping.length > 0
+                anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 10; spacing: 6
+                IconButton { visible: pane.showBack; ico: "arrow-left"; onClicked: pane.back() }
+                Item {
+                    Layout.fillWidth: true; Layout.fillHeight: true; visible: core.currentRoom.length > 0
+                    RowLayout {
+                        anchors.verticalCenter: parent.verticalCenter; spacing: 12
+                        Avatar { source: core.currentAvatar; letter: core.currentName.length ? core.currentName[0].toUpperCase() : "?"; seed: core.currentName; size: 40; network: core.currentNetwork }
+                        ColumnLayout {
+                            spacing: 0
+                            RowLayout { spacing: 4
+                                Label { text: core.currentName; color: look.text; font.pixelSize: Math.round(16 * look.textScale); font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.maximumWidth: pane.width - 330 }
+                                Icon { name: "chevron-down"; size: 15; color: look.muted } }
+                            Label { visible: text.length > 0; text: core.currentTyping.length ? core.currentTyping : core.currentSub; color: core.currentTyping.length ? look.accent : look.muted; font.pixelSize: Math.round(12 * look.textScale); font.italic: core.currentTyping.length > 0 }
                         }
                     }
                     TapHandler { onTapped: pane.toggleInfo() }
+                    HoverHandler { cursorShape: Qt.PointingHandCursor }
                 }
                 Item { Layout.fillWidth: true; visible: core.currentRoom.length === 0 }
-                IconButton { visible: core.currentRoom.length > 0; symbol: "⌕"; glyphSize: 22; onClicked: pane.searchRequested(); ToolTip.text: "Search this chat (Ctrl+F)"; ToolTip.visible: hovered; ToolTip.delay: 600 }
-                ToolButton {
-                    visible: core.currentRoom.length > 0; id: infoBtn; onClicked: pane.toggleInfo(); ToolTip.text: "Chat info"; ToolTip.visible: hovered; ToolTip.delay: 600
-                    contentItem: Label { text: "ⓘ"; color: pane.infoOpen ? look.accent : look.muted; font.pixelSize: 22; horizontalAlignment: Text.AlignHCenter }
-                    background: Rectangle { radius: 18; color: infoBtn.hovered ? look.panel2 : "transparent" }
-                }
+                IconButton { visible: core.currentRoom.length > 0; ico: "search"; onClicked: pane.searchRequested(); ToolTip.text: "Search in page (Ctrl+F)"; ToolTip.visible: hovered }
+                IconButton { visible: core.currentRoom.length > 0; ico: "info"; tint: pane.infoOpen ? look.accent : look.muted; onClicked: pane.toggleInfo(); ToolTip.text: "Page info"; ToolTip.visible: hovered }
             }
         }
         // ---- some messages cannot be read yet
@@ -123,7 +118,7 @@ Rectangle {
                 visible: !msgs.atYEnd && msgs.count > 0
                 width: 40; height: 40; radius: 20; color: look.panel; border.width: 1; border.color: look.line
                 anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 16
-                Label { anchors.centerIn: parent; text: "↓"; color: look.text; font.pixelSize: 20 }
+                Icon { anchors.centerIn: parent; name: "arrow-down"; size: 20; color: look.text }
                 TapHandler { onTapped: msgs.positionViewAtBeginning() }
                 layer.enabled: true
             }
@@ -140,55 +135,58 @@ Rectangle {
             Rectangle { width: 3; height: parent.height; color: look.accent }
             RowLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 8
                 Label { Layout.fillWidth: true; text: pane.barText; color: look.muted; font.pixelSize: Math.round(13 * look.textScale); elide: Text.ElideRight }
-                IconButton { symbol: "✕"; glyphSize: 16; onClicked: { pane.replyingTo = ""; pane.editing = ""; input.clear() } } }
+                IconButton { ico: "x"; iconSize: 16; implicitWidth: 30; implicitHeight: 30; onClicked: { pane.replyingTo = ""; pane.editing = ""; input.clear() } } }
         }
         // ---- the box you write in
         Rectangle {
             visible: core.currentRoom.length > 0
-            Layout.fillWidth: true; color: look.panel; implicitHeight: Math.min(Math.max(input.implicitHeight, 40), 170) + 20
+            Layout.fillWidth: true; color: look.panel; implicitHeight: Math.min(Math.max(input.implicitHeight, 44), 170) + 20
             Rectangle { width: parent.width; height: 1; color: look.line }
             RowLayout {
-                anchors.fill: parent; anchors.margins: 10; spacing: 6
-                ToolButton {
-                    id: plus; Layout.alignment: Qt.AlignBottom; onClicked: attachMenu.popup(); ToolTip.text: "Attach"; ToolTip.visible: hovered; ToolTip.delay: 600
-                    contentItem: Label { text: "＋"; color: look.muted; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                    background: Rectangle { implicitWidth: 40; implicitHeight: 40; radius: 20; color: plus.hovered ? look.panel2 : "transparent" }
+                anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; anchors.topMargin: 10; anchors.bottomMargin: 10; spacing: 8
+                IconButton {
+                    id: plus; Layout.alignment: Qt.AlignBottom; ico: "plus"; iconSize: 22; implicitWidth: 44; implicitHeight: 44; tint: look.accent
+                    onClicked: attachMenu.popup(); ToolTip.text: "Attach"; ToolTip.visible: hovered; ToolTip.delay: 600
                     Menu {
                         id: attachMenu
                         MenuItem { text: "Photo or file…"; onTriggered: filePicker.open() }
                         MenuItem { text: "Poll…"; onTriggered: pollDialog.open() }
                     }
                 }
-                ScrollView {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    TextArea {
-                        id: input
-                        placeholderText: "Message"; placeholderTextColor: look.muted; color: look.text; font.pixelSize: Math.round(15 * look.textScale); selectByMouse: true
-                        wrapMode: TextArea.Wrap; leftPadding: 16; rightPadding: 40; topPadding: 9; bottomPadding: 9
-                        background: Rectangle { radius: 20; color: look.panel2 }
-                        onTextChanged: { core.setTyping(text.length > 0 && settings.sendTyping); draftTimer.restart() }
-                        Keys.onPressed: (e) => {
-                            if ((e.key === Qt.Key_V) && (e.modifiers & Qt.ControlModifier) && files.clipboardHasImage()) {
-                                e.accepted = true; const p = files.saveClipboardImage(); if (p.length) { const sz = files.imageSize(p); core.sendFile(p, "image/png", sz.width, sz.height) }
-                                return
+                Rectangle {
+                    Layout.fillWidth: true; Layout.fillHeight: true; radius: 24; color: look.panel2
+                    ScrollView {
+                        anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 44
+                        TextArea {
+                            id: input
+                            placeholderText: "Message " + core.currentName.split(" ")[0] + (core.currentNetworkLabel.length ? " · " + core.currentNetworkLabel : "")
+                            leftPadding: 12; rightPadding: 4; topPadding: 12; bottomPadding: 12
+                            background: Item { }
+                            onTextChanged: { core.setTyping(text.length > 0 && settings.sendTyping); draftTimer.restart() }
+                            Keys.onPressed: (e) => {
+                                if ((e.key === Qt.Key_V) && (e.modifiers & Qt.ControlModifier) && files.clipboardHasImage()) {
+                                    e.accepted = true; const p = files.saveClipboardImage(); if (p.length) { const sz = files.imageSize(p); core.sendFile(p, "image/png", sz.width, sz.height) }
+                                    return
+                                }
+                                if (e.key !== Qt.Key_Return && e.key !== Qt.Key_Enter) return
+                                const wantsSend = settings.enterToSend ? !(e.modifiers & Qt.ShiftModifier) : (e.modifiers & Qt.ControlModifier)
+                                if (wantsSend) { e.accepted = true; pane.sendIt() }
                             }
-                            if (e.key !== Qt.Key_Return && e.key !== Qt.Key_Enter) return
-                            const wantsSend = settings.enterToSend ? !(e.modifiers & Qt.ShiftModifier) : (e.modifiers & Qt.ControlModifier)
-                            if (wantsSend) { e.accepted = true; pane.sendIt() }
+                            Keys.onEscapePressed: { pane.replyingTo = ""; pane.editing = "" }
                         }
-                        Keys.onEscapePressed: { pane.replyingTo = ""; pane.editing = "" }
-                        Label { text: "☺"; color: emojiHover.hovered ? look.accent : look.muted; font.pixelSize: 20; anchors.right: parent.right; anchors.rightMargin: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 8
-                            HoverHandler { id: emojiHover; cursorShape: Qt.PointingHandCursor }
-                            TapHandler { onTapped: inputEmoji.open() } }
                     }
+                    IconButton { anchors.right: parent.right; anchors.rightMargin: 4; anchors.bottom: parent.bottom; anchors.bottomMargin: 3; ico: "smile"; iconSize: 21; onClicked: inputEmoji.open(); ToolTip.text: "Emoji"; ToolTip.visible: hovered; ToolTip.delay: 600 }
                 }
-                Button {
+                Rectangle {
                     id: sendBtn
-                    Layout.alignment: Qt.AlignBottom
-                    enabled: input.text.trim().length > 0
-                    contentItem: Label { text: "➤"; color: look.accentInk; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                    background: Rectangle { implicitWidth: 40; implicitHeight: 40; radius: 20; color: sendBtn.enabled ? look.accent : look.muted }
-                    onClicked: pane.sendIt()
+                    Layout.alignment: Qt.AlignBottom; implicitWidth: 46; implicitHeight: 46; radius: 23; color: look.accent
+                    readonly property bool hasText: input.text.trim().length > 0
+                    Icon { anchors.centerIn: parent; name: sendBtn.hasText ? "send" : "mic"; size: 21; color: look.accentInk }
+                    TapHandler { onTapped: { if (sendBtn.hasText) pane.sendIt(); else voiceDialog.start() } }
+                    TapHandler { acceptedButtons: Qt.RightButton; enabled: sendBtn.hasText; onTapped: scheduleDialog.openFor(pane.roomId, input.text) }
+                    HoverHandler { cursorShape: Qt.PointingHandCursor }
+                    ToolTip.visible: sendHover.hovered; ToolTip.text: sendBtn.hasText ? "Send (right-click to schedule)" : "Record a voice message"; ToolTip.delay: 600
+                    HoverHandler { id: sendHover }
                 }
             }
             Timer { id: draftTimer; interval: 600; onTriggered: core.setDraft(pane.roomId, input.text) }
@@ -204,10 +202,16 @@ Rectangle {
     }
 
     PollDialog { id: pollDialog }
+    // recording (and the multimedia libraries behind it) is loaded the first time you press the microphone
+    Loader { id: voiceLoader; active: false; source: "VoiceDialog.qml"; onLoaded: item.start() }
+    QtObject { id: voiceDialog; function start() { if (voiceLoader.active) voiceLoader.item.start(); else voiceLoader.active = true } }
+    ScheduleDialog { id: scheduleDialog; onScheduled: { input.clear() } }
     FileDialog { id: filePicker; title: "Send a photo or file"; fileMode: FileDialog.OpenFiles; onAccepted: pane.attach(selectedFiles) }
     EmojiPicker { id: picker; onPicked: (e) => core.react(pane.target, e) }
     EmojiPicker { id: inputEmoji; onPicked: (e) => { input.insert(input.cursorPosition, e); input.forceActiveFocus() } }
-    ImageViewer { id: viewer }
+    // the viewer (pictures and video, with the multimedia libraries) is loaded the first time something is opened
+    Loader { id: viewerLoader; property string pendingId; active: false; source: "ImageViewer.qml"; onLoaded: item.show(viewerLoader.pendingId) }
+    QtObject { id: viewer; function show(id) { viewerLoader.pendingId = id; if (viewerLoader.active) viewerLoader.item.show(id); else viewerLoader.active = true } }
     FileDialog { id: saveDialog; property string event; fileMode: FileDialog.SaveFile; onAccepted: { if (!core.saveCopy(event, files.path(selectedFile))) saveError.open() } }
     Dialog { id: saveError; modal: true; anchors.centerIn: Overlay.overlay; title: "Couldn't save"; standardButtons: Dialog.Ok; background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
         Label { text: "The file couldn't be saved there."; color: look.text } }

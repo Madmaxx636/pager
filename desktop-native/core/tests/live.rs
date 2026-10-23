@@ -102,7 +102,16 @@ fn encrypted_conversation_between_the_engine_and_another_client() {
     let hist = wait_for(&rx, 60, |k, v| k == "history" && v["room"] == room_id.as_str()).expect("history");
     let bodies: Vec<String> = hist["events"].as_array().unwrap().iter().filter_map(|e| e["content"]["body"].as_str().map(String::from)).collect();
     assert!(bodies.contains(&"hello alice".to_string()) && bodies.contains(&"hi bob".to_string()), "history should be readable after a restart, got {bodies:?}");
-    pager_stop(engine2);
+    // and again, and again: every start must list every chat (the SDK alone only reports what is new to it)
+    let mut last = engine2;
+    for round in 0..2 {
+        pager_stop(last);
+        std::thread::sleep(Duration::from_millis(500));
+        while rx.try_recv().is_ok() {}
+        last = pager_start(dirc.as_ptr(), on_event, tx as *mut _ as *mut c_void);
+        assert!(wait_for(&rx, 60, |k, v| k == "rooms" && v["rooms"].as_array().into_iter().flatten().any(|r| r["id"] == room_id.as_str())).is_some(), "start number {} should list the chat again", round + 3);
+    }
+    pager_stop(last);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -211,9 +220,24 @@ fn reactions_files_and_pictures_work_in_an_encrypted_chat() {
     assert_eq!(sent["event_id"].is_string(), true, "{sent}");
     let up = dir.join("hello.txt"); std::fs::write(&up, "file from alice").unwrap();
     let upc = CString::new(up.to_str().unwrap()).unwrap();
-    pager_send_file(engine, rid.as_ptr(), upc.as_ptr(), c"text/plain".as_ptr(), c"".as_ptr(), 0, 0, c"t2".as_ptr());
+    pager_send_file(engine, rid.as_ptr(), upc.as_ptr(), c"text/plain".as_ptr(), c"".as_ptr(), 0, 0, c"t2".as_ptr(), false, 0);
     let sent = wait_for(&rx, 60, |k, v| (k == "sent" || k == "send_failed") && v["txn"] == "t2").unwrap();
     assert!(sent["event_id"].is_string(), "{sent}");
+    let voice = dir.join("note.ogg"); std::fs::write(&voice, b"OggS-not-really-audio").unwrap();
+    let voicec = CString::new(voice.to_str().unwrap()).unwrap();
+    pager_send_file(engine, rid.as_ptr(), voicec.as_ptr(), c"audio/ogg".as_ptr(), c"".as_ptr(), 0, 0, c"t3".as_ptr(), true, 4200);
+    let sent = wait_for(&rx, 60, |k, v| (k == "sent" || k == "send_failed") && v["txn"] == "t3").unwrap();
+    assert!(sent["event_id"].is_string(), "{sent}");
+    let voice_seen = rt.block_on(async {
+        let room = bob_room(); let end = Instant::now() + Duration::from_secs(60); let mut ok = false;
+        while Instant::now() < end && !ok {
+            bob_client.sync_once(SyncSettings::default().timeout(Duration::from_secs(2))).await.ok();
+            let m = room.messages(matrix_sdk::room::MessagesOptions::backward()).await.unwrap();
+            ok = m.chunk.iter().any(|e| { let j = e.raw().json().get(); j.contains("msc3245.voice") && j.contains("4200") });
+        }
+        ok
+    });
+    assert!(voice_seen, "bob should see alice's voice message with its length");
     let (heard, redact_ok) = rt.block_on(async {
         let room = bob_room(); let end = Instant::now() + Duration::from_secs(60); let (mut react, mut file) = (false, false);
         while Instant::now() < end && !(react && file) {

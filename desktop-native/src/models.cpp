@@ -1,6 +1,7 @@
 #include "models.h"
 #include <QDateTime>
 #include <QRegularExpression>
+
 #include <QVariantMap>
 #include <algorithm>
 #include "rich.h"
@@ -27,8 +28,10 @@ QHash<int, QByteArray> RoomListModel::roleNames() const {
 }
 
 QString RoomListModel::displayName(const Room &r) {
-    if (!r.name.trimmed().isEmpty() && r.name != r.id) return Names::pretty(r.name);
+    static const QRegularExpression empty(QStringLiteral("^Empty Room( \\(was .*\\))?$"));
+    if (!r.name.trimmed().isEmpty() && r.name != r.id && !empty.match(r.name).hasMatch()) return Names::pretty(r.name);
     for (const QString &h : r.heroes) return r.nameOf(h);
+    for (const QString &u : r.joined) if (u != QString() && !Store::isBridgeBot(u)) { /* someone else in it */ }
     return QStringLiteral("Unnamed chat");
 }
 
@@ -36,7 +39,7 @@ static QString previewOf(const Room &r, const QString &me) {
     for (int i = r.msgs.size() - 1; i >= 0; --i) {
         const Msg &m = r.msgs[i];
         QString t;
-        if (m.locked) t = QStringLiteral("\U0001F512 Message waiting for its key");
+        if (m.locked) t = QStringLiteral("\U0001F512 ") + Store::lockedText(m.ts);
         else if (m.kind == QLatin1String("image")) t = m.sticker ? QStringLiteral("Sticker") : (m.mime == QLatin1String("image/gif") ? QStringLiteral("GIF") : QStringLiteral("Photo"));
         else if (m.kind == QLatin1String("video")) t = QStringLiteral("Video");
         else if (m.kind == QLatin1String("audio")) t = m.voice ? QStringLiteral("Voice message") : m.body;
@@ -96,9 +99,14 @@ void RoomListModel::refresh() {
         else if (r.archived()) { if (q.isEmpty()) continue; }
         else if (m_tab == QLatin1String("unread")) { if (!isUnread(r)) continue; }
         else if (m_tab == QLatin1String("low")) { if (!r.lowPriority()) continue; }
-        else if (m_tab == QLatin1String("pinned")) { if (!r.pinned()) continue; }
         else if (m_tab.startsWith(QLatin1String("label:"))) { if (!r.labels().contains(m_tab.mid(6))) continue; }
         else if (m_tab == QLatin1String("inbox")) { if (r.lowPriority() && q.isEmpty()) continue; }
+        if (m_filters.value("groups").toBool() && !r.isGroup()) continue;
+        if (m_filters.value("dms").toBool() && r.isGroup()) continue;
+        if (m_filters.value("drafts").toBool() && !m_drafts.contains(r.id)) continue;
+        if (m_filters.value("unanswered").toBool() && (r.msgs.isEmpty() || r.msgs.last().sender == m_store->me())) continue;
+        if (!m_filters.value("network").toString().isEmpty() && r.network != m_filters.value("network").toString()) continue;
+        if (m_excludePinned && r.pinned() && !r.archived() && !r.lowPriority()) continue;
         if (!q.isEmpty()) {
             bool hit = displayName(r).toLower().contains(q);
             if (!hit) for (int i = r.msgs.size() - 1; i >= 0 && i >= r.msgs.size() - 40 && !hit; --i) hit = r.msgs[i].body.toLower().contains(q) || r.msgs[i].caption.toLower().contains(q);
@@ -253,7 +261,8 @@ QVariant TimelineModel::data(const QModelIndex &i, int role) const {
     case IdRole: return m.id;
     case SenderRole: return m.sender;
     case SenderNameRole: return Names::pretty(m.senderName);
-    case BodyRole: return m.kind == QLatin1String("emote") ? QStringLiteral("* %1 %2").arg(m.senderName, m.body) : m.body;
+    case BodyRole: if (m.locked) return Store::lockedText(m.ts);
+        return m.kind == QLatin1String("emote") ? QStringLiteral("* %1 %2").arg(m.senderName, m.body) : m.body;
     case KindRole: return m.kind;
     case TimeRole: return Store::clock(m.ts);
     case FullTimeRole: return QDateTime::fromMSecsSinceEpoch(m.ts).toString(QStringLiteral("ddd, MMM d, h:mm:ss AP"));
