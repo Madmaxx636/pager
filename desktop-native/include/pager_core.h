@@ -26,7 +26,8 @@ void pager_update_check(PagerEngine *e, const char *server, const char *current,
 void pager_update_download(PagerEngine *e, const char *base, const char *file, const char *sha256, const char *dest_dir);
 void pager_recover(PagerEngine *e, const char *recovery_key);
 // Says you have read up to this event.
-void pager_mark_read(PagerEngine *e, const char *room_id, const char *event_id);
+void pager_mark_read(PagerEngine *e, const char *room_id, const char *event_id, bool private_receipt);
+void pager_resync(PagerEngine *e);
 void pager_stop(PagerEngine *e);
 const char *pager_core_version(void);
 

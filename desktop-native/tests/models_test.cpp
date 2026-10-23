@@ -64,6 +64,25 @@ private slots:
         QVERIFY(m.data(m.index(1), TimelineModel::DividerRole).toBool()); QVERIFY(!m.data(m.index(0), TimelineModel::DividerRole).toBool());
         QCOMPARE(m.data(m.index(0), TimelineModel::ReplyTextRole).toString(), QString("question"));
     }
+    void groupingGapAndBigEmojiFollowTheOptions() {
+        Store s; s.setMe("@me:x"); TimelineModel m(&s);
+        s.applyRooms({room("!r", "R", {msg("$1", "@a:x", "one", 0), msg("$2", "@a:x", "two", 8 * 60000), msg("$3", "@a:x", QString::fromUtf8("😀"), 9 * 60000)})});
+        m.setOptions(5, true); m.show("!r");
+        QVERIFY(m.data(m.index(1), TimelineModel::FirstRole).toBool()); QVERIFY(!m.data(m.index(0), TimelineModel::FirstRole).toBool()); QVERIFY(m.data(m.index(2), TimelineModel::LastRole).toBool());   // $2 and $3 are one run; $1 stands apart
+        QVERIFY(m.data(m.index(0), TimelineModel::BigEmojiRole).toBool());
+        m.setOptions(15, false); m.show("!r");
+        QVERIFY(!m.data(m.index(2), TimelineModel::LastRole).toBool());     // 15 minutes: all three belong together
+        QVERIFY(!m.data(m.index(0), TimelineModel::BigEmojiRole).toBool());
+    }
+    void hiddenNetworksAndUnreadFirstShapeTheList() {
+        Store s; s.setMe("@me:x"); RoomListModel l(&s);
+        QJsonObject wa = room("!w", "On WhatsApp", {msg("$1", "@x:y", "a", 3000)}); wa["state"] = QJsonArray{QJsonObject{{"type", "m.bridge"}, {"state_key", "x"}, {"content", QJsonObject{{"protocol", QJsonObject{{"id", "whatsapp"}}}}}}};
+        QJsonObject quiet = room("!q", "Read one", {msg("$2", "@x:y", "b", 2000)}); QJsonObject unread = room("!u", "Unread one", {msg("$3", "@x:y", "c", 1000)}); unread["unread"] = 1;
+        s.applyRooms({wa, quiet, unread});
+        l.setOptions({"whatsapp"}, false); l.refresh(); QCOMPARE(l.rowCount(), 2);
+        l.setOptions({}, true); l.refresh(); QCOMPARE(l.rowCount(), 3); QCOMPARE(l.data(l.index(0), RoomListModel::NameRole).toString(), QString("Unread one"));     // oldest, but unread: first
+        l.setOptions({}, false); l.refresh(); QCOMPARE(l.data(l.index(0), RoomListModel::NameRole).toString(), QString("On WhatsApp"));
+    }
     void roomListMovesRowsInsteadOfResetting() {
         Store s; s.setMe("@me:x"); RoomListModel l(&s); QAbstractItemModelTester check(&l);
         s.applyRooms({room("!a", "Alpha", {msg("$1", "@x:y", "a", 1000)}), room("!b", "Beta", {msg("$2", "@x:y", "b", 2000)}), room("!c", "Gamma", {msg("$3", "@x:y", "c", 3000)})});

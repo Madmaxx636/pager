@@ -15,11 +15,11 @@ Rectangle {
     property var menuInfo: ({})
 
     Component.onCompleted: {
-        if (startupDialog === "settings") Qt.callLater(settings.open); else if (startupDialog === "accounts") Qt.callLater(accounts.open); else if (startupDialog === "admin") Qt.callLater(admin.open)
+        if (startupDialog === "settings") Qt.callLater(settingsPage.open); else if (startupDialog === "accounts") Qt.callLater(accounts.open); else if (startupDialog === "admin") Qt.callLater(admin.open)
     }
     Accounts { id: accounts }
     Admin { id: admin }
-    Settings { id: settings; onRestoreRequested: pane.restoreRequested() }
+    Settings { id: settingsPage; onRestoreRequested: pane.restoreRequested(); onAccountsRequested: accounts.open(); onAdminRequested: admin.open(); onOpenMessage: (r, e) => core.openAt(r, e) }
 
     function showMenu(id) { menuRoom = id; menuInfo = core.roomInfo(id); chatMenu.popup() }
 
@@ -44,7 +44,7 @@ Rectangle {
                     MenuItem { text: "Mark all as read"; onTriggered: core.markAllRead() }
                     MenuItem { text: "Chat accounts…"; onTriggered: accounts.open() }
                     MenuItem { text: "Server admin…"; visible: core.isAdmin; height: visible ? implicitHeight : 0; onTriggered: admin.open() }
-                    MenuItem { text: "Settings"; onTriggered: settings.open() }
+                    MenuItem { text: "Settings"; onTriggered: settingsPage.open() }
                     MenuItem { text: "Restore old messages…"; onTriggered: pane.restoreRequested() }
                     MenuItem { text: "Sign out"; onTriggered: core.logout() }
                 }

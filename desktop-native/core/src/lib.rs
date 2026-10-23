@@ -98,7 +98,7 @@ fn sync_filter() -> Option<matrix_sdk::ruma::api::client::filter::FilterDefiniti
 }
 
 async fn run_sync(client: Client, tell: Tell) {
-    tell.say("state", &json!({ "signedIn": true, "user": client.user_id().map(|u| u.to_string()), "device": client.device_id().map(|d| d.to_string()), "syncing": true }));
+    tell.say("state", &json!({ "signedIn": true, "user": client.user_id().map(|u| u.to_string()), "device": client.device_id().map(|d| d.to_string()), "syncing": true, "homeserver": client.homeserver().to_string() }));
     let mut waited = 0u64;
     let mut first = true;
     loop {
@@ -371,9 +371,9 @@ pub extern "C" fn pager_recover(h: *mut Arc<Engine>, recovery_key: *const c_char
     });
 }
 
-/// Tells everyone you have read up to [event_id] in a room (and clears its unread count).
+/// Tells people you have read up to [event_id] (only you and the server when [private_receipt]) in a room (and clears its unread count).
 #[no_mangle]
-pub extern "C" fn pager_mark_read(h: *mut Arc<Engine>, room_id: *const c_char, event_id: *const c_char) {
+pub extern "C" fn pager_mark_read(h: *mut Arc<Engine>, room_id: *const c_char, event_id: *const c_char, private_receipt: bool) {
     use matrix_sdk::ruma::api::client::receipt::create_receipt::v3::ReceiptType;
     use matrix_sdk::ruma::events::receipt::ReceiptThread;
     let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
@@ -383,8 +383,17 @@ pub extern "C" fn pager_mark_read(h: *mut Arc<Engine>, room_id: *const c_char, e
         let Some(client) = e2.client() else { return };
         let (Ok(id), Ok(ev)) = (OwnedRoomId::try_from(rid.as_str()), matrix_sdk::ruma::OwnedEventId::try_from(eid.as_str())) else { return };
         let Some(room) = client.get_room(&id) else { return };
-        if let Err(err) = room.send_single_receipt(ReceiptType::Read, ReceiptThread::Unthreaded, ev).await { e2.tell.problem("could not mark as read", err); }
+        let kind = if private_receipt { ReceiptType::ReadPrivate } else { ReceiptType::Read };
+        if let Err(err) = room.send_single_receipt(kind, ReceiptThread::Unthreaded, ev).await { e2.tell.problem("could not mark as read", err); }
     });
+}
+
+/// Starts the sync again from nothing (a fresh first sync), for "reload everything from the server".
+#[no_mangle]
+pub extern "C" fn pager_resync(h: *mut Arc<Engine>) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let e2 = e.clone();
+    e.rt.spawn(async move { if let Some(c) = e2.client() { e2.start_sync(c); } });
 }
 
 #[no_mangle]

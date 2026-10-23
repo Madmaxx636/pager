@@ -145,6 +145,12 @@ private slots:
         s.applyRooms({o});
         QCOMPARE(s.room("!r")->msgs.size(), 1); QCOMPARE(s.room("!r")->historyToken, QString("tok")); QVERIFY(!s.room("!r")->reachedStart);
     }
+    void theClockFollowsTheChosenFormat() {
+        const qint64 ts = QDateTime(QDate(2026, 3, 4), QTime(15, 7)).toMSecsSinceEpoch();
+        Store::setTimeFormat("24"); QCOMPARE(Store::clock(ts), QString("15:07"));
+        Store::setTimeFormat("12"); QCOMPARE(Store::clock(ts), QString("3:07 PM"));
+        Store::setTimeFormat("system"); QVERIFY(!Store::clock(ts).isEmpty());
+    }
     void ourOwnEchoReplacesTheMessageShownAtOnce() {
         Store s; s.setMe("@me:x");
         s.applyRooms({room("!r", "R", {msg("$1", "@maya:x", "hello", 1000)})});
