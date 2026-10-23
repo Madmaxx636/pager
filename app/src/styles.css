@@ -631,7 +631,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 /* Linux desktop: our own title bar, so it looks the same maximized or not */
 .titlebar { display: none; }
 :root[data-titlebar] #root { display: flex; flex-direction: column; }
-:root[data-titlebar] .titlebar { display: flex; align-items: center; flex: none; height: 36px; padding: 0 160px 0 14px; -webkit-app-region: drag; user-select: none; background: var(--bg); color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: .02em; }
+:root[data-titlebar] .titlebar { display: flex; align-items: center; flex: none; height: env(titlebar-area-height, 36px); padding: 0 max(150px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 10px)) 0 14px; -webkit-app-region: drag; user-select: none; background: var(--bg); color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: .02em; }
 :root[data-titlebar] #root > :not(.titlebar) { flex: 1 1 0; min-height: 0; height: auto; }
 :root[data-titlebar] .shell, :root[data-titlebar] .splash { height: auto; }
 
