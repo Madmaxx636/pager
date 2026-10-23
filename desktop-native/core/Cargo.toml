@@ -1,0 +1,17 @@
+[package]
+name = "pager-core"
+version = "0.1.0"
+edition = "2021"
+description = "Pager's Matrix engine for the native desktop app: sign-in, sync, end-to-end encryption, sending. Exposes a small C interface for the Qt user interface."
+license = "AGPL-3.0-or-later"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+matrix-sdk = { version = "=0.19.1", default-features = false, features = ["e2e-encryption", "sqlite", "bundled-sqlite", "rustls-aws-lc-rs", "automatic-room-key-forwarding"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+futures-util = "0.3"
