@@ -17,7 +17,7 @@ Dialog {
     property string note: ""
     modal: true; anchors.centerIn: Overlay.overlay
     width: Math.min(880, Overlay.overlay ? Overlay.overlay.width - 24 : 880)
-    height: Math.min(720, Overlay.overlay ? Overlay.overlay.height - 24 : 720)
+    height: Math.min(Qt.application.arguments.indexOf("--screenshot") >= 0 ? 4000 : 720, Overlay.overlay ? Overlay.overlay.height - 24 : 720)
     padding: 0
     background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
     readonly property bool narrow: width < 640
@@ -507,8 +507,8 @@ Dialog {
             function onSyncSaved(err) { syncDlg.msg = err.length ? err : "Saved."; if (!err.length) { syncDlg.saveIds = []; core.fetchSyncedSettings() } } }
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(480, Overlay.overlay ? Overlay.overlay.width - 32 : 480); height: Math.min(640, Overlay.overlay ? Overlay.overlay.height - 40 : 640); title: "Sync settings"; standardButtons: Dialog.Close
         background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
-        component Pick: Repeater { property var picked; signal flip(string id); property var only: null
-            delegate: CheckBox { visible: !parent.only || parent.only.indexOf(modelData.id) >= 0; height: visible ? implicitHeight : 0; text: modelData.label + "  ·  " + modelData.hint; checked: parent.picked.indexOf(modelData.id) >= 0; onToggled: parent.flip(modelData.id) } }
+        component Pick: Repeater { id: rep; property var picked; signal flip(string id); property var only: null
+            delegate: CheckBox { visible: !rep.only || rep.only.indexOf(modelData.id) >= 0; height: visible ? implicitHeight : 0; text: modelData.label + "  ·  " + modelData.hint; checked: rep.picked.indexOf(modelData.id) >= 0; onToggled: rep.flip(modelData.id) } }
         contentItem: ScrollView { clip: true; contentWidth: availableWidth
             ColumnLayout { width: parent.width; spacing: 6
                 Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; text: "Settings stay on each device. Here you choose what to copy between your computers and browsers. Phones and tablets have their own." }

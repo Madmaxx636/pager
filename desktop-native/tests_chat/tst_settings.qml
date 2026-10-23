@@ -37,6 +37,33 @@ Item {
             text.store("abc123"); compare(settings.gifKeys.giphy, "abc123")
             text.store(""); verify(!("giphy" in settings.gifKeys))
         }
+        function findAll(item, pred, out) { for (let i = 0; i < item.children.length; i++) { const c = item.children[i]; if (pred(c)) out.push(c); findAll(c, pred, out) } return out }
+        function test_every_switch_and_choice_on_every_page_changes_its_setting() {
+            page.open(); tryVerify(function () { return page.opened })
+            let toggled = 0, chosen = 0
+            for (let i = 0; i < page.visiblePages.length; i++) {
+                page.page = i; page.showingList = false; wait(120)
+                const toggles = findAll(page.contentItem, c => c.hasOwnProperty("inverted") && c.hasOwnProperty("key") && c.hasOwnProperty("hint"), [])
+                for (const t of toggles) {
+                    if (!t.visible || !t.enabled || !t.key.length) continue
+                    const sw = sw_(t); if (!sw) continue
+                    const before = !!settings[t.key]
+                    sw.toggle(); sw.toggled(); wait(20)
+                    verify(!!settings[t.key] !== before, "switch " + t.key + " on page " + page.visiblePages[i][0])
+                    settings.set(t.key, before); toggled++
+                }
+                const choices = findAll(page.contentItem, c => c.hasOwnProperty("options") && c.hasOwnProperty("key") && c.hasOwnProperty("picked"), [])
+                for (const c of choices) {
+                    if (!c.visible || !c.key.length || c.options.length < 2) continue
+                    const before = settings[c.key]
+                    const other = c.options.find(o => String(o[0]) !== String(before)); settings.set(c.key, other[0]); verify(String(settings[c.key]) === String(other[0]), c.key)
+                    settings.set(c.key, before); chosen++
+                }
+            }
+            verify(toggled > 40, "found " + toggled + " switches"); verify(chosen > 15, "found " + chosen + " choices")
+            page.close()
+        }
+        function sw_(t) { const l = findAll(t, c => c.hasOwnProperty("checked") && c.hasOwnProperty("toggle"), []); return l.length ? l[0] : null }
         function test_the_pages_open_and_list_what_the_other_apps_have() {
             page.open(); tryVerify(function () { return page.opened })
             const names = page.visiblePages.map(p => p[0])

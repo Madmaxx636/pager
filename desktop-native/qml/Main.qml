@@ -53,7 +53,7 @@ ApplicationWindow {
     }
     NewChat { id: newChat }
     Greeting { id: greeting; parent: Overlay.overlay }
-    readonly property bool quietRun: Qt.application.arguments.indexOf("--screenshot") >= 0 || Qt.application.arguments.indexOf("--demo") >= 0
+    readonly property bool quietRun: Qt.application.arguments.indexOf("--demo") >= 0 || Qt.application.arguments.indexOf("--open") >= 0 || Qt.application.arguments.indexOf("--chat") >= 0
     Connections { target: core; function onStateChanged() { if (core.signedIn && !win.quietRun) greeting.hello() } }
     Loader { id: soundLoader; active: false; source: "SoundPlayer.qml"; property string pendingFile: ""; property real pendingVolume: 0.5
         onLoaded: item.play(pendingFile, pendingVolume) }

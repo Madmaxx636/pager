@@ -64,7 +64,7 @@ class TimelineModel : public DiffModel {
 public:
     enum Role { IdRole = Qt::UserRole + 1, SenderRole, SenderNameRole, BodyRole, KindRole, TimeRole, MineRole, LockedRole, LocalRole, FirstRole, LastRole, ReactionsRole, DayRole, EditedRole, ReplyRole,
                 MediaRole, WidthRole, HeightRole, FileNameRole, PollRole, HtmlRole, CaptionRole, CaptionHtmlRole, MimeRole, SizeRole, DurationRole, VoiceRole, StickerRole, GifRole, GeoRole,
-                TickRole, SenderAvatarRole, ReplyNameRole, ReplyTextRole, DividerRole, MentionedRole, BigEmojiRole, FullTimeRole, StatusRole, PosterRole };
+                TickRole, SenderAvatarRole, ReplyNameRole, ReplyTextRole, DividerRole, MentionedRole, BigEmojiRole, FullTimeRole, StatusRole, PosterRole, FreshRole };
     explicit TimelineModel(Store *store, QObject *parent = nullptr) : DiffModel(parent), m_store(store) {}
     QVariant data(const QModelIndex &i, int role) const override;
     QHash<int, QByteArray> roleNames() const override;

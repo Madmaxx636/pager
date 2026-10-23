@@ -23,6 +23,7 @@ class Appearance : public QObject {
     Q_PROPERTY(QString accentName READ accentName NOTIFY changed) // a name from accents(), or a #rrggbb of your own
     Q_PROPERTY(QString palette READ palette NOTIFY changed)     // id of a ready-made look, or empty
     Q_PROPERTY(qreal textScale READ textScale NOTIFY changed)
+    Q_PROPERTY(bool motion READ motion NOTIFY changed)          // small animations on (and not "reduce motion")
 public:
     /// The look is kept in [settings] (themeMode, accent, accentCustom, palette, fontScale). [palettesTsv] is for tests; normally the built-in palettes are used.
     explicit Appearance(AppSettings *settings, QObject *parent = nullptr, const QByteArray &palettesTsv = QByteArray());
@@ -41,6 +42,7 @@ public:
     QString accentName() const { return m_accent; }
     QString palette() const { return m_palette; }
     qreal textScale() const { return m_scale; }
+    bool motion() const { return m_motion; }
     Q_INVOKABLE void setMode(const QString &mode);
     Q_INVOKABLE void setAccent(const QString &nameOrHex);
     Q_INVOKABLE void setPalette(const QString &id);
@@ -60,6 +62,7 @@ private:
     AppSettings *m_settings;
     Colors m_c;
     QString m_mode = QStringLiteral("system"), m_accent = QStringLiteral("teal"), m_palette;
+    bool m_motion = true;
     qreal m_scale = 1.0;
     bool m_dark = false, m_systemDark = false;
 };

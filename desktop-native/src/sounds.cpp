@@ -56,8 +56,8 @@ double wave(const QString &type, double phase) {          // phase in turns
 }
 
 QVariantList Sounds::list() {
-    QVariantList out; for (const auto &l : labels()) out << QVariantList{QString::fromLatin1(l.first), QString::fromUtf8(l.second)};
-    out << QVariantList{QStringLiteral("none"), QStringLiteral("None")};
+    QVariantList out; for (const auto &l : labels()) out << QVariant(QVariantList{QString::fromLatin1(l.first), QString::fromUtf8(l.second)});
+    out << QVariant(QVariantList{QStringLiteral("none"), QStringLiteral("None")});
     return out;
 }
 

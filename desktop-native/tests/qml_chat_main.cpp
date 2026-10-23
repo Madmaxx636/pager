@@ -18,7 +18,7 @@ class Setup : public QObject {
 public slots:
     void qmlEngineAvailable(QQmlEngine *e) {
         e->addImageProvider(QStringLiteral("icon"), new IconProvider); qmlRegisterType<RoundedImage>("Pager.Items", 1, 0, "RoundedImage"); qmlRegisterType<Wallpaper>("Pager.Items", 1, 0, "Wallpaper"); qmlRegisterType<ScreenEffects>("Pager.Items", 1, 0, "ScreenEffects");
-        static Engine core(QString(), true); static AppSettings settings(QStringLiteral("/tmp/pager-qml-chat-settings.json")); static Appearance look(&settings); static FileInfo files; static Emoji emoji; static Rich rich;
+        static Engine core(QString(), true); static AppSettings settings(QStringLiteral("/tmp/pager-qml-chat-settings.json")); static Appearance look(&settings); static FileInfo files; static Emoji emoji; static Rich rich; core.setSettings(&settings);
         e->rootContext()->setContextProperty(QStringLiteral("core"), &core);
         e->rootContext()->setContextProperty(QStringLiteral("look"), &look);
         e->rootContext()->setContextProperty(QStringLiteral("files"), &files);

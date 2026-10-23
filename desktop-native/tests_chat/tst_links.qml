@@ -6,7 +6,8 @@ Item {
     width: 900; height: 700
     TestCase {
         name: "Links"; when: windowShown
-        function cleanup() { core.unlink("!maya"); core.unlink("!dad") }
+        function init() { settings.set("showPinsRow", false); wait(50) }                          // pinned chats would sit in their own row, not in the list
+        function cleanup() { core.unlink("!maya"); core.unlink("!dad"); settings.set("showPinsRow", true); wait(50) }
         function test_two_chats_of_one_person_become_one_row_and_one_conversation() {
             const rows = core.rooms.rowCount()
             core.openRoom("!maya"); wait(200)

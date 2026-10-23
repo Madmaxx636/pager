@@ -193,7 +193,7 @@ QHash<int, QByteArray> TimelineModel::roleNames() const {
             {WidthRole, "imgWidth"}, {HeightRole, "imgHeight"}, {FileNameRole, "fileName"}, {PollRole, "poll"}, {HtmlRole, "html"}, {CaptionRole, "caption"}, {CaptionHtmlRole, "captionHtml"}, {MimeRole, "mime"},
             {SizeRole, "size"}, {DurationRole, "durationMs"}, {VoiceRole, "voice"}, {StickerRole, "sticker"}, {GifRole, "gifLike"}, {GeoRole, "geo"}, {TickRole, "tick"}, {SenderAvatarRole, "senderAvatar"},
             {ReplyNameRole, "replyName"}, {ReplyTextRole, "replyText"}, {DividerRole, "unreadDivider"}, {MentionedRole, "mentioned"}, {BigEmojiRole, "bigEmoji"}, {FullTimeRole, "fullTime"}, {StatusRole, "status"},
-            {PosterRole, "poster"}};
+            {PosterRole, "poster"}, {FreshRole, "fresh"}};
 }
 
 TimelineModel::Row TimelineModel::build(const Room &r, int si, int readPos, int deliveredPos, bool group) const {
@@ -269,6 +269,7 @@ QVariant TimelineModel::data(const QModelIndex &i, int role) const {
     const Row &row = m_rows[i.row()]; const Msg &m = row.msg;
     switch (role) {
     case IdRole: return m.id;
+    case FreshRole: return QDateTime::currentMSecsSinceEpoch() - m.ts < 5000;     // arrived just now: gets the entrance animation
     case SenderRole: return m.sender;
     case SenderNameRole: return Names::pretty(m.senderName);
     case BodyRole: if (m.locked) return Store::lockedText(m.ts);
