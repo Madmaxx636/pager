@@ -23,7 +23,13 @@ const Msg *Room::find(const QString &id) const {
     return nullptr;
 }
 
-QString Store::clock(qint64 ms) { return QDateTime::fromMSecsSinceEpoch(ms).time().toString(QStringLiteral("h:mm AP")); }
+QString Store::s_timeFormat = QStringLiteral("system");
+QString Store::clock(qint64 ms) {
+    const QTime t = QDateTime::fromMSecsSinceEpoch(ms).time();
+    if (s_timeFormat == QLatin1String("24")) return t.toString(QStringLiteral("HH:mm"));
+    if (s_timeFormat == QLatin1String("12")) return t.toString(QStringLiteral("h:mm AP"));
+    return QLocale::system().toString(t, QLocale::ShortFormat);
+}
 QString Store::dayLabel(qint64 ms) {
     const QDate d = QDateTime::fromMSecsSinceEpoch(ms).date(), today = QDate::currentDate();
     if (d == today) return QStringLiteral("Today");

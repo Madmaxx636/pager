@@ -20,4 +20,11 @@ public:
     Q_INVOKABLE QString saveClipboardImage() const;
     Q_INVOKABLE QString downloadsDir() const;
     Q_INVOKABLE QString clipboardText() const;
+    /// Starts Pager when you log in (a launcher in the autostart folder).
+    Q_INVOKABLE void setAutostart(bool on) const;
+    Q_INVOKABLE bool autostart() const;
+    /// Text of a small file (for importing settings); empty when it cannot be read.
+    Q_INVOKABLE QString readText(const QString &path) const;
+    Q_INVOKABLE bool writeText(const QString &path, const QString &text) const;
+    Q_INVOKABLE QString humanSize(double bytes) const;
 };

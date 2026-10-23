@@ -28,6 +28,8 @@ class Engine : public QObject {
     Q_PROPERTY(QString search READ search NOTIFY listChanged)
     Q_PROPERTY(int unreadChats READ unreadChats NOTIFY listChanged)     // chats with something new (the badge on the Unread tab)
     Q_PROPERTY(QStringList labels READ labels NOTIFY listChanged)
+    Q_PROPERTY(QString server READ server NOTIFY stateChanged)
+    Q_PROPERTY(QString logPath READ logPath CONSTANT)
     Q_PROPERTY(QString currentAvatar READ currentAvatar NOTIFY currentChanged)
     Q_PROPERTY(QString currentNetwork READ currentNetwork NOTIFY currentChanged)
     Q_PROPERTY(bool currentIsGroup READ currentIsGroupChat NOTIFY currentChanged)
@@ -64,6 +66,8 @@ public:
     QString search() const { return m_search; }
     int unreadChats() const { return m_rooms.unreadChats(); }
     QStringList labels() const;
+    QString server() const { return m_server; }
+    QString logPath() const { return m_logFile; }
     QString currentAvatar() const { const Room *r = m_store.room(m_current); if (!r || r->avatar.isEmpty()) return {}; const QString p = m_store.mediaPath(QStringLiteral("av:") + r->avatar); if (p.isEmpty()) m_store.wantAvatar(r->avatar); return p; }
     QString currentNetwork() const { const Room *r = m_store.room(m_current); return r ? r->network : QString(); }
     bool currentIsGroupChat() const { const Room *r = m_store.room(m_current); return r && r->isGroup(); }
@@ -143,7 +147,31 @@ public:
     /// Opens a chat at a message, fetching it first when it is older than what is loaded. Emits jumpRequested(eventId) when it is there.
     Q_INVOKABLE void openAt(const QString &roomId, const QString &eventId);
     /// Where the settings live (notification rules, mostly). Without them every message from someone else alerts.
-    void setSettings(AppSettings *s) { m_settings = s; }
+    void setSettings(AppSettings *s);
+    // ---- saved things: starred messages, reminders (and snoozed chats), scheduled messages
+    Q_INVOKABLE QVariantList starred() const;
+    Q_INVOKABLE bool isStarred(const QString &eventId) const;
+    Q_INVOKABLE void toggleStar(const QString &eventId);
+    /// A reminder to look at a chat at [whenMs]. A snooze also tucks the chat into the archive until then.
+    Q_INVOKABLE void remind(const QString &roomId, double whenMs, bool snoozed = false);
+    Q_INVOKABLE void snooze(const QString &roomId, double whenMs) { remind(roomId, whenMs, true); }
+    Q_INVOKABLE QVariantList reminders() const;
+    Q_INVOKABLE void cancelReminder(const QString &id);
+    /// Sends [text] to a chat in [delayMs] ms, from the server (so it goes even if Pager is closed). [done](error) says how it went ("" = scheduled).
+    Q_INVOKABLE void scheduleSend(const QString &roomId, const QString &text, double delayMs, const QJSValue &done);
+    Q_INVOKABLE QVariantList scheduled() const;
+    Q_INVOKABLE void cancelScheduled(const QString &delayId);
+    /// Throws away what this device knows and loads every chat from the server again (the fix for a list that is missing something).
+    Q_INVOKABLE void reloadEverything();
+    /// Deletes downloaded pictures and files; returns the bytes freed.
+    Q_INVOKABLE double clearMediaCache();
+    Q_INVOKABLE double mediaCacheSize() const;
+    // ---- labels (your own folders)
+    Q_INVOKABLE int labelCount(const QString &label) const;
+    Q_INVOKABLE void renameLabel(const QString &oldName, const QString &newName);
+    Q_INVOKABLE void deleteLabel(const QString &name);
+    /// The chat above or below the open one in the list ([dir] -1 or 1); with [unreadOnly] the next one with something new.
+    Q_INVOKABLE void stepChat(int dir, bool unreadOnly);
     Q_INVOKABLE void retry(const QString &localId);
     Q_INVOKABLE QString draft(const QString &roomId) const { return m_drafts.value(roomId); }
     Q_INVOKABLE void setDraft(const QString &roomId, const QString &text);
@@ -181,6 +209,7 @@ signals:
     void listChanged();
     void mediaReady(const QString &key);
     void roomOpened(const QString &roomId);
+    void savedChanged();
     void jumpRequested(const QString &eventId);
     void recoveryChanged();
     void updateChanged();
@@ -207,6 +236,9 @@ private:
     AppSettings *m_settings = nullptr;
     QHash<QString, QString> m_drafts; QString m_dataDir;
     void saveDrafts();
+    void saveSaved();
+    void armReminders();
+    QJsonObject m_saved; QHash<QString, QTimer *> m_reminderTimers;
     qint64 m_lastTyping = 0;
     Store m_store;
     RoomListModel m_rooms{&m_store};
@@ -216,7 +248,7 @@ private:
     QSet<QString> m_fetching;
     QHash<QString, QJSValue> m_calls;
     int m_callCounter = 0;
-    QString m_meKey;
+    QString m_meKey, m_server;
     QString m_updState = QStringLiteral("idle"), m_updVersion, m_updNotes, m_updMessage, m_updFile, m_updSha, m_updBase;
     int m_updProgress = 0;
     bool m_updQuiet = false;

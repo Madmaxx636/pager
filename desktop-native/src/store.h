@@ -90,6 +90,8 @@ public:
     QString mediaPath(const QString &eventId) const { return m_media.value(eventId); }
     void setMediaPath(const QString &eventId, const QString &path) { m_media.insert(eventId, path); }
     void removeRoom(const QString &id) { m_rooms.remove(id); }
+    void clearRooms() { m_rooms.clear(); }
+    void forgetMedia() { m_media.clear(); m_wantedAvatars.clear(); }
     const Room *room(const QString &id) const { auto it = m_rooms.constFind(id); return it == m_rooms.cend() ? nullptr : &*it; }
     Room *mutableRoom(const QString &id) { auto it = m_rooms.find(id); return it == m_rooms.end() ? nullptr : &*it; }
     /// Room ids, most recent activity first.
@@ -103,7 +105,10 @@ public:
     void forgetWantedAvatar(const QString &mxc) const { m_wantedAvatars.remove(mxc); }
     static bool isBridgeBot(const QString &user);
     bool mine(const Msg &m) const { return !m_me.isEmpty() && m.sender == m_me; }
+    /// "h:mm AP" or "HH:mm" depending on [format] (system, 12 or 24)
     static QString clock(qint64 ms);
+    static void setTimeFormat(const QString &format) { s_timeFormat = format; }
+    static QString s_timeFormat;
     static QString dayLabel(qint64 ms);
 
 private:

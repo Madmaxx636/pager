@@ -126,6 +126,18 @@ private slots:
         e.setMuted("!b", true); e.handle("rooms", room("!b", "$4", now + 4000)); e.handle("rooms", room("!b", "$5", now + 5000)); QCOMPARE(pop.count(), 2);              // muted
         s.set("notifEnabled", false); s.setEntry("notifChat", "!a", "mode", "all"); e.handle("rooms", room("!a", "$6", now + 6000)); QCOMPARE(pop.count(), 2);           // master switch
     }
+    void starsRemindersAndSnoozeWork() {              // needs no server
+        QTemporaryDir dir; Engine e(dir.path(), true);
+        QVERIFY(!e.isStarred("a1")); e.toggleStar("a1"); QVERIFY(e.isStarred("a1")); QCOMPARE(e.starred().size(), 1); QCOMPARE(e.starred().first().toMap().value("text").toString(), QString("Are we still on for dinner tonight?"));
+        e.toggleStar("a1"); QVERIFY(!e.isStarred("a1"));
+        QSignalSpy pop(&e, &Engine::notify);
+        e.snooze("!sam", QDateTime::currentMSecsSinceEpoch() + 150);
+        QVERIFY(e.roomInfo("!sam").value("archived").toBool());                               // tucked away while snoozed
+        QCOMPARE(e.reminders().size(), 1);
+        QTRY_VERIFY_WITH_TIMEOUT(pop.count() == 1, 3000);
+        QVERIFY(!e.roomInfo("!sam").value("archived").toBool()); QVERIFY(e.roomInfo("!sam").value("markedUnread").toBool());   // back, and unread
+        QVERIFY(e.reminders().isEmpty());
+    }
     void popUpsOnlyForNewMessagesFromOthers() {      // needs no server
         Engine e(QString(), true);
         QSignalSpy pop(&e, &Engine::notify);

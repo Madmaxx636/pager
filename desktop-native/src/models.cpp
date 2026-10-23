@@ -91,7 +91,7 @@ void RoomListModel::refresh() {
     QVector<const Room *> keep;
     for (auto it = m_store->roomsBegin(); it != m_store->roomsEnd(); ++it) {
         const Room &r = *it;
-        if (m_store->isBotRoom(r)) continue;
+        if (m_store->isBotRoom(r) || m_hidden.contains(r.network)) continue;
         if (m_tab == QLatin1String("archive")) { if (!r.archived()) continue; }
         else if (r.archived()) { if (q.isEmpty()) continue; }
         else if (m_tab == QLatin1String("unread")) { if (!isUnread(r)) continue; }
@@ -110,6 +110,7 @@ void RoomListModel::refresh() {
     std::sort(keep.begin(), keep.end(), [&](const Room *a, const Room *b) {
         if (pinsFirst && a->pinned() != b->pinned()) return a->pinned();
         if (pinsFirst && a->pinned() && b->pinned() && a->pinOrder != b->pinOrder) return a->pinOrder < b->pinOrder;
+        if (m_unreadFirst && pinsFirst && isUnread(*a) != isUnread(*b)) return isUnread(*a);
         const qint64 ta = a->lastTs(), tb = b->lastTs();
         return ta != tb ? ta > tb : a->id < b->id;
     });
@@ -180,7 +181,7 @@ QHash<int, QByteArray> TimelineModel::roleNames() const {
 TimelineModel::Row TimelineModel::build(const Room &r, int si, int readPos, int deliveredPos, bool group) const {
     Row row; const Msg &m = r.msgs[si]; row.msg = m;
     const Msg *older = si > 0 ? &r.msgs[si - 1] : nullptr, *newer = si + 1 < r.msgs.size() ? &r.msgs[si + 1] : nullptr;
-    const qint64 gap = 5 * 60 * 1000;
+    const qint64 gap = m_gapMs;
     auto sameDay = [](qint64 a, qint64 b) { return QDateTime::fromMSecsSinceEpoch(a).date() == QDateTime::fromMSecsSinceEpoch(b).date(); };
     const bool sameRunOlder = older && older->sender == m.sender && m.ts - older->ts < gap && sameDay(older->ts, m.ts) && older->id != m_unreadBefore + QString() && m.id != m_unreadBefore;
     const bool sameRunNewer = newer && newer->sender == m.sender && newer->ts - m.ts < gap && sameDay(newer->ts, m.ts) && newer->id != m_unreadBefore;
@@ -194,7 +195,7 @@ TimelineModel::Row TimelineModel::build(const Room &r, int si, int readPos, int 
         row.tick = m.status == 2 ? 2 : (m.status == 1 || m.local) ? 1 : si <= readPos ? 5 : si <= deliveredPos ? 4 : 3;
     }
     row.mentioned = m.sender != me && (m.mentions.contains(me) || (!me.isEmpty() && m.body.toLower().contains(QLatin1Char('@') + r.nameOf(me).toLower())));
-    row.big = m.kind == QLatin1String("text") && m.html.isEmpty() && Rich::emojiOnly(m.body);
+    row.big = m_bigEmojiOn && m.kind == QLatin1String("text") && m.html.isEmpty() && Rich::emojiOnly(m.body);
     Q_UNUSED(group)
     QString s;
     s.reserve(160);
