@@ -22,6 +22,7 @@ class Engine : public QObject {
     Q_PROPERTY(QString currentName READ currentName NOTIFY currentChanged)
     Q_PROPERTY(QString currentSub READ currentSub NOTIFY currentChanged)
     Q_PROPERTY(bool currentIsDirect READ currentIsDirect NOTIFY currentChanged)
+    Q_PROPERTY(int currentLocked READ currentLocked NOTIFY currentChanged)   // messages of the open chat that cannot be read yet
     Q_PROPERTY(bool isAdmin READ isAdmin NOTIFY stateChanged)
     Q_PROPERTY(QString updateState READ updateState NOTIFY updateChanged)   // idle, checking, available, downloading, installing, error
     Q_PROPERTY(QString updateVersion READ updateVersion NOTIFY updateChanged)
@@ -48,6 +49,7 @@ public:
     QString currentName() const;
     QString currentSub() const;
     bool currentIsDirect() const { const Room *r = m_store.room(m_current); return r && r->direct; }
+    int currentLocked() const { const Room *r = m_store.room(m_current); int n = 0; if (r) for (const Msg &m : r->msgs) if (m.locked) ++n; return n; }
     bool isAdmin() const { return m_admin; }
     QString updateState() const { return m_updState; }
     QString updateVersion() const { return m_updVersion; }

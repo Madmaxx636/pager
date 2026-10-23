@@ -11,6 +11,7 @@ Rectangle {
     property string replyingTo: ""; property string editing: ""       // set while the composer is answering or editing
     readonly property string barText: editing ? "Editing message" : (replyingTo ? "Replying to: " + core.bodyOf(replyingTo) : "")
     signal back()
+    signal restoreRequested()
 
     ColumnLayout {
         anchors.fill: parent
@@ -34,6 +35,16 @@ Rectangle {
                     Label { text: core.currentSub; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) }
                 }
                 Item { Layout.fillWidth: true }
+            }
+        }
+        Rectangle {   // some messages cannot be read yet: say how to fix it
+            visible: core.currentLocked > 0
+            Layout.fillWidth: true; implicitHeight: lockRow.implicitHeight + 16; color: Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.14)
+            RowLayout {
+                id: lockRow; anchors.fill: parent; anchors.margins: 8; anchors.leftMargin: 14
+                Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.text; font.pixelSize: Math.round(13 * look.textScale)
+                    text: "🔒 " + core.currentLocked + (core.currentLocked === 1 ? " message is" : " messages are") + " locked on this device. Enter your recovery key to read them." }
+                Button { text: "Enter recovery key"; onClicked: pane.restoreRequested() }
             }
         }
         // messages: the list is upside down (newest first), so the newest message stays at the bottom by itself

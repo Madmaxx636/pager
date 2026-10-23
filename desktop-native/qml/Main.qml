@@ -16,6 +16,8 @@ ApplicationWindow {
     // Coming back to the window counts as reading what arrived while it was behind.
     Connections { target: Qt.application; function onStateChanged() { core.setActive(Qt.application.state === Qt.ApplicationActive) } }
 
+    Recovery { id: recovery }
+
     Loader {
         anchors.fill: parent
         sourceComponent: core.starting ? splash : (core.signedIn ? main : login)
@@ -31,6 +33,7 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 visible: win.wide || !win.showingChat
                 onOpened: win.showingChat = true
+                onRestoreRequested: recovery.open()
             }
             Rectangle { Layout.fillHeight: true; width: 1; color: look.line; visible: win.wide }
             Chat {
@@ -38,6 +41,7 @@ ApplicationWindow {
                 visible: win.wide || win.showingChat
                 showBack: !win.wide
                 onBack: win.showingChat = false
+                onRestoreRequested: recovery.open()
             }
         }
     }
