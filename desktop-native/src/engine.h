@@ -69,6 +69,7 @@ public:
     QString currentSub() const;
     bool currentIsDirect() const { const Room *r = m_store.room(m_current); return r && r->direct; }
     QVariantList pins() const;
+    Q_INVOKABLE QVariantList faces(const QString &roomId) const;   // up to four people of a group without a picture of its own, for its round collage
     QVariantMap filters() const { return m_filters; }
     int filterCount() const { int n = 0; for (const char *k : {"groups", "dms", "drafts", "unanswered"}) if (m_filters.value(QLatin1String(k)).toBool()) ++n; if (!m_filters.value("network").toString().isEmpty()) ++n; return n; }
     QStringList networks() const;

@@ -128,21 +128,26 @@ Rectangle {
             clip: true; model: core.rooms; boundsBehavior: Flickable.StopAtBounds; cacheBuffer: 400; reuseItems: true
             ScrollBar.vertical: ScrollBar { }
             SmoothWheel { view: list }
-            header: Flickable {
+            header: Item {   // pinned chats: a grid of big pictures, three across, like the web app
                 visible: core.pins.length > 0
-                width: list.width; height: visible ? 100 : 0; contentWidth: pinRow.width + 8; contentHeight: height; clip: true; flickableDirection: Flickable.HorizontalFlick; boundsBehavior: Flickable.StopAtBounds
-                Row {
-                    id: pinRow; x: 8; y: 6; spacing: 2
+                width: list.width; height: visible ? pinGrid.height + 12 : 0
+                Grid {
+                    id: pinGrid
+                    x: 8; y: 8; columns: 3; rowSpacing: 6; columnSpacing: 4
+                    readonly property real cell: (list.width - 16 - 8) / 3
                     Repeater {
                         model: core.pins
                         delegate: Rectangle {
-                            width: 74; height: 88; radius: 14; color: pinHover.hovered || core.currentRoom === modelData.id ? look.panel2 : "transparent"
-                            HoverHandler { id: pinHover }
-                            Column { anchors.horizontalCenter: parent.horizontalCenter; y: 6; spacing: 5
-                                Item { width: 54; height: 54; anchors.horizontalCenter: parent.horizontalCenter
-                                    Avatar { anchors.centerIn: parent; size: 52; source: modelData.avatar; letter: modelData.name.length ? modelData.name[0].toUpperCase() : "?"; seed: modelData.name; network: settings.showNetworkBadges ? modelData.network : "" }
-                                    Rectangle { visible: modelData.unread; width: 14; height: 14; radius: 7; color: modelData.muted ? look.muted : look.accent; border.width: 2.5; border.color: look.panel; anchors.right: parent.right; anchors.top: parent.top } }
-                                Label { text: modelData.name; width: 70; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Medium; color: look.text } }
+                            width: pinGrid.cell; height: 8 + 76 + 5 + 20 + 6; radius: 14
+                            color: pinHover.hovered || core.currentRoom === modelData.id ? look.panel2 : "transparent"
+                            HoverHandler { id: pinHover; cursorShape: Qt.PointingHandCursor }
+                            Item { id: pav; y: 8; width: 76; height: 76; anchors.horizontalCenter: parent.horizontalCenter
+                                Loader { anchors.fill: parent; active: modelData.faces.length > 1; sourceComponent: GroupAvatar { size: 76; faces: modelData.faces } }
+                                Avatar { visible: modelData.faces.length < 2; size: 76; ring: modelData.unread && !modelData.muted; source: modelData.avatar; letter: modelData.name.length ? modelData.name[0].toUpperCase() : "?"; seed: modelData.name; network: settings.showNetworkBadges ? modelData.network : "" }
+                                Rectangle { visible: modelData.unread; height: modelData.count > 0 ? 22 : 16; width: modelData.count > 0 ? Math.max(22, pinCount.implicitWidth + 10) : 16; radius: height / 2
+                                    x: parent.width - width + 2; y: -2; color: modelData.muted ? look.muted : look.accent
+                                    Label { id: pinCount; visible: modelData.count > 0; anchors.centerIn: parent; text: modelData.count > 99 ? "99+" : modelData.count; color: modelData.muted ? look.bg : look.accentInk; font.pixelSize: 11; font.weight: Font.Bold } } }
+                            Label { y: 8 + 76 + 5; width: parent.width - 4; x: 2; text: modelData.name; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; font.pixelSize: Math.round(13 * look.textScale); font.weight: Font.DemiBold; color: look.text }
                             TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { core.openRoom(modelData.id); pane.opened() } }
                             TapHandler { acceptedButtons: Qt.RightButton; onTapped: pane.showMenu(modelData.id) }
                             TapHandler { acceptedDevices: PointerDevice.TouchScreen; longPressThreshold: 0.5; onLongPressed: pane.showMenu(modelData.id) }
@@ -163,7 +168,9 @@ Rectangle {
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10; spacing: 13
                     Item { visible: settings.showAvatars; Layout.preferredWidth: 48; Layout.preferredHeight: 48
-                        Avatar { anchors.centerIn: parent; size: settings.density === "compact" ? 40 : 46; ring: row.isUnread && !muted; source: model.avatar; letter: model.letter; seed: model.name; network: settings.showNetworkBadges ? model.network : "" } }
+                        Loader { id: gface; anchors.centerIn: parent; readonly property var f: isGroup && model.avatar.length === 0 ? core.faces(roomId) : []
+                            active: f.length > 1; sourceComponent: GroupAvatar { size: settings.density === "compact" ? 40 : 46; faces: gface.f } }
+                        Avatar { visible: !gface.active; anchors.centerIn: parent; size: settings.density === "compact" ? 40 : 46; ring: row.isUnread && !muted; source: model.avatar; letter: model.letter; seed: model.name; network: settings.showNetworkBadges ? model.network : "" } }
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 1
                         RowLayout {
