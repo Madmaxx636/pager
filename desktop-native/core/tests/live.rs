@@ -97,6 +97,7 @@ fn encrypted_conversation_between_the_engine_and_another_client() {
     while rx.try_recv().is_ok() {}
     let engine2 = pager_start(dirc.as_ptr(), on_event, tx as *mut _ as *mut c_void);
     assert!(wait_for(&rx, 60, |k, v| k == "state" && v["signedIn"] == true).is_some(), "the saved sign-in should come back by itself");
+    assert!(wait_for(&rx, 60, |k, v| k == "rooms" && v["rooms"].as_array().into_iter().flatten().any(|r| r["id"] == room_id.as_str())).is_some(), "after a restart the chats must be listed again, not only what changed");
     pager_load_history(engine2, rid.as_ptr(), c"".as_ptr());
     let hist = wait_for(&rx, 60, |k, v| k == "history" && v["room"] == room_id.as_str()).expect("history");
     let bodies: Vec<String> = hist["events"].as_array().unwrap().iter().filter_map(|e| e["content"]["body"].as_str().map(String::from)).collect();
