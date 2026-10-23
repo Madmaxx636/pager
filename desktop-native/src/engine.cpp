@@ -528,6 +528,14 @@ void Engine::pin(const QString &roomId, bool on) {
     double last = 0; for (auto it = m_store.roomsBegin(); it != m_store.roomsEnd(); ++it) if (it->pinned() && it->id != roomId) last = qMax(last, it->pinOrder);
     setTag(roomId, QStringLiteral("m.favourite"), true, last + 1);
 }
+void Engine::movePin(const QString &roomId, int toIndex) {
+    QVector<const Room *> others;   // the pinned chats in row order, without the one being moved
+    for (const QVariant &v : pins()) { const QString id = v.toMap().value("id").toString(); if (id != roomId) if (const Room *r = m_store.room(id)) others.append(r); }
+    const int i = qBound(0, toIndex, int(others.size()));
+    const bool hasB = i > 0, hasA = i < others.size();
+    const double order = !hasB && !hasA ? 1 : !hasB ? others[i]->pinOrder - 1 : !hasA ? others[i - 1]->pinOrder + 1 : (others[i - 1]->pinOrder + others[i]->pinOrder) / 2;
+    setTag(roomId, QStringLiteral("m.favourite"), true, order);
+}
 void Engine::setMuted(const QString &roomId, bool on) {
     QSet<QString> s = m_store.mutedSet(); if (on) s.insert(roomId); else s.remove(roomId);
     m_store.setMuted(s); refreshLists();

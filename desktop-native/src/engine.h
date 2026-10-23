@@ -133,6 +133,7 @@ public:
     Q_INVOKABLE void clearFilters() { setFilters({}); }
     Q_INVOKABLE void setTag(const QString &roomId, const QString &tag, bool on, double order = 0);
     Q_INVOKABLE void pin(const QString &roomId, bool on);
+    Q_INVOKABLE void movePin(const QString &roomId, int toIndex);   // rearrange the pinned row
     Q_INVOKABLE void archive(const QString &roomId, bool on) { setTag(roomId, QStringLiteral("u.archived"), on); }
     Q_INVOKABLE void setLowPriority(const QString &roomId, bool on) { setTag(roomId, QStringLiteral("m.lowpriority"), on); }
     Q_INVOKABLE void addLabel(const QString &roomId, const QString &label) { setTag(roomId, QStringLiteral("u.label.") + label, true); }

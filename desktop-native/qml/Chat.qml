@@ -149,8 +149,8 @@ Rectangle {
                     onClicked: attachMenu.popup(); ToolTip.text: "Attach"; ToolTip.visible: hovered; ToolTip.delay: 600
                     Menu {
                         id: attachMenu
-                        MenuItem { text: "Photo or file…"; onTriggered: filePicker.open() }
-                        MenuItem { text: "Poll…"; onTriggered: pollDialog.open() }
+                        MenuItem { icon.name: "image-plus"; text: "Photo or file…"; onTriggered: filePicker.open() }
+                        MenuItem { icon.name: "chart-column"; text: "Poll…"; onTriggered: pollDialog.open() }
                     }
                 }
                 Rectangle {
@@ -246,13 +246,14 @@ Rectangle {
                 Label { anchors.centerIn: parent; text: "＋"; font.pixelSize: 20; color: look.muted }
                 TapHandler { onTapped: { actions.close(); picker.open() } } }
         }
-        MenuItem { text: "Reply"; onTriggered: { pane.editing = ""; pane.replyingTo = pane.target; input.forceActiveFocus() } }
-        MenuItem { text: "Copy text"; onTriggered: files.copy(core.bodyOf(pane.target)) }
-        MenuItem { text: "Forward…"; onTriggered: forward.openFor(pane.target) }
-        MenuItem { text: "Save file…"; visible: core.isMediaMessage(pane.target); height: visible ? implicitHeight : 0
+        MenuItem { icon.name: "reply"; text: "Reply"; onTriggered: { pane.editing = ""; pane.replyingTo = pane.target; input.forceActiveFocus() } }
+        MenuItem { icon.name: "forward"; text: "Forward"; onTriggered: forward.openFor(pane.target) }
+        MenuItem { icon.name: "copy"; text: "Copy text"; visible: !core.isMediaMessage(pane.target); height: visible ? implicitHeight : 0; onTriggered: files.copy(core.bodyOf(pane.target)) }
+        MenuItem { icon.name: "star"; text: core.isStarred(pane.target) ? "Remove star" : "Star"; onTriggered: core.toggleStar(pane.target) }
+        MenuItem { icon.name: "download"; text: "Save"; visible: core.isMediaMessage(pane.target); height: visible ? implicitHeight : 0
             onTriggered: { saveDialog.event = pane.target; core.fetchFull(pane.target); saveDialog.currentFile = "file://" + files.downloadsDir() + "/" + core.fileNameOf(pane.target); saveDialog.open() } }
-        MenuItem { text: "Edit"; visible: pane.targetMine && !core.isMediaMessage(pane.target); height: visible ? implicitHeight : 0; onTriggered: { pane.replyingTo = ""; pane.editing = pane.target; input.text = core.bodyOf(pane.target); input.forceActiveFocus() } }
-        MenuItem { text: "Details"; onTriggered: { details.text_ = core.messageDetails(pane.target); details.open() } }
-        MenuItem { text: "Delete"; visible: pane.targetMine; height: visible ? implicitHeight : 0; onTriggered: confirmDelete.open() }
+        MenuItem { icon.name: "pencil"; text: "Edit"; visible: pane.targetMine && !core.isMediaMessage(pane.target); height: visible ? implicitHeight : 0; onTriggered: { pane.replyingTo = ""; pane.editing = pane.target; input.text = core.bodyOf(pane.target); input.forceActiveFocus() } }
+        MenuItem { icon.name: "info"; text: "Details"; onTriggered: { details.text_ = core.messageDetails(pane.target); details.open() } }
+        MenuItem { icon.name: "trash-2"; text: "Delete"; visible: pane.targetMine; height: visible ? implicitHeight : 0; onTriggered: confirmDelete.open() }
     }
 }
