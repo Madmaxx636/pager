@@ -18,7 +18,7 @@ Popup {
     contentItem: ColumnLayout {
         spacing: 8
         TextField {
-            id: search; Layout.fillWidth: true; placeholderText: "Search emoji"; color: look.text; placeholderTextColor: look.muted; font.pixelSize: 14
+            id: search; Layout.fillWidth: true; placeholderText: "Search emoji"; color: look.text; placeholderTextColor: look.muted; font.pixelSize: Math.round(14 * look.textScale)
             background: Rectangle { radius: 18; color: look.panel2 }
             leftPadding: 14
         }
@@ -28,7 +28,7 @@ Popup {
                 model: pop.groups
                 delegate: Rectangle {
                     width: 34; height: 32; radius: 8; color: index === pop.group ? look.panel2 : "transparent"
-                    Label { anchors.centerIn: parent; text: modelData.icon; font.pixelSize: 18 }
+                    Label { anchors.centerIn: parent; text: modelData.icon; font.pixelSize: Math.round(18 * look.textScale) }
                     TapHandler { onTapped: pop.group = index }
                 }
             }
@@ -42,7 +42,7 @@ Popup {
             delegate: Rectangle {
                 width: 40; height: 40; radius: 8; color: hov.hovered ? look.panel2 : "transparent"
                 HoverHandler { id: hov }
-                Label { anchors.centerIn: parent; text: modelData; font.pixelSize: 24 }
+                Label { anchors.centerIn: parent; text: modelData; font.pixelSize: Math.round(24 * look.textScale) }
                 TapHandler { onTapped: { pop.picked(modelData); pop.close() } }
             }
             Label { anchors.centerIn: parent; visible: pop.shown.length === 0; text: "Nothing found"; color: look.muted }

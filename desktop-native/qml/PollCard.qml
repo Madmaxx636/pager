@@ -13,8 +13,8 @@ Rectangle {
     ColumnLayout {
         id: col
         x: 14; y: 12; width: parent.width - 28; spacing: 8
-        Label { Layout.fillWidth: true; text: "📊 " + card.poll.question; wrapMode: Text.Wrap; color: card.ink; font.pixelSize: 15; font.weight: Font.DemiBold }
-        Label { text: card.poll.ended ? "Final results" : (card.poll.max > 1 ? "Choose up to " + card.poll.max : "Choose one"); color: card.soft; font.pixelSize: 12 }
+        Label { Layout.fillWidth: true; text: "📊 " + card.poll.question; wrapMode: Text.Wrap; color: card.ink; font.pixelSize: Math.round(15 * look.textScale); font.weight: Font.DemiBold }
+        Label { text: card.poll.ended ? "Final results" : (card.poll.max > 1 ? "Choose up to " + card.poll.max : "Choose one"); color: card.soft; font.pixelSize: Math.round(12 * look.textScale) }
         Repeater {
             model: card.poll.answers
             delegate: Rectangle {
@@ -28,17 +28,17 @@ Rectangle {
                 }
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
-                    Label { Layout.fillWidth: true; text: (modelData.mine ? "✓ " : "") + modelData.text; color: card.ink; font.pixelSize: 14; elide: Text.ElideRight; font.weight: modelData.winner ? Font.Bold : Font.Normal }
-                    Label { visible: modelData.votes >= 0; text: modelData.votes; color: card.soft; font.pixelSize: 13 }
+                    Label { Layout.fillWidth: true; text: (modelData.mine ? "✓ " : "") + modelData.text; color: card.ink; font.pixelSize: Math.round(14 * look.textScale); elide: Text.ElideRight; font.weight: modelData.winner ? Font.Bold : Font.Normal }
+                    Label { visible: modelData.votes >= 0; text: modelData.votes; color: card.soft; font.pixelSize: Math.round(13 * look.textScale) }
                 }
                 TapHandler { enabled: !card.poll.ended && !card.local; onTapped: core.vote(card.eventId, modelData.id) }
             }
         }
         RowLayout {
             Layout.fillWidth: true
-            Label { Layout.fillWidth: true; color: card.soft; font.pixelSize: 12
+            Label { Layout.fillWidth: true; color: card.soft; font.pixelSize: Math.round(12 * look.textScale)
                 text: card.poll.voters < 0 ? "Results show when the poll ends" : (card.poll.voters + (card.poll.voters === 1 ? " vote" : " votes")) }
-            Label { visible: card.mine && !card.poll.ended && !card.local; text: "End poll"; color: card.ink; font.pixelSize: 12; font.underline: true
+            Label { visible: card.mine && !card.poll.ended && !card.local; text: "End poll"; color: card.ink; font.pixelSize: Math.round(12 * look.textScale); font.underline: true
                 TapHandler { onTapped: core.endPoll(card.eventId) } }
         }
     }

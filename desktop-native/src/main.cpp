@@ -12,11 +12,12 @@
 #include "appearance.h"
 #include "emoji.h"
 #include "fileinfo.h"
+#include "prefs.h"
 #include "engine.h"
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
-    QApplication::setQuitOnLastWindowClosed(false);   // closing the window leaves Pager in the tray, so messages still reach you
+    QApplication::setQuitOnLastWindowClosed(false);   // closing the window leaves Pager in the tray (unless switched off in Settings), so messages still reach you
     QGuiApplication::setOrganizationName(QStringLiteral("Pager"));
     QGuiApplication::setApplicationName(QStringLiteral("pager-native"));
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Pager"));
@@ -29,6 +30,8 @@ int main(int argc, char *argv[]) {
     QCommandLineOption data(QStringLiteral("data-dir"), QStringLiteral("Where the sign-in and the encrypted store are kept."), QStringLiteral("folder"));
     QCommandLineOption shot(QStringLiteral("screenshot"), QStringLiteral("Save a picture of the window to this file and quit (used for checking the screens)."), QStringLiteral("file"));
     QCommandLineOption size(QStringLiteral("size"), QStringLiteral("Window size for --screenshot, like 1100x720."), QStringLiteral("WxH"));
+    QCommandLineOption open(QStringLiteral("open"), QStringLiteral("Open a window on start (settings, emoji, poll) for screenshots."), QStringLiteral("which"));
+    cli.addOption(open);
     cli.addOption(demo); cli.addOption(data); cli.addOption(shot); cli.addOption(size);
     cli.process(app);
 
@@ -38,12 +41,15 @@ int main(int argc, char *argv[]) {
     Appearance look;
     Emoji emoji;
     FileInfo files;
+    Prefs prefs;
 
     QQmlApplicationEngine qml;
     qml.rootContext()->setContextProperty(QStringLiteral("core"), &engine);
     qml.rootContext()->setContextProperty(QStringLiteral("look"), &look);
     qml.rootContext()->setContextProperty(QStringLiteral("emoji"), &emoji);
     qml.rootContext()->setContextProperty(QStringLiteral("files"), &files);
+    qml.rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
+    qml.rootContext()->setContextProperty(QStringLiteral("startupDialog"), cli.value(open));
     qml.load(QUrl(QStringLiteral("qrc:/Pager/qml/Main.qml")));
     if (qml.rootObjects().isEmpty()) return 1;
     auto *win = qobject_cast<QQuickWindow *>(qml.rootObjects().first());
@@ -59,9 +65,10 @@ int main(int argc, char *argv[]) {
         QObject::connect(&tray, &QSystemTrayIcon::activated, [&](QSystemTrayIcon::ActivationReason why) { if (why == QSystemTrayIcon::Trigger) { if (win->isVisible() && win->isActive()) win->hide(); else showWindow(); } });
         tray.show();
     } else QApplication::setQuitOnLastWindowClosed(true);   // no tray on this desktop: closing the window quits
+    QObject::connect(&app, &QGuiApplication::lastWindowClosed, [&] { if (!prefs.closeToTray() || !tray.isVisible()) app.quit(); });
     static QString notifiedRoom;
     QObject::connect(&engine, &Engine::notify, [&](const QString &room, const QString &title, const QString &body) {
-        if (!tray.isVisible()) return;
+        if (!tray.isVisible() || !prefs.notifications()) return;
         notifiedRoom = room;
         tray.showMessage(title, body.left(200), QSystemTrayIcon::NoIcon, 8000);
     });
