@@ -1,0 +1,3 @@
+# Give the engine library its own name inside, so the program asks for "libpager_core.so" (found next to it) instead of the path it was built from.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-Wl,-soname,libpager_core.so"]
