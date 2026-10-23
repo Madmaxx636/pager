@@ -422,6 +422,123 @@ pub extern "C" fn pager_qr(text: *const c_char) -> *mut c_char {
 #[no_mangle]
 pub extern "C" fn pager_free_string(p: *mut c_char) { if !p.is_null() { drop(unsafe { CString::from_raw(p) }); } }
 
+// ---- updates -----------------------------------------------------------------------------------------------------------------------------
+// The server publishes /updates/latest.json and a signature next to it. The public key is built into the app, so a file on the server can't be swapped
+// for a different one without the release key (the same rule the other Pager apps follow).
+
+fn update_key() -> Option<ed25519_dalek::VerifyingKey> {
+    use base64::Engine as _;
+    #[cfg(feature = "test-update-key")]
+    if let Ok(raw) = std::env::var("PAGER_TEST_UPDATE_PUBKEY") {
+        let bytes: [u8; 32] = base64::engine::general_purpose::STANDARD.decode(raw).ok()?.try_into().ok()?;
+        return ed25519_dalek::VerifyingKey::from_bytes(&bytes).ok();
+    }
+    let pem = include_str!("../update-pubkey.pem");
+    let b64: String = pem.lines().filter(|l| !l.starts_with("-----")).collect();
+    let der = base64::engine::general_purpose::STANDARD.decode(b64.trim()).ok()?;
+    let raw: [u8; 32] = der.get(der.len().checked_sub(32)?..)?.try_into().ok()?;
+    ed25519_dalek::VerifyingKey::from_bytes(&raw).ok()
+}
+
+/// True when [manifest] was signed with the release key.
+fn update_verified(manifest: &[u8], signature: &[u8]) -> bool {
+    let (Some(key), Ok(sig)) = (update_key(), <[u8; 64]>::try_from(signature)) else { return false };
+    key.verify_strict(manifest, &ed25519_dalek::Signature::from_bytes(&sig)).is_ok()
+}
+
+/// True when version a is newer than b (1.2.10 > 1.2.9).
+fn version_newer(a: &str, b: &str) -> bool {
+    let p = |v: &str| -> Vec<u64> { v.split('.').map(|n| n.parse().unwrap_or(0)).collect() };
+    let (x, y) = (p(a), p(b));
+    for i in 0..3 { let (m, n) = (x.get(i).copied().unwrap_or(0), y.get(i).copied().unwrap_or(0)); if m != n { return m > n; } }
+    false
+}
+
+fn hex(bytes: &[u8]) -> String { bytes.iter().map(|b| format!("{b:02x}")).collect() }
+
+/// Looks for a newer version. [server] is the Pager address (empty: the one you are signed in to), [current] this app's version, [entry] which
+/// line of the update information fits this computer ("native" or "nativeWindows"). Answers "update" {state: "none"|"available"|"error", ...}.
+#[no_mangle]
+pub extern "C" fn pager_update_check(h: *mut Arc<Engine>, server: *const c_char, current: *const c_char, entry: *const c_char) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (server, current, entry) = (s(server), s(current), s(entry));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let say = |v: Value| e2.tell.say("update", &v);
+        let base = if server.is_empty() { match e2.client() { Some(c) => c.homeserver().to_string(), None => return say(json!({ "state": "error", "error": "Sign in first" })) } } else { server };
+        let base = format!("{}/updates/", base.trim_end_matches('/'));
+        let http = matrix_sdk::reqwest::Client::new();
+        let get = |name: &str| { let (http, url) = (http.clone(), format!("{base}{name}")); async move { let r = http.get(url).timeout(Duration::from_secs(30)).send().await.ok()?; if !r.status().is_success() { return None; } r.bytes().await.ok() } };
+        let Some(man) = get("latest.json").await else { return say(json!({ "state": "none", "note": "Your server doesn't publish updates yet." })) };
+        let Some(sig) = get("latest.json.sig").await else { return say(json!({ "state": "error", "error": "The update information isn't signed, so it was ignored." })) };
+        if !update_verified(&man, &sig) { return say(json!({ "state": "error", "error": "The update information isn't signed by the Pager release key, so it was ignored." })); }
+        let all: Value = match serde_json::from_slice(&man) { Ok(v) => v, Err(_) => return say(json!({ "state": "error", "error": "The update information is unreadable." })) };
+        let Some(d) = all.get(&entry) else { return say(json!({ "state": "none", "note": "Your server doesn't publish a native app for this computer yet." })) };
+        let (version, file, sha) = (d["version"].as_str().unwrap_or(""), d["file"].as_str().unwrap_or(""), d["sha256"].as_str().unwrap_or("").to_lowercase());
+        if version.is_empty() || file.is_empty() || file.contains('/') || file.contains('\\') || sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+            return say(json!({ "state": "error", "error": "The update information is incomplete." }));
+        }
+        if !version_newer(version, &current) { return say(json!({ "state": "none", "version": current, "note": format!("You're up to date ({current}).") })); }
+        say(json!({ "state": "available", "version": version, "file": file, "sha256": sha, "notes": d["notes"].as_str().unwrap_or(""), "base": base }));
+    });
+}
+
+/// Downloads an update found by pager_update_check into [dest_dir], checking its checksum. Progress is "update_progress" {done, total};
+/// the end is "update_ready" {path} or "update_failed" {error}.
+#[no_mangle]
+pub extern "C" fn pager_update_download(h: *mut Arc<Engine>, base: *const c_char, file: *const c_char, sha256: *const c_char, dest_dir: *const c_char) {
+    use sha2::Digest;
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (base, file, sha, dest) = (s(base), s(file), s(sha256).to_lowercase(), s(dest_dir));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let fail = |why: String| e2.tell.say("update_failed", &json!({ "error": why }));
+        if file.contains('/') || file.contains('\\') || file.is_empty() { return fail("The update information is incomplete.".into()); }
+        let _ = std::fs::remove_dir_all(&dest);
+        if let Err(err) = std::fs::create_dir_all(&dest) { return fail(err.to_string()); }
+        let path = std::path::Path::new(&dest).join(&file);
+        let http = matrix_sdk::reqwest::Client::new();
+        let mut last_err = String::new();
+        for attempt in 1..=3u64 {
+            let res = async {
+                let mut r = http.get(format!("{base}{file}")).timeout(Duration::from_secs(600)).send().await.map_err(|x| x.to_string())?;
+                if !r.status().is_success() { return Err(format!("server said {}", r.status().as_u16())); }
+                let total = r.content_length().unwrap_or(0);
+                let (mut hasher, mut done, mut last_pc) = (sha2::Sha256::new(), 0u64, 101u64);
+                let mut out = std::fs::File::create(&path).map_err(|x| x.to_string())?;
+                while let Some(chunk) = r.chunk().await.map_err(|x| x.to_string())? {
+                    std::io::Write::write_all(&mut out, &chunk).map_err(|x| x.to_string())?;
+                    hasher.update(&chunk); done += chunk.len() as u64;
+                    let pc = if total > 0 { done * 100 / total } else { 0 };
+                    if pc != last_pc { last_pc = pc; e2.tell.say("update_progress", &json!({ "done": done, "total": total })); }
+                }
+                Ok::<String, String>(hex(&hasher.finalize()))
+            }.await;
+            match res {
+                Ok(got) if got == sha => return e2.tell.say("update_ready", &json!({ "path": path })),
+                Ok(_) => { let _ = std::fs::remove_file(&path); return fail("The download doesn't match its checksum, so it was not installed.".into()); }
+                Err(err) => { last_err = err; tokio::time::sleep(Duration::from_secs(2 * attempt)).await; }
+            }
+        }
+        fail(format!("The download kept stopping ({last_err}). Check your connection and try again."));
+    });
+}
+
 /// The engine's version, for the About page.
 #[no_mangle]
 pub extern "C" fn pager_core_version() -> *const c_char { concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char }
+
+#[cfg(test)]
+mod update_tests {
+    use super::*;
+    #[test]
+    fn versions_compare_like_the_other_apps() {
+        assert!(version_newer("1.2.10", "1.2.9")); assert!(!version_newer("1.2.9", "1.2.10")); assert!(!version_newer("0.5.73", "0.5.73")); assert!(version_newer("0.6.0", "0.5.99"));
+    }
+    #[test]
+    fn the_release_key_loads_and_a_bad_signature_is_refused() {
+        assert!(update_key().is_some());
+        assert!(!update_verified(b"{}", &[0u8; 64]));
+        assert!(!update_verified(b"{}", &[0u8; 10]));
+    }
+}

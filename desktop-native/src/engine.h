@@ -23,10 +23,16 @@ class Engine : public QObject {
     Q_PROPERTY(QString currentSub READ currentSub NOTIFY currentChanged)
     Q_PROPERTY(bool currentIsDirect READ currentIsDirect NOTIFY currentChanged)
     Q_PROPERTY(bool isAdmin READ isAdmin NOTIFY stateChanged)
+    Q_PROPERTY(QString updateState READ updateState NOTIFY updateChanged)   // idle, checking, available, downloading, installing, error
+    Q_PROPERTY(QString updateVersion READ updateVersion NOTIFY updateChanged)
+    Q_PROPERTY(QString updateNotes READ updateNotes NOTIFY updateChanged)
+    Q_PROPERTY(QString updateMessage READ updateMessage NOTIFY updateChanged)
+    Q_PROPERTY(int updateProgress READ updateProgress NOTIFY updateChanged)
     Q_PROPERTY(bool recovering READ recovering NOTIFY recoveryChanged)
     Q_PROPERTY(QString recoveryMessage READ recoveryMessage NOTIFY recoveryChanged)
     Q_PROPERTY(bool recoveryDone READ recoveryDone NOTIFY recoveryChanged)
     Q_PROPERTY(QString version READ version CONSTANT)
+    Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
 public:
     explicit Engine(const QString &dataDir, bool demo = false, QObject *parent = nullptr);
     ~Engine() override;
@@ -43,10 +49,16 @@ public:
     QString currentSub() const;
     bool currentIsDirect() const { const Room *r = m_store.room(m_current); return r && r->direct; }
     bool isAdmin() const { return m_admin; }
+    QString updateState() const { return m_updState; }
+    QString updateVersion() const { return m_updVersion; }
+    QString updateNotes() const { return m_updNotes; }
+    QString updateMessage() const { return m_updMessage; }
+    int updateProgress() const { return m_updProgress; }
     bool recovering() const { return m_recovering; }
     QString recoveryMessage() const { return m_recoveryMessage; }
     bool recoveryDone() const { return m_recoveryDone; }
     QString version() const;
+    QString appVersion() const { return QStringLiteral(PAGER_NATIVE_VERSION); }
     Q_INVOKABLE void login(const QString &homeserver, const QString &user, const QString &password);
     Q_INVOKABLE void logout();
     Q_INVOKABLE void openRoom(const QString &id);
@@ -66,6 +78,11 @@ public:
     Q_INVOKABLE void api(const QString &method, const QString &path, const QVariant &body, const QJSValue &callback);
     /// A QR code for [text]: {size, rows:["0101…"]}.
     Q_INVOKABLE QVariantMap qr(const QString &text) const;
+    /// Asks the server whether a newer version exists. [quiet] keeps "you're up to date" and errors to itself.
+    Q_INVOKABLE void checkForUpdates(bool quiet);
+    Q_INVOKABLE void installUpdate();
+    /// The screen tells us how putting the downloaded update in place went ("" = fine; the app then restarts).
+    Q_INVOKABLE void updateInstalled(const QString &error);
     /// Text of one of your messages in the open chat (to edit it).
     Q_INVOKABLE QString bodyOf(const QString &eventId) const;
     Q_INVOKABLE void loadOlder();
@@ -84,6 +101,10 @@ signals:
     void problemChanged();
     void currentChanged();
     void recoveryChanged();
+    void updateChanged();
+    /// The update has been downloaded and checked: the screen puts it in place and restarts.
+    void updateReady(const QString &path);
+    void restartRequested();
     /// A message arrived that deserves a pop-up: which chat, who from, what it says.
     void notify(const QString &roomId, const QString &title, const QString &body);
     void unreadChanged(int total);
@@ -101,6 +122,9 @@ private:
     QHash<QString, QJSValue> m_calls;
     int m_callCounter = 0;
     QString m_meKey;
+    QString m_updState = QStringLiteral("idle"), m_updVersion, m_updNotes, m_updMessage, m_updFile, m_updSha, m_updBase;
+    int m_updProgress = 0;
+    bool m_updQuiet = false;
     QHash<QString, QString> m_seen;      // room -> id of the newest message we have already looked at
     bool m_admin = false, m_active = true, m_recovering = false, m_recoveryDone = false;
     QString m_user, m_error, m_problem, m_current, m_recoveryMessage, m_lastRead;

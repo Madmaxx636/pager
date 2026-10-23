@@ -105,10 +105,27 @@ Dialog {
                 Label { Layout.fillWidth: true; text: "Restore old messages with your recovery key"; wrapMode: Text.Wrap; color: look.text; font.pixelSize: Math.round(14 * look.textScale) }
                 Button { text: "Restore…"; onClicked: { dlg.close(); dlg.restoreRequested() } } }
 
+            Section { text: "Updates" }
+            RowLayout { Layout.fillWidth: true
+                ColumnLayout { Layout.fillWidth: true; spacing: 1
+                    Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.text; font.pixelSize: Math.round(14 * look.textScale)
+                        text: core.updateState === "available" ? "Pager " + core.updateVersion + " is available"
+                            : core.updateState === "checking" ? "Checking…"
+                            : core.updateState === "downloading" ? "Downloading… " + core.updateProgress + "%"
+                            : core.updateState === "installing" ? "Installing…"
+                            : "Pager " + core.appVersion }
+                    Label { visible: core.updateState === "available" && core.updateNotes.length > 0; Layout.fillWidth: true; wrapMode: Text.Wrap; text: core.updateNotes; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) }
+                    Label { visible: core.updateMessage.length > 0; Layout.fillWidth: true; wrapMode: Text.Wrap; text: core.updateMessage; color: core.updateState === "error" ? look.danger : look.muted; font.pixelSize: Math.round(12 * look.textScale) }
+                    ProgressBar { visible: core.updateState === "downloading"; Layout.fillWidth: true; from: 0; to: 100; value: core.updateProgress }
+                }
+                Button { visible: core.updateState === "available"; text: "Update now"; onClicked: core.installUpdate() }
+                Button { visible: core.updateState === "idle" || core.updateState === "error"; text: "Check for updates"; onClicked: core.checkForUpdates(false) }
+            }
+
             Section { text: "Account" }
             Label { text: core.user; color: look.text; font.pixelSize: Math.round(14 * look.textScale) }
             RowLayout { Layout.fillWidth: true; Layout.bottomMargin: 20
-                Label { Layout.fillWidth: true; text: "Pager native · engine " + core.version; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) }
+                Label { Layout.fillWidth: true; text: "Pager native " + core.appVersion + " · engine " + core.version; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) }
                 Button { text: "Sign out"; onClicked: { dlg.close(); core.logout() } } }
         }
     }
