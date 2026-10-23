@@ -22,6 +22,7 @@ class Engine : public QObject {
     Q_PROPERTY(QString currentName READ currentName NOTIFY currentChanged)
     Q_PROPERTY(QString currentSub READ currentSub NOTIFY currentChanged)
     Q_PROPERTY(bool currentIsDirect READ currentIsDirect NOTIFY currentChanged)
+    Q_PROPERTY(bool isAdmin READ isAdmin NOTIFY stateChanged)
     Q_PROPERTY(bool recovering READ recovering NOTIFY recoveryChanged)
     Q_PROPERTY(QString recoveryMessage READ recoveryMessage NOTIFY recoveryChanged)
     Q_PROPERTY(bool recoveryDone READ recoveryDone NOTIFY recoveryChanged)
@@ -41,6 +42,7 @@ public:
     QString currentName() const;
     QString currentSub() const;
     bool currentIsDirect() const { const Room *r = m_store.room(m_current); return r && r->direct; }
+    bool isAdmin() const { return m_admin; }
     bool recovering() const { return m_recovering; }
     QString recoveryMessage() const { return m_recoveryMessage; }
     bool recoveryDone() const { return m_recoveryDone; }
@@ -98,7 +100,8 @@ private:
     QSet<QString> m_fetching;
     QHash<QString, QJSValue> m_calls;
     int m_callCounter = 0;
+    QString m_meKey;
     QHash<QString, QString> m_seen;      // room -> id of the newest message we have already looked at
-    bool m_active = true, m_recovering = false, m_recoveryDone = false;
+    bool m_admin = false, m_active = true, m_recovering = false, m_recoveryDone = false;
     QString m_user, m_error, m_problem, m_current, m_recoveryMessage, m_lastRead;
 };

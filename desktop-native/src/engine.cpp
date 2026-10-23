@@ -27,7 +27,10 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
     if (kind == QLatin1String("state")) {
         m_starting = false;
         m_signedIn = b.value(QLatin1String("signedIn")).toBool();
-        if (m_signedIn) { m_user = b.value(QLatin1String("user")).toString(m_user); m_store.setMe(m_user); m_error.clear(); }
+        if (m_signedIn) {
+            m_user = b.value(QLatin1String("user")).toString(m_user); m_store.setMe(m_user); m_error.clear();
+            if (m_core) api(QStringLiteral("GET"), QStringLiteral("/api/me"), QVariant(), QJSValue());   // is this an admin? (answered below)
+        }
         else { m_user.clear(); m_error = b.value(QLatin1String("error")).toString(); }
         m_working = false;
         emit stateChanged();
@@ -73,6 +76,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
         if (b.contains(QLatin1String("path"))) { m_store.setMediaPath(key, b.value(QLatin1String("path")).toString()); m_timeline.touch(key); }
     } else if (kind == QLatin1String("http")) {
         const QString key = b.value(QLatin1String("key")).toString();
+        if (m_meKey == key) { m_meKey.clear(); const bool a = b.value(QLatin1String("status")).toInt() == 200 && b.value(QLatin1String("body")).toObject().value(QLatin1String("admin")).toBool(); if (a != m_admin) { m_admin = a; emit stateChanged(); } return; }
         QJSValue cb = m_calls.take(key);
         if (cb.isCallable()) {
             QJSEngine *js = qjsEngine(this);
@@ -250,6 +254,7 @@ void Engine::endPoll(const QString &pollId) {
 
 void Engine::api(const QString &method, const QString &path, const QVariant &body, const QJSValue &callback) {
     const QString key = QStringLiteral("api-%1").arg(++m_callCounter);
+    if (path == QLatin1String("/api/me") && !callback.isCallable()) m_meKey = key;
     if (callback.isCallable()) m_calls.insert(key, callback);
     if (!m_core) { QTimer::singleShot(0, this, [this, key] { handle(QStringLiteral("http"), QJsonObject{{"key", key}, {"status", 0}, {"body", QJsonObject{{"error", "Not connected"}}}}); }); return; }
     const QByteArray json = body.isValid() && !body.isNull() ? QJsonDocument::fromVariant(body).toJson(QJsonDocument::Compact) : QByteArray();

@@ -18,7 +18,7 @@ set_target_properties(pager-native PROPERTIES INSTALL_RPATH "$ORIGIN:$ORIGIN/../
 
 qt_add_resources(pager-native icon PREFIX / FILES pager.svg emoji-names.tsv emoji-groups.tsv palettes.tsv)
 qt_add_qml_module(pager-native URI Pager VERSION 1.0 RESOURCE_PREFIX / QML_FILES
-  qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml qml/PollCard.qml qml/PollDialog.qml qml/Settings.qml qml/Accounts.qml qml/QrView.qml qml/Networks.js)
+  qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml qml/PollCard.qml qml/PollDialog.qml qml/Settings.qml qml/Accounts.qml qml/QrView.qml qml/Networks.js qml/Admin.qml)
 install(TARGETS pager-native RUNTIME DESTINATION bin)
 
 # Tests of the parts that do not need a screen.
