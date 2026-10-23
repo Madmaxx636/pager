@@ -1,4 +1,5 @@
 #include "store.h"
+#include "names.h"
 #include <QJsonValue>
 #include <QRegularExpression>
 #include <algorithm>
@@ -16,6 +17,7 @@ QString Room::preview() const {
     }
     return {};
 }
+QString Room::nameOf(const QString &user) const { const QString n = members.value(user); return Names::pretty(n.isEmpty() ? user.mid(1).section(QLatin1Char(':'), 0, 0) : n); }
 const Msg *Room::find(const QString &id) const {
     for (const Msg &m : msgs) if (m.id == id) return &m;
     return nullptr;
@@ -336,11 +338,11 @@ QString Store::applyHistory(const QJsonObject &page) {
     return id;
 }
 
-QString Store::addLocal(const QString &roomId, const QString &body, const QString &replyTo) {
+QString Store::addLocal(const QString &roomId, const QString &body, const QString &replyTo, const QString &html) {
     Room *r = mutableRoom(roomId);
     if (!r) return {};
     Msg m; m.id = QStringLiteral("local-%1").arg(++m_localCounter); m.sender = m_me; m.senderName = QStringLiteral("You"); m.body = body; m.kind = QStringLiteral("text");
-    m.ts = QDateTime::currentMSecsSinceEpoch(); m.local = true; m.replyTo = replyTo; m.status = 1; m.type = QStringLiteral("m.text");
+    m.ts = QDateTime::currentMSecsSinceEpoch(); m.local = true; m.replyTo = replyTo; m.html = html; m.status = 1; m.type = QStringLiteral("m.text");
     r->msgs.append(m);
     return m.id;
 }
@@ -369,4 +371,8 @@ QString Store::addLocalFile(const QString &roomId, const QString &path, const QS
     m_media.insert(m.id, path);
     r->msgs.append(m);
     return m.id;
+}
+
+void Store::removeMessage(const QString &roomId, const QString &id) {
+    if (Room *r = mutableRoom(roomId)) for (int i = 0; i < r->msgs.size(); ++i) if (r->msgs[i].id == id) { r->msgs.removeAt(i); return; }
 }

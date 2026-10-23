@@ -47,7 +47,7 @@ struct Room {
     bool archived() const { return tags.contains(QLatin1String("u.archived")); }
     bool lowPriority() const { return tags.contains(QLatin1String("m.lowpriority")); }
     QStringList labels() const { QStringList out; for (const QString &t : tags) if (t.startsWith(QLatin1String("u.label."))) out << t.mid(8); out.sort(); return out; }
-    QString nameOf(const QString &user) const { const QString n = members.value(user); return n.isEmpty() ? user.mid(1).section(QLatin1Char(':'), 0, 0) : n; }
+    QString nameOf(const QString &user) const;
     int unread = 0, highlights = 0;
     QVector<Msg> msgs;                      // oldest first
     QHash<QString, QStringList> reactionRefs; // reaction event id -> {target, key, sender}
@@ -79,7 +79,8 @@ public:
     QStringList applyRooms(const QJsonArray &rooms);
     /// Applies a page of older messages (or the first look at a room). Returns the room id.
     QString applyHistory(const QJsonObject &page);
-    QString addLocal(const QString &roomId, const QString &body, const QString &replyTo = QString());
+    QString addLocal(const QString &roomId, const QString &body, const QString &replyTo = QString(), const QString &html = QString());
+    void removeMessage(const QString &roomId, const QString &id);
     QString addLocalFile(const QString &roomId, const QString &path, const QString &name, bool image, int w, int h);
     /// Applies one event we made ourselves (a reaction, an edit, a deletion) so it shows before the server echoes it.
     void applyLocalEvent(const QString &roomId, const QJsonObject &event);

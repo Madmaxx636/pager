@@ -1,9 +1,11 @@
 #include "engine.h"
+#include "rich.h"
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
 #include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QJSEngine>
 #include <QQmlEngine>
 #include <QStandardPaths>
@@ -19,6 +21,8 @@ Engine::Engine(const QString &dataDir, bool demo, QObject *parent) : QObject(par
         const QByteArray json = QJsonDocument(QJsonObject{{"url", mxc}, {"thumb", QJsonObject{{"w", 96}, {"h", 96}}}}).toJson(QJsonDocument::Compact);
         pager_fetch_media(m_core, ("av:" + mxc).toUtf8().constData(), json.constData(), true);
     };
+    m_dataDir = dataDir;
+    if (!dataDir.isEmpty()) { QFile f(dataDir + QStringLiteral("/drafts.json")); if (f.open(QIODevice::ReadOnly)) { const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object(); for (auto it = o.begin(); it != o.end(); ++it) m_drafts.insert(it.key(), it.value().toString()); } }
     m_logFile = dataDir.isEmpty() ? QString() : dataDir + QStringLiteral("/pager-native.log");
     if (demo) { loadDemo(); return; }
     m_core = pager_start(dataDir.toUtf8().constData(), &Engine::callback, this);
@@ -151,7 +155,11 @@ QString Engine::currentName() const { const Room *r = m_store.room(m_current); r
 QString Engine::currentSub() const {
     const Room *r = m_store.room(m_current);
     if (!r) return {};
-    return r->encrypted ? QStringLiteral("End-to-end encrypted") : QStringLiteral("Not encrypted");
+    QStringList parts;
+    if (r->network != QLatin1String("matrix")) parts << (r->network == QLatin1String("gmessages") ? QStringLiteral("Messages") : r->network.left(1).toUpper() + r->network.mid(1));
+    if (r->isGroup() && r->memberCount > 2) parts << QStringLiteral("%1 people").arg(qMax(2, r->memberCount - (r->roomType.isEmpty() ? 0 : 2)));
+    parts << (r->encrypted ? QStringLiteral("End-to-end encrypted") : QStringLiteral("Not encrypted"));
+    return parts.join(QStringLiteral(" · "));
 }
 
 void Engine::login(const QString &hs, const QString &user, const QString &pw) {
@@ -217,14 +225,16 @@ void Engine::loadOlder() {
     r->historyToken.clear();                       // one request at a time: the answer brings the next token
     pager_load_history(m_core, m_current.toUtf8().constData(), token.constData());
 }
-void Engine::send(const QString &text, const QString &replyTo) {
+void Engine::send(const QString &text, const QString &replyTo, bool markdown) {
     const QString body = text.trimmed();
     if (body.isEmpty() || m_current.isEmpty()) return;
-    const QString local = m_store.addLocal(m_current, body, replyTo);
-    setTyping(false);
+    const QString html = markdown ? Rich::markdown(body) : QString();
+    const QString local = m_store.addLocal(m_current, body, replyTo, html);
+    setTyping(false); setDraft(m_current, QString());
     m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
     if (!m_core) return;
     QJsonObject content{{"msgtype", "m.text"}, {"body", body}};
+    if (!html.isEmpty()) { content.insert("format", "org.matrix.html"); content.insert("formatted_body", html); }
     if (!replyTo.isEmpty()) content.insert("m.relates_to", QJsonObject{{"m.in_reply_to", QJsonObject{{"event_id", replyTo}}}});
     sendEvent(m_current, QStringLiteral("m.room.message"), content, local);
 }
@@ -509,6 +519,91 @@ void Engine::loadIdentity() {
     });
 }
 
+void Engine::demoReceive(const QString &room, const QString &text) {
+    if (m_core) return;                                           // only for the made-up chats (tests, screenshots)
+    const Room *r = m_store.room(room); if (!r) return;
+    handle(QStringLiteral("rooms"), QJsonObject{{"rooms", QJsonArray{QJsonObject{{"id", room}, {"events", QJsonArray{QJsonObject{{"event_id", QStringLiteral("d%1").arg(++m_callCounter)}, {"type", "m.room.message"}, {"sender", "@someone:demo.test"}, {"sender_name", "Someone"},
+        {"origin_server_ts", double(QDateTime::currentMSecsSinceEpoch())}, {"content", QJsonObject{{"msgtype", "m.text"}, {"body", text}}}}}}}}}});
+}
+
+void Engine::retry(const QString &localId) {
+    Room *r = m_store.mutableRoom(m_current);
+    const Msg *m = r ? r->find(localId) : nullptr;
+    if (!m || m->status != 2) return;
+    const QString body = m->body, reply = m->replyTo;
+    m_store.removeMessage(m_current, localId);
+    send(body, reply, true);
+}
+void Engine::setDraft(const QString &roomId, const QString &text) {
+    if (text.isEmpty()) m_drafts.remove(roomId); else m_drafts.insert(roomId, text);
+    QTimer::singleShot(1000, this, [this] { saveDrafts(); });
+}
+void Engine::saveDrafts() {
+    if (m_dataDir.isEmpty()) return;
+    QJsonObject o; for (auto it = m_drafts.cbegin(); it != m_drafts.cend(); ++it) o.insert(it.key(), it.value());
+    QFile f(m_dataDir + QStringLiteral("/drafts.json"));
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(QJsonDocument(o).toJson(QJsonDocument::Compact));
+}
+QString Engine::nameOfMessage(const QString &id) const {
+    const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(id) : nullptr;
+    return !m ? QString() : (m_store.mine(*m) ? QStringLiteral("yourself") : r->nameOf(m->sender));
+}
+bool Engine::isMediaMessage(const QString &id) const {
+    const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(id) : nullptr;
+    return m && !m->content.isEmpty() && (m->kind == QLatin1String("image") || m->kind == QLatin1String("video") || m->kind == QLatin1String("audio") || m->kind == QLatin1String("file"));
+}
+QString Engine::fileNameOf(const QString &id) const {
+    const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(id) : nullptr;
+    return m ? (m->fileName.isEmpty() ? m->body : m->fileName) : QString();
+}
+QString Engine::messageDetails(const QString &id) const {
+    const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(id) : nullptr;
+    if (!m) return {};
+    return QStringLiteral("Sent: %1\nFrom: %2 (%3)\nType: %4\nEvent: %5").arg(QDateTime::fromMSecsSinceEpoch(m->ts).toString(QStringLiteral("dddd, MMMM d, yyyy h:mm:ss AP")), r->nameOf(m->sender), m->sender, m->type.isEmpty() ? m->kind : m->type, m->id);
+}
+void Engine::forward(const QString &id, const QString &toRoom) {
+    const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(id) : nullptr;
+    if (!m || !m_store.room(toRoom) || m->locked) return;
+    QJsonObject content;
+    if (!m->content.isEmpty()) { content = m->content; content.remove(QStringLiteral("m.relates_to")); }
+    else { content = QJsonObject{{"msgtype", "m.text"}, {"body", m->body}}; if (!m->html.isEmpty()) { content.insert("format", "org.matrix.html"); content.insert("formatted_body", m->html); } }
+    sendEvent(toRoom, QStringLiteral("m.room.message"), content, QString());
+}
+QVariantList Engine::chatChoices(const QString &query) const {
+    QVariantList out; const QString q = query.trimmed().toLower();
+    for (const QString &id : m_store.order()) {
+        const Room *r = m_store.room(id); if (!r || m_store.isBotRoom(*r)) continue;
+        const QString name = RoomListModel::displayName(*r);
+        if (!q.isEmpty() && !name.toLower().contains(q)) continue;
+        const QString av = r->avatar.isEmpty() ? QString() : m_store.mediaPath(QStringLiteral("av:") + r->avatar);
+        if (!r->avatar.isEmpty() && av.isEmpty()) m_store.wantAvatar(r->avatar);
+        out << QVariantMap{{"id", id}, {"name", name}, {"avatar", av}, {"network", r->network}};
+        if (out.size() >= 60) break;
+    }
+    return out;
+}
+QString Engine::mediaNeighbor(const QString &id, int dir) const {
+    const Room *r = m_store.room(m_current); if (!r) return {};
+    int at = -1; for (int i = 0; i < r->msgs.size(); ++i) if (r->msgs[i].id == id) { at = i; break; }
+    if (at < 0 || dir == 0) return {};
+    for (int i = at + (dir > 0 ? 1 : -1); i >= 0 && i < r->msgs.size(); i += dir > 0 ? 1 : -1) {
+        const Msg &m = r->msgs[i]; if ((m.kind == QLatin1String("image") || m.kind == QLatin1String("video")) && !m.sticker && !m.content.isEmpty()) return m.id;
+    }
+    return {};
+}
+QVariantList Engine::members() const {
+    QVariantList out; const Room *r = m_store.room(m_current); if (!r) return out;
+    QStringList ids = r->joined; for (auto it = r->members.cbegin(); it != r->members.cend(); ++it) if (!ids.contains(it.key()) && r->joined.isEmpty()) ids << it.key();
+    for (const QString &u : ids) {
+        if (Store::isBridgeBot(u) || QRegularExpression(QStringLiteral("^@[a-z0-9_-]*bot:")).match(u).hasMatch()) continue;
+        const QString av = r->memberAvatars.value(u); QString path = av.isEmpty() ? QString() : m_store.mediaPath(QStringLiteral("av:") + av);
+        if (!av.isEmpty() && path.isEmpty()) m_store.wantAvatar(av);
+        out << QVariantMap{{"id", u}, {"name", r->nameOf(u)}, {"avatar", path}, {"you", u == m_user}};
+    }
+    std::sort(out.begin(), out.end(), [](const QVariant &a, const QVariant &b) { const auto x = a.toMap(), y = b.toMap(); if (x["you"].toBool() != y["you"].toBool()) return x["you"].toBool(); return x["name"].toString().toLower() < y["name"].toString().toLower(); });
+    return out;
+}
+
 QString Engine::bodyOf(const QString &eventId) const { const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(eventId) : nullptr; return m ? m->body : QString(); }
 
 // Made-up chats for screenshots and for trying the screens without a server (run with --demo).
@@ -535,6 +630,9 @@ void Engine::loadDemo() {
         QJsonObject{{"id", "!dad"}, {"name", "Dad"}, {"direct", true}, {"encrypted", true}, {"unread", 0}, {"events", QJsonArray{ev("d1", dad, "Dad", "Call me when you land", 190), ev("d2", me, "You", "Will do", 185)}}},
         QJsonObject{{"id", "!sam"}, {"name", "Sam"}, {"direct", true}, {"encrypted", false}, {"unread", 0}, {"events", QJsonArray{ev("s1", QStringLiteral("@sam:demo.test"), "Sam", "lol that's great", 1500), ev("s2", me, "You", "I know right", 1490)}}},
     };
+    QJsonArray longEv;
+    for (int i = 0; i < 400; ++i) longEv.append(ev(QStringLiteral("L%1").arg(i), i % 3 ? priya : leo, i % 3 ? "Priya" : "Leo", QStringLiteral("Message number %1 in a long chat, with enough words to wrap onto a second line sometimes").arg(i), 4000 - i * 3));
+    rooms.append(QJsonObject{{"id", "!long"}, {"name", "Long chat"}, {"direct", false}, {"encrypted", true}, {"unread", 0}, {"events", longEv}});
     m_store.applyRooms(rooms); m_rooms.refresh();
     openRoom(QStringLiteral("!maya"));
 }
