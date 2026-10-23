@@ -13,15 +13,27 @@ Rectangle {
     signal back()
     signal restoreRequested()
     signal toggleInfo()
+    signal openStickerSettings()
     signal searchRequested()
     property string jumpTarget: ""
     onJumpTargetChanged: if (jumpTarget.length) { pane.jumpTo(jumpTarget); jumpTarget = "" }
     property string target: ""; property bool targetMine: false        // the message a menu was opened on
     property string replyingTo: ""; property string editing: ""        // set while the composer is answering or editing
     property string highlight: ""
+    property var mentionIds: ({})            // names picked from the @ list -> user ids, for the message's mentions
+    readonly property string mentionToken: { const m = settings.mentionSuggestions && core.currentIsGroup ? /(?:^|\s)@([^\s@]*)$/.exec(input.text.slice(0, input.cursorPosition)) : null; return m ? m[1] : "" }
+    readonly property bool mentioning: settings.mentionSuggestions && core.currentIsGroup && /(?:^|\s)@([^\s@]*)$/.test(input.text.slice(0, input.cursorPosition))
+    readonly property var mentionPeople: mentioning ? core.members().filter(p => !p.you && p.name.toLowerCase().indexOf(mentionToken.toLowerCase()) >= 0).slice(0, 8) : []
+    function pickMention(p) {
+        const before = input.text.slice(0, input.cursorPosition), after = input.text.slice(input.cursorPosition)
+        const cut = before.length - mentionToken.length - 1
+        input.text = before.slice(0, cut) + "@" + p.name + " " + after; input.cursorPosition = cut + p.name.length + 2
+        const m = Object.assign({}, mentionIds); m[p.name] = p.id; mentionIds = m; input.forceActiveFocus()
+    }
     readonly property string barText: editing ? "Editing message" : (replyingTo ? "Replying to " + core.nameOfMessage(replyingTo) + ": " + core.bodyOf(replyingTo) : "")
     readonly property string roomId: core.currentRoom
 
+    function openViewer(id) { viewer.show(id) }
     function jumpTo(id) {
         const r = core.timeline.rowOfMessage(id)
         if (r < 0) return
@@ -29,8 +41,9 @@ Rectangle {
     }
     function sendIt() {
         if (!input.text.trim().length) return
-        if (editing) core.edit(editing, input.text); else core.send(input.text, replyingTo, settings.markdown)
-        input.clear(); editing = ""; replyingTo = ""
+        const ids = []; for (const n in mentionIds) if (input.text.indexOf("@" + n) >= 0) ids.push(mentionIds[n])
+        if (editing) core.edit(editing, input.text); else core.send(input.text, replyingTo, settings.markdown, ids)
+        input.clear(); editing = ""; replyingTo = ""; mentionIds = ({})
         msgs.positionViewAtBeginning()
     }
     function attach(urls) { for (const u of urls) { const p = files.path(u); if (!p.length) continue; const sz = files.imageSize(p); core.sendFile(p, files.mime(p), sz.width, sz.height) } }
@@ -65,8 +78,17 @@ Rectangle {
                             Label { visible: text.length > 0; text: core.currentTyping.length ? core.currentTyping : core.currentSub; color: core.currentTyping.length ? look.accent : look.muted; font.pixelSize: Math.round(12 * look.textScale); font.italic: core.currentTyping.length > 0 }
                         }
                     }
-                    TapHandler { onTapped: pane.toggleInfo() }
+                    TapHandler { onTapped: core.linkedChats.length > 1 ? netMenu.popup(parent, 40, parent.height) : pane.toggleInfo() }
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
+                    Menu {   // one person on several networks: all together, or one at a time
+                        id: netMenu
+                        MenuItem { text: "All · " + core.linkedChats.length + " chats together"; checkable: true; checked: core.merged; onTriggered: core.setSolo(core.currentRoom, false) }
+                        MenuSeparator { }
+                        Repeater { model: core.linkedChats
+                            delegate: MenuItem { text: N.meta(modelData.network).label + (modelData.unread > 0 ? "  ·  " + modelData.unread : ""); checkable: true; checked: modelData.here; onTriggered: core.setSolo(modelData.id, true) } }
+                        MenuSeparator { }
+                        MenuItem { text: "Info"; icon.name: "info"; onTriggered: pane.toggleInfo() }
+                    }
                 }
                 Item { Layout.fillWidth: true; visible: core.currentRoom.length === 0 }
                 IconButton { visible: core.currentRoom.length > 0; ico: "search"; onClicked: pane.searchRequested(); ToolTip.text: "Search in page (Ctrl+F)"; ToolTip.visible: hovered }
@@ -83,6 +105,20 @@ Rectangle {
                     text: "🔒 " + core.currentLocked + (core.currentLocked === 1 ? " message is" : " messages are") + " locked on this device. Enter your recovery key to read them." }
                 Button { text: "Enter recovery key"; onClicked: pane.restoreRequested() }
             }
+        }
+        // ---- the same person on another network: offer to show them as one chat
+        Rectangle {
+            id: offerBar
+            property var offer: ({})
+            function refreshOffer() { offer = core.currentRoom.length ? core.linkOffer() : ({}) }
+            Connections { target: core; function onCurrentChanged() { offerBar.refreshOffer() } function onListChanged() { offerBar.refreshOffer() } }
+            visible: !!offer.a
+            Layout.fillWidth: true; implicitHeight: offerRow.implicitHeight + 16; color: Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.12)
+            RowLayout { id: offerRow; anchors.fill: parent; anchors.margins: 8; anchors.leftMargin: 14; spacing: 8
+                Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.text; font.pixelSize: Math.round(13 * look.textScale)
+                    text: "Is this the same person as " + (offerBar.offer.name || "") + " on " + (offerBar.offer.network ? N.meta(offerBar.offer.network).label : "") + "? Show them as one chat." }
+                Button { text: "Show as one"; onClicked: core.link(offerBar.offer.a, offerBar.offer.b) }
+                Button { text: "Not the same"; flat: true; onClicked: core.dismissOffer(offerBar.offer.a, offerBar.offer.b) } }
         }
         // ---- the messages
         Item {
@@ -137,6 +173,34 @@ Rectangle {
                 Label { Layout.fillWidth: true; text: pane.barText; color: look.muted; font.pixelSize: Math.round(13 * look.textScale); elide: Text.ElideRight }
                 IconButton { ico: "x"; iconSize: 16; implicitWidth: 30; implicitHeight: 30; onClicked: { pane.replyingTo = ""; pane.editing = ""; input.clear() } } }
         }
+        // ---- who to @mention
+        Rectangle {
+            visible: pane.mentionPeople.length > 0
+            Layout.fillWidth: true; implicitHeight: Math.min(pane.mentionPeople.length, 5) * 44 + 8; color: look.panel
+            Rectangle { width: parent.width; height: 1; color: look.line }
+            ListView { anchors.fill: parent; anchors.margins: 4; clip: true; model: pane.mentionPeople
+                delegate: Rectangle { width: ListView.view.width; height: 44; radius: 10; color: mh.hovered ? look.panel2 : "transparent"
+                    HoverHandler { id: mh; cursorShape: Qt.PointingHandCursor }
+                    Row { x: 10; anchors.verticalCenter: parent.verticalCenter; spacing: 10
+                        Avatar { size: 30; source: modelData.avatar; letter: modelData.name.length ? modelData.name[0].toUpperCase() : "?"; seed: modelData.id }
+                        Label { text: modelData.name; color: look.text; anchors.verticalCenter: parent.verticalCenter } }
+                    TapHandler { onTapped: pane.pickMention(modelData) } } }
+        }
+        // ---- merged chat: which network the next message goes out on
+        Rectangle {
+            visible: core.merged
+            Layout.fillWidth: true; implicitHeight: 30; color: look.panel
+            Row { x: 16; anchors.verticalCenter: parent.verticalCenter; spacing: 6
+                Label { text: "Sending on"; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) }
+                Rectangle { width: 9; height: 9; radius: 5; color: N.meta(core.sendNetwork).color; anchors.verticalCenter: parent.verticalCenter }
+                Label { text: N.meta(core.sendNetwork).label; color: look.text; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.DemiBold }
+                Icon { name: "chevron-down"; size: 13; color: look.muted; anchors.verticalCenter: parent.verticalCenter } }
+            TapHandler { onTapped: viaMenu.popup() }
+            HoverHandler { cursorShape: Qt.PointingHandCursor }
+            Menu { id: viaMenu
+                Repeater { model: core.linkedChats
+                    delegate: MenuItem { text: N.meta(modelData.network).label; checkable: true; checked: modelData.network === core.sendNetwork; onTriggered: core.setVia(modelData.id) } } }
+        }
         // ---- the box you write in
         Rectangle {
             visible: core.currentRoom.length > 0
@@ -146,11 +210,40 @@ Rectangle {
                 anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; anchors.topMargin: 10; anchors.bottomMargin: 10; spacing: 8
                 IconButton {
                     id: plus; Layout.alignment: Qt.AlignBottom; ico: "plus"; iconSize: 22; implicitWidth: 44; implicitHeight: 44; tint: look.accent
-                    onClicked: attachMenu.popup(); ToolTip.text: "Attach"; ToolTip.visible: hovered; ToolTip.delay: 600
-                    Menu {
+                    onClicked: attachMenu.opened ? attachMenu.close() : attachMenu.open(); ToolTip.text: "Attach"; ToolTip.visible: hovered && !attachMenu.opened; ToolTip.delay: 600
+                    Popup {   // a grid of everything you can add to a message, like the web's + menu
                         id: attachMenu
-                        MenuItem { icon.name: "image-plus"; text: "Photo or file…"; onTriggered: filePicker.open() }
-                        MenuItem { icon.name: "chart-column"; text: "Poll…"; onTriggered: pollDialog.open() }
+                        x: 0; y: -height - 8; padding: 8; width: 3 * 112 + 16
+                        background: Rectangle { color: look.panel; radius: 16; border.color: look.line }
+                        readonly property var items: [["photos", "Photos", "image", "#3b82f6"], ["gif", "GIF", "", "#ec4899"], ["stickers", "Stickers", "sticker", "#f59e0b"], ["emoji", "Emoji", "smile", "#eab308"],
+                            ["file", "File", "file", "#14b8a6"], ["viewonce", "View once", "eye-off", "#475569"], ["poll", "Poll", "chart-column", "#8b5cf6"], ["contact", "Contact", "contact-round", "#0ea5e9"],
+                            ["location", "Location", "map-pin", "#ef4444"], ["attention", "Get attention", "bell", "#f43f5e"]]
+                        function pick(k) {
+                            close()
+                            switch (k) {
+                            case "photos": photoPicker.open(); break
+                            case "file": filePicker.open(); break
+                            case "viewonce": viewOncePicker.open(); break
+                            case "gif": gifDialog.open(); break
+                            case "stickers": stickerDialog.open(); break
+                            case "emoji": inputEmoji.open(); break
+                            case "poll": pollDialog.open(); break
+                            case "contact": contactDialog.open(); break
+                            case "location": locationDialog.open(); break
+                            case "attention": attentionDialog.open(); break
+                            }
+                        }
+                        contentItem: Grid { columns: 3; spacing: 0
+                            Repeater { model: attachMenu.items
+                                delegate: Rectangle { visible: modelData[0] !== "viewonce" || core.sendNetwork === "signal"; width: visible ? 112 : 0; height: visible ? 92 : 0; radius: 12; color: ah.hovered ? look.panel2 : "transparent"
+                                    HoverHandler { id: ah; cursorShape: Qt.PointingHandCursor }
+                                    Column { anchors.centerIn: parent; spacing: 8
+                                        Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: 48; height: 48; radius: 24; color: modelData[3]
+                                            Icon { visible: modelData[2].length > 0; anchors.centerIn: parent; name: modelData[2]; size: 22; color: "white" }
+                                            Label { visible: modelData[2].length === 0; anchors.centerIn: parent; text: "GIF"; color: "white"; font.bold: true; font.pixelSize: 14 } }
+                                        Label { anchors.horizontalCenter: parent.horizontalCenter; text: modelData[1]; color: look.text; font.pixelSize: Math.round(12 * look.textScale) } }
+                                    TapHandler { onTapped: attachMenu.pick(modelData[0]) } } }
+                        }
                     }
                 }
                 Rectangle {
@@ -206,7 +299,15 @@ Rectangle {
     Loader { id: voiceLoader; active: false; source: "VoiceDialog.qml"; onLoaded: item.start() }
     QtObject { id: voiceDialog; function start() { if (voiceLoader.active) voiceLoader.item.start(); else voiceLoader.active = true } }
     ScheduleDialog { id: scheduleDialog; onScheduled: { input.clear() } }
-    FileDialog { id: filePicker; title: "Send a photo or file"; fileMode: FileDialog.OpenFiles; onAccepted: pane.attach(selectedFiles) }
+    FileDialog { id: filePicker; title: "Send a file"; fileMode: FileDialog.OpenFiles; onAccepted: pane.attach(selectedFiles) }
+    FileDialog { id: photoPicker; title: "Send photos or videos"; fileMode: FileDialog.OpenFiles; nameFilters: ["Photos and videos (*.png *.jpg *.jpeg *.gif *.webp *.bmp *.mp4 *.mov *.webm *.mkv)", "All files (*)"]; onAccepted: pane.attach(selectedFiles) }
+    FileDialog { id: viewOncePicker; title: "Send a photo or video that disappears after viewing"; fileMode: FileDialog.OpenFile; nameFilters: ["Photos and videos (*.png *.jpg *.jpeg *.gif *.webp *.mp4 *.mov *.webm)"]
+        onAccepted: { const p = files.path(selectedFile); if (p.length) { const sz = files.imageSize(p); core.sendMedia(p, files.mime(p), sz.width, sz.height, "", { "com.beeper.view_limited": { type: "count", count: 1 } }) } } }
+    GifDialog { id: gifDialog; onOpenSettings: pane.openStickerSettings() }
+    StickerDialog { id: stickerDialog }
+    ContactDialog { id: contactDialog }
+    LocationDialog { id: locationDialog }
+    AttentionDialog { id: attentionDialog }
     EmojiPicker { id: picker; onPicked: (e) => core.react(pane.target, e) }
     EmojiPicker { id: inputEmoji; onPicked: (e) => { input.insert(input.cursorPosition, e); input.forceActiveFocus() } }
     // the viewer (pictures and video, with the multimedia libraries) is loaded the first time something is opened

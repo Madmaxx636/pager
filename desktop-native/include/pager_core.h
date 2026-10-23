@@ -19,6 +19,8 @@ void pager_send_event(PagerEngine *e, const char *room_id, const char *event_typ
 void pager_redact(PagerEngine *e, const char *room_id, const char *event_id);
 void pager_send_file(PagerEngine *e, const char *room_id, const char *path, const char *mime_type, const char *caption, unsigned width, unsigned height, const char *txn, bool voice, unsigned long long duration_ms);
 void pager_fetch_media(PagerEngine *e, const char *key, const char *content_json, bool thumbnail);
+void pager_send_media(PagerEngine *e, const char *room_id, const char *path, const char *mime_type, const char *caption, unsigned width, unsigned height, const char *txn, const char *extra_json);
+void pager_upload(PagerEngine *e, const char *key, const char *path, const char *mime_type);
 void pager_http(PagerEngine *e, const char *key, const char *method, const char *path, const char *body_json);
 char *pager_qr(const char *text);
 void pager_free_string(char *s);

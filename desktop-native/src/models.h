@@ -27,7 +27,7 @@ class RoomListModel : public DiffModel {
     Q_OBJECT
 public:
     enum Role { IdRole = Qt::UserRole + 1, NameRole, PreviewRole, TimeRole, UnreadRole, DirectRole, EncryptedRole, LetterRole, AvatarRole, NetworkRole, PinnedRole, ArchivedRole,
-                LowRole, MutedRole, MarkedUnreadRole, TypingRole, GroupRole, MentionRole, LabelsRole, TickRole };
+                LowRole, MutedRole, MarkedUnreadRole, TypingRole, GroupRole, MentionRole, LabelsRole, TickRole, LinkedRole };
     explicit RoomListModel(Store *store, QObject *parent = nullptr) : DiffModel(parent), m_store(store) {}
     QVariant data(const QModelIndex &i, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
@@ -43,6 +43,8 @@ public:
     QString tab() const { return m_tab; }
     int unreadChats() const;      // chats with something unread (not archived or muted), for the tab badge
     static QString displayName(const Room &r);
+    /// Names you gave chats ("rename for me"); they win over everything else.
+    static QHash<QString, QString> s_aliases;
 protected:
     void rowRemoved(int row) override { m_sig.remove(row); }
     void rowInserted(int row, const QString &id) override { m_sig.insert(row, signature(id)); }
@@ -68,6 +70,9 @@ public:
     QHash<int, QByteArray> roleNames() const override;
     /// Shows [roomId]: a different chat starts over, the same chat is brought up to date by what changed.
     void show(const QString &roomId);
+    /// Show the chats linked with [roomId] together as one conversation (when it has any).
+    void setMerged(bool on) { m_merged = on; }
+    bool merged() const { return m_merged; }
     /// One message changed on its own (its picture arrived): redraw just that row.
     void touch(const QString &eventId);
     QString roomId() const { return m_room; }
@@ -85,7 +90,7 @@ private:
     struct Row { Msg msg; bool first = false, last = false; QString day, replyName, replyText, sig; int tick = 0; bool mentioned = false, big = false; };
     Row build(const Room &r, int storeIndex, int readPos, int deliveredPos, bool group) const;
     Store *m_store;
-    QString m_room, m_unreadBefore;
+    QString m_room, m_unreadBefore; bool m_merged = false;
     qint64 m_gapMs = 5 * 60000; bool m_bigEmojiOn = true;
     QVector<Row> m_rows;   // newest first
 };

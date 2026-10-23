@@ -27,4 +27,6 @@ public:
     Q_INVOKABLE QString readText(const QString &path) const;
     Q_INVOKABLE bool writeText(const QString &path, const QString &text) const;
     Q_INVOKABLE QString humanSize(double bytes) const;
+    /// A short alert sound made on the spot: "ring" (a phone-like double burst) or "nudge" (a sharp three-note alert). Returns the file.
+    Q_INVOKABLE QString tone(const QString &kind) const;
 };
