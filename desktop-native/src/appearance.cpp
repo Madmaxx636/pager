@@ -24,7 +24,7 @@ Appearance::Appearance(AppSettings *settings, QObject *parent, const QByteArray 
         m_systemDark = hints->colorScheme() == Qt::ColorScheme::Dark;
         connect(hints, &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme s) { setSystemDark(s == Qt::ColorScheme::Dark); });
     }
-    connect(m_settings, &AppSettings::valueChanged, this, [this](const QString &k) { if (k == QLatin1String("themeMode") || k == QLatin1String("accent") || k == QLatin1String("accentCustom") || k == QLatin1String("palette") || k == QLatin1String("fontScale")) recompute(); });
+    connect(m_settings, &AppSettings::valueChanged, this, [this](const QString &k) { if (k == QLatin1String("themeMode") || k == QLatin1String("accent") || k == QLatin1String("accentCustom") || k == QLatin1String("palette") || k == QLatin1String("fontScale") || k == QLatin1String("uiScale")) recompute(); });
     recompute();
 }
 
@@ -34,7 +34,8 @@ void Appearance::recompute() {
     const QString acc = m_settings->value(QStringLiteral("accent")).toString();
     m_accent = acc == QLatin1String("custom") ? m_settings->value(QStringLiteral("accentCustom")).toString() : acc;
     m_palette = m_settings->value(QStringLiteral("palette")).toString(); if (m_palette == QLatin1String("none")) m_palette.clear();
-    m_scale = qBound(0.8, m_settings->value(QStringLiteral("fontScale")).toDouble(), 1.6);
+    const QString ui = m_settings->value(QStringLiteral("uiScale")).toString();
+    m_scale = qBound(0.8, m_settings->value(QStringLiteral("fontScale")).toDouble(), 1.6) * (ui == QLatin1String("small") ? 0.92 : ui == QLatin1String("large") ? 1.12 : 1.0);
     for (const Pal &p : m_pals) if (p.id == m_palette) pal = &p;
     if (pal) {
         m_dark = pal->dark;

@@ -55,16 +55,26 @@ Item {
     signal openMedia(string eventId)
     signal replyRequested(string eventId)
 
-    readonly property real maxW: Math.min(width * 0.76, 560)
+    readonly property real maxW: Math.min(width * (settings.bubbleWidth >= 40 ? Math.min(95, settings.bubbleWidth) / 100 : 0.76), settings.bubbleWidth >= 40 ? 1200 : 560)
     readonly property bool bare: sticker || bigEmoji
     readonly property bool framed: !bare && (kind === "image" || kind === "video")   // a picture sits in its bubble with a thin edge, like the web
     width: ListView.view ? ListView.view.width : 400
     height: col.implicitHeight + (first ? 7 : 1.5)
-    readonly property color bubbleColor: settings.bubbleStyle === "outline" ? "transparent" : (mine ? look.accent : look.theirs)
-    readonly property bool outlined: settings.bubbleStyle === "outline"
-    readonly property color ink: outlined ? look.text : (mine ? look.accentInk : look.text)
-    readonly property color softInk: outlined ? look.muted : (mine ? Qt.rgba(look.accentInk.r, look.accentInk.g, look.accentInk.b, 0.72) : look.muted)
-    readonly property real tailRadius: settings.bubbleStyle === "tail" ? 3 : settings.bubbleStyle === "curved" ? 7 : 5
+    // ---- how this side's bubbles look: BubbleLook holds the rules, these are just short names for them
+    BubbleLook { id: lk; mine: row.mine; network: core.currentNetwork }
+    readonly property string shape: lk.shape
+    readonly property int baseRadius: lk.baseRadius
+    readonly property int tight: lk.tight
+    readonly property string borderStyle: lk.borderStyle
+    readonly property string fill: lk.fill
+    readonly property string customBg: lk.customBg
+    readonly property color base: lk.base
+    readonly property bool outlined: lk.outlined
+    readonly property color bubbleColor: lk.bubbleColor
+    readonly property color ink: lk.ink
+    readonly property color softInk: lk.softInk
+    readonly property color borderColorOf: lk.borderColorOf
+    readonly property real tailRadius: lk.tailRadius
 
     Component.onCompleted: if ((kind === "image" || kind === "video") && media.length === 0 && poster.length === 0 && eventId.length && !local && settings.autoDownload === "always" && !settings.lowData) core.fetchMedia(eventId)
 
@@ -103,11 +113,24 @@ Item {
                 x: row.mine ? row.width - width - 14 : 14 + (row.showName && !row.mine && settings.showAvatars ? 40 : 0)
                 width: Math.max(contentLoader.implicitWidth + (row.bare ? 0 : row.framed ? 8 : 26), metaRow.visible && !row.bare ? metaRow.implicitWidth + 26 : 0, quote.visible ? 180 : 0)
                 height: contentLoader.implicitHeight + (row.bare ? 0 : (row.framed ? 8 : 14) + (quote.visible ? quote.height + 6 : 0))
-                radius: row.bare ? 14 : 18
-                topLeftRadius: row.bare ? 14 : (!row.mine && !row.first ? 5 : 18); bottomLeftRadius: row.bare ? 14 : (!row.mine && !row.last ? 5 : (!row.mine && row.last && settings.bubbleStyle !== "round" && settings.bubbleStyle !== "outline" ? row.tailRadius : 18))
-                topRightRadius: row.bare ? 14 : (row.mine && !row.first ? 5 : 18); bottomRightRadius: row.bare ? 14 : (row.mine && !row.last ? 5 : (row.mine && row.last && settings.bubbleStyle !== "round" && settings.bubbleStyle !== "outline" ? row.tailRadius : 18))
+                radius: row.bare ? 14 : row.baseRadius
+                readonly property bool tailed: row.shape === "curved" || row.shape === "tail"
+                topLeftRadius: row.bare ? 14 : (!row.mine && !row.first ? row.tight : row.baseRadius)
+                bottomLeftRadius: row.bare ? 14 : (!row.mine && !row.last ? row.tight : (!row.mine && tailed ? row.tailRadius : row.baseRadius))
+                topRightRadius: row.bare ? 14 : (row.mine && !row.first ? row.tight : row.baseRadius)
+                bottomRightRadius: row.bare ? 14 : (row.mine && !row.last ? row.tight : (row.mine && tailed ? row.tailRadius : row.baseRadius))
                 color: row.bare ? "transparent" : row.bubbleColor
-                border.width: row.mentioned && !row.bare ? 2 : (row.status === 2 ? 1 : (row.outlined && !row.bare ? 1.5 : 0)); border.color: row.status === 2 ? look.danger : (row.outlined && !row.mentioned ? (row.mine ? look.accent : look.line) : look.accent)
+                gradient: !row.bare && row.fill === "gradient" && row.mine && row.customBg === "" ? mineGradient : null
+                Gradient { id: mineGradient; orientation: Gradient.Vertical
+                    GradientStop { position: 0; color: row.base }
+                    GradientStop { position: 1; color: Qt.tint(row.base, Qt.rgba(0.486, 0.227, 0.929, 0.38)) } }
+                border.width: row.mentioned && !row.bare ? 2 : (row.status === 2 ? 1 : (!row.bare && (row.borderStyle !== "none" || row.shape === "outline" || row.fill === "glass") ? (row.borderStyle === "thick" ? 3 : 1.5) : 0))
+                border.color: row.status === 2 ? look.danger : (row.mentioned ? look.accent : row.borderColorOf)
+                Rectangle {   // depth: a soft or raised shadow under the bubble (drawn as a shifted copy so it works without graphics effects)
+                    z: -1; visible: !row.bare && !row.outlined && (settings.bubbleDepth === "soft" || settings.bubbleDepth === "raised"); anchors.fill: parent
+                    anchors.topMargin: settings.bubbleDepth === "raised" ? 3 : 1; anchors.leftMargin: -0.5; anchors.rightMargin: -0.5; anchors.bottomMargin: settings.bubbleDepth === "raised" ? -3 : -1
+                    topLeftRadius: parent.topLeftRadius; topRightRadius: parent.topRightRadius; bottomLeftRadius: parent.bottomLeftRadius; bottomRightRadius: parent.bottomRightRadius
+                    color: Qt.rgba(0, 0, 0, settings.bubbleDepth === "raised" ? 0.2 : 0.06) }
                 opacity: row.local && row.status !== 2 ? 0.72 : 1
 
                 Item {   // the message this one answers: a bar and two lines, no box
@@ -125,7 +148,7 @@ Item {
                     id: contentLoader
                     x: row.bare ? 0 : row.framed ? 4 : 13; y: row.bare ? 0 : (row.framed ? 4 : 7) + (quote.visible ? quote.height + 14 - (row.framed ? 6 : 6) : 0)
                     sourceComponent: row.locked ? lockedC : row.kind === "poll" ? pollC : row.kind === "image" ? (row.sticker ? stickerC : imageC) : row.kind === "video" ? videoC
-                        : row.kind === "audio" ? audioC : row.kind === "file" ? fileC : row.kind === "location" ? locationC : row.bigEmoji ? bigC : textC
+                        : row.kind === "audio" ? audioC : row.kind === "file" ? (row.mime.indexOf("vcard") >= 0 || /\.vcf$/i.test(row.fileName || row.body) ? contactC : fileC) : row.kind === "location" ? locationC : row.bigEmoji ? bigC : textC
                 }
                 Row {   // time, edited, delivery marks
                     id: metaRow
@@ -276,11 +299,37 @@ Item {
         id: fileC
         Column {
             Row {
-                spacing: 10
-                Rectangle { width: 40; height: 40; radius: 10; color: Qt.rgba(row.ink.r, row.ink.g, row.ink.b, 0.14); Label { anchors.centerIn: parent; text: "📄"; font.pixelSize: 20 } }
+                spacing: 12
+                Rectangle { width: 40; height: 40; radius: 12; color: Qt.rgba(row.ink.r, row.ink.g, row.ink.b, 0.13); Icon { anchors.centerIn: parent; name: "file-text"; size: 20; color: row.ink } }
                 Column { anchors.verticalCenter: parent.verticalCenter; spacing: 1
                     Label { text: row.fileName || row.body; color: row.ink; font.pixelSize: Math.round(14 * look.textScale); elide: Text.ElideMiddle; width: Math.min(implicitWidth, row.maxW - 100) }
-                    Label { text: (row.size > 0 ? (row.size > 1048576 ? (row.size / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(row.size / 1024)) + " KB") + " · " : "") + (row.media.length ? "Downloaded" : "Click to download"); color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) } }
+                    Label { text: row.size > 0 ? files.humanSize(row.size) : ""; visible: text.length > 0; color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) } }
+            }
+            Item { width: 1; height: metaRow.visible ? 13 : 0 }
+            TapHandler { onTapped: row.openMedia(row.eventId) }
+            HoverHandler { cursorShape: Qt.PointingHandCursor }
+        }
+    }
+    Component {
+        id: contactC
+        Column {
+            id: card
+            property string name: row.fileName.replace(/\.vcf$/i, "") || row.body.replace(/\.vcf$/i, "")
+            property string tel: ""
+            Component.onCompleted: core.fetchFull(row.eventId)
+            Connections { target: core; function onMediaReady(key) { if (key === "full:" + row.eventId) card.read() } }
+            function read() {
+                const p = core.fullPath(row.eventId); if (!p.length) return
+                const t = files.readText(p), n = /^FN[^:]*:(.*)$/m.exec(t), v = /^TEL[^:]*:(.*)$/m.exec(t)
+                if (n && n[1].trim().length) name = n[1].trim(); if (v) tel = v[1].trim()
+            }
+            Row {
+                spacing: 12
+                Avatar { size: 42; letter: card.name.length ? card.name[0].toUpperCase() : "?"; seed: card.name }
+                Column { anchors.verticalCenter: parent.verticalCenter; spacing: 1
+                    Label { text: card.name; color: row.ink; font.weight: Font.DemiBold; font.pixelSize: Math.round(14 * look.textScale) }
+                    Label { visible: card.tel.length > 0; text: card.tel; color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) }
+                    Label { text: "Click to save contact"; color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) } }
             }
             Item { width: 1; height: metaRow.visible ? 13 : 0 }
             TapHandler { onTapped: row.openMedia(row.eventId) }
@@ -290,11 +339,13 @@ Item {
     Component {
         id: locationC
         Column {
-            spacing: 4
-            Row { spacing: 8; Label { text: "📍"; font.pixelSize: 20 }
-                Label { text: "Shared location"; color: row.ink; font.pixelSize: Math.round(14 * look.textScale); anchors.verticalCenter: parent.verticalCenter } }
-            Label { text: "Open in maps"; color: row.mine ? row.ink : look.accent; font.underline: true; font.pixelSize: Math.round(13 * look.textScale)
-                TapHandler { onTapped: { const c = row.geo.replace("geo:", "").split(";")[0].split(","); files.openUrl("https://www.openstreetmap.org/?mlat=" + c[0] + "&mlon=" + c[1] + "#map=16/" + c[0] + "/" + c[1]) } } }
+            Row { spacing: 12
+                Rectangle { width: 40; height: 40; radius: 12; color: "#ef4444"; Icon { anchors.centerIn: parent; name: "map-pin"; size: 20; color: "white" } }
+                Column { anchors.verticalCenter: parent.verticalCenter; spacing: 1
+                    Label { text: "Shared location"; color: row.ink; font.pixelSize: Math.round(14 * look.textScale) }
+                    Label { text: row.geo.replace("geo:", "").split(";")[0] + " · open map"; color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) } }
+                TapHandler { onTapped: { const c = row.geo.replace("geo:", "").split(";")[0].split(","); files.openUrl("https://www.openstreetmap.org/?mlat=" + c[0] + "&mlon=" + c[1] + "#map=16/" + c[0] + "/" + c[1]) } }
+                HoverHandler { cursorShape: Qt.PointingHandCursor } }
             Item { width: 1; height: metaRow.visible ? 13 : 0 }
         }
     }

@@ -7,6 +7,11 @@ static QVariantMap makeDefaults() {
     auto strs = [](std::initializer_list<const char *> l) { QVariantList v; for (const char *s : l) v << QString::fromUtf8(s); return v; };
     d.insert("themeMode", "system"); d.insert("accent", "teal"); d.insert("accentCustom", "#0d9488"); d.insert("fontScale", 1.0); d.insert("palette", "none"); d.insert("themeFollowSystem", true);
     d.insert("bubbleStyle", "round"); d.insert("colorSenderNames", true); d.insert("timeFormat", "system"); d.insert("wallpaper", "none"); d.insert("wallpaperDim", 0);
+    d.insert("bubbleFill", "solid"); d.insert("bubbleBorder", "none"); d.insert("bubbleBorderColor", ""); d.insert("outStyle", ""); d.insert("outRadius", -1); d.insert("outBorder", ""); d.insert("outBorderColor", "");
+    d.insert("bubbleMine", ""); d.insert("bubbleTheirs", ""); d.insert("bubbleMineDark", ""); d.insert("bubbleTheirsDark", ""); d.insert("bubbleMineText", ""); d.insert("bubbleTheirsText", ""); d.insert("bubbleMineTextDark", ""); d.insert("bubbleTheirsTextDark", "");
+    d.insert("bubbleNative", false); d.insert("bubbleRadius", 0); d.insert("bubbleWidth", 0); d.insert("bubbleDepth", "soft");
+    d.insert("deleteAtSource", false); d.insert("fontFamily", "system"); d.insert("look", "none"); d.insert("reactionStyle", "filled"); d.insert("reactionSound", "tick"); d.insert("uiScale", "medium"); d.insert("skin", "default"); d.insert("skinAccent", "");
+    d.insert("appIcon", "classic"); d.insert("wallpaperPhoto", ""); d.insert("autoTranscribe", false); d.insert("smoothGraphics", false);
     d.insert("fancyMotion", true); d.insert("reduceMotion", false); d.insert("screenEffects", true); d.insert("messageAnimation", "pop");
     d.insert("density", "comfortable"); d.insert("showAvatars", true); d.insert("showNetworkBadges", true); d.insert("showNetworkNameInRows", false); d.insert("showPreviews", true); d.insert("showFilterBar", true);
     d.insert("showReadTicks", true); d.insert("showMessageTimes", true); d.insert("inboxStyle", "pro"); d.insert("showPinsRow", true); d.insert("sortUnreadFirst", false); d.insert("defaultTab", "inbox");

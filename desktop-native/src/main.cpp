@@ -18,6 +18,7 @@
 #include "emoji.h"
 #include "iconprovider.h"
 #include "roundedimage.h"
+#include "wallpaper.h"
 #include "fileinfo.h"
 #include "appsettings.h"
 #include "rich.h"
@@ -77,6 +78,17 @@ int main(int argc, char *argv[]) {
         const QStringList a = qEnvironmentVariable("PAGER_AUTOLOGIN").split(QLatin1Char(','));
         if (a.size() == 3) QTimer::singleShot(1500, &engine, [&engine, a] { if (!engine.signedIn()) engine.login(a[0], a[1], a[2]); });
     }
+    // the font the whole app is drawn in (Settings > Appearance > Font); the first family that is installed wins
+    static const QHash<QString, QStringList> kFonts{{"serif", {"Georgia", "Iowan Old Style", "Noto Serif", "DejaVu Serif"}}, {"rounded", {"Nunito", "Varela Round", "Quicksand", "Noto Sans"}},
+        {"humanist", {"Gill Sans", "Trebuchet MS", "Noto Sans", "Candara"}}, {"mono", {"JetBrains Mono", "DejaVu Sans Mono", "Noto Sans Mono", "Consolas"}}, {"sf", {"SF Pro Text", "Helvetica Neue", "Cantarell", "Noto Sans"}},
+        {"googlesans", {"Google Sans", "Product Sans", "Roboto", "Noto Sans"}}, {"roboto", {"Roboto", "Helvetica Neue", "Arial"}}, {"readable", {"Atkinson Hyperlegible", "Verdana", "DejaVu Sans", "Tahoma"}}};
+    const QString interFamily = QGuiApplication::font().family();
+    auto applyFont = [&settings, interFamily] {
+        QFont f = QGuiApplication::font(); const QString id = settings.value(QStringLiteral("fontFamily")).toString();
+        if (kFonts.contains(id)) f.setFamilies(kFonts.value(id) + QStringList{interFamily}); else f.setFamilies({interFamily});
+        QGuiApplication::setFont(f);
+    };
+    applyFont(); QObject::connect(&settings, &AppSettings::valueChanged, &app, [applyFont](const QString &k) { if (k == QLatin1String("fontFamily")) applyFont(); });
     Appearance look(&settings);
     Emoji emoji;
     FileInfo files;
@@ -84,7 +96,7 @@ int main(int argc, char *argv[]) {
 
     QQmlApplicationEngine qml;
     qml.addImageProvider(QStringLiteral("icon"), new IconProvider);
-    qmlRegisterType<RoundedImage>("Pager.Items", 1, 0, "RoundedImage");
+    qmlRegisterType<RoundedImage>("Pager.Items", 1, 0, "RoundedImage"); qmlRegisterType<Wallpaper>("Pager.Items", 1, 0, "Wallpaper");
     qml.addImportPath(QStringLiteral("qrc:/qml"));
     qml.rootContext()->setContextProperty(QStringLiteral("core"), &engine);
     qml.rootContext()->setContextProperty(QStringLiteral("look"), &look);
