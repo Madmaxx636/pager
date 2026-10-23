@@ -24,7 +24,7 @@ Appearance::Appearance(AppSettings *settings, QObject *parent, const QByteArray 
         m_systemDark = hints->colorScheme() == Qt::ColorScheme::Dark;
         connect(hints, &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme s) { setSystemDark(s == Qt::ColorScheme::Dark); });
     }
-    connect(m_settings, &AppSettings::valueChanged, this, [this](const QString &k) { if (k == QLatin1String("themeMode") || k == QLatin1String("accent") || k == QLatin1String("accentCustom") || k == QLatin1String("palette") || k == QLatin1String("fontScale") || k == QLatin1String("uiScale")) recompute(); });
+    connect(m_settings, &AppSettings::valueChanged, this, [this](const QString &k) { if (k == QLatin1String("themeMode") || k == QLatin1String("accent") || k == QLatin1String("accentCustom") || k == QLatin1String("palette") || k == QLatin1String("fontScale") || k == QLatin1String("uiScale") || k == QLatin1String("fancyMotion") || k == QLatin1String("reduceMotion") || k == QLatin1String("themeFollowSystem")) recompute(); });
     recompute();
 }
 
@@ -34,6 +34,7 @@ void Appearance::recompute() {
     const QString acc = m_settings->value(QStringLiteral("accent")).toString();
     m_accent = acc == QLatin1String("custom") ? m_settings->value(QStringLiteral("accentCustom")).toString() : acc;
     m_palette = m_settings->value(QStringLiteral("palette")).toString(); if (m_palette == QLatin1String("none")) m_palette.clear();
+    m_motion = m_settings->value(QStringLiteral("fancyMotion")).toBool() && !m_settings->value(QStringLiteral("reduceMotion")).toBool();
     const QString ui = m_settings->value(QStringLiteral("uiScale")).toString();
     m_scale = qBound(0.8, m_settings->value(QStringLiteral("fontScale")).toDouble(), 1.6) * (ui == QLatin1String("small") ? 0.92 : ui == QLatin1String("large") ? 1.12 : 1.0);
     for (const Pal &p : m_pals) if (p.id == m_palette) pal = &p;
@@ -41,7 +42,7 @@ void Appearance::recompute() {
         m_dark = pal->dark;
         m_c = {pal->bg, pal->panel, pal->panel2, pal->line, pal->text, pal->muted, pal->accent, inkFor(pal->accent), pal->theirs};
     } else {
-        m_dark = m_mode == QLatin1String("dark") || m_mode == QLatin1String("black") || (m_mode == QLatin1String("system") && m_systemDark);
+        m_dark = m_mode == QLatin1String("dark") || m_mode == QLatin1String("black") || (m_mode == QLatin1String("system") && m_systemDark && m_settings->value(QStringLiteral("themeFollowSystem")).toBool());
         // the same colours as the web app
         if (m_mode == QLatin1String("black")) m_c = {QColor("#000000"), QColor("#0a0a0a"), QColor("#161616"), QColor("#1d1d1d"), QColor("#e8ecf2"), QColor("#8b95a5"), {}, {}, QColor("#121212")};
         else if (m_dark) m_c = {QColor("#0b0e13"), QColor("#12161d"), QColor("#1c222c"), QColor("#232a35"), QColor("#e8ecf2"), QColor("#8b95a5"), {}, {}, QColor("#161b23")};

@@ -34,6 +34,15 @@ Item {
         function test_the_sound_libraries_stay_out_of_memory_until_a_sound_is_needed() {
             verify(files.readText("/proc/self/maps").indexOf("ffmpegmediaplugin") < 0, "QtMultimedia was loaded at start")
         }
+        function test_every_sound_is_an_id_and_a_name() {
+            const list = files.sounds(); verify(list.length > 20)
+            for (const e of list) { compare(e.length, 2); verify(e[0].length > 1 && e[1].length > 1) }
+            verify(files.soundFile("chime").length > 0)
+        }
+        function test_hiding_stories_removes_the_row() {
+            settings.set("hideStories", true); compare(core.storiesInfo().id, undefined)
+            settings.set("hideStories", false); compare(core.storiesInfo().id, "!stories")
+        }
         function test_a_place_link_is_understood() {
             place.parse("https://www.openstreetmap.org/?mlat=48.858400&mlon=2.294500#map=16/48.8584/2.2945")
             verify(Math.abs(place.lat - 48.8584) < 0.0001); verify(Math.abs(place.lon - 2.2945) < 0.0001)

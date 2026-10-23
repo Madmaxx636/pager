@@ -53,7 +53,7 @@ Rectangle {
     onRoomIdChanged: {
         replyingTo = ""; editing = ""
         input.text = core.draft(roomId)
-        Qt.callLater(function () { const r = core.dividerRow(); if (r >= 0) msgs.positionViewAtIndex(r, ListView.Center); else msgs.positionViewAtBeginning() })
+        Qt.callLater(function () { const r = settings.openAtUnread ? core.dividerRow() : -1; if (r >= 0) msgs.positionViewAtIndex(r, ListView.Center); else msgs.positionViewAtBeginning() })
     }
 
     ColumnLayout {
@@ -358,7 +358,8 @@ Rectangle {
         MenuItem { icon.name: "download"; text: "Save"; visible: core.isMediaMessage(pane.target); height: visible ? implicitHeight : 0
             onTriggered: { saveDialog.event = pane.target; core.fetchFull(pane.target); saveDialog.currentFile = "file://" + files.downloadsDir() + "/" + core.fileNameOf(pane.target); saveDialog.open() } }
         MenuItem { icon.name: "pencil"; text: "Edit"; visible: pane.targetMine && !core.isMediaMessage(pane.target); height: visible ? implicitHeight : 0; onTriggered: { pane.replyingTo = ""; pane.editing = pane.target; input.text = core.bodyOf(pane.target); input.forceActiveFocus() } }
+        MenuItem { icon.name: "code-xml"; text: "Copy event ID"; visible: settings.developerMode; height: visible ? implicitHeight : 0; onTriggered: files.copy(pane.target) }
         MenuItem { icon.name: "info"; text: "Details"; onTriggered: { details.text_ = core.messageDetails(pane.target); details.open() } }
-        MenuItem { icon.name: "trash-2"; text: "Delete"; visible: pane.targetMine; height: visible ? implicitHeight : 0; onTriggered: confirmDelete.open() }
+        MenuItem { icon.name: "trash-2"; text: "Delete"; visible: pane.targetMine; height: visible ? implicitHeight : 0; onTriggered: settings.confirmDelete ? confirmDelete.open() : core.deleteMessage(pane.target) }
     }
 }

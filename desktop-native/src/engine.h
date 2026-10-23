@@ -110,9 +110,14 @@ public:
     Q_INVOKABLE QVariantMap sharedMedia() const;                       // {photos:[{id,w,h}], links:[{id,url,who,when}], files:[{id,name,size,who,kind}]} of what is loaded in the open chat
     Q_INVOKABLE QString photoPath(const QString &eventId);             // a picture's file when it is here (asks for it otherwise; mediaReady(eventId) when it arrives)
     void effectFor(const QString &text);
+    void checkAccountAlerts(const QJsonArray &networks);
+    void checkBridgeUpdates();
+    QStringList m_reportedBroken;
+    QTimer *m_alertTimer = nullptr;
     void chime(const QString &kindKey, const QString &volKey, bool convo);
     Q_INVOKABLE void testNotification() { emit notify(QString(), QStringLiteral("Pager test"), QStringLiteral("This is how a message will look."), !(m_settings && m_settings->value(QStringLiteral("notifSound")).toBool())); if (m_settings && m_settings->value(QStringLiteral("notifSound")).toBool()) emit playSound(m_settings->value(QStringLiteral("notifSoundId")).toString(), m_settings->value(QStringLiteral("notifSoundVolume")).toDouble()); }
     Q_INVOKABLE void previewSound(const QString &id, double volume) { emit playSound(id, volume); }
+    int badgeCount() const;                         // the number on the app icon, by the "unread badge counts" setting
     Q_INVOKABLE QString dataDir() const { return m_dataDir; }
     Q_INVOKABLE QString aliasOf(const QString &roomId) const { return RoomListModel::s_aliases.value(roomId); }
     Q_INVOKABLE void setAlias(const QString &roomId, const QString &name);       // "rename for me": only on your side

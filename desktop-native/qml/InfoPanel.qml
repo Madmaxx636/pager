@@ -24,15 +24,16 @@ Rectangle {
 
     Rectangle { anchors.left: parent.left; width: 1; height: parent.height; color: look.line }
     component SheetItem: Rectangle {
+        id: si
         property string ico; property string label; property string hint: ""; property bool danger: false; signal clicked()
         Layout.fillWidth: true; implicitHeight: 54; radius: 12; color: sh.hovered ? look.panel2 : "transparent"
         HoverHandler { id: sh; cursorShape: Qt.PointingHandCursor }
         RowLayout { anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8; spacing: 12
-            Icon { name: parent.parent.ico; size: 20; color: parent.parent.danger ? look.danger : look.muted }
+            Icon { name: si.ico; size: 20; color: si.danger ? look.danger : look.muted }
             ColumnLayout { Layout.fillWidth: true; spacing: 0
-                Label { text: parent.parent.parent.label; color: parent.parent.parent.danger ? look.danger : look.text; font.pixelSize: Math.round(14 * look.textScale); Layout.fillWidth: true; elide: Text.ElideRight }
-                Label { visible: parent.parent.parent.hint.length > 0; text: parent.parent.parent.hint; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); Layout.fillWidth: true; elide: Text.ElideRight } } }
-        TapHandler { onTapped: parent.clicked() }
+                Label { text: si.label; color: si.danger ? look.danger : look.text; font.pixelSize: Math.round(14 * look.textScale); Layout.fillWidth: true; elide: Text.ElideRight }
+                Label { visible: si.hint.length > 0; text: si.hint; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); Layout.fillWidth: true; elide: Text.ElideRight } } }
+        TapHandler { onTapped: si.clicked() }
     }
     component ToggleRow: Item {
         id: tr
@@ -212,14 +213,14 @@ Rectangle {
             if (p.preview === "hide") parts.push("Hidden")
             return parts.length ? parts.join(" · ") : "Default"
         }
-        component Pick: ColumnLayout { property string title; property string key; property var options: []; Layout.fillWidth: true; spacing: 4
-            Label { text: parent.title; color: look.text; font.pixelSize: Math.round(13 * look.textScale) }
+        component Pick: ColumnLayout { id: pk; property string title; property string key; property var options: []; Layout.fillWidth: true; spacing: 4
+            Label { text: pk.title; color: look.text; font.pixelSize: Math.round(13 * look.textScale) }
             Flow { Layout.fillWidth: true; spacing: 6
-                Repeater { model: parent.parent.options
-                    delegate: Rectangle { readonly property bool on: (notifDlg.prefs()[parent.parent.parent.key] || "default") === modelData[0]
+                Repeater { model: pk.options
+                    delegate: Rectangle { readonly property bool on: (notifDlg.prefs()[pk.key] || "default") === modelData[0]
                         height: 30; width: pl.implicitWidth + 22; radius: 15; color: on ? look.accent : look.panel2
                         Label { id: pl; anchors.centerIn: parent; text: modelData[1]; color: parent.on ? look.accentInk : look.text; font.pixelSize: Math.round(12 * look.textScale) }
-                        TapHandler { onTapped: notifDlg.setPref(parent.parent.parent.key, modelData[0]) } } } } }
+                        TapHandler { onTapped: notifDlg.setPref(pk.key, modelData[0]) } } } } }
         ColumnLayout { width: parent.width; spacing: 10
             Pick { title: "Importance"; key: "level"; options: [["default", "Default"], ["priority", "Priority: always gets through"], ["silent", "Silent: shown without sound"]] }
             Pick { title: "Notify me about"; key: "mode"; options: [["default", "My general settings"], ["all", "Every message"], ["mentions", "Mentions and replies only"], ["none", "Nothing"]] }

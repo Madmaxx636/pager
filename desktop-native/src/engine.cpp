@@ -117,7 +117,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
             emit notify(id, title, what, d.silent);
         }
         m_firstRooms = false;
-        emit unreadChanged(totalUnread());
+        emit unreadChanged(badgeCount());
         if (m_active && !m_current.isEmpty() && !m_firstRooms) if (const Room *cr = m_store.room(m_current)) if (!cr->msgs.isEmpty() && changed.contains(m_current) && !m_store.mine(cr->msgs.last()) && !cr->msgs.last().local && m_chimed != cr->msgs.last().id) { m_chimed = cr->msgs.last().id; chime(QStringLiteral("receiveSound"), QStringLiteral("convoSoundVolume"), true); if (cr->msgs.last().kind == QLatin1String("text") && QDateTime::currentMSecsSinceEpoch() - cr->msgs.last().ts < 6000) effectFor(cr->msgs.last().body); }
         if (!m_current.isEmpty() && (changed.contains(m_current) || [&] { for (const QString &g : m_store.linkGroup(m_current)) if (changed.contains(g)) return true; return false; }())) { m_timeline.show(m_current); emit currentChanged(); if (m_active) markCurrentRead(); }
     } else if (kind == QLatin1String("history")) {
@@ -644,6 +644,7 @@ void Engine::loadIdentity() {
             }
         }
         m_store.setOwnIdentity(names, ids); m_timeline.show(m_current); refreshLists();
+        checkAccountAlerts(v.toObject().value(QLatin1String("networks")).toArray());
         // names for the phone numbers bridges show: each of your accounts' contact lists
         for (const QJsonValue &nv : v.toObject().value(QLatin1String("networks")).toArray()) {
             const QJsonObject n = nv.toObject();
@@ -678,7 +679,7 @@ void Engine::setSettings(AppSettings *s) {
         m_rooms.setOptions(hidden, m_settings->value(QStringLiteral("sortUnreadFirst")).toBool()); applyListOptions();
         m_timeline.show(m_current); refreshLists();
     };
-    if (s) { connect(s, &AppSettings::valueChanged, this, [apply](const QString &k) { if (k == QLatin1String("timeFormat") || k == QLatin1String("groupGapMin") || k == QLatin1String("largeEmoji") || k == QLatin1String("hiddenNetworks") || k == QLatin1String("sortUnreadFirst") || k == QLatin1String("showPinsRow")) apply(); }); apply(); }
+    if (s) { connect(s, &AppSettings::valueChanged, this, [this, apply](const QString &k) { if (k == QLatin1String("timeFormat") || k == QLatin1String("groupGapMin") || k == QLatin1String("largeEmoji") || k == QLatin1String("hiddenNetworks") || k == QLatin1String("sortUnreadFirst") || k == QLatin1String("showPinsRow")) apply(); if (k == QLatin1String("notifBadge") || k == QLatin1String("hideStories")) { emit unreadChanged(badgeCount()); emit listChanged(); } }); apply(); }
 }
 
 void Engine::openWhenAvailable(const QString &roomId) {
@@ -1421,4 +1422,58 @@ int Engine::loadSyncedSettings(const QStringList &ids) {
         if (QJsonValue::fromVariant(m_settings->value(k)) != st.value(k)) { m_settings->set(k, nv); ++n; }
     }
     return n;
+}
+
+int Engine::badgeCount() const {
+    const QString mode = m_settings ? m_settings->value(QStringLiteral("notifBadge")).toString() : QStringLiteral("unmuted");
+    if (mode == QLatin1String("off")) return 0;
+    int n = 0;
+    for (auto it = m_store.roomsBegin(); it != m_store.roomsEnd(); ++it) {
+        const Room &r = *it; if (m_store.isBotRoom(r) || Store::isStoriesRoom(r)) continue;
+        const Store::LinkAgg a = m_store.linkAgg(r); if (a.top != &r || !(a.unread > 0 || a.marked)) continue;
+        if (mode == QLatin1String("all") || (!a.muted && !a.archived && !r.lowPriority())) ++n;
+    }
+    return n;
+}
+void Engine::checkAccountAlerts(const QJsonArray &networks) {
+    QStringList broken; struct Lost { QString key, network, account, state; }; QVector<Lost> now;
+    for (const QJsonValue &nv : networks) {
+        const QJsonObject n = nv.toObject();
+        for (const QJsonValue &lv : n.value(QLatin1String("logins")).toArray()) {
+            const QJsonObject l = lv.toObject(); const QString st = l.value(QLatin1String("state_event")).toString();
+            if (st == QLatin1String("BAD_CREDENTIALS") || st == QLatin1String("LOGGED_OUT") || st == QLatin1String("UNKNOWN_ERROR"))
+                now.append({n.value(QLatin1String("id")).toString() + QLatin1Char('/') + l.value(QLatin1String("id")).toString(), n.value(QLatin1String("name")).toString(), l.value(QLatin1String("name")).toString(l.value(QLatin1String("profile")).toObject().value(QLatin1String("name")).toString()), st});
+        }
+    }
+    const QStringList before = m_reportedBroken; for (const Lost &l : now) broken << l.key;
+    m_reportedBroken = broken;
+    if (!m_settings || !m_settings->value(QStringLiteral("accountAlerts")).toBool() || !m_settings->value(QStringLiteral("notifEnabled")).toBool()) return;
+    for (const Lost &l : now) if (!before.contains(l.key) && m_alertTimer) {      // only ones that broke while the app was watching
+        const QString who = l.account.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(l.account);
+        const QString why = l.state == QLatin1String("UNKNOWN_ERROR") ? QStringLiteral("Pager lost the connection and can't get your messages.") : QStringLiteral("The service ended the login, so Pager can't get your messages until you sign in again.");
+        emit notify(QString(), QStringLiteral("%1 disconnected").arg(l.network), why + who + QStringLiteral(" Open Settings → Bridges & accounts to sign in again."), false);
+    }
+    if (!m_alertTimer) {      // first look only remembers; after that, check every five minutes
+        m_alertTimer = new QTimer(this); m_alertTimer->setInterval(5 * 60 * 1000);
+        connect(m_alertTimer, &QTimer::timeout, this, [this] { call(QStringLiteral("GET"), QStringLiteral("/api/bridges"), QVariant(), [this](int status, const QJsonValue &v) { if (status == 200) checkAccountAlerts(v.toObject().value(QLatin1String("networks")).toArray()); }); });
+        m_alertTimer->start();
+    }
+    checkBridgeUpdates();
+}
+void Engine::checkBridgeUpdates() {      // admins: tell me after the weekly bridge update (and if one had to be put back)
+    if (!isAdmin() || !m_settings || !m_settings->value(QStringLiteral("updateAlerts")).toBool() || !m_settings->value(QStringLiteral("notifEnabled")).toBool()) return;
+    call(QStringLiteral("GET"), QStringLiteral("/api/admin/bridge-updates"), QVariant(), [this](int status, const QJsonValue &v) {
+        if (status != 200) return;
+        const qint64 seen = QDateTime::fromString(m_saved.value(QLatin1String("updatesSeen")).toString(), Qt::ISODate).toMSecsSinceEpoch(), now = QDateTime::currentMSecsSinceEpoch();
+        QString newest;
+        for (const QJsonValue &ev : v.toObject().value(QLatin1String("entries")).toArray()) {
+            const QJsonObject e = ev.toObject(); const QString at = e.value(QLatin1String("at")).toString(); const qint64 t = QDateTime::fromString(at, Qt::ISODate).toMSecsSinceEpoch();
+            if (t <= seen || now - t > 86400000) continue;
+            QStringList upd, back; for (const QJsonValue &x : e.value(QLatin1String("updated")).toArray()) upd << x.toString(); for (const QJsonValue &x : e.value(QLatin1String("putBack")).toArray()) back << x.toString();
+            QStringList parts; if (!upd.isEmpty()) parts << QStringLiteral("Updated to the newest version: %1.").arg(upd.join(QStringLiteral(", "))); if (!back.isEmpty()) parts << QStringLiteral("%1 would not start on the new version and was put back.").arg(back.join(QStringLiteral(", ")));
+            emit notify(QString(), back.isEmpty() ? QStringLiteral("Bridges updated") : QStringLiteral("Bridge update needs a look"), parts.join(QLatin1Char(' ')), false);
+            if (at > newest) newest = at;
+        }
+        if (!newest.isEmpty()) { m_saved.insert(QStringLiteral("updatesSeen"), newest); saveSaved(); }
+    });
 }

@@ -9,7 +9,7 @@ Rectangle {
     property string text: ""
     anchors.fill: parent; z: 100; color: look.bg; opacity: 0; visible: opacity > 0
     function hello() { if (shown || !settings.greetings) return; shown = true; text = G.pick(); opacity = 1; hold.restart() }
-    Behavior on opacity { NumberAnimation { duration: settings.reduceMotion ? 0 : 350 } }
+    Behavior on opacity { NumberAnimation { duration: look.motion ? 350 : 0 } }
     Timer { id: hold; interval: 2400; onTriggered: root.opacity = 0 }
     Column { anchors.centerIn: parent; spacing: 22
         Image { anchors.horizontalCenter: parent.horizontalCenter; source: "qrc:/pager.svg"; sourceSize.width: 300; sourceSize.height: 300; width: 150; height: 150; smooth: true }

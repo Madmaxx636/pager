@@ -212,6 +212,49 @@ private slots:
         e.send(word); QTRY_VERIFY_WITH_TIMEOUT(!e.searchLocal(word, id, "all").isEmpty(), 20000);
         e.logout(); QTRY_VERIFY_WITH_TIMEOUT(!e.signedIn(), 30000);
     }
+    void accountDataFeaturesReachTheServer() {         // links, names, stickers, favourite GIFs, saved settings, mute for a while
+        const QString server = qEnvironmentVariable("PAGER_TEST_SERVER"), alice = qEnvironmentVariable("PAGER_TEST_ALICE");
+        if (server.isEmpty() || !alice.contains(':')) QSKIP("no test server given");
+        QTemporaryDir dir; Engine e(dir.path()); AppSettings st; e.setSettings(&st);
+        QJSEngine js; js.newQObject(&e); QQmlEngine::setObjectOwnership(&e, QQmlEngine::CppOwnership);
+        QTRY_VERIFY_WITH_TIMEOUT(!e.starting(), 20000);
+        e.login(server, alice.section(':', 0, 0), alice.section(':', 1));
+        QTRY_VERIFY_WITH_TIMEOUT(e.signedIn(), 60000);
+        auto *rooms = qobject_cast<RoomListModel *>(e.rooms());
+        QTRY_VERIFY_WITH_TIMEOUT(rooms->rowCount() >= 2 && !e.loading(), 60000);
+        const QString a = rooms->data(rooms->index(0), RoomListModel::IdRole).toString(), b = rooms->data(rooms->index(1), RoomListModel::IdRole).toString(), me = e.user();
+        auto get = [&](const QString &path) { js.evaluate("answer = undefined");
+            e.api("GET", path, QVariant(), js.evaluate("(function(s, b) { answer = { status: s, body: b } })"));
+            [&] { QTRY_VERIFY_WITH_TIMEOUT(!js.globalObject().property("answer").isUndefined(), 20000); }(); return js.globalObject().property("answer").toVariant().toMap(); };
+        const QString encMe = QString::fromUtf8(QUrl::toPercentEncoding(me)), base = "/_matrix/client/v3/user/" + encMe + "/account_data/";
+        // two chats shown as one: saved in the account, and one row fewer
+        const int before = rooms->rowCount();
+        e.link(a, b); QVERIFY(e.isLinked(a));
+        QTRY_COMPARE_WITH_TIMEOUT(rooms->rowCount(), before - 1, 10000);
+        QTRY_VERIFY_WITH_TIMEOUT(get(base + "app.pager.links").value("body").toMap().value("groups").toList().size() == 1, 20000);
+        e.unlink(a); QVERIFY(!e.isLinked(a));
+        QTRY_VERIFY_WITH_TIMEOUT(get(base + "app.pager.links").value("body").toMap().value("groups").toList().isEmpty(), 20000);
+        // "rename for me"
+        e.setAlias(a, "Zed Zebra"); QCOMPARE(e.roomInfo(a).value("name").toString(), QString("Zed Zebra"));
+        QTRY_COMPARE_WITH_TIMEOUT(get(base + "app.pager.aliases").value("body").toMap().value("names").toMap().value(a).toString(), QString("Zed Zebra"), 20000);
+        e.setAlias(a, QString());
+        // stickers: favourite GIFs
+        e.toggleFavoriteGif(QVariantMap{{"url", "https://example.com/x.gif"}, {"id", "x"}, {"title", "x"}, {"previewUrl", "https://example.com/x.gif"}, {"w", 10}, {"h", 10}});
+        QVERIFY(e.isFavoriteGif("https://example.com/x.gif"));
+        QTRY_VERIFY_WITH_TIMEOUT(get(base + "app.pager.favorite_gifs").value("body").toMap().value("gifs").toList().size() == 1, 20000);
+        e.toggleFavoriteGif(QVariantMap{{"url", "https://example.com/x.gif"}});
+        // settings saved to the account and read back
+        st.set("bubbleDepth", "raised"); e.saveSyncedSettings({"bubbles"});
+        QSignalSpy saved(&e, &Engine::syncSaved); QTRY_VERIFY_WITH_TIMEOUT(saved.count() >= 1, 20000); QCOMPARE(saved.first().first().toString(), QString());
+        st.set("bubbleDepth", "flat");
+        QSignalSpy fetched(&e, &Engine::syncFetched); e.fetchSyncedSettings(); QTRY_VERIFY_WITH_TIMEOUT(fetched.count() >= 1, 20000);
+        QVERIFY(fetched.first().first().toMap().value("groups").toStringList().contains("bubbles"));
+        QVERIFY(e.loadSyncedSettings({"bubbles"}) >= 1); QCOMPARE(st.value("bubbleDepth").toString(), QString("raised"));
+        // mute for a while, then it ends by itself
+        e.muteFor(a, 1000); QVERIFY(e.roomInfo(a).value("muted").toBool()); QVERIFY(e.muteLeftMs(a) > 0);
+        QTRY_VERIFY_WITH_TIMEOUT(!e.roomInfo(a).value("muted").toBool(), 8000);
+        e.logout(); QTRY_VERIFY_WITH_TIMEOUT(!e.signedIn(), 30000);
+    }
     void signInOpenAndSend() {
         const QString server = qEnvironmentVariable("PAGER_TEST_SERVER"), alice = qEnvironmentVariable("PAGER_TEST_ALICE");
         if (server.isEmpty() || !alice.contains(':')) QSKIP("no test server given");

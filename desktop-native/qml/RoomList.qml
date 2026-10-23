@@ -128,12 +128,12 @@ Rectangle {
             function refresh() { info = core.storiesInfo() }
             Component.onCompleted: refresh()
             Connections { target: core; function onListChanged() { storiesLoader.refresh() } }
-            active: !!info.id && core.tab === "inbox" && core.search.length === 0
-            Layout.fillWidth: true; Layout.preferredHeight: item ? item.height : 0
+            active: !settings.hideStories && !!info.id && core.tab === "inbox" && core.search.length === 0
+            Layout.fillWidth: true; Layout.preferredHeight: active ? 62 : 0; visible: active
             sourceComponent: Rectangle {
                 property var info: storiesLoader.info
                 id: storiesRow
-                width: storiesLoader.width - 16; x: 8; height: 62; radius: 14; color: sh.hovered || core.currentRoom === info.id ? look.panel2 : "transparent"
+                width: pane.width - 16; x: 8; height: 62; radius: 14; color: sh.hovered || core.currentRoom === info.id ? look.panel2 : "transparent"
                 HoverHandler { id: sh; cursorShape: Qt.PointingHandCursor }
                 Row { x: 10; anchors.verticalCenter: parent.verticalCenter; spacing: 13
                     Rectangle { width: 46; height: 46; radius: 23; color: "transparent"; border.width: 2.5; border.color: storiesRow.info.unread > 0 ? look.accent : look.line
@@ -175,8 +175,8 @@ Rectangle {
                             transform: Translate {
                                 x: pinCell.carried ? pinDrag.activeTranslation.x : ((pinCell.slot % 3) - (index % 3)) * (pinGrid.cell + 4)
                                 y: pinCell.carried ? pinDrag.activeTranslation.y : (Math.floor(pinCell.slot / 3) - Math.floor(index / 3)) * pinGrid.cellH
-                                Behavior on x { enabled: !pinCell.carried; NumberAnimation { duration: settings.reduceMotion ? 0 : 180; easing.type: Easing.OutCubic } }
-                                Behavior on y { enabled: !pinCell.carried; NumberAnimation { duration: settings.reduceMotion ? 0 : 180; easing.type: Easing.OutCubic } }
+                                Behavior on x { enabled: !pinCell.carried; NumberAnimation { duration: look.motion ? 180 : 0; easing.type: Easing.OutCubic } }
+                                Behavior on y { enabled: !pinCell.carried; NumberAnimation { duration: look.motion ? 180 : 0; easing.type: Easing.OutCubic } }
                             }
                             color: pinHover.hovered || pinCell.carried || core.currentRoom === modelData.id ? look.panel2 : "transparent"
                             border.width: carried ? 1 : 0; border.color: look.line

@@ -48,6 +48,7 @@ Item {
     required property bool unreadDivider
     required property bool mentioned
     required property bool bigEmoji
+    required property bool fresh
     property bool showName: false           // group chats: names and pictures of the other people
     signal menuRequested(string eventId, bool mine, real gx, real gy)
     signal reactionTapped(string eventId, string key)
@@ -101,6 +102,18 @@ Item {
         Item {
             id: line
             width: parent.width; height: Math.max(bubble.height, 1)
+            // a new message arrives with the animation you chose (Settings > Appearance > Message animation)
+            readonly property bool animate: row.fresh && look.motion && settings.messageAnimation !== "none"
+            opacity: animate && settings.messageAnimation === "fade" ? 0 : 1
+            transform: [ Scale { id: popScale; origin.x: row.mine ? line.width : 0; origin.y: line.height; xScale: 1; yScale: 1 }, Translate { id: slideShift; y: 0 } ]
+            Component.onCompleted: if (animate) {
+                if (settings.messageAnimation === "pop") { popScale.xScale = 0.85; popScale.yScale = 0.85; popIn.start() }
+                else if (settings.messageAnimation === "slide") { slideShift.y = 16; slideIn.start() }
+                else fadeIn.start()
+            }
+            NumberAnimation { id: popIn; target: popScale; properties: "xScale,yScale"; to: 1; duration: 280; easing.type: Easing.OutBack; easing.overshoot: 2 }
+            NumberAnimation { id: slideIn; target: slideShift; property: "y"; to: 0; duration: 260; easing.type: Easing.OutCubic }
+            NumberAnimation { id: fadeIn; target: line; property: "opacity"; to: 1; duration: 350 }
             HoverHandler { id: lineHover }
 
             Avatar {   // the other person's picture, level with the start of their run
@@ -167,6 +180,12 @@ Item {
                 TapHandler { acceptedButtons: Qt.LeftButton; gesturePolicy: TapHandler.ReleaseWithinBounds; onDoubleTapped: if (settings.doubleTapReact) row.reactionTapped(row.eventId, settings.doubleTapEmoji) }
             }
 
+            DragHandler {   // swipe a message to the right to reply (touch screens)
+                id: swipe
+                enabled: settings.swipeToReply && row.status !== 2 && !row.local; acceptedDevices: PointerDevice.TouchScreen; target: null; xAxis.enabled: true; yAxis.enabled: false
+                onActiveChanged: { if (!active && swipe.translation.x > 70) row.replyRequested(row.eventId) }
+            }
+            Icon { visible: swipe.active && swipe.translation.x > 10; x: 16; anchors.verticalCenter: parent.verticalCenter; name: "reply"; size: 22; color: look.accent; opacity: Math.min(1, swipe.translation.x / 70) }
             Row {   // hover tools
                 visible: lineHover.hovered && row.status !== 2 && !row.local
                 x: row.mine ? bubble.x - width - 6 : bubble.x + bubble.width + 6
@@ -190,8 +209,8 @@ Item {
                 model: row.reactions
                 delegate: Rectangle {
                     height: 26; width: chipRow.implicitWidth + 16; radius: 13
-                    color: modelData.mine ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.20) : look.panel
-                    border.width: 1; border.color: modelData.mine ? look.accent : look.line
+                    color: settings.reactionStyle === "outline" ? "transparent" : (modelData.mine ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.20) : look.panel)
+                    border.width: settings.reactionStyle === "outline" ? (modelData.mine ? 3 : 1.5) : 1; border.color: settings.reactionStyle === "outline" ? look.text : (modelData.mine ? look.accent : look.line)
                     Row { id: chipRow; anchors.centerIn: parent; spacing: 4
                         Label { text: modelData.key; font.pixelSize: Math.round(15 * look.textScale); color: look.text }
                         Label { visible: modelData.count > 1; text: modelData.count; font.pixelSize: Math.round(12 * look.textScale); color: look.muted; anchors.verticalCenter: parent.verticalCenter } }
@@ -245,7 +264,9 @@ Item {
                 height: Math.min(fit * ratio, 380); width: height / ratio
                 Rectangle { id: ph; anchors.fill: parent; radius: 14; color: Qt.darker(look.panel2, look.dark ? 0.85 : 1.07); visible: pic.status !== 2
                     Label { anchors.centerIn: parent; text: row.media.length ? "" : (settings.autoDownload === "always" && !settings.lowData ? "Loading…" : "Tap to load"); color: row.softInk; font.pixelSize: 13 } }
-                RoundedImage { id: pic; anchors.fill: parent; source: row.media; radius: 14; maxSide: 900 }
+                readonly property bool playGif: (row.gifLike || row.mime === "image/gif") && settings.autoPlayGifs && !settings.lowData && row.media.length > 0
+                RoundedImage { id: pic; anchors.fill: parent; source: row.media; radius: 14; maxSide: 900; visible: !frame.playGif }
+                AnimatedImage { anchors.fill: parent; visible: frame.playGif; source: frame.playGif ? "file://" + row.media : ""; fillMode: Image.PreserveAspectCrop; playing: frame.playGif; cache: false }
                 Label { visible: row.gifLike || row.mime === "image/gif"; text: "GIF"; color: "white"; font.bold: true; font.pixelSize: 11; leftPadding: 6; rightPadding: 6; topPadding: 2; bottomPadding: 2; x: 8; y: 8
                     background: Rectangle { radius: 6; color: "#99000000" } }
                 TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { if (row.media.length === 0) core.fetchMedia(row.eventId); row.openMedia(row.eventId) } }

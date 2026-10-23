@@ -120,6 +120,7 @@ int main(int argc, char *argv[]) {
         tray.setToolTip(QStringLiteral("Pager"));
         QObject::connect(&tray, &QSystemTrayIcon::activated, [&](QSystemTrayIcon::ActivationReason why) { if (why == QSystemTrayIcon::Trigger) { if (win->isVisible() && win->isActive()) win->hide(); else showWindow(); } });
         tray.show();
+        if (settings.value(QStringLiteral("startMinimized")).toBool()) win->hide();      // "Start minimized to tray"
     } else QApplication::setQuitOnLastWindowClosed(true);   // no tray on this desktop: closing the window quits
     QObject::connect(&app, &QGuiApplication::lastWindowClosed, [&] { if (!settings.value(QStringLiteral("closeToTray")).toBool() || !tray.isVisible()) app.quit(); });
     QObject::connect(&engine, &Engine::updateReady, [&](const QString &path) {
