@@ -128,6 +128,19 @@ public:
     /// What the list shows about one chat (for menus): {pinned, archived, lowPriority, muted, unread, markedUnread, labels, isGroup, name}.
     Q_INVOKABLE QVariantMap roomInfo(const QString &roomId) const;
     Q_INVOKABLE void demoReceive(const QString &room, const QString &text);
+    /// Opens a chat as soon as it is in the list (a new chat made by a bridge arrives a moment later).
+    Q_INVOKABLE void openWhenAvailable(const QString &roomId);
+    Q_INVOKABLE void addToPhonebook(const QVariantList &entries, bool override = false);
+    /// Reads a .vcf contacts file; returns how many numbers it had (names then replace numbers everywhere).
+    Q_INVOKABLE int importContacts(const QString &path);
+    Q_INVOKABLE QString prettyName(const QString &raw) const;
+    /// Messages on this device that match: kind is all, images, videos, links or files. [roomId] narrows to one chat.
+    /// [{roomId, eventId, sender, senderName, text, ts, time, chat, avatar, network, kind}], newest first.
+    Q_INVOKABLE QVariantList searchLocal(const QString &term, const QString &roomId, const QString &kind) const;
+    /// Asks the server too (it can see older history than this device has); [callback](hits) gets the same kind of list.
+    Q_INVOKABLE void searchRemote(const QString &term, const QString &roomId, const QJSValue &callback);
+    /// Opens a chat at a message, fetching it first when it is older than what is loaded. Emits jumpRequested(eventId) when it is there.
+    Q_INVOKABLE void openAt(const QString &roomId, const QString &eventId);
     Q_INVOKABLE void retry(const QString &localId);
     Q_INVOKABLE QString draft(const QString &roomId) const { return m_drafts.value(roomId); }
     Q_INVOKABLE void setDraft(const QString &roomId, const QString &text);
@@ -164,6 +177,8 @@ signals:
     void currentChanged();
     void listChanged();
     void mediaReady(const QString &key);
+    void roomOpened(const QString &roomId);
+    void jumpRequested(const QString &eventId);
     void recoveryChanged();
     void updateChanged();
     /// The update has been downloaded and checked: the screen puts it in place and restarts.
@@ -185,7 +200,7 @@ private:
     void loadIdentity();
     void refreshLists() { m_rooms.refresh(); emit listChanged(); emit unreadChanged(totalUnread()); }
     QHash<QString, std::function<void(int, const QJsonValue &)>> m_internal;
-    QString m_tab = QStringLiteral("inbox"), m_search;
+    QString m_tab = QStringLiteral("inbox"), m_search, m_pendingOpen;
     QHash<QString, QString> m_drafts; QString m_dataDir;
     void saveDrafts();
     qint64 m_lastTyping = 0;

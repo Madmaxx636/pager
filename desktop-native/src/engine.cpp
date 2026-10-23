@@ -1,5 +1,6 @@
 #include "engine.h"
 #include "rich.h"
+#include "names.h"
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
@@ -22,6 +23,8 @@ Engine::Engine(const QString &dataDir, bool demo, QObject *parent) : QObject(par
         pager_fetch_media(m_core, ("av:" + mxc).toUtf8().constData(), json.constData(), true);
     };
     m_dataDir = dataDir;
+    if (!dataDir.isEmpty() && !demo) { Names::load(dataDir + QStringLiteral("/phonebook.json")); }
+    Names::onChange = [this] { m_timeline.show(m_current); refreshLists(); };
     if (!dataDir.isEmpty()) { QFile f(dataDir + QStringLiteral("/drafts.json")); if (f.open(QIODevice::ReadOnly)) { const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object(); for (auto it = o.begin(); it != o.end(); ++it) m_drafts.insert(it.key(), it.value().toString()); } }
     m_logFile = dataDir.isEmpty() ? QString() : dataDir + QStringLiteral("/pager-native.log");
     if (demo) { loadDemo(); return; }
@@ -62,6 +65,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
     } else if (kind == QLatin1String("rooms")) {
         const QStringList changed = m_store.applyRooms(b.value(QLatin1String("rooms")).toArray());
         refreshLists();
+        if (!m_pendingOpen.isEmpty() && m_store.room(m_pendingOpen)) { const QString id = m_pendingOpen; m_pendingOpen.clear(); openRoom(id); emit roomOpened(id); }
         for (const QString &id : changed) {        // pop-ups: only for new messages from others, never for the first catch-up or the chat in front of you
             const Room *r = m_store.room(id);
             if (!r || r->msgs.isEmpty()) continue;
@@ -516,6 +520,20 @@ void Engine::loadIdentity() {
             }
         }
         m_store.setOwnIdentity(names, ids); m_timeline.show(m_current); refreshLists();
+        // names for the phone numbers bridges show: each of your accounts' contact lists
+        for (const QJsonValue &nv : v.toObject().value(QLatin1String("networks")).toArray()) {
+            const QJsonObject n = nv.toObject();
+            for (const QJsonValue &lv : n.value(QLatin1String("logins")).toArray()) {
+                const QString lid = lv.toObject().value(QLatin1String("id")).toString();
+                call(QStringLiteral("GET"), QStringLiteral("/api/bridges/%1/contacts?login_id=%2").arg(pct(n.value(QLatin1String("id")).toString()), pct(lid)), QVariant(), [](int st, const QJsonValue &cv) {
+                    if (st != 200) return;
+                    const QJsonObject o = cv.toObject(); QJsonArray arr = o.value(QLatin1String("contacts")).toArray(); if (arr.isEmpty()) arr = o.value(QLatin1String("results")).toArray();
+                    QList<QPair<QString, QString>> entries;
+                    for (const QJsonValue &c : arr) { const QJsonObject co = c.toObject(); const QJsonArray idn = co.value(QLatin1String("identifiers")).toArray(); if (idn.isEmpty()) continue; QString num = idn[0].toString(); if (num.startsWith(QLatin1String("tel:"))) num = num.mid(4); entries.append({num, co.value(QLatin1String("name")).toString()}); }
+                    Names::add(entries);
+                });
+            }
+        }
     });
 }
 
@@ -524,6 +542,93 @@ void Engine::demoReceive(const QString &room, const QString &text) {
     const Room *r = m_store.room(room); if (!r) return;
     handle(QStringLiteral("rooms"), QJsonObject{{"rooms", QJsonArray{QJsonObject{{"id", room}, {"events", QJsonArray{QJsonObject{{"event_id", QStringLiteral("d%1").arg(++m_callCounter)}, {"type", "m.room.message"}, {"sender", "@someone:demo.test"}, {"sender_name", "Someone"},
         {"origin_server_ts", double(QDateTime::currentMSecsSinceEpoch())}, {"content", QJsonObject{{"msgtype", "m.text"}, {"body", text}}}}}}}}}});
+}
+
+void Engine::openWhenAvailable(const QString &roomId) {
+    if (m_store.room(roomId)) { openRoom(roomId); emit roomOpened(roomId); return; }
+    m_pendingOpen = roomId;
+    QTimer::singleShot(30000, this, [this, roomId] { if (m_pendingOpen == roomId) m_pendingOpen.clear(); });
+}
+void Engine::addToPhonebook(const QVariantList &entries, bool override) {
+    QList<QPair<QString, QString>> list;
+    for (const QVariant &v : entries) { const QVariantMap m = v.toMap(); list.append({m.value("number").toString(), m.value("name").toString()}); }
+    Names::add(list, override);
+}
+int Engine::importContacts(const QString &path) {
+    QFile f(path); if (!f.open(QIODevice::ReadOnly)) return 0;
+    const auto entries = Names::parseVcf(QString::fromUtf8(f.readAll()));
+    Names::add(entries, true);
+    QSet<QString> numbers; for (const auto &e : entries) numbers.insert(Names::phoneKey(e.first));
+    numbers.remove(QString()); return numbers.size();
+}
+QString Engine::prettyName(const QString &raw) const { return Names::pretty(raw); }
+
+static QVariantMap hitOf(const Store &store, const Room &r, const Msg &m) {
+    QString text = m.body;
+    if (m.kind == QLatin1String("image")) text = m.sticker ? QStringLiteral("Sticker") : QStringLiteral("Photo") + (m.caption.isEmpty() ? QString() : QStringLiteral(": ") + m.caption);
+    else if (m.kind == QLatin1String("video")) text = QStringLiteral("Video") + (m.caption.isEmpty() ? QString() : QStringLiteral(": ") + m.caption);
+    else if (m.kind == QLatin1String("poll")) text = QStringLiteral("Poll: ") + m.poll.question;
+    const QString av = r.avatar.isEmpty() ? QString() : store.mediaPath(QStringLiteral("av:") + r.avatar);
+    if (!r.avatar.isEmpty() && av.isEmpty()) store.wantAvatar(r.avatar);
+    return QVariantMap{{"roomId", r.id}, {"eventId", m.id}, {"sender", m.sender}, {"senderName", store.mine(m) ? QStringLiteral("You") : r.nameOf(m.sender)}, {"text", text}, {"ts", m.ts},
+                       {"time", QDateTime::fromMSecsSinceEpoch(m.ts).toString(QStringLiteral("MMM d, h:mm AP"))}, {"chat", RoomListModel::displayName(r)}, {"avatar", av}, {"network", r.network}, {"kind", m.kind}};
+}
+
+QVariantList Engine::searchLocal(const QString &term, const QString &roomId, const QString &kind) const {
+    const QString t = term.trimmed().toLower();
+    static const QRegularExpression url(QStringLiteral("https?://\\S+|www\\.\\S+"));
+    QVector<QPair<qint64, QVariantMap>> found;
+    for (auto it = m_store.roomsBegin(); it != m_store.roomsEnd(); ++it) {
+        const Room &r = *it;
+        if ((!roomId.isEmpty() && r.id != roomId) || m_store.isBotRoom(r)) continue;
+        for (const Msg &m : r.msgs) {
+            if (m.local || m.locked) continue;
+            const bool kindOk = kind == QLatin1String("all") || (kind == QLatin1String("images") && m.kind == QLatin1String("image") && !m.sticker) || (kind == QLatin1String("videos") && m.kind == QLatin1String("video"))
+                || (kind == QLatin1String("files") && m.kind == QLatin1String("file")) || (kind == QLatin1String("links") && url.match(m.body).hasMatch());
+            if (!kindOk) continue;
+            if (!t.isEmpty() && !m.body.toLower().contains(t) && !m.caption.toLower().contains(t) && !m.poll.question.toLower().contains(t)) continue;
+            if (t.isEmpty() && kind == QLatin1String("all")) continue;
+            found.append({m.ts, hitOf(m_store, r, m)});
+        }
+    }
+    std::sort(found.begin(), found.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
+    QVariantList out; for (int i = 0; i < found.size() && i < 200; ++i) out << found[i].second;
+    return out;
+}
+
+void Engine::searchRemote(const QString &term, const QString &roomId, const QJSValue &callback) {
+    QVariantMap roomEvents{{"search_term", term}, {"keys", QVariantList{"content.body"}}, {"order_by", "recent"}};
+    if (!roomId.isEmpty()) roomEvents.insert("filter", QVariantMap{{"rooms", QVariantList{roomId}}});
+    QJSValue cb = callback;
+    call(QStringLiteral("POST"), QStringLiteral("/_matrix/client/v3/search"), QVariantMap{{"search_categories", QVariantMap{{"room_events", roomEvents}}}}, [this, cb](int status, const QJsonValue &v) mutable {
+        QVariantList out;
+        if (status == 200) for (const QJsonValue &rv : v.toObject().value(QLatin1String("search_categories")).toObject().value(QLatin1String("room_events")).toObject().value(QLatin1String("results")).toArray()) {
+            const QJsonObject ev = rv.toObject().value(QLatin1String("result")).toObject();
+            const QString room = ev.value(QLatin1String("room_id")).toString(); const Room *r = m_store.room(room); if (!r) continue;
+            const QString body = ev.value(QLatin1String("content")).toObject().value(QLatin1String("body")).toString(); if (body.isEmpty()) continue;
+            const QString sender = ev.value(QLatin1String("sender")).toString(); const qint64 ts = ev.value(QLatin1String("origin_server_ts")).toVariant().toLongLong();
+            out << QVariantMap{{"roomId", room}, {"eventId", ev.value(QLatin1String("event_id")).toString()}, {"sender", sender}, {"senderName", sender == m_user ? QStringLiteral("You") : r->nameOf(sender)}, {"text", body}, {"ts", ts},
+                               {"time", QDateTime::fromMSecsSinceEpoch(ts).toString(QStringLiteral("MMM d, h:mm AP"))}, {"chat", RoomListModel::displayName(*r)}, {"avatar", r->avatar.isEmpty() ? QString() : m_store.mediaPath(QStringLiteral("av:") + r->avatar)}, {"network", r->network}, {"kind", "text"}};
+        }
+        if (cb.isCallable()) { QJSEngine *js = qjsEngine(this); if (js) cb.call({js->toScriptValue(out)}); }
+    });
+}
+
+void Engine::openAt(const QString &roomId, const QString &eventId) {
+    openRoom(roomId); emit roomOpened(roomId);
+    const Room *r = m_store.room(roomId); if (!r) return;
+    if (r->find(eventId)) { QTimer::singleShot(120, this, [this, eventId] { emit jumpRequested(eventId); }); return; }
+    // older than what is loaded: ask the server for the stretch around it
+    call(QStringLiteral("GET"), QStringLiteral("/_matrix/client/v3/rooms/%1/context/%2?limit=30").arg(pct(roomId), pct(eventId)), QVariant(), [this, roomId, eventId](int status, const QJsonValue &v) {
+        if (status != 200) return;
+        const QJsonObject o = v.toObject(); QJsonArray evs = o.value(QLatin1String("events_before")).toArray();
+        QJsonArray ordered; for (int i = evs.size() - 1; i >= 0; --i) ordered.append(evs[i]);           // oldest first
+        ordered.append(o.value(QLatin1String("event"))); for (const QJsonValue &a : o.value(QLatin1String("events_after")).toArray()) ordered.append(a);
+        Room *r = m_store.mutableRoom(roomId); if (!r) return;
+        for (const QJsonValue &e : ordered) m_store.applyLocalEvent(roomId, e.toObject());
+        if (roomId == m_current) m_timeline.show(roomId);
+        QTimer::singleShot(150, this, [this, eventId] { emit jumpRequested(eventId); });
+    });
 }
 
 void Engine::retry(const QString &localId) {

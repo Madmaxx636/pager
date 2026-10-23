@@ -20,6 +20,14 @@ ApplicationWindow {
 
     Component.onCompleted: { if (startupDialog === "info") infoOpen = true }
     Recovery { id: recovery }
+    NewChat { id: newChat }
+    SearchDialog { id: searchDlg; onChosen: (roomId, eventId) => core.openAt(roomId, eventId) }
+    Connections { target: core; function onJumpRequested(id) { win.pendingJump = id } }
+    property string pendingJump: ""
+    Connections { target: core; function onRoomOpened(id) { win.showingChat = true } }
+    Shortcut { sequence: "Ctrl+N"; onActivated: newChat.open() }
+    Shortcut { sequence: "Ctrl+Shift+F"; onActivated: searchDlg.openFor("", "", "") }
+    Shortcut { sequence: "Ctrl+F"; onActivated: searchDlg.openFor(core.currentRoom, core.currentName, "") }
     Shortcut { sequence: "Ctrl+Q"; onActivated: Qt.quit() }
     Shortcut { sequence: "Ctrl+I"; onActivated: win.infoOpen = !win.infoOpen }
 
@@ -39,6 +47,8 @@ ApplicationWindow {
                 visible: win.wide || !win.showingChat
                 onOpened: win.showingChat = true
                 onRestoreRequested: recovery.open()
+                onNewChat: newChat.open()
+                onSearchRequested: (text) => searchDlg.openFor("", "", text)
             }
             Rectangle { Layout.fillHeight: true; width: 1; color: look.line; visible: win.wide }
             Chat {
@@ -49,6 +59,8 @@ ApplicationWindow {
                 onBack: win.showingChat = false
                 onToggleInfo: win.infoOpen = !win.infoOpen
                 onRestoreRequested: recovery.open()
+                onSearchRequested: searchDlg.openFor(core.currentRoom, core.currentName, "")
+                jumpTarget: win.pendingJump
             }
             InfoPanel {
                 Layout.preferredWidth: win.roomy ? 310 : win.width; Layout.fillHeight: true

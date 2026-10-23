@@ -10,6 +10,7 @@ Rectangle {
     signal opened()
     signal restoreRequested()
     signal newChat()
+    signal searchRequested(string text)
     property string menuRoom: ""
     property var menuInfo: ({})
 
@@ -127,6 +128,14 @@ Rectangle {
                         }
                     }
                 }
+            }
+            footer: Rectangle {
+                visible: core.search.trim().length >= 2; width: list.width; height: visible ? 52 : 0; color: fh.hovered ? look.panel2 : "transparent"
+                HoverHandler { id: fh }
+                Row { anchors.verticalCenter: parent.verticalCenter; x: 18; spacing: 12
+                    Rectangle { width: 36; height: 36; radius: 18; color: look.accent; Label { anchors.centerIn: parent; text: "⌕"; color: look.accentInk; font.pixelSize: 20 } }
+                    Label { anchors.verticalCenter: parent.verticalCenter; text: "Search all messages for “" + core.search.trim() + "”"; color: look.text; elide: Text.ElideRight; width: list.width - 90 } }
+                TapHandler { onTapped: pane.searchRequested(core.search.trim()) }
             }
             Label {
                 anchors.centerIn: parent; visible: list.count === 0 && !core.loading; width: parent.width - 40; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; color: look.muted

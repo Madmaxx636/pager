@@ -13,6 +13,9 @@ Rectangle {
     signal back()
     signal restoreRequested()
     signal toggleInfo()
+    signal searchRequested()
+    property string jumpTarget: ""
+    onJumpTargetChanged: if (jumpTarget.length) { pane.jumpTo(jumpTarget); jumpTarget = "" }
     property string target: ""; property bool targetMine: false        // the message a menu was opened on
     property string replyingTo: ""; property string editing: ""        // set while the composer is answering or editing
     property string highlight: ""
@@ -67,6 +70,7 @@ Rectangle {
                     TapHandler { onTapped: pane.toggleInfo() }
                 }
                 Item { Layout.fillWidth: true; visible: core.currentRoom.length === 0 }
+                IconButton { visible: core.currentRoom.length > 0; symbol: "⌕"; glyphSize: 22; onClicked: pane.searchRequested(); ToolTip.text: "Search this chat (Ctrl+F)"; ToolTip.visible: hovered; ToolTip.delay: 600 }
                 ToolButton {
                     visible: core.currentRoom.length > 0; id: infoBtn; onClicked: pane.toggleInfo(); ToolTip.text: "Chat info"; ToolTip.visible: hovered; ToolTip.delay: 600
                     contentItem: Label { text: "ⓘ"; color: pane.infoOpen ? look.accent : look.muted; font.pixelSize: 22; horizontalAlignment: Text.AlignHCenter }
@@ -135,7 +139,7 @@ Rectangle {
             Rectangle { width: 3; height: parent.height; color: look.accent }
             RowLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 8
                 Label { Layout.fillWidth: true; text: pane.barText; color: look.muted; font.pixelSize: Math.round(13 * look.textScale); elide: Text.ElideRight }
-                ToolButton { text: "✕"; onClicked: { pane.replyingTo = ""; pane.editing = ""; input.clear() } } }
+                IconButton { symbol: "✕"; glyphSize: 16; onClicked: { pane.replyingTo = ""; pane.editing = ""; input.clear() } } }
         }
         // ---- the box you write in
         Rectangle {

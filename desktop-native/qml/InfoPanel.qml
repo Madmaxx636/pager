@@ -22,7 +22,7 @@ Rectangle {
             id: col; width: parent.width - 32; x: 16; y: 16; spacing: 12
             RowLayout { Layout.fillWidth: true
                 Label { text: "Chat info"; color: look.text; font.pixelSize: Math.round(18 * look.textScale); font.weight: Font.Bold; Layout.fillWidth: true }
-                ToolButton { text: "✕"; onClicked: panel.closeRequested() } }
+                IconButton { symbol: "✕"; glyphSize: 16; onClicked: panel.closeRequested() } }
             Avatar { Layout.alignment: Qt.AlignHCenter; size: 96; source: core.currentAvatar; letter: core.currentName.length ? core.currentName[0].toUpperCase() : "?"; seed: core.currentName; network: core.currentNetwork }
             Label { Layout.alignment: Qt.AlignHCenter; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; text: core.currentName; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.DemiBold; wrapMode: Text.Wrap }
             Label { Layout.alignment: Qt.AlignHCenter; text: core.currentSub; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) }
@@ -33,7 +33,7 @@ Rectangle {
                 ColumnLayout { Layout.fillWidth: true; spacing: 0
                     Label { text: parent.parent.label; color: look.text; font.pixelSize: Math.round(14 * look.textScale) }
                     Label { visible: parent.parent.hint.length > 0; text: parent.parent.hint; color: look.muted; font.pixelSize: Math.round(11 * look.textScale); wrapMode: Text.Wrap; Layout.fillWidth: true } }
-                Switch { id: sw; onToggled: parent.toggled(checked) }
+                PSwitch { id: sw; onToggled: parent.toggled(checked) }
             }
             Row2 { label: "Pinned"; checked: !!panel.info.pinned; onToggled: (on) => core.pin(core.currentRoom, on) }
             Row2 { label: "Muted"; hint: "No alerts from this chat"; checked: !!panel.info.muted; onToggled: (on) => core.setMuted(core.currentRoom, on) }
