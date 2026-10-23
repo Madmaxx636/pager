@@ -425,7 +425,7 @@ class Store(private val context: Context) {
             if ((ev["type"] as? JsonPrimitive)?.contentOrNull != "m.room.encrypted") ev
             // Encryption may not have finished starting yet (a slow phone, right after signing in). The message must NOT be passed on as it is:
             // the app would drop it, and the sync has already moved past it. Keep it as a locked placeholder; it opens once encryption is ready.
-            else (e?.decrypt(roomId, ev)) ?: unreadable(ev).also { if (e != null) scope.launch { delay(4_000); retryWaiting(listOf(roomId)) } }
+            else (e?.decrypt(roomId, ev)) ?: unreadable(ev).also { if (e != null) retrySoon(roomId) }
         }
     }
 
@@ -445,6 +445,14 @@ class Store(private val context: Context) {
 
     /** Opens messages that were waiting for a key, in the pages whose keys just arrived (or everywhere with no list). They are kept on the message itself, so this also works after a restart. */
     private val askedBackup = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val retrying = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    /** A message that cannot be read yet: look again after 1, 2, 4, 8, 15 and 30 seconds (the key is usually only moments behind), not once after 4 seconds and then a minute later. */
+    private fun retrySoon(roomId: String) {
+        val now = System.currentTimeMillis()
+        if (now - (retrying[roomId] ?: 0L) < 900L) return
+        retrying[roomId] = now
+        scope.launch { var last = 0L; for (ms in listOf(1_000L, 2_000L, 4_000L, 8_000L, 15_000L, 30_000L)) { delay(ms - last); last = ms; retryWaiting(listOf(roomId)) } }
+    }
     private suspend fun retryWaiting(rooms: List<String>? = null) {
         val e = e2ee ?: return
         for ((roomId, chat) in _chats.value.entries.toList()) {
@@ -453,7 +461,7 @@ class Store(private val context: Context) {
                 val raw = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(m.sealed!!) as? JsonObject }.getOrNull() ?: continue
                 // The recovery backup may hold this message's key (another device of yours saved it there): ask, at most once a minute per key.
                 val sid = ((raw["content"] as? JsonObject)?.get("session_id") as? JsonPrimitive)?.contentOrNull
-                if (sid != null && System.currentTimeMillis() - (askedBackup[roomId + sid] ?: 0L) > 60_000L) { askedBackup[roomId + sid] = System.currentTimeMillis(); e.fetchKeyFromBackup(roomId, sid) }
+                if (sid != null && System.currentTimeMillis() - (askedBackup[roomId + sid] ?: 0L) > 6_000L) { askedBackup[roomId + sid] = System.currentTimeMillis(); e.fetchKeyFromBackup(roomId, sid) }
                 val clear = e.decrypt(roomId, raw) ?: continue
                 update(roomId) { SyncReducer.replaceDecrypted(it, clear) }
             }

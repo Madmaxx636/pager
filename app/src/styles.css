@@ -843,3 +843,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-lowend][data-look] .chat-head { backdrop-filter: none; }
 :root[data-motion="reduced"][data-look] .msg.fresh .bubble, :root[data-motion="reduced"][data-look] .chat { animation: none !important; }
 @media (max-width: 760px) { :root[data-look] .fab { bottom: 84px; } }
+
+/* The message field with a picture or file waiting in it stacks its rows; the looks centre the field's contents, so keep the text row full width. */
+:root[data-look] .composer .field.has-tray { align-items: stretch; }
+:root[data-look] .composer .field .field-row { width: 100%; align-items: center; } :root[data-look] .composer .field .field-row textarea { flex: 1; min-width: 0; }
