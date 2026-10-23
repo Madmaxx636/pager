@@ -27,6 +27,7 @@ class Engine : public QObject {
     Q_PROPERTY(QString search READ search NOTIFY listChanged)
     Q_PROPERTY(int unreadChats READ unreadChats NOTIFY listChanged)     // chats with something new (the badge on the Unread tab)
     Q_PROPERTY(QStringList labels READ labels NOTIFY listChanged)
+    Q_PROPERTY(QString currentAvatar READ currentAvatar NOTIFY currentChanged)
     Q_PROPERTY(QString currentNetwork READ currentNetwork NOTIFY currentChanged)
     Q_PROPERTY(bool currentIsGroup READ currentIsGroupChat NOTIFY currentChanged)
     Q_PROPERTY(QString currentTyping READ currentTyping NOTIFY currentChanged)
@@ -62,6 +63,7 @@ public:
     QString search() const { return m_search; }
     int unreadChats() const { return m_rooms.unreadChats(); }
     QStringList labels() const;
+    QString currentAvatar() const { const Room *r = m_store.room(m_current); if (!r || r->avatar.isEmpty()) return {}; const QString p = m_store.mediaPath(QStringLiteral("av:") + r->avatar); if (p.isEmpty()) m_store.wantAvatar(r->avatar); return p; }
     QString currentNetwork() const { const Room *r = m_store.room(m_current); return r ? r->network : QString(); }
     bool currentIsGroupChat() const { const Room *r = m_store.room(m_current); return r && r->isGroup(); }
     QString currentTyping() const;
@@ -81,7 +83,7 @@ public:
     Q_INVOKABLE void login(const QString &homeserver, const QString &user, const QString &password);
     Q_INVOKABLE void logout();
     Q_INVOKABLE void openRoom(const QString &id);
-    Q_INVOKABLE void send(const QString &text, const QString &replyTo = QString());
+    Q_INVOKABLE void send(const QString &text, const QString &replyTo = QString(), bool markdown = true);
     /// Adds your reaction to a message, or takes it back if you already reacted with that emoji.
     Q_INVOKABLE void react(const QString &eventId, const QString &emoji);
     Q_INVOKABLE void deleteMessage(const QString &eventId);
@@ -125,6 +127,24 @@ public:
     Q_INVOKABLE void setTyping(bool on);
     /// What the list shows about one chat (for menus): {pinned, archived, lowPriority, muted, unread, markedUnread, labels, isGroup, name}.
     Q_INVOKABLE QVariantMap roomInfo(const QString &roomId) const;
+    Q_INVOKABLE void demoReceive(const QString &room, const QString &text);
+    Q_INVOKABLE void retry(const QString &localId);
+    Q_INVOKABLE QString draft(const QString &roomId) const { return m_drafts.value(roomId); }
+    Q_INVOKABLE void setDraft(const QString &roomId, const QString &text);
+    /// The row of the "new messages" line in the open chat, or -1.
+    Q_INVOKABLE int dividerRow() const { return m_timeline.dividerRow(); }
+    Q_INVOKABLE QString nameOfMessage(const QString &eventId) const;
+    Q_INVOKABLE bool isMediaMessage(const QString &eventId) const;
+    Q_INVOKABLE QString fileNameOf(const QString &eventId) const;
+    Q_INVOKABLE QString messageDetails(const QString &eventId) const;
+    Q_INVOKABLE void forward(const QString &eventId, const QString &toRoom);
+    /// Chats to pick from (forwarding, new messages): [{id, name, avatar, network}] matching [query].
+    Q_INVOKABLE QVariantList chatChoices(const QString &query) const;
+    /// The previous (dir < 0) or next picture/video in the open chat after [eventId], or empty.
+    Q_INVOKABLE QString kindOf(const QString &eventId) const { const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(eventId) : nullptr; return m ? m->kind : QString(); }
+    Q_INVOKABLE QString mediaNeighbor(const QString &eventId, int dir) const;
+    /// Who is in the open chat: [{id, name, avatar, you}] (no bridge bots).
+    Q_INVOKABLE QVariantList members() const;
     /// Text of one of your messages in the open chat (to edit it).
     Q_INVOKABLE QString bodyOf(const QString &eventId) const;
     Q_INVOKABLE void loadOlder();
@@ -166,6 +186,8 @@ private:
     void refreshLists() { m_rooms.refresh(); emit listChanged(); emit unreadChanged(totalUnread()); }
     QHash<QString, std::function<void(int, const QJsonValue &)>> m_internal;
     QString m_tab = QStringLiteral("inbox"), m_search;
+    QHash<QString, QString> m_drafts; QString m_dataDir;
+    void saveDrafts();
     qint64 m_lastTyping = 0;
     Store m_store;
     RoomListModel m_rooms{&m_store};

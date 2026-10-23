@@ -65,7 +65,8 @@ public:
     QString roomId() const { return m_room; }
     /// Where the unread messages begin (set when the chat is opened).
     void setUnreadBefore(const QString &id) { m_unreadBefore = id; }
-    int rowOfMessage(const QString &id) const { return rowOf(id); }
+    Q_INVOKABLE int rowOfMessage(const QString &id) const { return rowOf(id); }
+    int dividerRow() const { return m_unreadBefore.isEmpty() ? -1 : rowOf(m_unreadBefore); }
 protected:
     void rowRemoved(int row) override { m_rows.remove(row); }
     void rowInserted(int row, const QString &) override { m_rows.insert(row, Row()); }

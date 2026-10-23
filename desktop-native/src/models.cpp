@@ -4,6 +4,7 @@
 #include <QVariantMap>
 #include <algorithm>
 #include "rich.h"
+#include "names.h"
 
 // ---- keeping a list in step with what changed ---------------------------------------------------------------------------------------------------
 void DiffModel::applyIds(const QStringList &next) {
@@ -26,7 +27,7 @@ QHash<int, QByteArray> RoomListModel::roleNames() const {
 }
 
 QString RoomListModel::displayName(const Room &r) {
-    if (!r.name.trimmed().isEmpty() && r.name != r.id) return r.name;
+    if (!r.name.trimmed().isEmpty() && r.name != r.id) return Names::pretty(r.name);
     for (const QString &h : r.heroes) return r.nameOf(h);
     return QStringLiteral("Unnamed chat");
 }
@@ -250,7 +251,7 @@ QVariant TimelineModel::data(const QModelIndex &i, int role) const {
     switch (role) {
     case IdRole: return m.id;
     case SenderRole: return m.sender;
-    case SenderNameRole: return m.senderName;
+    case SenderNameRole: return Names::pretty(m.senderName);
     case BodyRole: return m.kind == QLatin1String("emote") ? QStringLiteral("* %1 %2").arg(m.senderName, m.body) : m.body;
     case KindRole: return m.kind;
     case TimeRole: return Store::clock(m.ts);

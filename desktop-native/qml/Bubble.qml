@@ -1,142 +1,303 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
+import "Networks.js" as N
 
-// One message: the bubble, the little time under the last of a run, and reaction chips.
+// One message with everything around it: day heading, "new messages" line, sender name and picture, the bubble (text, picture, video, voice, file, place, poll...),
+// reactions, delivery marks. Every role of the timeline model arrives as a property of the same name.
 Item {
     id: row
-    // roles from the timeline model
-    property string body; property string kind; property string time; property string senderName
-    property bool mine; property bool locked; property bool local; property bool first; property bool last; property bool edited; property bool showName
-    property var reactions: []
-    property string day; property string eventId; property string replyTo
-    property string media; property int imgWidth; property int imgHeight; property string fileName; property var poll
-    property bool wantOpen: false
-    onMediaChanged: if (wantOpen && media.length) { wantOpen = false; files.open(media) }
-    Component.onCompleted: if (kind === "image" && media.length === 0 && eventId.length) core.fetchMedia(eventId)
+    required property string eventId
+    required property string sender
+    required property string senderName
+    required property string senderAvatar
+    required property string body
+    required property string kind
+    required property string time
+    required property string fullTime
+    required property bool mine
+    required property bool locked
+    required property bool local
+    required property int status
+    required property bool first
+    required property bool last
+    required property var reactions
+    required property string day
+    required property bool edited
+    required property string replyTo
+    required property string replyName
+    required property string replyText
+    required property string media
+    required property string poster
+    required property int imgWidth
+    required property int imgHeight
+    required property string fileName
+    required property var poll
+    required property string html
+    required property string caption
+    required property string captionHtml
+    required property string mime
+    required property real size
+    required property real durationMs
+    required property bool voice
+    required property bool sticker
+    required property bool gifLike
+    required property string geo
+    required property int tick
+    required property bool unreadDivider
+    required property bool mentioned
+    required property bool bigEmoji
+    property bool showName: false           // group chats: names and pictures of the other people
     signal menuRequested(string eventId, bool mine, real gx, real gy)
     signal reactionTapped(string eventId, string key)
+    signal jumpTo(string eventId)
+    signal openMedia(string eventId)
+    signal replyRequested(string eventId)
 
+    readonly property real maxW: Math.min(width * 0.76, 560)
+    readonly property bool bare: sticker || bigEmoji || ((kind === "image" || kind === "video") && caption.length === 0 && !sticker)
     width: ListView.view ? ListView.view.width : 400
-    implicitHeight: col.implicitHeight + (first ? 8 : 2)
+    height: col.implicitHeight + (first ? 7 : 1.5)
+    readonly property color ink: mine ? look.accentInk : look.text
+    readonly property color softInk: mine ? Qt.rgba(look.accentInk.r, look.accentInk.g, look.accentInk.b, 0.72) : look.muted
+    readonly property color bubbleColor: mine ? look.accent : look.theirs
+
+    Component.onCompleted: if ((kind === "image" || kind === "video") && media.length === 0 && poster.length === 0 && eventId.length && !local) core.fetchMedia(eventId)
 
     Column {
         id: col
         width: parent.width
         spacing: 2
-        Label { // the day heading sits above the first message of that day
+        Label {   // the day heading sits above the first message of that day
             visible: row.day.length > 0
             anchors.horizontalCenter: parent.horizontalCenter
-            topPadding: 10; bottomPadding: 6
+            topPadding: 12; bottomPadding: 8
             text: row.day; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.DemiBold
         }
-        Label { visible: row.showName && !row.mine && row.first; leftPadding: 18; text: row.senderName; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.DemiBold }
-        Item {   // a picture
-            visible: row.kind === "image"
-            width: parent.width; height: visible ? pic.height : 0
-            Rectangle {
-                id: pic
-                anchors.right: row.mine ? parent.right : undefined; anchors.left: row.mine ? undefined : parent.left
-                anchors.rightMargin: 14; anchors.leftMargin: 14
-                readonly property real ratio: row.imgWidth > 0 && row.imgHeight > 0 ? row.imgHeight / row.imgWidth : 0.75
-                width: Math.min(300, row.width * 0.7); height: Math.max(80, Math.min(width * ratio, 380))
-                radius: 14; color: row.mine ? look.accent : look.theirs; clip: true; opacity: row.local ? 0.7 : 1
-                Image { anchors.fill: parent; source: row.media.length ? "file://" + row.media : ""; fillMode: Image.PreserveAspectCrop; asynchronous: true; cache: true; sourceSize.width: 640 }
-                Label { anchors.centerIn: parent; visible: row.media.length === 0; text: "Loading picture…"; color: row.mine ? look.accentInk : look.muted; font.pixelSize: Math.round(13 * look.textScale) }
-                TapHandler { acceptedButtons: Qt.LeftButton; onTapped: if (row.media.length) files.open(row.media) }
-                TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = pic.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
-            }
+        Item {   // where the unread messages begin
+            visible: row.unreadDivider; width: parent.width; height: visible ? 30 : 0
+            Rectangle { anchors.verticalCenter: parent.verticalCenter; x: 16; width: parent.width - 32; height: 1; color: look.accent; opacity: 0.5 }
+            Label { anchors.centerIn: parent; text: "New messages"; color: look.accent; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Bold; leftPadding: 10; rightPadding: 10; background: Rectangle { color: look.bg } }
         }
-        Item {   // a file
-            visible: row.kind === "file"
-            width: parent.width; height: visible ? fileBox.height : 0
-            Rectangle {
-                id: fileBox
-                anchors.right: row.mine ? parent.right : undefined; anchors.left: row.mine ? undefined : parent.left
-                anchors.rightMargin: 14; anchors.leftMargin: 14
-                width: Math.min(300, row.width * 0.74); height: 54; radius: 14; color: row.mine ? look.accent : look.theirs; opacity: row.local ? 0.7 : 1
-                RowLayout {
-                    anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 10
-                    Label { text: "📎"; font.pixelSize: Math.round(22 * look.textScale) }
-                    Label { Layout.fillWidth: true; text: row.fileName || row.body; elide: Text.ElideMiddle; color: row.mine ? look.accentInk : look.text; font.pixelSize: Math.round(14 * look.textScale) }
-                    Label { text: row.media.length ? "Open" : (row.wantOpen ? "…" : "Download"); color: row.mine ? look.accentInk : look.accent; font.pixelSize: Math.round(13 * look.textScale); font.weight: Font.DemiBold }
-                }
-                TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { if (row.media.length) files.open(row.media); else { row.wantOpen = true; core.fetchMedia(row.eventId) } } }
-                TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = fileBox.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
-            }
-        }
-        Item {   // a poll
-            visible: row.kind === "poll"
-            width: parent.width; height: visible ? pollCard.height : 0
-            PollCard {
-                id: pollCard
-                anchors.right: row.mine ? parent.right : undefined; anchors.left: row.mine ? undefined : parent.left
-                anchors.rightMargin: 14; anchors.leftMargin: 14
-                width: Math.min(340, row.width * 0.8); height: implicitHeight
-                poll: row.poll ? row.poll : ({ question: "", answers: [], ended: false, voters: 0, max: 1 }); mine: row.mine; eventId: row.eventId; local: row.local
-                TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = pollCard.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
-            }
+        Label {
+            visible: row.showName && !row.mine && row.first
+            leftPadding: 18 + 40; text: row.senderName
+            color: Qt.hsla(((row.sender).split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)) / 360, 0.6, look.dark ? 0.68 : 0.40, 1)
+            font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.DemiBold
         }
         Item {
-            visible: row.kind !== "image" && row.kind !== "file" && row.kind !== "poll"
-            width: parent.width; height: visible ? bubble.height : 0
+            id: line
+            width: parent.width; height: Math.max(bubble.height, 1)
+            HoverHandler { id: lineHover }
+
+            Avatar {   // the other person's picture, level with the start of their run
+                visible: row.showName && !row.mine && row.first
+                x: 12; y: 0; size: 32; source: row.senderAvatar; letter: row.senderName.length ? row.senderName[0].toUpperCase() : "?"; seed: row.sender
+            }
+
             Rectangle {
                 id: bubble
-                anchors.right: row.mine ? parent.right : undefined
-                anchors.left: row.mine ? undefined : parent.left
-                anchors.rightMargin: 14; anchors.leftMargin: 14
-                width: Math.min(Math.max(text.implicitWidth, quote.visible ? 160 : 0) + 28, row.width * 0.74)
-                height: text.implicitHeight + 16 + (quote.visible ? quote.height + 4 : 0) + (meta.visible ? meta.implicitHeight + 2 : 0)
-                radius: 18
-                topLeftRadius: !row.mine && !row.first ? 5 : 18; bottomLeftRadius: !row.mine && !row.last ? 5 : 18
-                topRightRadius: row.mine && !row.first ? 5 : 18; bottomRightRadius: row.mine && !row.last ? 5 : 18
-                color: row.mine ? look.accent : look.theirs
-                opacity: row.local ? 0.7 : 1
-                TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = bubble.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
-                TapHandler { acceptedButtons: Qt.LeftButton; acceptedDevices: PointerDevice.TouchScreen; longPressThreshold: 0.5; onLongPressed: { const g = bubble.mapToItem(null, point.position.x, point.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
+                x: row.mine ? row.width - width - 14 : 14 + (row.showName && !row.mine ? 40 : 0)
+                width: Math.max(contentLoader.implicitWidth + (row.bare ? 0 : 26), metaRow.visible && !row.bare ? metaRow.implicitWidth + 26 : 0)
+                height: contentLoader.implicitHeight + (row.bare ? 0 : 14 + (metaRow.visible ? metaRow.implicitHeight + 1 : 0) + (quote.visible ? quote.height + 5 : 0))
+                radius: row.bare ? 14 : 18
+                topLeftRadius: row.bare ? 14 : (!row.mine && !row.first ? 5 : 18); bottomLeftRadius: row.bare ? 14 : (!row.mine && !row.last ? 5 : 18)
+                topRightRadius: row.bare ? 14 : (row.mine && !row.first ? 5 : 18); bottomRightRadius: row.bare ? 14 : (row.mine && !row.last ? 5 : 18)
+                color: row.bare ? "transparent" : row.bubbleColor
+                border.width: row.mentioned && !row.bare ? 2 : (row.status === 2 ? 1 : 0); border.color: row.status === 2 ? look.danger : look.accent
+                opacity: row.local && row.status !== 2 ? 0.72 : 1
+
                 Rectangle {   // the message this one answers
                     id: quote
-                    visible: row.replyTo.length > 0
-                    x: 10; y: 8; width: bubble.width - 20; height: visible ? quoteText.implicitHeight + 8 : 0; radius: 8
-                    color: Qt.rgba(0, 0, 0, row.mine ? 0.18 : 0.07)
-                    Text { id: quoteText; x: 8; y: 4; width: parent.width - 16; text: core.bodyOf(row.replyTo) || "Message"; elide: Text.ElideRight; maximumLineCount: 2; wrapMode: Text.Wrap
-                           color: row.mine ? look.accentInk : look.muted; font.pixelSize: Math.round(12 * look.textScale); textFormat: Text.PlainText }
+                    visible: row.replyTo.length > 0 && !row.bare
+                    x: 9; y: 8; width: bubble.width - 18; height: visible ? qcol.implicitHeight + 10 : 0; radius: 9
+                    color: Qt.rgba(0, 0, 0, row.mine ? 0.16 : 0.06)
+                    Rectangle { x: 0; width: 3; height: parent.height; radius: 1.5; color: row.mine ? row.ink : look.accent }
+                    Column { id: qcol; x: 11; y: 5; width: parent.width - 18
+                        Label { text: row.replyName; width: parent.width; elide: Text.ElideRight; color: row.mine ? row.ink : look.accent; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Bold; visible: text.length > 0 }
+                        Label { text: row.replyText || "Message"; width: parent.width; elide: Text.ElideRight; maximumLineCount: 2; wrapMode: Text.Wrap; color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) } }
+                    TapHandler { onTapped: row.jumpTo(row.replyTo) }
                 }
-                Text {
-                    id: text
-                    x: 14; y: 8 + (quote.visible ? quote.height + 4 : 0)
-                    width: Math.min(implicitWidth, row.width * 0.74 - 28)
-                    text: row.body
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                    color: row.locked ? look.muted : (row.mine ? look.accentInk : look.text)
-                    font.pixelSize: Math.round(15 * look.textScale); font.italic: row.locked || row.kind === "emote"
+
+                Loader {
+                    id: contentLoader
+                    x: row.bare ? 0 : 13; y: row.bare ? 0 : 7 + (quote.visible ? quote.height + 5 : 0)
+                    sourceComponent: row.locked ? lockedC : row.kind === "poll" ? pollC : row.kind === "image" ? (row.sticker ? stickerC : imageC) : row.kind === "video" ? videoC
+                        : row.kind === "audio" ? audioC : row.kind === "file" ? fileC : row.kind === "location" ? locationC : row.bigEmoji ? bigC : textC
                 }
-                Label {
-                    id: meta
-                    visible: row.last
-                    anchors.right: parent.right; anchors.rightMargin: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 5
-                    text: (row.edited ? "edited · " : "") + row.time + (row.local ? " · sending" : "")
-                    color: row.mine ? Qt.rgba(look.accentInk.r, look.accentInk.g, look.accentInk.b, 0.75) : look.muted; font.pixelSize: Math.round(11 * look.textScale)
+                Row {   // time, edited, delivery marks
+                    id: metaRow
+                    visible: row.last && !row.bare && row.kind !== "poll"
+                    anchors.right: parent.right; anchors.rightMargin: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 5; spacing: 4
+                    Label { visible: row.edited; text: "edited"; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale); font.italic: true }
+                    Label { text: row.time; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale)
+                        ToolTip.visible: tipHover.hovered; ToolTip.text: row.fullTime; ToolTip.delay: 500; HoverHandler { id: tipHover } }
+                    Label { visible: row.mine && row.tick > 0; font.pixelSize: Math.round(11 * look.textScale)
+                        text: row.tick === 1 ? "⏱" : row.tick === 2 ? "!" : row.tick === 5 ? "✓✓" : row.tick === 4 ? "✓✓" : "✓"
+                        color: row.tick === 5 ? (row.mine ? "#9be7ff" : look.accent) : (row.tick === 2 ? look.danger : row.softInk) }
+                }
+                TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = bubble.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
+                TapHandler { acceptedButtons: Qt.LeftButton; enabled: row.status === 2; onTapped: core.retry(row.eventId) }
+                TapHandler { acceptedDevices: PointerDevice.TouchScreen; longPressThreshold: 0.45; onLongPressed: { const g = bubble.mapToItem(null, point.position.x, point.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
+                TapHandler { acceptedButtons: Qt.LeftButton; gesturePolicy: TapHandler.ReleaseWithinBounds; onDoubleTapped: row.reactionTapped(row.eventId, "👍") }
+            }
+
+            Row {   // hover tools
+                visible: lineHover.hovered && row.status !== 2 && !row.local
+                x: row.mine ? bubble.x - width - 6 : bubble.x + bubble.width + 6
+                y: Math.max(0, (bubble.height - height) / 2); spacing: 2
+                Repeater {
+                    model: [["☺", "React"], ["↩", "Reply"], ["⋯", "More"]]
+                    delegate: Rectangle { width: 26; height: 26; radius: 13; color: tHover.hovered ? look.panel2 : "transparent"; border.width: 1; border.color: look.line
+                        Label { anchors.centerIn: parent; text: modelData[0]; color: look.muted; font.pixelSize: 14 }
+                        HoverHandler { id: tHover }
+                        TapHandler { onTapped: { if (index === 1) row.replyRequested(row.eventId); else { const g = parent.mapToItem(null, 0, 26); row.menuRequested(row.eventId, row.mine, g.x, g.y) } } }
+                    }
                 }
             }
         }
-        Flow {
+        Label { visible: row.status === 2; x: row.mine ? row.width - width - 16 : 56; text: "Not sent · click the message to try again"; color: look.danger; font.pixelSize: Math.round(11 * look.textScale) }
+        Flow {   // reactions
             visible: row.reactions.length > 0
-            anchors.right: row.mine ? parent.right : undefined
-            anchors.left: row.mine ? undefined : parent.left
-            anchors.rightMargin: 18; anchors.leftMargin: 18
-            spacing: 4
+            x: row.mine ? Math.max(14, row.width - width - 16) : 14 + (row.showName ? 40 : 0)
+            width: row.maxW; spacing: 4
             Repeater {
                 model: row.reactions
                 delegate: Rectangle {
-                    height: 26; width: chip.implicitWidth + 16; radius: 13
+                    height: 26; width: chipRow.implicitWidth + 16; radius: 13
                     color: modelData.mine ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.22) : look.panel2
                     border.width: modelData.mine ? 1 : 0; border.color: look.accent
+                    Row { id: chipRow; anchors.centerIn: parent; spacing: 4
+                        Label { text: modelData.key; font.pixelSize: Math.round(15 * look.textScale); color: look.text }
+                        Label { visible: modelData.count > 1; text: modelData.count; font.pixelSize: Math.round(12 * look.textScale); color: look.muted; anchors.verticalCenter: parent.verticalCenter } }
                     TapHandler { onTapped: row.reactionTapped(row.eventId, modelData.key) }
-                    Label { id: chip; anchors.centerIn: parent; text: modelData.key + (modelData.count > 1 ? " " + modelData.count : ""); font.pixelSize: Math.round(15 * look.textScale); color: look.text }
+                    HoverHandler { id: chipHover }
+                    ToolTip.visible: chipHover.hovered; ToolTip.text: modelData.who; ToolTip.delay: 400
                 }
             }
         }
+        Item { width: 1; height: 2 }
+    }
+
+    // ---- what is inside the bubble ----------------------------------------------------------------------------------------------------------------
+    Component {
+        id: textC
+        Column {
+            spacing: 0
+            Text {
+                id: msgText
+                width: Math.min(implicitWidth, row.maxW - 28)
+                text: rich.render(row.body, row.html); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
+                font.pixelSize: Math.round(15 * look.textScale); font.italic: row.kind === "emote" || row.kind === "notice"
+                onLinkActivated: (link) => files.openUrl(link)
+                HoverHandler { cursorShape: msgText.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor }
+            }
+            Item { width: 1; height: metaRow.visible ? 13 : 0 }
+        }
+    }
+    Component {
+        id: bigC
+        Text { text: row.body; font.pixelSize: Math.round(46 * look.textScale); color: row.ink }
+    }
+    Component {
+        id: lockedC
+        Column { Text { text: "🔒 " + row.body; color: row.softInk; font.italic: true; font.pixelSize: Math.round(14 * look.textScale); width: Math.min(implicitWidth, row.maxW - 28); wrapMode: Text.Wrap }
+                 Item { width: 1; height: metaRow.visible ? 13 : 0 } }
+    }
+    Component {
+        id: imageC
+        Column {
+            spacing: 4
+            Item {
+                id: frame
+                readonly property real ratio: row.imgWidth > 0 && row.imgHeight > 0 ? Math.min(2.2, Math.max(0.4, row.imgHeight / row.imgWidth)) : 0.75
+                width: Math.min(row.maxW, 340); height: Math.max(90, Math.min(width * ratio, 420))
+                Rectangle { id: ph; anchors.fill: parent; radius: 14; color: row.bubbleColor; opacity: 0.8; visible: pic.status !== Image.Ready
+                    Label { anchors.centerIn: parent; text: row.media.length ? "" : "Loading…"; color: row.softInk; font.pixelSize: 13 } }
+                Image { id: pic; anchors.fill: parent; visible: false; source: row.media.length ? "file://" + row.media : ""; fillMode: Image.PreserveAspectCrop; asynchronous: true; cache: false; sourceSize.width: 720
+                    autoTransform: true }
+                MultiEffect { anchors.fill: parent; source: pic; visible: pic.status === Image.Ready; maskEnabled: true; maskSource: picMask; maskThresholdMin: 0.5; maskSpreadAtMin: 1.0 }
+                Item { id: picMask; anchors.fill: parent; visible: false; layer.enabled: true; Rectangle { anchors.fill: parent; radius: 14; color: "black" } }
+                Label { visible: row.gifLike || row.mime === "image/gif"; text: "GIF"; color: "white"; font.bold: true; font.pixelSize: 11; leftPadding: 6; rightPadding: 6; topPadding: 2; bottomPadding: 2; x: 8; y: 8
+                    background: Rectangle { radius: 6; color: "#99000000" } }
+                Row {   // time over the picture when there are no words with it
+                    visible: row.caption.length === 0; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 6
+                    Label { text: row.time + (row.mine ? (row.tick === 5 ? "  ✓✓" : "  ✓") : ""); color: "white"; font.pixelSize: 11; leftPadding: 7; rightPadding: 7; topPadding: 2; bottomPadding: 2; background: Rectangle { radius: 9; color: "#99000000" } } }
+                TapHandler { acceptedButtons: Qt.LeftButton; onTapped: row.openMedia(row.eventId) }
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
+            }
+            Text { visible: row.caption.length > 0; width: Math.min(implicitWidth, frame.width); text: rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
+                font.pixelSize: Math.round(15 * look.textScale); onLinkActivated: (link) => files.openUrl(link) }
+            Item { width: 1; height: row.caption.length > 0 && metaRow.visible ? 13 : 0 }
+        }
+    }
+    Component {
+        id: stickerC
+        Item {
+            width: 150; height: 150
+            Image { anchors.fill: parent; source: row.media.length ? "file://" + row.media : ""; fillMode: Image.PreserveAspectFit; asynchronous: true; cache: false; sourceSize.width: 300 }
+        }
+    }
+    Component {
+        id: videoC
+        Column {
+            spacing: 4
+            Item {
+                id: vframe
+                readonly property real ratio: row.imgWidth > 0 && row.imgHeight > 0 ? Math.min(2.0, Math.max(0.45, row.imgHeight / row.imgWidth)) : 0.56
+                width: Math.min(row.maxW, 340); height: Math.max(100, Math.min(width * ratio, 420))
+                Rectangle { anchors.fill: parent; radius: 14; color: "#222"; }
+                Image { id: vpic; anchors.fill: parent; visible: false; source: row.poster.length ? "file://" + row.poster : ""; fillMode: Image.PreserveAspectCrop; asynchronous: true; sourceSize.width: 720 }
+                MultiEffect { anchors.fill: parent; source: vpic; visible: vpic.status === Image.Ready; maskEnabled: true; maskSource: vMask; maskThresholdMin: 0.5; maskSpreadAtMin: 1.0 }
+                Item { id: vMask; anchors.fill: parent; visible: false; layer.enabled: true; Rectangle { anchors.fill: parent; radius: 14; color: "black" } }
+                Rectangle { anchors.centerIn: parent; width: 54; height: 54; radius: 27; color: "#aa000000"; Label { anchors.centerIn: parent; text: "▶"; color: "white"; font.pixelSize: 22; leftPadding: 3 } }
+                Label { visible: row.durationMs > 0; x: 8; y: 8; text: Math.floor(row.durationMs / 60000) + ":" + ("0" + Math.floor(row.durationMs / 1000) % 60).slice(-2); color: "white"; font.pixelSize: 11; leftPadding: 6; rightPadding: 6; topPadding: 2; bottomPadding: 2; background: Rectangle { radius: 6; color: "#99000000" } }
+                Row { visible: row.caption.length === 0; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 6
+                    Label { text: row.time; color: "white"; font.pixelSize: 11; leftPadding: 7; rightPadding: 7; topPadding: 2; bottomPadding: 2; background: Rectangle { radius: 9; color: "#99000000" } } }
+                TapHandler { onTapped: row.openMedia(row.eventId) }
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
+            }
+            Text { visible: row.caption.length > 0; width: Math.min(implicitWidth, vframe.width); text: rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
+                font.pixelSize: Math.round(15 * look.textScale); onLinkActivated: (link) => files.openUrl(link) }
+            Item { width: 1; height: row.caption.length > 0 && metaRow.visible ? 13 : 0 }
+        }
+    }
+    Component {
+        id: audioC
+        Column {
+            AudioBubble { eventId: row.eventId; voice: row.voice; durationMs: row.durationMs; fileName: row.fileName; ink: row.ink; softInk: row.softInk; accentColor: row.mine ? row.ink : look.accent; width: Math.min(row.maxW - 28, 280) }
+            Item { width: 1; height: metaRow.visible ? 13 : 0 }
+        }
+    }
+    Component {
+        id: fileC
+        Column {
+            Row {
+                spacing: 10
+                Rectangle { width: 40; height: 40; radius: 10; color: Qt.rgba(row.ink.r, row.ink.g, row.ink.b, 0.14); Label { anchors.centerIn: parent; text: "📄"; font.pixelSize: 20 } }
+                Column { anchors.verticalCenter: parent.verticalCenter; spacing: 1
+                    Label { text: row.fileName || row.body; color: row.ink; font.pixelSize: Math.round(14 * look.textScale); elide: Text.ElideMiddle; width: Math.min(implicitWidth, row.maxW - 100) }
+                    Label { text: (row.size > 0 ? (row.size > 1048576 ? (row.size / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(row.size / 1024)) + " KB") + " · " : "") + (row.media.length ? "Downloaded" : "Click to download"); color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) } }
+            }
+            Item { width: 1; height: metaRow.visible ? 13 : 0 }
+            TapHandler { onTapped: row.openMedia(row.eventId) }
+            HoverHandler { cursorShape: Qt.PointingHandCursor }
+        }
+    }
+    Component {
+        id: locationC
+        Column {
+            spacing: 4
+            Row { spacing: 8; Label { text: "📍"; font.pixelSize: 20 }
+                Label { text: "Shared location"; color: row.ink; font.pixelSize: Math.round(14 * look.textScale); anchors.verticalCenter: parent.verticalCenter } }
+            Label { text: "Open in maps"; color: row.mine ? row.ink : look.accent; font.underline: true; font.pixelSize: Math.round(13 * look.textScale)
+                TapHandler { onTapped: { const c = row.geo.replace("geo:", "").split(";")[0].split(","); files.openUrl("https://www.openstreetmap.org/?mlat=" + c[0] + "&mlon=" + c[1] + "#map=16/" + c[0] + "/" + c[1]) } } }
+            Item { width: 1; height: metaRow.visible ? 13 : 0 }
+        }
+    }
+    Component {
+        id: pollC
+        PollCard { poll: row.poll ? row.poll : ({ question: "", answers: [], ended: false, voters: 0, max: 1 }); mine: row.mine; eventId: row.eventId; local: row.local; width: Math.min(340, row.maxW - 4); color: "transparent" }
     }
 }

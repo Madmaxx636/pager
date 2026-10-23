@@ -12,11 +12,16 @@ ApplicationWindow {
     // Narrow windows show one thing at a time (the list, or the chat), wide ones show both.
     readonly property bool wide: width >= 760
     property bool showingChat: false
+    property bool infoOpen: false
+    readonly property bool roomy: width >= 1040          // room for the info panel beside the chat
 
     // Coming back to the window counts as reading what arrived while it was behind.
     Connections { target: Qt.application; function onStateChanged() { core.setActive(Qt.application.state === Qt.ApplicationActive) } }
 
+    Component.onCompleted: { if (startupDialog === "info") infoOpen = true }
     Recovery { id: recovery }
+    Shortcut { sequence: "Ctrl+Q"; onActivated: Qt.quit() }
+    Shortcut { sequence: "Ctrl+I"; onActivated: win.infoOpen = !win.infoOpen }
 
     Loader {
         anchors.fill: parent
@@ -38,10 +43,17 @@ ApplicationWindow {
             Rectangle { Layout.fillHeight: true; width: 1; color: look.line; visible: win.wide }
             Chat {
                 Layout.fillWidth: true; Layout.fillHeight: true
-                visible: win.wide || win.showingChat
+                visible: (win.wide || win.showingChat) && !(win.infoOpen && !win.roomy)
                 showBack: !win.wide
+                infoOpen: win.infoOpen
                 onBack: win.showingChat = false
+                onToggleInfo: win.infoOpen = !win.infoOpen
                 onRestoreRequested: recovery.open()
+            }
+            InfoPanel {
+                Layout.preferredWidth: win.roomy ? 310 : win.width; Layout.fillHeight: true
+                visible: win.infoOpen && core.currentRoom.length > 0 && (win.roomy || win.showingChat || win.wide)
+                onCloseRequested: win.infoOpen = false
             }
         }
     }
