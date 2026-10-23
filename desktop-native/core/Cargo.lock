@@ -2364,6 +2364,7 @@ dependencies = [
  "matrix-sdk",
  "matrix-sdk-base",
  "mime",
+ "qrcode",
  "serde",
  "serde_json",
  "tokio",
@@ -2607,6 +2608,12 @@ checksum = "200b9ff220857e53e184257720a14553b2f4aa02577d2ed9842d45d4b9654810"
 dependencies = [
  "cc",
 ]
+
+[[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
 
 [[package]]
 name = "quinn"

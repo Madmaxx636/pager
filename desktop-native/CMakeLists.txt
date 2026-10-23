@@ -18,7 +18,7 @@ set_target_properties(pager-native PROPERTIES INSTALL_RPATH "$ORIGIN:$ORIGIN/../
 
 qt_add_resources(pager-native icon PREFIX / FILES pager.svg emoji-names.tsv emoji-groups.tsv palettes.tsv)
 qt_add_qml_module(pager-native URI Pager VERSION 1.0 RESOURCE_PREFIX / QML_FILES
-  qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml qml/PollCard.qml qml/PollDialog.qml qml/Settings.qml)
+  qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml qml/PollCard.qml qml/PollDialog.qml qml/Settings.qml qml/Accounts.qml qml/QrView.qml qml/Networks.js)
 install(TARGETS pager-native RUNTIME DESTINATION bin)
 
 # Tests of the parts that do not need a screen.
@@ -32,7 +32,7 @@ add_test(NAME store COMMAND store-test)
 # The Qt layer on top of the real engine (needs a test homeserver: see tests/engine_live_test.cpp).
 qt_add_executable(engine-live-test tests/engine_live_test.cpp src/engine.cpp src/store.cpp src/models.cpp)
 target_include_directories(engine-live-test PRIVATE src include)
-target_link_libraries(engine-live-test PRIVATE Qt6::Core Qt6::Test pager_core)
+target_link_libraries(engine-live-test PRIVATE Qt6::Core Qt6::Qml Qt6::Test pager_core)
 set_target_properties(engine-live-test PROPERTIES INSTALL_RPATH "$ORIGIN" BUILD_WITH_INSTALL_RPATH ON)
 add_test(NAME engine-live COMMAND engine-live-test)
 
@@ -45,3 +45,11 @@ qt_add_executable(appearance-test tests/appearance_test.cpp src/appearance.cpp)
 target_include_directories(appearance-test PRIVATE src)
 target_link_libraries(appearance-test PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
 add_test(NAME appearance COMMAND appearance-test)
+
+# QML screens with a stand-in engine (tests/tst_*.qml)
+find_package(Qt6 6.4 REQUIRED COMPONENTS QuickTest)
+qt_add_executable(qml-test tests/qml_main.cpp src/appearance.cpp src/fileinfo.cpp src/prefs.h)
+target_include_directories(qml-test PRIVATE src)
+target_compile_definitions(qml-test PRIVATE QUICK_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}/tests")
+target_link_libraries(qml-test PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::QuickTest)
+add_test(NAME qml COMMAND qml-test -platform offscreen)

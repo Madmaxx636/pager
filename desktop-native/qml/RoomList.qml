@@ -7,7 +7,8 @@ Rectangle {
     color: look.panel
     signal opened()
     Recovery { id: recovery }
-    Component.onCompleted: if (startupDialog === "settings") Qt.callLater(settings.open)
+    Accounts { id: accounts }
+    Component.onCompleted: if (startupDialog === "settings") Qt.callLater(settings.open); else if (startupDialog === "accounts") Qt.callLater(accounts.open)
     Settings { id: settings; onRestoreRequested: recovery.open() }
 
     ColumnLayout {
@@ -24,6 +25,7 @@ Rectangle {
                 Menu {
                     id: menu
                     MenuItem { text: core.user; enabled: false }
+                    MenuItem { text: "Chat accounts…"; onTriggered: accounts.open() }
                     MenuItem { text: "Settings"; onTriggered: settings.open() }
                     MenuItem { text: "Restore old messages…"; onTriggered: recovery.open() }
                     MenuItem { text: "Sign out"; onTriggered: core.logout() }

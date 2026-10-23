@@ -1,6 +1,8 @@
 // The Qt side on top of the real engine, against a real homeserver (PAGER_TEST_SERVER and PAGER_TEST_ALICE=name:password; without them this does nothing).
 // A fresh sign-in on a new "device": it must show the account's chats, open one, and send a message that appears at once and is not shown twice.
+#include <QJSEngine>
 #include <QJsonArray>
+#include <QQmlEngine>
 #include <QJsonObject>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -51,6 +53,17 @@ private slots:
         QVERIFY(r->ended.contains("$poll"));
         e.vote("$poll", "a2");                                  // closed: ignored
         QCOMPARE(r->votes.value("$poll").value("@me:demo.test"), QStringList{"a1"});
+    }
+    void serverCallsAnswerTheCallbackAndQrCodesAreSquare() {   // needs no server
+        Engine e(QString(), true);
+        QJSEngine js; js.newQObject(&e); QQmlEngine::setObjectOwnership(&e, QQmlEngine::CppOwnership);
+        QJSValue fn = js.evaluate("(function(status, body) { got = status + ':' + body.error; })");
+        e.api("GET", "/api/bridges", QVariant(), fn);
+        QTRY_VERIFY_WITH_TIMEOUT(js.globalObject().hasProperty("got"), 2000);
+        QCOMPARE(js.globalObject().property("got").toString(), QString("0:Not connected"));
+        const QVariantMap q = e.qr("https://example.com/x");
+        QVERIFY(q.value("size").toInt() >= 21);
+        QCOMPARE(q.value("rows").toList().size(), q.value("size").toInt());
     }
     void popUpsOnlyForNewMessagesFromOthers() {      // needs no server
         Engine e(QString(), true);

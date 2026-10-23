@@ -13,4 +13,6 @@ public:
     Q_INVOKABLE QSize imageSize(const QString &path) const;
     /// Opens a downloaded file with whatever the desktop uses for it.
     Q_INVOKABLE void open(const QString &path) const;
+    Q_INVOKABLE void openUrl(const QString &url) const;
+    Q_INVOKABLE void copy(const QString &text) const;
 };

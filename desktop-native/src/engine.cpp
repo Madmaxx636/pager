@@ -1,6 +1,8 @@
 #include "engine.h"
 #include <QCoreApplication>
 #include <QFileInfo>
+#include <QJSEngine>
+#include <QQmlEngine>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMetaObject>
@@ -69,6 +71,17 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
         const QString key = b.value(QLatin1String("key")).toString();
         m_fetching.remove(key);
         if (b.contains(QLatin1String("path"))) { m_store.setMediaPath(key, b.value(QLatin1String("path")).toString()); m_timeline.touch(key); }
+    } else if (kind == QLatin1String("http")) {
+        const QString key = b.value(QLatin1String("key")).toString();
+        QJSValue cb = m_calls.take(key);
+        if (cb.isCallable()) {
+            QJSEngine *js = qjsEngine(this);
+            const QJsonValue body = b.value(QLatin1String("body"));
+            QJSValue arg = js ? js->toScriptValue(body.toVariant()) : QJSValue();
+            QJSValueList args{QJSValue(b.value(QLatin1String("status")).toInt()), arg};
+            const QJSValue r = cb.call(args);
+            if (r.isError()) qWarning("api callback failed: %s", qPrintable(r.toString()));
+        }
     } else if (kind == QLatin1String("send_failed")) {
         m_problem = QStringLiteral("Could not send: ") + b.value(QLatin1String("error")).toString();
         emit problemChanged();
@@ -233,6 +246,21 @@ void Engine::endPoll(const QString &pollId) {
     m_store.applyLocalEvent(m_current, QJsonObject{{"event_id", QStringLiteral("local-end-%1").arg(m_store.nextLocalId())}, {"type", "org.matrix.msc3381.poll.end"}, {"sender", m_user}, {"origin_server_ts", double(QDateTime::currentMSecsSinceEpoch())}, {"content", content}});
     sendEvent(m_current, QStringLiteral("org.matrix.msc3381.poll.end"), content);
     m_timeline.show(m_current); emit currentChanged();
+}
+
+void Engine::api(const QString &method, const QString &path, const QVariant &body, const QJSValue &callback) {
+    const QString key = QStringLiteral("api-%1").arg(++m_callCounter);
+    if (callback.isCallable()) m_calls.insert(key, callback);
+    if (!m_core) { QTimer::singleShot(0, this, [this, key] { handle(QStringLiteral("http"), QJsonObject{{"key", key}, {"status", 0}, {"body", QJsonObject{{"error", "Not connected"}}}}); }); return; }
+    const QByteArray json = body.isValid() && !body.isNull() ? QJsonDocument::fromVariant(body).toJson(QJsonDocument::Compact) : QByteArray();
+    pager_http(m_core, key.toUtf8().constData(), method.toUtf8().constData(), path.toUtf8().constData(), json.constData());
+}
+
+QVariantMap Engine::qr(const QString &text) const {
+    char *raw = pager_qr(text.toUtf8().constData());
+    const QJsonObject o = QJsonDocument::fromJson(QByteArray(raw)).object();
+    pager_free_string(raw);
+    return o.toVariantMap();
 }
 
 QString Engine::bodyOf(const QString &eventId) const { const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(eventId) : nullptr; return m ? m->body : QString(); }
