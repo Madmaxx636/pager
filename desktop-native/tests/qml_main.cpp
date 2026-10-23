@@ -13,6 +13,11 @@ class MockCore : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString user READ user CONSTANT)
     Q_PROPERTY(QString version READ version CONSTANT)
+    Q_PROPERTY(QString updateState READ upd CONSTANT) Q_PROPERTY(QString updateVersion READ upd CONSTANT) Q_PROPERTY(QString updateNotes READ upd CONSTANT)
+    Q_PROPERTY(QString updateMessage READ upd CONSTANT) Q_PROPERTY(int updateProgress READ prog CONSTANT) Q_PROPERTY(QString appVersion READ upd CONSTANT)
+    Q_PROPERTY(bool recovering READ recovering NOTIFY recoveryChanged)
+    Q_PROPERTY(bool recoveryDone READ recoveryDone NOTIFY recoveryChanged)
+    Q_PROPERTY(QString recoveryMessage READ recoveryMessage NOTIFY recoveryChanged)
 public:
     QString user() const { return QStringLiteral("@me:test"); }
     QString version() const { return QStringLiteral("test"); }
@@ -27,7 +32,16 @@ public:
     }
     Q_INVOKABLE QVariantMap qr(const QString &) const { return QVariantMap{{"size", 21}, {"rows", QVariantList()}}; }
     Q_INVOKABLE void logout() {}
+    QString upd() const { return QStringLiteral("idle"); } int prog() const { return 0; }
+    Q_INVOKABLE void checkForUpdates(bool) {} Q_INVOKABLE void installUpdate() {}
+    bool recovering() const { return false; } bool recoveryDone() const { return m_done; } QString recoveryMessage() const { return m_msg; }
+    Q_INVOKABLE void resetRecovery() { m_msg.clear(); m_done = false; emit recoveryChanged(); }
+    Q_INVOKABLE void recover(const QString &key) { m_lastKey = key; }
+    Q_INVOKABLE QString lastKey() const { return m_lastKey; }
+signals:
+    void recoveryChanged();
 private:
+    bool m_done = false; QString m_msg, m_lastKey;
     QVariantList m_calls; QHash<QString, QPair<int, QVariant>> m_replies;
 };
 

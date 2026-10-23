@@ -94,6 +94,14 @@ private slots:
         e.handle("update_failed", QJsonObject{{"error", "The download doesn't match its checksum, so it was not installed."}});
         QCOMPARE(e.updateState(), QString("error")); QVERIFY(e.updateMessage().contains("checksum"));
     }
+    void lockedMessagesAreCountedForTheBanner() {     // needs no server
+        Engine e(QString(), true);
+        QCOMPARE(e.currentLocked(), 0);
+        e.handle("rooms", QJsonObject{{"rooms", QJsonArray{QJsonObject{{"id", "!maya"}, {"events", QJsonArray{QJsonObject{{"event_id", "$l"}, {"type", "m.room.encrypted"}, {"sender", "@maya:demo.test"}, {"origin_server_ts", 9e12}, {"locked", true}, {"content", QJsonObject{}}}}}}}}});
+        QCOMPARE(e.currentLocked(), 1);
+        e.handle("history", QJsonObject{{"room", "!maya"}, {"events", QJsonArray{QJsonObject{{"event_id", "$l"}, {"type", "m.room.message"}, {"sender", "@maya:demo.test"}, {"origin_server_ts", 9e12}, {"content", QJsonObject{{"msgtype", "m.text"}, {"body", "now readable"}}}}}}});
+        QCOMPARE(e.currentLocked(), 0);
+    }
     void popUpsOnlyForNewMessagesFromOthers() {      // needs no server
         Engine e(QString(), true);
         QSignalSpy pop(&e, &Engine::notify);

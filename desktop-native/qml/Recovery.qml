@@ -18,11 +18,12 @@ Dialog {
             text: "A new sign-in can't read messages from before it existed. Paste the recovery key you saved when you set up Pager's backup and the keys come back from your server."
         }
         TextField {
-            id: keyField; Layout.fillWidth: true; placeholderText: "Recovery key"; enabled: !core.recovering && !core.recoveryDone
+            id: keyField; objectName: "keyField"; Layout.fillWidth: true; placeholderText: "Recovery key"; enabled: !core.recovering && !core.recoveryDone
             color: look.text; font.pixelSize: Math.round(14 * look.textScale); selectByMouse: true
             background: Rectangle { color: look.bg; radius: 8; border.color: keyField.activeFocus ? look.accent : look.line }
             onAccepted: restore.clicked()
         }
+        Button { text: "Paste from clipboard"; flat: true; visible: !core.recovering && !core.recoveryDone; onClicked: { keyField.clear(); keyField.paste(); keyField.forceActiveFocus() } }
         Label {
             Layout.fillWidth: true; wrapMode: Text.Wrap; visible: text.length > 0; font.pixelSize: Math.round(13 * look.textScale)
             text: core.recoveryMessage; color: core.recoveryDone ? look.accent : (core.recovering ? look.muted : "#e5484d")
