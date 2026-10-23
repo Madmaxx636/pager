@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import Pager.Items
 import "Networks.js" as N
 
 // The open chat: header, messages, and the box you write in.
@@ -123,6 +124,7 @@ Rectangle {
         // ---- the messages
         Item {
             Layout.fillWidth: true; Layout.fillHeight: true
+            Wallpaper { anchors.fill: parent; visible: settings.wallpaper !== "none"; wallpaper: settings.wallpaper; dark: look.dark; bg: look.bg; dim: settings.wallpaperDim; photo: settings.wallpaperPhoto }
             ListView {
                 id: msgs
                 anchors.fill: parent

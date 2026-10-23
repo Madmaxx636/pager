@@ -103,6 +103,7 @@ public:
     // ---- the info panel
     Q_INVOKABLE QVariantMap sharedMedia() const;                       // {photos:[{id,w,h}], links:[{id,url,who,when}], files:[{id,name,size,who,kind}]} of what is loaded in the open chat
     Q_INVOKABLE QString photoPath(const QString &eventId);             // a picture's file when it is here (asks for it otherwise; mediaReady(eventId) when it arrives)
+    Q_INVOKABLE QString dataDir() const { return m_dataDir; }
     Q_INVOKABLE QString aliasOf(const QString &roomId) const { return RoomListModel::s_aliases.value(roomId); }
     Q_INVOKABLE void setAlias(const QString &roomId, const QString &name);       // "rename for me": only on your side
     Q_INVOKABLE void muteFor(const QString &roomId, double ms);                   // mute, and unmute by itself later (ms <= 0: until you unmute)

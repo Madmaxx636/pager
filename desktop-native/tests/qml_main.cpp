@@ -7,6 +7,7 @@
 #include "appearance.h"
 #include "iconprovider.h"
 #include "roundedimage.h"
+#include "wallpaper.h"
 #include "fileinfo.h"
 #include "appsettings.h"
 
@@ -56,7 +57,7 @@ class Setup : public QObject {
     Q_OBJECT
 public slots:
     void qmlEngineAvailable(QQmlEngine *e) {
-        e->addImageProvider(QStringLiteral("icon"), new IconProvider); qmlRegisterType<RoundedImage>("Pager.Items", 1, 0, "RoundedImage");
+        e->addImageProvider(QStringLiteral("icon"), new IconProvider); qmlRegisterType<RoundedImage>("Pager.Items", 1, 0, "RoundedImage"); qmlRegisterType<Wallpaper>("Pager.Items", 1, 0, "Wallpaper");
         static MockCore core; static AppSettings settings(QStringLiteral("/tmp/pager-qml-test-settings.json")); static Appearance look(&settings); static FileInfo files;
         e->rootContext()->setContextProperty(QStringLiteral("core"), &core);
         e->rootContext()->setContextProperty(QStringLiteral("look"), &look);

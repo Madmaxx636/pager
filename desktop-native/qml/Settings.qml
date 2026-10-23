@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import Pager.Items
 import "Networks.js" as N
 import "Shortcuts.js" as SC
 
@@ -35,6 +36,8 @@ Dialog {
         ["advanced", "Advanced", "Developer tools", "code-xml", "#475569", "System"], ["about", "About", "Version, server, sign out", "info", "#6b7280", ""]
     ]
     property string find: ""
+    FileDialog { id: photoPick; title: "Choose a wallpaper photo"; nameFilters: ["Pictures (*.png *.jpg *.jpeg *.webp *.bmp)"]
+        onAccepted: { const f = files.importWallpaper(String(selectedFile), core.dataDir()); if (f.length) { settings.set("wallpaperPhoto", f); settings.set("wallpaper", "custom") } } }
     FileDialog { id: stickerAdder; title: "Add stickers"; fileMode: FileDialog.OpenFiles; nameFilters: ["Pictures (*.png *.jpg *.jpeg *.gif *.webp)"]; onAccepted: core.addStickers(selectedFiles.map(u => String(u))) }
     readonly property var visiblePages: pages.filter(p => (p[0] !== "admin" || core.isAdmin) && (find.length === 0 || (p[1] + " " + p[2]).toLowerCase().indexOf(find.toLowerCase()) >= 0))
 
@@ -103,38 +106,101 @@ Dialog {
 
     // =============================================================== pages
     Component { id: appearance
-        SGroup { plain: true; Layout.fillWidth: true; width: parent ? parent.width : 400
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Theme"
                 SBlock {
-                Label { text: "Mode"; color: look.text }
-                Flow { Layout.fillWidth: true; spacing: 6
-                    Repeater { model: [["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black"]]
-                        delegate: Rectangle { height: 32; width: ml.implicitWidth + 24; radius: 16; color: look.palette === "" && look.mode === modelData[0] ? look.accent : look.panel2
-                            Label { id: ml; anchors.centerIn: parent; text: modelData[1]; color: look.palette === "" && look.mode === modelData[0] ? look.accentInk : look.text; font.pixelSize: Math.round(13 * look.textScale) }
-                            TapHandler { onTapped: look.setMode(modelData[0]) } } } }
-                Label { text: "Accent colour"; color: look.text }
-                Flow { Layout.fillWidth: true; spacing: 8
-                    Repeater { model: look.accents()
-                        delegate: Rectangle { width: 34; height: 34; radius: 17; color: modelData.color; border.width: look.palette === "" && look.accentName === modelData.name ? 3 : 0; border.color: look.text; TapHandler { onTapped: look.setAccent(modelData.name) } } }
-                    TextField { width: 110; height: 34; placeholderText: "#rrggbb"; maximumLength: 7; color: look.text; placeholderTextColor: look.muted; background: Rectangle { radius: 17; color: look.panel2 }
-                        onTextEdited: if (/^#[0-9a-fA-F]{6}$/.test(text)) look.setAccent(text) } }
-                Label { text: "Ready-made looks"; color: look.text }
-                Flow { Layout.fillWidth: true; spacing: 8
-                    Repeater { model: look.palettes()
-                        delegate: Rectangle { width: 38; height: 38; radius: 10; color: modelData.bg; border.width: look.palette === modelData.id ? 3 : 1; border.color: look.palette === modelData.id ? look.text : modelData.line
-                            Rectangle { anchors.right: parent.right; anchors.bottom: parent.bottom; width: 20; height: 20; radius: 10; color: modelData.accent; anchors.margins: 4 }
-                            ToolTip.visible: ph.hovered; ToolTip.text: modelData.name; HoverHandler { id: ph } TapHandler { onTapped: look.setPalette(modelData.id) } } } }
+                    Label { text: "Mode"; color: look.text }
+                    Flow { Layout.fillWidth: true; spacing: 6
+                        Repeater { model: [["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black (AMOLED)"]]
+                            delegate: Rectangle { height: 32; width: ml.implicitWidth + 24; radius: 16; color: look.palette === "" && look.mode === modelData[0] ? look.accent : look.panel2
+                                Label { id: ml; anchors.centerIn: parent; text: modelData[1]; color: look.palette === "" && look.mode === modelData[0] ? look.accentInk : look.text; font.pixelSize: Math.round(13 * look.textScale) }
+                                TapHandler { onTapped: look.setMode(modelData[0]) } } } }
+                    Label { text: "Accent colour"; color: look.text }
+                    Flow { Layout.fillWidth: true; spacing: 8
+                        Repeater { model: look.accents()
+                            delegate: Rectangle { width: 34; height: 34; radius: 17; color: modelData.color; border.width: look.palette === "" && look.accentName === modelData.name ? 3 : 0; border.color: look.text; TapHandler { onTapped: look.setAccent(modelData.name) } } }
+                        TextField { width: 110; height: 34; placeholderText: "#rrggbb"; maximumLength: 7; color: look.text; placeholderTextColor: look.muted; background: Rectangle { radius: 17; color: look.panel2 }
+                            onTextEdited: if (/^#[0-9a-fA-F]{6}$/.test(text)) look.setAccent(text) } }
+                    RowLayout { Layout.fillWidth: true
+                        ColumnLayout { Layout.fillWidth: true; spacing: 0
+                            Label { text: "Ready-made looks"; color: look.text }
+                            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); text: "A whole colour set for the app, in every colour: on white, on black, or solid. Choose “Mode and accent” to go back to your own mix." } }
+                        Button { text: look.palette === "" ? "✓ Mode and accent" : "Mode and accent"; flat: true; onClicked: look.setPalette("none") } }
+                    Flow { Layout.fillWidth: true; spacing: 8
+                        Repeater { model: look.palettes()
+                            delegate: Rectangle { width: 38; height: 38; radius: 10; color: modelData.bg; border.width: look.palette === modelData.id ? 3 : 1; border.color: look.palette === modelData.id ? look.text : modelData.line
+                                Rectangle { anchors.right: parent.right; anchors.bottom: parent.bottom; width: 20; height: 20; radius: 10; color: modelData.accent; anchors.margins: 4 }
+                                ToolTip.visible: ph.hovered; ToolTip.text: modelData.name; HoverHandler { id: ph } TapHandler { onTapped: look.setPalette(modelData.id) } } } }
                 }
             }
-            SGroup { title: "Text"
-                SSlider { key: "fontScale"; title: "Text size"; from: 0.8; to: 1.6; step: 0.05; suffix: "×"; decimals: 2 }
-                SChoice { key: "bubbleStyle"; title: "Bubble shape"; options: [["round", "Round"], ["curved", "Curved tail"], ["tail", "Pointed tail"], ["outline", "Outlined"]] }
-                SToggle { key: "colorSenderNames"; title: "Colour people's names in groups" }
-                SToggle { key: "largeEmoji"; title: "Large emoji"; hint: "A message of only a few emoji is shown big, without a bubble" }
+            SGroup { title: "Message bubbles"
+                SBlock { BubblePreview { Layout.fillWidth: true } }
+                SCollapse { title: "Incoming"
+                    SToggle { key: "bubbleNative"; title: "Use native colors"; hint: "Each network's own colour" }
+                    SBlock { Label { text: "Light"; color: look.accent; font.weight: Font.Bold; font.pixelSize: Math.round(12 * look.textScale) } }
+                    SColor { key: "bubbleTheirs"; title: "Color" } SColor { key: "bubbleTheirsText"; title: "Text color" }
+                    SBlock { Label { text: "Dark"; color: look.accent; font.weight: Font.Bold; font.pixelSize: Math.round(12 * look.textScale) } }
+                    SColor { key: "bubbleTheirsDark"; title: "Color" } SColor { key: "bubbleTheirsTextDark"; title: "Text color" }
+                    SChoice { key: "bubbleStyle"; title: "Bubble shape"; options: [["round", "Rounded"], ["curved", "Curved tail"], ["tail", "Pointed tail"], ["outline", "Outlined"]] }
+                    SSlider { key: "bubbleRadius"; title: "Corner radius (0 = default)"; from: 0; to: 24; step: 1 }
+                    SChoice { key: "bubbleBorder"; title: "Border style"; options: [["none", "None"], ["solid", "Solid"], ["dotted", "Dotted"], ["dashed", "Dashed"], ["thick", "Thick"], ["edge", "Bottom edge"], ["dashdot", "Dash dot"]] }
+                    SColor { visible: settings.bubbleBorder !== "none"; key: "bubbleBorderColor"; title: "Border color" }
+                }
+                SCollapse { title: "Outgoing"
+                    SBlock { Label { text: "Light"; color: look.accent; font.weight: Font.Bold; font.pixelSize: Math.round(12 * look.textScale) } }
+                    SColor { key: "bubbleMine"; title: "Color" } SColor { key: "bubbleMineText"; title: "Text color" }
+                    SBlock { Label { text: "Dark"; color: look.accent; font.weight: Font.Bold; font.pixelSize: Math.round(12 * look.textScale) } }
+                    SColor { key: "bubbleMineDark"; title: "Color" } SColor { key: "bubbleMineTextDark"; title: "Text color" }
+                    SChoice { key: "outStyle"; title: "Bubble shape"; options: [["", "Same as incoming"], ["round", "Rounded"], ["curved", "Curved tail"], ["tail", "Pointed tail"], ["outline", "Outlined"]] }
+                    SSlider { key: "outRadius"; title: "Corner radius (-1 = same as incoming)"; from: -1; to: 24; step: 1 }
+                    SChoice { key: "outBorder"; title: "Border style"; options: [["", "Same as incoming"], ["none", "None"], ["solid", "Solid"], ["dotted", "Dotted"], ["dashed", "Dashed"], ["thick", "Thick"], ["edge", "Bottom edge"], ["dashdot", "Dash dot"]] }
+                    SColor { key: "outBorderColor"; title: "Border color" }
+                    SChoice { key: "bubbleFill"; title: "Fill"; hint: "How your own messages are coloured"; options: [["solid", "Solid"], ["gradient", "Gradient"], ["tinted", "Soft tint"], ["glass", "Glass"]] }
+                }
+                SChoice { key: "bubbleDepth"; title: "Depth"; options: [["flat", "Flat"], ["soft", "Soft shadow"], ["raised", "Raised"]] }
+                SSlider { key: "bubbleWidth"; title: "Widest bubble (0 = default)"; hint: "Percent of the chat"; from: 0; to: 95; step: 5; suffix: " %" }
+                SChoice { key: "messageAnimation"; title: "Message animation"; hint: "When a new message appears"; options: [["none", "None"], ["pop", "Pop"], ["slide", "Slide"], ["fade", "Fade"]] }
+                SAction { title: "Reset message bubbles"; hint: "Undo all bubble color and shape changes made here"; button: "Reset"; danger: true
+                    onClicked: { for (const k of ["bubbleFill", "bubbleBorder", "bubbleBorderColor", "outStyle", "outBorder", "outBorderColor", "bubbleMine", "bubbleTheirs", "bubbleMineDark", "bubbleTheirsDark", "bubbleMineText", "bubbleTheirsText", "bubbleMineTextDark", "bubbleTheirsTextDark"]) settings.set(k, "")
+                        settings.set("bubbleStyle", "round"); settings.set("bubbleFill", "solid"); settings.set("bubbleBorder", "none"); settings.set("bubbleDepth", "soft"); settings.set("bubbleRadius", 0); settings.set("outRadius", -1); settings.set("bubbleWidth", 0); settings.set("bubbleNative", false) } }
             }
-            SGroup { title: "Reactions"
+            SGroup { title: "Wallpaper"; footer: "Made in the app, so there is nothing to download. Your own photo stays on this device and is shrunk to save memory."
+                SBlock {
+                    Flow { Layout.fillWidth: true; spacing: 8
+                        Repeater { model: files.wallpapers()
+                            delegate: Rectangle { width: 92; height: 64; radius: 12; color: look.panel2; clip: true; border.width: settings.wallpaper === modelData.id ? 3 : 1; border.color: settings.wallpaper === modelData.id ? look.accent : look.line
+                                Wallpaper { anchors.fill: parent; anchors.margins: 1; wallpaper: modelData.id; dark: look.dark; bg: look.bg }
+                                Label { anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: 6; text: modelData.name; color: look.text; font.pixelSize: 11; font.weight: Font.Medium; style: Text.Outline; styleColor: Qt.rgba(look.bg.r, look.bg.g, look.bg.b, 0.8) }
+                                TapHandler { onTapped: settings.set("wallpaper", modelData.id) } HoverHandler { cursorShape: Qt.PointingHandCursor } } }
+                        Rectangle { width: 92; height: 64; radius: 12; color: look.panel2; clip: true; border.width: settings.wallpaper === "custom" ? 3 : 1; border.color: settings.wallpaper === "custom" ? look.accent : look.line
+                            Wallpaper { anchors.fill: parent; anchors.margins: 1; visible: settings.wallpaperPhoto.length > 0; wallpaper: "custom"; photo: settings.wallpaperPhoto; bg: look.bg }
+                            Label { anchors.centerIn: parent; visible: settings.wallpaperPhoto.length === 0; text: "Add photo…"; color: look.muted; font.pixelSize: 11 }
+                            TapHandler { onTapped: settings.wallpaperPhoto.length ? settings.set("wallpaper", "custom") : photoPick.open() } HoverHandler { cursorShape: Qt.PointingHandCursor } }
+                    }
+                }
+                SAction { title: "Your own photo"; hint: settings.wallpaperPhoto.length ? "Saved on this device" : "Pick a picture from your computer"; button: settings.wallpaperPhoto.length ? "Change…" : "Choose…"; onClicked: photoPick.open() }
+                SAction { visible: settings.wallpaperPhoto.length > 0; title: "Remove your photo"; button: "Remove"; danger: true; onClicked: { settings.set("wallpaperPhoto", ""); if (settings.wallpaper === "custom") settings.set("wallpaper", "none") } }
+                SSlider { key: "wallpaperDim"; title: "Darken"; hint: settings.wallpaperDim ? "" : "Off"; from: 0; to: 70; step: 5; suffix: " %" }
+            }
+            SGroup { title: "Screen effects"
+                SToggle { key: "screenEffects"; title: "Screen effects"; hint: "Confetti, balloons and more play when a message says something like “congrats”, “happy birthday” or “I love you”. Nothing extra is sent." }
+            }
+            SGroup { title: "Size & font"
+                SChoice { key: "uiScale"; title: "App size"; hint: "Makes everything bigger or smaller, not only the text"; options: [["small", "Small"], ["medium", "Medium"], ["large", "Large"]] }
+                SChoice { key: "fontFamily"; title: "Font"; options: [["system", "System"], ["serif", "Serif"], ["rounded", "Rounded"], ["humanist", "Humanist"], ["mono", "Monospace"], ["sf", "iPhone style"], ["googlesans", "Google style"], ["roboto", "Roboto"], ["readable", "Easy to read"]] }
+            }
+            SGroup { title: "Text & messages"
+                SChoice { key: "reactionStyle"; title: "Reactions"; options: [["filled", "Filled"], ["outline", "Outline"]] }
+                SToggle { key: "deleteAtSource"; title: "Delete on the other network too"; hint: "When you delete a chat in Pager, also delete it on Signal, WhatsApp or Google Messages. It can't be undone, so you are asked each time" }
+                SSlider { key: "fontScale"; title: "Text size"; from: 0.85; to: 1.4; step: 0.05; suffix: "×"; decimals: 2 }
+                SChoice { key: "avatarShape"; title: "Avatar shape"; options: [["circle", "Circle"], ["squircle", "Rounded square"]] }
+                SToggle { key: "colorSenderNames"; title: "Color sender names in groups" }
+                SToggle { key: "largeEmoji"; title: "Large emoji"; hint: "Emoji-only messages are shown big" }
+            }
+            SGroup { title: "Reactions"; footer: "Quick reactions are the emoji shown when you react to a message."
                 SList { key: "quickReactions"; title: "Quick reactions"; hint: "The row of emoji that appears when you react to a message"; emojiPicker: true }
-                SToggle { key: "doubleTapReact"; title: "Double-click a message to react" }
+                SToggle { key: "doubleTapReact"; title: "Double-click to react"; hint: "Double-click a message to add " + (settings.doubleTapEmoji || "👍") }
+                SToggle { key: "swipeToReply"; title: "Swipe to reply"; hint: "Swipe a message to the right (touch screens, or two fingers on a trackpad)" }
             }
         }
     }

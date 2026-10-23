@@ -60,3 +60,7 @@ QString FileInfo::tone(const QString &kind) const {
     f.write("data"); f.write(le32(bytes)); f.write(reinterpret_cast<const char *>(pcm.constData()), bytes);
     return path;
 }
+
+#include "wallpaper.h"
+QVariantList FileInfo::wallpapers() const { return Wallpaper::list(); }
+QString FileInfo::importWallpaper(const QString &file, const QString &dir) const { return Wallpaper::importPhoto(file, dir); }
