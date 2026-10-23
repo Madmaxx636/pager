@@ -162,3 +162,74 @@ fn a_new_device_gets_old_messages_back_with_the_recovery_key() {
     pager_stop(engine);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn reactions_files_and_pictures_work_in_an_encrypted_chat() {
+    let (Ok(server), Some((alice, apw)), Some((bob, bpw))) = (std::env::var("PAGER_TEST_SERVER"), creds("PAGER_TEST_ALICE"), creds("PAGER_TEST_BOB")) else { eprintln!("no test server given: skipping"); return };
+    let dir = std::env::temp_dir().join(format!("pager-media-{}", std::process::id())); let _ = std::fs::remove_dir_all(&dir);
+    let (tx, rx) = channel::<(String, Value)>(); let tx = Box::leak(Box::new(tx));
+    let dirc = CString::new(dir.to_str().unwrap()).unwrap();
+    let engine = pager_start(dirc.as_ptr(), on_event, tx as *mut _ as *mut c_void);
+    assert!(wait_for(&rx, 20, |k, v| k == "state" && v["signedIn"] == false).is_some());
+    let (hs, u, p) = (CString::new(server.clone()).unwrap(), CString::new(alice.clone()).unwrap(), CString::new(apw).unwrap());
+    pager_login(engine, hs.as_ptr(), u.as_ptr(), p.as_ptr());
+    assert!(wait_for(&rx, 60, |k, v| k == "state" && v["signedIn"] == true).is_some());
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (room_id, bob_client, first_id) = rt.block_on(async {
+        let c = Client::builder().homeserver_url(&server).build().await.unwrap();
+        c.matrix_auth().login_username(&bob, &bpw).send().await.unwrap();
+        c.sync_once(SyncSettings::default()).await.unwrap();
+        let mut req = CreateRoom::new();
+        req.invite = vec![format!("@{alice}:{}", c.user_id().unwrap().server_name()).try_into().unwrap()];
+        req.initial_state = vec![serde_json::from_value(serde_json::json!({ "type": "m.room.encryption", "state_key": "", "content": { "algorithm": "m.megolm.v1.aes-sha2" } })).unwrap()];
+        let room = c.create_room(req).await.unwrap();
+        (room.room_id().to_string(), c, String::new())
+    });
+    let _ = first_id;
+    assert!(wait_for(&rx, 60, |k, v| k == "rooms" && v["rooms"].as_array().into_iter().flatten().any(|r| r["id"] == room_id.as_str())).is_some());
+    let bob_room = || bob_client.get_room(room_id.as_str().try_into().unwrap()).unwrap();
+    let (msg_id, _) = rt.block_on(async {
+        let room = bob_room();
+        for _ in 0..20 { bob_client.sync_once(SyncSettings::default().timeout(Duration::from_millis(500))).await.ok(); if room.encryption_state().is_encrypted() { break; } }
+        let r = room.send(RoomMessageEventContent::text_plain("react to me")).await.unwrap();
+        // bob also sends a small encrypted file
+        let png = vec![137u8, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4];
+        let f = room.send_attachment("pic.png", &"image/png".parse().unwrap(), png, matrix_sdk::attachment::AttachmentConfig::new()).await.unwrap();
+        (r.response.event_id.to_string(), f.event_id.to_string())
+    });
+    let seen = wait_for(&rx, 60, |k, v| k == "rooms" && has_body(v, &room_id, "react to me")).expect("message");
+    let room = seen["rooms"].as_array().unwrap().iter().find(|r| r["id"] == room_id.as_str()).unwrap().clone();
+    let file_ev = room["events"].as_array().unwrap().iter().find(|e| e["content"]["body"] == "pic.png").expect("the file message").clone();
+
+    // alice reacts and sends a file through the engine
+    let rid = CString::new(room_id.clone()).unwrap();
+    let content = CString::new(serde_json::json!({ "m.relates_to": { "rel_type": "m.annotation", "event_id": msg_id, "key": "👍" } }).to_string()).unwrap();
+    pager_send_event(engine, rid.as_ptr(), c"m.reaction".as_ptr(), content.as_ptr(), c"t1".as_ptr());
+    let sent = wait_for(&rx, 60, |k, v| (k == "sent" || k == "send_failed") && v["txn"] == "t1").unwrap();
+    assert_eq!(sent["event_id"].is_string(), true, "{sent}");
+    let up = dir.join("hello.txt"); std::fs::write(&up, "file from alice").unwrap();
+    let upc = CString::new(up.to_str().unwrap()).unwrap();
+    pager_send_file(engine, rid.as_ptr(), upc.as_ptr(), c"text/plain".as_ptr(), c"".as_ptr(), 0, 0, c"t2".as_ptr());
+    let sent = wait_for(&rx, 60, |k, v| (k == "sent" || k == "send_failed") && v["txn"] == "t2").unwrap();
+    assert!(sent["event_id"].is_string(), "{sent}");
+    let (heard, redact_ok) = rt.block_on(async {
+        let room = bob_room(); let end = Instant::now() + Duration::from_secs(60); let (mut react, mut file) = (false, false);
+        while Instant::now() < end && !(react && file) {
+            bob_client.sync_once(SyncSettings::default().timeout(Duration::from_secs(2))).await.ok();
+            let m = room.messages(matrix_sdk::room::MessagesOptions::backward()).await.unwrap();
+            for e in &m.chunk { let j = e.raw().json().get(); react |= j.contains("m.annotation"); file |= j.contains("hello.txt"); }
+        }
+        (react && file, true)
+    });
+    assert!(heard && redact_ok, "bob should see alice's reaction and her file");
+
+    // alice fetches bob's encrypted picture
+    let key = CString::new("k1").unwrap(); let cj = CString::new(file_ev["content"].to_string()).unwrap();
+    pager_fetch_media(engine, key.as_ptr(), cj.as_ptr(), false);
+    let m = wait_for(&rx, 60, |k, v| k == "media" && v["key"] == "k1").unwrap();
+    let bytes = std::fs::read(m["path"].as_str().unwrap_or_else(|| panic!("{m}"))).unwrap();
+    assert_eq!(bytes, vec![137u8, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4], "the decrypted picture should match");
+    pager_stop(engine);
+    let _ = std::fs::remove_dir_all(&dir);
+}
