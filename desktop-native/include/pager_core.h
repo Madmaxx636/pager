@@ -15,6 +15,10 @@ void pager_logout(PagerEngine *e);
 void pager_load_history(PagerEngine *e, const char *room_id, const char *from);
 void pager_send_text(PagerEngine *e, const char *room_id, const char *body);
 // Opens your history on a new device with the recovery key the other Pager apps showed you. Progress arrives as "recovery", the end as "recovered".
+void pager_send_event(PagerEngine *e, const char *room_id, const char *event_type, const char *content_json, const char *txn);
+void pager_redact(PagerEngine *e, const char *room_id, const char *event_id);
+void pager_send_file(PagerEngine *e, const char *room_id, const char *path, const char *mime_type, const char *caption, unsigned width, unsigned height, const char *txn);
+void pager_fetch_media(PagerEngine *e, const char *key, const char *content_json, bool thumbnail);
 void pager_recover(PagerEngine *e, const char *recovery_key);
 // Says you have read up to this event.
 void pager_mark_read(PagerEngine *e, const char *room_id, const char *event_id);

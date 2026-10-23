@@ -206,6 +206,98 @@ pub extern "C" fn pager_send_text(h: *mut Arc<Engine>, room_id: *const c_char, b
     });
 }
 
+/// Sends any event: a reaction, an edit, a reply, a poll, a vote... [content_json] is the event's content exactly as Matrix defines it.
+/// [txn] is whatever the caller wants to hear back: the answer is "sent" {room, txn, event_id} or "send_failed" {room, txn, error}.
+#[no_mangle]
+pub extern "C" fn pager_send_event(h: *mut Arc<Engine>, room_id: *const c_char, event_type: *const c_char, content_json: *const c_char, txn: *const c_char) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (rid, ty, content, txn) = (s(room_id), s(event_type), s(content_json), s(txn));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let fail = |why: String| e2.tell.say("send_failed", &json!({ "room": rid, "txn": txn, "error": why }));
+        let Some(client) = e2.client() else { return fail("Not signed in".into()) };
+        let Ok(id) = OwnedRoomId::try_from(rid.as_str()) else { return fail("Bad chat id".into()) };
+        let Some(room) = client.get_room(&id) else { return fail("That chat isn't available".into()) };
+        let Ok(body) = serde_json::from_str::<Value>(&content) else { return fail("Bad message".into()) };
+        match room.send_raw(&ty, body).await {
+            Ok(r) => e2.tell.say("sent", &json!({ "room": rid, "txn": txn, "event_id": r.response.event_id })),
+            Err(err) => fail(err.to_string()),
+        }
+    });
+}
+
+/// Removes a message (or a reaction) for everyone.
+#[no_mangle]
+pub extern "C" fn pager_redact(h: *mut Arc<Engine>, room_id: *const c_char, event_id: *const c_char) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (rid, eid) = (s(room_id), s(event_id));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let Some(client) = e2.client() else { return };
+        let (Ok(id), Ok(ev)) = (OwnedRoomId::try_from(rid.as_str()), matrix_sdk::ruma::OwnedEventId::try_from(eid.as_str())) else { return };
+        let Some(room) = client.get_room(&id) else { return };
+        if let Err(err) = room.redact(&ev, None, None).await { e2.tell.problem("could not delete", err); }
+    });
+}
+
+/// Sends a file or picture from this computer (encrypted automatically in encrypted chats). Answers like pager_send_event.
+/// [width] and [height] are the picture's size, or 0.
+#[no_mangle]
+pub extern "C" fn pager_send_file(h: *mut Arc<Engine>, room_id: *const c_char, path: *const c_char, mime_type: *const c_char, caption: *const c_char, width: u32, height: u32, txn: *const c_char) {
+    use matrix_sdk::attachment::{AttachmentConfig, AttachmentInfo, BaseImageInfo};
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (rid, path, mime_s, caption, txn) = (s(room_id), s(path), s(mime_type), s(caption), s(txn));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let fail = |why: String| e2.tell.say("send_failed", &json!({ "room": rid, "txn": txn, "error": why }));
+        let Some(client) = e2.client() else { return fail("Not signed in".into()) };
+        let Ok(id) = OwnedRoomId::try_from(rid.as_str()) else { return fail("Bad chat id".into()) };
+        let Some(room) = client.get_room(&id) else { return fail("That chat isn't available".into()) };
+        let data = match std::fs::read(&path) { Ok(d) => d, Err(err) => return fail(format!("Couldn't read the file: {err}")) };
+        let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into());
+        let mime: mime::Mime = mime_s.parse().unwrap_or(mime::APPLICATION_OCTET_STREAM);
+        let mut cfg = AttachmentConfig::new();
+        if mime.type_() == mime::IMAGE && width > 0 && height > 0 {
+            cfg = cfg.info(AttachmentInfo::Image(BaseImageInfo { width: Some(width.into()), height: Some(height.into()), size: matrix_sdk::ruma::UInt::new(data.len() as u64), blurhash: None, is_animated: None }));
+        }
+        if !caption.is_empty() { cfg = cfg.caption(Some(matrix_sdk::ruma::events::room::message::TextMessageEventContent::plain(caption.clone()))); }
+        match room.send_attachment(name, &mime, data, cfg).await {
+            Ok(r) => e2.tell.say("sent", &json!({ "room": rid, "txn": txn, "event_id": r.event_id })),
+            Err(err) => fail(err.to_string()),
+        }
+    });
+}
+
+/// Fetches a picture or file of a message and saves it under the data folder (decrypting it if it was sent encrypted).
+/// [content_json] is the message's content (it has the "url" or the encrypted "file"). The answer is "media" {key, path} or {key, error}.
+#[no_mangle]
+pub extern "C" fn pager_fetch_media(h: *mut Arc<Engine>, key: *const c_char, content_json: *const c_char, thumbnail: bool) {
+    use matrix_sdk::media::{MediaFormat, MediaRequestParameters};
+    use matrix_sdk::ruma::events::room::MediaSource;
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (key, content) = (s(key), s(content_json));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let fail = |why: String| e2.tell.say("media", &json!({ "key": key, "error": why }));
+        let Some(client) = e2.client() else { return fail("Not signed in".into()) };
+        let Ok(c) = serde_json::from_str::<Value>(&content) else { return fail("Bad message".into()) };
+        let source_json = if thumbnail && (c.get("info").and_then(|i| i.get("thumbnail_url")).is_some() || c.get("info").and_then(|i| i.get("thumbnail_file")).is_some()) {
+            let i = &c["info"]; if let Some(f) = i.get("thumbnail_file") { json!({ "file": f }) } else { json!({ "url": i["thumbnail_url"] }) }
+        } else { c.clone() };
+        let source: MediaSource = match serde_json::from_value(source_json) { Ok(m) => m, Err(_) => return fail("This message has no file".into()) };
+        let ext = c.get("body").and_then(|b| b.as_str()).and_then(|b| std::path::Path::new(b).extension()).map(|x| x.to_string_lossy().into_owned()).unwrap_or_default();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        std::hash::Hash::hash(&(&key, thumbnail), &mut hasher);
+        let file = e2.dir.join("media").join(format!("{:016x}{}", std::hash::Hasher::finish(&hasher), if ext.is_empty() { String::new() } else { format!(".{ext}") }));
+        if file.exists() { return e2.tell.say("media", &json!({ "key": key, "path": file })); }
+        let _ = std::fs::create_dir_all(file.parent().unwrap());
+        match client.media().get_media_content(&MediaRequestParameters { source, format: MediaFormat::File }, false).await {
+            Ok(bytes) => match std::fs::write(&file, bytes) { Ok(_) => e2.tell.say("media", &json!({ "key": key, "path": file })), Err(err) => fail(err.to_string()) },
+            Err(err) => fail(err.to_string()),
+        }
+    });
+}
+
 /// Opens your history on a new device: [recovery_key] is the code the other Pager apps showed you (the standard Matrix recovery key). The keys it unlocks
 /// are copied from the server's backup into this device, room by room; each step is reported as "recovery" and the end as "recovered".
 #[no_mangle]
