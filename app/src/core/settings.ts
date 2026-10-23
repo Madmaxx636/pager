@@ -313,6 +313,17 @@ export function effective(r: AppSettings): AppSettings {
   return s;
 }
 
+/** Any CSS colour as #rrggbb. Chromium reports some colours as color(srgb …), which the window's title bar (the minimise, maximise and close buttons) cannot read. */
+export function cssToHex(css: string): string {
+  try {
+    const c = document.createElement("canvas"); c.width = c.height = 1;
+    const x = c.getContext("2d", { willReadFrequently: true })!;
+    x.fillStyle = "#0b0e13"; x.fillStyle = css; x.fillRect(0, 0, 1, 1);
+    const [r, g, b] = x.getImageData(0, 0, 1, 1).data;
+    return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+  } catch { return "#0b0e13"; }
+}
+
 export const getSettings = () => state;
 /** Your own choices, without E-ink's overrides (this is what gets saved and shown on the settings page). */
 export const getRawSettings = () => raw;
@@ -463,6 +474,6 @@ export function applyTheme(s: AppSettings) {
   // Linux desktop: the title bar and its window buttons take the theme's colours.
   if (window.pagerDesktop?.platform === "linux") {
     r.dataset.titlebar = "";
-    window.requestAnimationFrame(() => { const cs = getComputedStyle(document.body); window.pagerDesktop?.setTitleBar?.({ color: cs.backgroundColor, symbolColor: cs.color }); });
+    window.requestAnimationFrame(() => { const bar = document.querySelector(".titlebar") ?? document.body; window.pagerDesktop?.setTitleBar?.({ color: cssToHex(getComputedStyle(bar).backgroundColor), symbolColor: cssToHex(getComputedStyle(document.body).color) }); });
   }
 }
