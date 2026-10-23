@@ -1372,3 +1372,53 @@ QVariantMap Engine::storiesInfo() const {
     }
     return {};
 }
+
+// ---- sync settings -------------------------------------------------------------------------------------------------------------------------------
+namespace {
+struct SyncGroup { const char *id, *label, *hint; QStringList keys; };
+const QVector<SyncGroup> &syncGroupTable() {
+    static const QVector<SyncGroup> t = {
+        {"look", "Colours and theme", "Mode, accent, looks, wallpaper, font, text size, avatars", {"themeMode", "look", "accent", "accentCustom", "palette", "wallpaper", "fontFamily", "fontScale", "avatarShape", "colorSenderNames", "largeEmoji", "timeFormat"}},
+        {"bubbles", "Bubbles and messages", "Bubble style, fill, depth, animations, effects", {"bubbleStyle", "bubbleFill", "bubbleBorder", "bubbleBorderColor", "outStyle", "outRadius", "outBorder", "outBorderColor", "bubbleMineDark", "bubbleTheirsDark", "bubbleMineText", "bubbleTheirsText", "bubbleMineTextDark", "bubbleTheirsTextDark", "bubbleNative", "bubbleMine", "bubbleTheirs", "bubbleRadius", "bubbleWidth", "wallpaperDim", "bubbleDepth", "messageAnimation", "screenEffects", "reactionStyle"}},
+        {"reactions", "Reactions", "Double-click reaction and swipe to reply", {"doubleTapReact", "doubleTapEmoji", "swipeToReply"}},
+        {"list", "Chat list", "What each row shows, filters, hidden networks", {"showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories"}},
+        {"notifications", "Notifications", "What alerts you, quiet hours, previews", {"notifEnabled", "accountAlerts", "updateAlerts", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin"}},
+        {"sounds", "Sounds", "Send, receive and reaction sounds", {"convoSounds", "sendSound", "receiveSound", "reactionSound"}},
+        {"gifs", "GIF search keys", "Your GIPHY and KLIPY keys (kept on your own server)", {"gifKeys"}},
+        {"behaviour", "Chat behaviour", "Read marks, typing, downloads, link previews, confirmations", {"lowData", "lowEnd", "markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider"}},
+        {"desktop", "Desktop style", "The desktop look and extra motion (computers only)", {"skin", "skinAccent", "fancyMotion"}},
+    };
+    return t;
+}
+}
+QVariantList Engine::syncGroups() const {
+    QVariantList out; for (const SyncGroup &g : syncGroupTable()) if (QLatin1String(g.id) != QLatin1String("desktop")) out << QVariantMap{{"id", QString::fromLatin1(g.id)}, {"label", QString::fromUtf8(g.label)}, {"hint", QString::fromUtf8(g.hint)}};
+    return out;
+}
+void Engine::saveSyncedSettings(const QStringList &ids) {
+    if (!m_settings) return;
+    QJsonObject settings = m_savedSync.value(QLatin1String("settings")).toObject();
+    for (const SyncGroup &g : syncGroupTable()) if (ids.contains(QLatin1String(g.id))) for (const QString &k : g.keys) if (m_settings->contains(k)) settings.insert(k, QJsonValue::fromVariant(m_settings->value(k)));
+    const QJsonObject saved{{"v", 3}, {"savedAt", double(QDateTime::currentMSecsSinceEpoch())}, {"from", QStringLiteral("Desktop app (native)")}, {"settings", settings}};
+    call(QStringLiteral("PUT"), QStringLiteral("/_matrix/client/v3/user/%1/account_data/app.pager.sync.desktop").arg(pct(m_user)), saved.toVariantMap(), [this, saved](int status, const QJsonValue &) {
+        if (status >= 200 && status < 300) { m_savedSync = saved; emit syncSaved(QString()); } else emit syncSaved(QStringLiteral("Couldn't save to your account."));
+    });
+}
+void Engine::fetchSyncedSettings() {
+    call(QStringLiteral("GET"), QStringLiteral("/_matrix/client/v3/user/%1/account_data/app.pager.sync.desktop").arg(pct(m_user)), QVariant(), [this](int status, const QJsonValue &v) {
+        const QJsonObject o = v.toObject();
+        if (status != 200 || o.value(QLatin1String("v")).toInt() != 3 || !o.value(QLatin1String("settings")).isObject()) { m_savedSync = QJsonObject(); emit syncFetched(QVariantMap()); return; }
+        m_savedSync = o; const QJsonObject st = o.value(QLatin1String("settings")).toObject(); QStringList have;
+        for (const SyncGroup &g : syncGroupTable()) { bool all = true; for (const QString &k : g.keys) if (!st.contains(k)) all = false; if (all) have << QString::fromLatin1(g.id); }
+        emit syncFetched(QVariantMap{{"savedAt", o.value(QLatin1String("savedAt")).toDouble()}, {"from", o.value(QLatin1String("from")).toString()}, {"groups", have}});
+    });
+}
+int Engine::loadSyncedSettings(const QStringList &ids) {
+    if (!m_settings) return 0;
+    const QJsonObject st = m_savedSync.value(QLatin1String("settings")).toObject(); int n = 0;
+    for (const SyncGroup &g : syncGroupTable()) if (ids.contains(QLatin1String(g.id))) for (const QString &k : g.keys) if (st.contains(k) && m_settings->contains(k)) {
+        const QVariant nv = st.value(k).toVariant();
+        if (QJsonValue::fromVariant(m_settings->value(k)) != st.value(k)) { m_settings->set(k, nv); ++n; }
+    }
+    return n;
+}

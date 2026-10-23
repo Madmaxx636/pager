@@ -410,11 +410,16 @@ Dialog {
     }
     Component { id: storage
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "Settings backup"
+            SGroup { title: "Sync settings"; footer: "Choose which settings to copy between your computers and browsers. Nothing is copied unless you press the button."
+                SAction { title: "Sync settings…"; hint: "Save from this device or load onto it"; button: "Open"; onClicked: syncDlg.openNow() }
+            }
+            SGroup { title: "Back up settings"; footer: "Saves every setting as a file, so you can load it on another device."
                 SAction { title: "Export settings"; hint: "Save your settings to a file"; button: "Export…"; onClicked: exportDialog.open() }
                 SAction { title: "Import settings"; hint: "Load settings saved with Export"; button: "Import…"; onClicked: importDialog.open() }
-                SAction { title: "Reset all settings"; hint: "Back to how Pager starts"; button: "Reset…"; danger: true; onClicked: resetConfirm.open() }
-                Label { visible: dlg.note.length > 0; text: dlg.note; color: look.accent; Layout.fillWidth: true; wrapMode: Text.Wrap }
+                SBlock { visible: dlg.note.length > 0; Label { text: dlg.note; color: look.accent; Layout.fillWidth: true; wrapMode: Text.Wrap } }
+            }
+            SGroup { title: "Reset"; footer: "Puts every setting back to its default. Your pages and accounts aren't touched."
+                SAction { title: "Reset all settings"; button: "Reset…"; danger: true; onClicked: resetConfirm.open() }
             }
         }
     }
@@ -493,6 +498,32 @@ Dialog {
     Dialog { id: renameLabel; property string old; modal: true; anchors.centerIn: Overlay.overlay; title: "Rename label"; standardButtons: Dialog.Cancel | Dialog.Ok; background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
         TextField { id: renameField; width: 300; color: look.text; background: Rectangle { color: look.bg; radius: 8; border.color: look.line } }
         onAccepted: core.renameLabel(old, renameField.text) }
+    Dialog {
+        id: syncDlg
+        property var saved: ({}); property bool ready: false; property var saveIds: []; property var loadIds: []; property string msg: ""
+        function openNow() { saveIds = []; loadIds = []; msg = ""; ready = false; saved = ({}); core.fetchSyncedSettings(); open() }
+        Connections { target: core
+            function onSyncFetched(info) { syncDlg.saved = info; syncDlg.ready = true }
+            function onSyncSaved(err) { syncDlg.msg = err.length ? err : "Saved."; if (!err.length) { syncDlg.saveIds = []; core.fetchSyncedSettings() } } }
+        modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(480, Overlay.overlay ? Overlay.overlay.width - 32 : 480); height: Math.min(640, Overlay.overlay ? Overlay.overlay.height - 40 : 640); title: "Sync settings"; standardButtons: Dialog.Close
+        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+        component Pick: Repeater { property var picked; signal flip(string id); property var only: null
+            delegate: CheckBox { visible: !parent.only || parent.only.indexOf(modelData.id) >= 0; height: visible ? implicitHeight : 0; text: modelData.label + "  ·  " + modelData.hint; checked: parent.picked.indexOf(modelData.id) >= 0; onToggled: parent.flip(modelData.id) } }
+        contentItem: ScrollView { clip: true; contentWidth: availableWidth
+            ColumnLayout { width: parent.width; spacing: 6
+                Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; text: "Settings stay on each device. Here you choose what to copy between your computers and browsers. Phones and tablets have their own." }
+                Label { text: "Save from this device"; color: look.accent; font.weight: Font.Bold; Layout.topMargin: 6 }
+                Pick { model: core.syncGroups(); picked: syncDlg.saveIds; onFlip: (id) => { const a = syncDlg.saveIds.slice(); const i = a.indexOf(id); if (i >= 0) a.splice(i, 1); else a.push(id); syncDlg.saveIds = a } }
+                Button { text: "Save to my account"; highlighted: true; enabled: syncDlg.saveIds.length > 0; onClicked: { syncDlg.msg = ""; core.saveSyncedSettings(syncDlg.saveIds) } }
+                Label { text: "Load onto this device"; color: look.accent; font.weight: Font.Bold; Layout.topMargin: 10 }
+                Label { visible: !syncDlg.ready; text: "Looking…"; color: look.muted }
+                Label { visible: syncDlg.ready && !(syncDlg.saved.groups && syncDlg.saved.groups.length); text: "Nothing has been saved yet. Save from your other device first."; color: look.muted }
+                Label { visible: !!(syncDlg.saved.groups && syncDlg.saved.groups.length); text: syncDlg.saved.groups ? "Last saved " + new Date(syncDlg.saved.savedAt).toLocaleString() + " from " + syncDlg.saved.from + "." : ""; color: look.muted; font.pixelSize: 12 }
+                Pick { model: core.syncGroups(); only: syncDlg.saved.groups || []; picked: syncDlg.loadIds; onFlip: (id) => { const a = syncDlg.loadIds.slice(); const i = a.indexOf(id); if (i >= 0) a.splice(i, 1); else a.push(id); syncDlg.loadIds = a } }
+                Button { visible: !!(syncDlg.saved.groups && syncDlg.saved.groups.length); text: "Load onto this device"; highlighted: true; enabled: syncDlg.loadIds.length > 0; onClicked: { const n = core.loadSyncedSettings(syncDlg.loadIds); syncDlg.msg = n ? "Changed " + n + " setting" + (n === 1 ? "" : "s") + " on this device." : "Nothing to change: this device already matches."; syncDlg.loadIds = [] } }
+                Label { visible: syncDlg.msg.length > 0; text: syncDlg.msg; color: look.accent }
+            } }
+    }
     Dialog { id: resetConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Reset all settings?"; standardButtons: Dialog.Cancel | Dialog.Ok; background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
         Label { text: "Everything goes back to how Pager starts."; color: look.text } onAccepted: { settings.reset(); dlg.note = "Settings reset." } }
     Dialog { id: encryptAllConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Encrypt all my pages?"; standardButtons: Dialog.Cancel | Dialog.Ok; width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420); background: Rectangle { color: look.panel; radius: 12; border.color: look.line }

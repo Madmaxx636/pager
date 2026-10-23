@@ -14,11 +14,11 @@ Popup {
     onOpened: { ring(); beat.restart(); giveUp.interval = calling ? 45000 : 12000; giveUp.restart(); shake.restart() }
     onClosed: { beat.stop(); giveUp.stop(); shake.stop() }
     function ring() { sound.source = "file://" + files.tone(calling ? "ring" : "nudge"); sound.play() }
-    Loader { id: soundLoader; source: "AttentionSound.qml"; onLoaded: item.objectName = "attn" }
+    Loader { id: soundLoader; active: false; source: "AttentionSound.qml"; onLoaded: soundProxy.play() }
     property alias sound: soundProxy
     QtObject { id: soundProxy
         property string source: ""
-        function play() { if (soundLoader.item) { soundLoader.item.source = source; soundLoader.item.play() } } }
+        function play() { if (!soundLoader.active) { soundLoader.active = true; return } if (soundLoader.item) { soundLoader.item.source = source; soundLoader.item.play() } } }
     Timer { id: beat; interval: pop.calling ? 2600 : 1800; repeat: true; onTriggered: pop.ring() }
     Timer { id: giveUp; onTriggered: pop.close() }
     background: Rectangle { color: Qt.rgba(0, 0, 0, 0.78) }

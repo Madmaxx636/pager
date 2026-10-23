@@ -255,6 +255,27 @@ fn reactions_files_and_pictures_work_in_an_encrypted_chat() {
     let m = wait_for(&rx, 60, |k, v| k == "media" && v["key"] == "k1").unwrap();
     let bytes = std::fs::read(m["path"].as_str().unwrap_or_else(|| panic!("{m}"))).unwrap();
     assert_eq!(bytes, vec![137u8, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4], "the decrypted picture should match");
+    // a picture that disappears after viewing (extra fields in the message), sent through the encrypted path
+    let once = dir.join("once.png"); std::fs::write(&once, vec![137u8, 80, 78, 71, 13, 10, 26, 10, 9, 9, 9, 9]).unwrap();
+    let oncec = CString::new(once.to_str().unwrap()).unwrap();
+    let extra = CString::new(serde_json::json!({ "com.beeper.view_limited": { "type": "count", "count": 1 }, "app.pager.attention": { "kind": "image" } }).to_string()).unwrap();
+    pager_send_media(engine, rid.as_ptr(), oncec.as_ptr(), c"image/png".as_ptr(), c"".as_ptr(), 4, 4, c"t4".as_ptr(), extra.as_ptr());
+    let sent = wait_for(&rx, 60, |k, v| (k == "sent" || k == "send_failed") && v["txn"] == "t4").unwrap();
+    assert!(sent["event_id"].is_string(), "{sent}");
+    let once_seen = rt.block_on(async {
+        let room = bob_room(); let end = Instant::now() + Duration::from_secs(60); let mut ok = false;
+        while Instant::now() < end && !ok {
+            bob_client.sync_once(SyncSettings::default().timeout(Duration::from_secs(2))).await.ok();
+            let m = room.messages(matrix_sdk::room::MessagesOptions::backward()).await.unwrap();
+            ok = m.chunk.iter().any(|e| { let j = e.raw().json().get(); j.contains("view_limited") && j.contains("\"file\"") });
+        }
+        ok
+    });
+    assert!(once_seen, "bob should see the view-once picture, its file encrypted");
+    // an upload for stickers answers with the address of the file
+    pager_upload(engine, c"up1".as_ptr(), oncec.as_ptr(), c"image/png".as_ptr());
+    let up = wait_for(&rx, 60, |k, v| k == "uploaded" && v["key"] == "up1").unwrap();
+    assert!(up["url"].as_str().unwrap_or_default().starts_with("mxc://"), "{up}");
     pager_stop(engine);
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -101,6 +101,11 @@ public:
     Q_INVOKABLE void toggleFavoriteGif(const QVariantMap &gif);
     Q_INVOKABLE bool isFavoriteGif(const QString &url) const;
     // ---- the info panel
+    // ---- sync settings: copy chosen groups of settings to your account and onto another computer (nothing is copied unless you press the button)
+    Q_INVOKABLE QVariantList syncGroups() const;                                // [{id, label, hint}]
+    Q_INVOKABLE void saveSyncedSettings(const QStringList &groupIds);           // saveResult(error) when done
+    Q_INVOKABLE void fetchSyncedSettings();                                     // fetchedSettings({savedAt, from, groups:[ids]}) (empty map: nothing saved yet)
+    Q_INVOKABLE int loadSyncedSettings(const QStringList &groupIds);            // applies the fetched ones to this computer; returns how many settings changed
     Q_INVOKABLE QVariantMap storiesInfo() const;                      // {id, unread, preview} of the Stories chat (WhatsApp status updates), or empty
     Q_INVOKABLE QVariantMap sharedMedia() const;                       // {photos:[{id,w,h}], links:[{id,url,who,when}], files:[{id,name,size,who,kind}]} of what is loaded in the open chat
     Q_INVOKABLE QString photoPath(const QString &eventId);             // a picture's file when it is here (asks for it otherwise; mediaReady(eventId) when it arrives)
@@ -277,6 +282,8 @@ public:
     int totalUnread() const;
     void handle(const QString &kind, const QJsonObject &body);   // also used by tests and the demo
 signals:
+    void syncSaved(const QString &error);
+    void syncFetched(const QVariantMap &info);
     void screenEffect(const QString &effect);   // a message that calls for confetti, hearts...
     void encryptAllProgress(int done, int total, int failed);
     void playSound(const QString &id, double volume);   // a little sound to play (send, receive, reaction, alert)
@@ -322,6 +329,7 @@ private:
     QHash<QString, QString> m_drafts; QString m_dataDir;
     QStringList m_encQueue; int m_encTotal = 0, m_encFailed = 0;
     void encryptNext();
+    QJsonObject m_savedSync;
     QSet<QString> m_solo, m_noLink; QString m_via, m_chimed;
     QHash<QString, QString> m_aliases; QHash<QString, double> m_muteUntil; QString m_allHistory; int m_allPages = 0;
     void saveAliases(); void expireMutes();
