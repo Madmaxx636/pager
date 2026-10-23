@@ -118,13 +118,59 @@ void Engine::loadOlder() {
     r->historyToken.clear();                       // one request at a time: the answer brings the next token
     pager_load_history(m_core, m_current.toUtf8().constData(), token.constData());
 }
-void Engine::send(const QString &text) {
+void Engine::send(const QString &text, const QString &replyTo) {
     const QString body = text.trimmed();
     if (body.isEmpty() || m_current.isEmpty()) return;
-    m_store.addLocal(m_current, body);
+    m_store.addLocal(m_current, body, replyTo);
     m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
-    if (m_core) pager_send_text(m_core, m_current.toUtf8().constData(), body.toUtf8().constData());
+    if (!m_core) return;
+    if (replyTo.isEmpty()) { pager_send_text(m_core, m_current.toUtf8().constData(), body.toUtf8().constData()); return; }
+    sendEvent(m_current, QStringLiteral("m.room.message"), QJsonObject{{"msgtype", "m.text"}, {"body", body}, {"m.relates_to", QJsonObject{{"m.in_reply_to", QJsonObject{{"event_id", replyTo}}}}}});
 }
+
+void Engine::sendEvent(const QString &room, const QString &type, const QJsonObject &content) {
+    if (!m_core) return;
+    const QByteArray json = QJsonDocument(content).toJson(QJsonDocument::Compact);
+    pager_send_event(m_core, room.toUtf8().constData(), type.toUtf8().constData(), json.constData(), "");
+}
+
+void Engine::react(const QString &eventId, const QString &emoji) {
+    if (m_current.isEmpty() || eventId.isEmpty() || eventId.startsWith(QLatin1String("local-"))) return;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const QString existing = m_store.reactionIdOf(m_current, eventId, emoji, m_user);
+    if (!existing.isEmpty()) {
+        if (!existing.startsWith(QLatin1String("local-")) && m_core) pager_redact(m_core, m_current.toUtf8().constData(), existing.toUtf8().constData());
+        m_store.applyLocalEvent(m_current, QJsonObject{{"event_id", QStringLiteral("local-redact-%1").arg(m_store.nextLocalId())}, {"type", "m.room.redaction"}, {"sender", m_user}, {"redacts", existing}, {"origin_server_ts", double(now)}});
+    } else {
+        const QJsonObject content{{"m.relates_to", QJsonObject{{"rel_type", "m.annotation"}, {"event_id", eventId}, {"key", emoji}}}};
+        m_store.applyLocalEvent(m_current, QJsonObject{{"event_id", QStringLiteral("local-react-%1").arg(m_store.nextLocalId())}, {"type", "m.reaction"}, {"sender", m_user}, {"origin_server_ts", double(now)}, {"content", content}});
+        sendEvent(m_current, QStringLiteral("m.reaction"), content);
+    }
+    m_timeline.show(m_current); emit currentChanged();
+}
+
+void Engine::deleteMessage(const QString &eventId) {
+    const Room *r = m_store.room(m_current);
+    const Msg *m = r ? r->find(eventId) : nullptr;
+    if (!m || !m_store.mine(*m) || m->local) return;
+    if (m_core) pager_redact(m_core, m_current.toUtf8().constData(), eventId.toUtf8().constData());
+    m_store.applyLocalEvent(m_current, QJsonObject{{"event_id", QStringLiteral("local-redact-%1").arg(m_store.nextLocalId())}, {"type", "m.room.redaction"}, {"sender", m_user}, {"redacts", eventId}, {"origin_server_ts", double(QDateTime::currentMSecsSinceEpoch())}});
+    m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
+}
+
+void Engine::edit(const QString &eventId, const QString &text) {
+    const QString body = text.trimmed();
+    const Room *r = m_store.room(m_current);
+    const Msg *m = r ? r->find(eventId) : nullptr;
+    if (body.isEmpty() || !m || !m_store.mine(*m) || m->local || m->body == body) return;
+    const QJsonObject content{{"msgtype", "m.text"}, {"body", QStringLiteral("* ") + body}, {"m.new_content", QJsonObject{{"msgtype", "m.text"}, {"body", body}}},
+                              {"m.relates_to", QJsonObject{{"rel_type", "m.replace"}, {"event_id", eventId}}}};
+    m_store.applyLocalEvent(m_current, QJsonObject{{"event_id", QStringLiteral("local-edit-%1").arg(m_store.nextLocalId())}, {"type", "m.room.message"}, {"sender", m_user}, {"origin_server_ts", double(QDateTime::currentMSecsSinceEpoch())}, {"content", content}});
+    sendEvent(m_current, QStringLiteral("m.room.message"), content);
+    m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
+}
+
+QString Engine::bodyOf(const QString &eventId) const { const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(eventId) : nullptr; return m ? m->body : QString(); }
 
 // Made-up chats for screenshots and for trying the screens without a server (run with --demo).
 void Engine::loadDemo() {

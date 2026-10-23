@@ -6,6 +6,9 @@ Rectangle {
     id: pane
     color: look.bg
     property bool showBack: false
+    property string target: ""; property bool targetMine: false       // the message a menu was opened on
+    property string replyingTo: ""; property string editing: ""       // set while the composer is answering or editing
+    readonly property string barText: editing ? "Editing message" : (replyingTo ? "Replying to: " + core.bodyOf(replyingTo) : "")
     signal back()
 
     ColumnLayout {
@@ -45,12 +48,21 @@ Rectangle {
             delegate: Bubble {
                 body: model.body; kind: model.kind; time: model.time; senderName: model.senderName
                 mine: model.mine; locked: model.locked; local: model.local; first: model.first; last: model.last; edited: model.edited
-                reactions: model.reactions; day: model.day
+                reactions: model.reactions; day: model.day; eventId: model.eventId; replyTo: model.replyTo
+                onMenuRequested: (id, mine, gx, gy) => { pane.target = id; pane.targetMine = mine; actions.popup() }
+                onReactionTapped: (id, key) => core.react(id, key)
                 showName: !core.currentIsDirect
             }
             // reaching the oldest message asks for older ones
             onAtYEndChanged: if (atYEnd && count > 0) core.loadOlder()
             Label { anchors.centerIn: parent; visible: core.currentRoom.length === 0; text: "Pick a chat"; color: look.muted; font.pixelSize: 16 }
+        }
+        Rectangle {   // what the composer is answering or editing
+            visible: pane.barText.length > 0
+            Layout.fillWidth: true; implicitHeight: 34; color: look.panel2
+            RowLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 8
+                Label { Layout.fillWidth: true; text: pane.barText; color: look.muted; font.pixelSize: 13; elide: Text.ElideRight }
+                ToolButton { text: "✕"; onClicked: { pane.replyingTo = ""; pane.editing = ""; input.clear() } } }
         }
         // composer
         Rectangle {
@@ -81,5 +93,32 @@ Rectangle {
             }
         }
     }
-    function sendIt() { if (input.text.trim().length) { core.send(input.text); input.clear() } }
+    function sendIt() {
+        if (!input.text.trim().length) return
+        if (editing) core.edit(editing, input.text); else core.send(input.text, replyingTo)
+        input.clear(); editing = ""; replyingTo = ""
+    }
+    EmojiPicker { id: picker; onPicked: (e) => core.react(pane.target, e) }
+    Menu {
+        id: actions
+        Row {
+            padding: 6; spacing: 2
+            Repeater {
+                model: emoji.quick()
+                delegate: Rectangle { width: 36; height: 36; radius: 8; color: h.hovered ? look.panel2 : "transparent"
+                    HoverHandler { id: h }
+                    Label { anchors.centerIn: parent; text: modelData; font.pixelSize: 22 }
+                    TapHandler { onTapped: { core.react(pane.target, modelData); actions.close() } } }
+            }
+            Rectangle { width: 36; height: 36; radius: 8; color: hm.hovered ? look.panel2 : "transparent"
+                HoverHandler { id: hm }
+                Label { anchors.centerIn: parent; text: "＋"; font.pixelSize: 20; color: look.muted }
+                TapHandler { onTapped: { actions.close(); picker.open() } } }
+        }
+        MenuItem { text: "Reply"; onTriggered: { pane.editing = ""; pane.replyingTo = pane.target; input.forceActiveFocus() } }
+        MenuItem { text: "Edit"; visible: pane.targetMine; height: visible ? implicitHeight : 0; onTriggered: { pane.replyingTo = ""; pane.editing = pane.target; input.text = core.bodyOf(pane.target); input.forceActiveFocus() } }
+        MenuItem { text: "Copy text"; onTriggered: { input.selectAll(); clip.text = core.bodyOf(pane.target); clip.selectAll(); clip.copy() } }
+        MenuItem { text: "Delete"; visible: pane.targetMine; height: visible ? implicitHeight : 0; onTriggered: core.deleteMessage(pane.target) }
+    }
+    TextEdit { id: clip; visible: false }
 }

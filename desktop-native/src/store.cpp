@@ -135,10 +135,25 @@ QString Store::applyHistory(const QJsonObject &page) {
     return id;
 }
 
-void Store::addLocal(const QString &roomId, const QString &body) {
+void Store::addLocal(const QString &roomId, const QString &body, const QString &replyTo) {
     Room *r = mutableRoom(roomId);
     if (!r) return;
     Msg m; m.id = QStringLiteral("local-%1").arg(++m_localCounter); m.sender = m_me; m.senderName = QStringLiteral("You"); m.body = body; m.kind = QStringLiteral("text");
-    m.ts = QDateTime::currentMSecsSinceEpoch(); m.local = true;
+    m.ts = QDateTime::currentMSecsSinceEpoch(); m.local = true; m.replyTo = replyTo;
     r->msgs.append(m);
+}
+
+void Store::applyLocalEvent(const QString &roomId, const QJsonObject &event) {
+    Room *r = mutableRoom(roomId);
+    if (!r) return;
+    applyEvent(*r, event);
+    sortMsgs(*r);
+}
+
+QString Store::reactionIdOf(const QString &roomId, const QString &target, const QString &key, const QString &who) const {
+    const Room *r = room(roomId);
+    if (!r) return {};
+    for (auto it = r->reactionRefs.cbegin(); it != r->reactionRefs.cend(); ++it)
+        if (it.value().size() == 3 && it.value()[0] == target && it.value()[1] == key && it.value()[2] == who) return it.key();
+    return {};
 }

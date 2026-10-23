@@ -36,7 +36,12 @@ public:
     QStringList applyRooms(const QJsonArray &rooms);
     /// Applies a page of older messages (or the first look at a room). Returns the room id.
     QString applyHistory(const QJsonObject &page);
-    void addLocal(const QString &roomId, const QString &body);
+    void addLocal(const QString &roomId, const QString &body, const QString &replyTo = QString());
+    /// Applies one event we made ourselves (a reaction, an edit, a deletion) so it shows before the server echoes it.
+    void applyLocalEvent(const QString &roomId, const QJsonObject &event);
+    /// The event id of this person's reaction with [key] on [target], or empty.
+    QString reactionIdOf(const QString &roomId, const QString &target, const QString &key, const QString &who) const;
+    int nextLocalId() { return ++m_localCounter; }
     void removeRoom(const QString &id) { m_rooms.remove(id); }
     const Room *room(const QString &id) const { auto it = m_rooms.constFind(id); return it == m_rooms.cend() ? nullptr : &*it; }
     Room *mutableRoom(const QString &id) { auto it = m_rooms.find(id); return it == m_rooms.end() ? nullptr : &*it; }
