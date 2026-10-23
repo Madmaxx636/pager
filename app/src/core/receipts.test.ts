@@ -33,3 +33,22 @@ describe("bridge bot receipts", () => {
     expect(readersOf(applySync({}, sync, me, true).chats["!r:x"], "$1", me)).toEqual([]);
   });
 });
+
+
+describe("delivery reports from the bridge", () => {
+  const sync = (events: unknown[]) => ({ rooms: { join: { "!r:s": { timeline: { events } } } } });
+  const ev = (type: string, id: string, content: unknown) => ({ type, event_id: id, sender: "@gmessagesbot:s", origin_server_ts: 1, content });
+  it("remembers who a message was delivered to, and that the bridge reports deliveries", () => {
+    const r = applySync({}, sync([
+      { type: "m.room.message", event_id: "$m", sender: "@me:s", origin_server_ts: 1, content: { msgtype: "m.text", body: "hi" } },
+      ev("com.beeper.message_send_status", "$s", { "m.relates_to": { rel_type: "m.reference", event_id: "$m" }, status: "SUCCESS", delivered_to: ["@them:s"] }),
+    ]), "@me:s", true);
+    const chat = r.chats["!r:s"];
+    expect(chat.statusSeen).toBe(true);
+    expect(chat.deliveredTo).toEqual({ "$m": ["@them:s"] });
+  });
+  it("a success without delivered_to still marks the chat as reporting", () => {
+    const r = applySync({}, sync([ev("com.beeper.message_send_status", "$s", { "m.relates_to": { event_id: "$m" }, status: "SUCCESS" })]), "@me:s", true);
+    expect(r.chats["!r:s"].statusSeen).toBe(true); expect(r.chats["!r:s"].deliveredTo).toEqual({});
+  });
+});

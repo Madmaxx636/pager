@@ -71,6 +71,10 @@ export interface ChatState {
   receipts: Record<string, string>;
   /** When each user's read receipt was sent (ms). */
   receiptTs?: Record<string, number>;
+  /** Message event id -> who it was delivered to, as the bridge reports it (the second tick in the other app). */
+  deliveredTo?: Record<string, string[]>;
+  /** The bridge sends delivery reports in this chat, so its own receipt only means "sent". */
+  statusSeen?: boolean;
   tags: string[];
   markedUnread: boolean;
   memberCount: number;
