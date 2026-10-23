@@ -10,6 +10,10 @@ Item {
     property bool mine; property bool locked; property bool local; property bool first; property bool last; property bool edited; property bool showName
     property var reactions: []
     property string day; property string eventId; property string replyTo
+    property string media; property int imgWidth; property int imgHeight; property string fileName; property var poll
+    property bool wantOpen: false
+    onMediaChanged: if (wantOpen && media.length) { wantOpen = false; files.open(media) }
+    Component.onCompleted: if (kind === "image" && media.length === 0 && eventId.length) core.fetchMedia(eventId)
     signal menuRequested(string eventId, bool mine, real gx, real gy)
     signal reactionTapped(string eventId, string key)
 
@@ -27,8 +31,55 @@ Item {
             text: row.day; color: look.muted; font.pixelSize: 12; font.weight: Font.DemiBold
         }
         Label { visible: row.showName && !row.mine && row.first; leftPadding: 18; text: row.senderName; color: look.muted; font.pixelSize: 12; font.weight: Font.DemiBold }
+        Item {   // a picture
+            visible: row.kind === "image"
+            width: parent.width; height: visible ? pic.height : 0
+            Rectangle {
+                id: pic
+                anchors.right: row.mine ? parent.right : undefined; anchors.left: row.mine ? undefined : parent.left
+                anchors.rightMargin: 14; anchors.leftMargin: 14
+                readonly property real ratio: row.imgWidth > 0 && row.imgHeight > 0 ? row.imgHeight / row.imgWidth : 0.75
+                width: Math.min(300, row.width * 0.7); height: Math.max(80, Math.min(width * ratio, 380))
+                radius: 14; color: row.mine ? look.accent : look.theirs; clip: true; opacity: row.local ? 0.7 : 1
+                Image { anchors.fill: parent; source: row.media.length ? "file://" + row.media : ""; fillMode: Image.PreserveAspectCrop; asynchronous: true; cache: true; sourceSize.width: 640 }
+                Label { anchors.centerIn: parent; visible: row.media.length === 0; text: "Loading picture…"; color: row.mine ? look.accentInk : look.muted; font.pixelSize: 13 }
+                TapHandler { acceptedButtons: Qt.LeftButton; onTapped: if (row.media.length) files.open(row.media) }
+                TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = pic.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
+            }
+        }
+        Item {   // a file
+            visible: row.kind === "file"
+            width: parent.width; height: visible ? fileBox.height : 0
+            Rectangle {
+                id: fileBox
+                anchors.right: row.mine ? parent.right : undefined; anchors.left: row.mine ? undefined : parent.left
+                anchors.rightMargin: 14; anchors.leftMargin: 14
+                width: Math.min(300, row.width * 0.74); height: 54; radius: 14; color: row.mine ? look.accent : look.theirs; opacity: row.local ? 0.7 : 1
+                RowLayout {
+                    anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 10
+                    Label { text: "📎"; font.pixelSize: 22 }
+                    Label { Layout.fillWidth: true; text: row.fileName || row.body; elide: Text.ElideMiddle; color: row.mine ? look.accentInk : look.text; font.pixelSize: 14 }
+                    Label { text: row.media.length ? "Open" : (row.wantOpen ? "…" : "Download"); color: row.mine ? look.accentInk : look.accent; font.pixelSize: 13; font.weight: Font.DemiBold }
+                }
+                TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { if (row.media.length) files.open(row.media); else { row.wantOpen = true; core.fetchMedia(row.eventId) } } }
+                TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = fileBox.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
+            }
+        }
+        Item {   // a poll
+            visible: row.kind === "poll"
+            width: parent.width; height: visible ? pollCard.height : 0
+            PollCard {
+                id: pollCard
+                anchors.right: row.mine ? parent.right : undefined; anchors.left: row.mine ? undefined : parent.left
+                anchors.rightMargin: 14; anchors.leftMargin: 14
+                width: Math.min(340, row.width * 0.8); height: implicitHeight
+                poll: row.poll ? row.poll : ({ question: "", answers: [], ended: false, voters: 0, max: 1 }); mine: row.mine; eventId: row.eventId; local: row.local
+                TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = pollCard.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
+            }
+        }
         Item {
-            width: parent.width; height: bubble.height
+            visible: row.kind !== "image" && row.kind !== "file" && row.kind !== "poll"
+            width: parent.width; height: visible ? bubble.height : 0
             Rectangle {
                 id: bubble
                 anchors.right: row.mine ? parent.right : undefined

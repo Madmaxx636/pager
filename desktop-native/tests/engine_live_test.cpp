@@ -29,6 +29,29 @@ private slots:
         e.send("on my way", "a8");
         QCOMPARE(r->msgs.last().replyTo, QString("a8"));
     }
+    void pollsCanBeCreatedVotedAndEnded() {            // needs no server
+        Engine e(QString(), true);
+        e.createPoll("Where to eat?", {"Pizza", " ", "Tacos"}, 1, true);
+        const Room *r = e.store()->room("!maya");
+        const Msg &p = r->msgs.last();
+        QCOMPARE(p.kind, QString("poll")); QVERIFY(p.local);
+        QCOMPARE(p.poll.answers.size(), 2);                     // the blank answer is dropped
+        // pretend the server echoed it back under its real id
+        e.handle("rooms", QJsonObject{{"rooms", QJsonArray{QJsonObject{{"id", "!maya"}, {"events", QJsonArray{QJsonObject{{"event_id", "$poll"}, {"type", "org.matrix.msc3381.poll.start"}, {"sender", "@me:demo.test"}, {"origin_server_ts", 9e12},
+            {"content", QJsonObject{{"org.matrix.msc3381.poll.start", QJsonObject{{"max_selections", 1}, {"question", QJsonObject{{"body", "Where to eat?"}}},
+                {"answers", QJsonArray{QJsonObject{{"id", "a1"}, {"body", "Pizza"}}, QJsonObject{{"id", "a2"}, {"body", "Tacos"}}}}}}}}}}}}}}});
+        QVERIFY(!r->find("$poll")->local);
+        int polls = 0; for (const Msg &m : r->msgs) if (m.kind == "poll") ++polls;
+        QCOMPARE(polls, 1);                                     // the local copy was replaced, not duplicated
+        e.vote("$poll", "a2");
+        QCOMPARE(r->votes.value("$poll").value("@me:demo.test"), QStringList{"a2"});
+        e.vote("$poll", "a1");                                  // single choice: replaces
+        QCOMPARE(r->votes.value("$poll").value("@me:demo.test"), QStringList{"a1"});
+        e.endPoll("$poll");
+        QVERIFY(r->ended.contains("$poll"));
+        e.vote("$poll", "a2");                                  // closed: ignored
+        QCOMPARE(r->votes.value("$poll").value("@me:demo.test"), QStringList{"a1"});
+    }
     void popUpsOnlyForNewMessagesFromOthers() {      // needs no server
         Engine e(QString(), true);
         QSignalSpy pop(&e, &Engine::notify);

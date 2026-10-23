@@ -1,5 +1,7 @@
 #include "engine.h"
 #include <QCoreApplication>
+#include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QMetaObject>
 #include <QTimer>
@@ -63,6 +65,13 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
             for (const QString &id : m_store.order()) { if (Room *r = m_store.mutableRoom(id)) { r->historyAsked = id == m_current; } }
             if (m_core && !m_current.isEmpty()) pager_load_history(m_core, m_current.toUtf8().constData(), "");
         }
+    } else if (kind == QLatin1String("media")) {
+        const QString key = b.value(QLatin1String("key")).toString();
+        m_fetching.remove(key);
+        if (b.contains(QLatin1String("path"))) { m_store.setMediaPath(key, b.value(QLatin1String("path")).toString()); m_timeline.touch(key); }
+    } else if (kind == QLatin1String("send_failed")) {
+        m_problem = QStringLiteral("Could not send: ") + b.value(QLatin1String("error")).toString();
+        emit problemChanged();
     } else if (kind == QLatin1String("problem")) {
         m_problem = b.value(QLatin1String("what")).toString() + QStringLiteral(": ") + b.value(QLatin1String("message")).toString();
         emit problemChanged();
@@ -170,6 +179,62 @@ void Engine::edit(const QString &eventId, const QString &text) {
     m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
 }
 
+void Engine::fetchMedia(const QString &eventId) {
+    const Room *r = m_store.room(m_current);
+    const Msg *m = r ? r->find(eventId) : nullptr;
+    if (!m_core || !m || m->content.isEmpty() || !m_store.mediaPath(eventId).isEmpty() || m_fetching.contains(eventId)) return;
+    m_fetching.insert(eventId);
+    const QByteArray json = QJsonDocument(m->content).toJson(QJsonDocument::Compact);
+    pager_fetch_media(m_core, eventId.toUtf8().constData(), json.constData(), m->kind == QLatin1String("image"));
+}
+
+void Engine::sendFile(const QString &path, const QString &mime, int w, int h, const QString &caption) {
+    if (m_current.isEmpty()) return;
+    const QString name = QFileInfo(path).fileName();
+    m_store.addLocalFile(m_current, path, name, mime.startsWith(QLatin1String("image/")), w, h);
+    m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
+    if (m_core) pager_send_file(m_core, m_current.toUtf8().constData(), path.toUtf8().constData(), mime.toUtf8().constData(), caption.toUtf8().constData(), w, h, "");
+}
+
+void Engine::createPoll(const QString &question, const QStringList &answers, int maxSelections, bool disclosed) {
+    QStringList list; for (const QString &a : answers) if (!a.trimmed().isEmpty()) list << a.trimmed();
+    if (m_current.isEmpty() || question.trimmed().isEmpty() || list.size() < 2) return;
+    QJsonArray ans; QString fallback = question.trimmed();
+    for (int i = 0; i < list.size(); ++i) { ans.append(QJsonObject{{"id", QStringLiteral("a%1").arg(i + 1)}, {"org.matrix.msc1767.text", list[i]}}); fallback += QStringLiteral("\n%1. %2").arg(i + 1).arg(list[i]); }
+    const QString q = question.trimmed();
+    const QJsonObject start{{"kind", disclosed ? "org.matrix.msc3381.poll.disclosed" : "org.matrix.msc3381.poll.undisclosed"}, {"max_selections", qBound(1, maxSelections, list.size())},
+                            {"question", QJsonObject{{"org.matrix.msc1767.text", q}, {"body", q}, {"msgtype", "m.text"}}}, {"answers", ans}};
+    const QJsonObject content{{"org.matrix.msc3381.poll.start", start}, {"org.matrix.msc1767.text", fallback}};
+    m_store.applyLocalEvent(m_current, QJsonObject{{"event_id", QStringLiteral("local-poll-%1").arg(m_store.nextLocalId())}, {"type", "org.matrix.msc3381.poll.start"}, {"sender", m_user}, {"origin_server_ts", double(QDateTime::currentMSecsSinceEpoch())}, {"content", content}});
+    sendEvent(m_current, QStringLiteral("org.matrix.msc3381.poll.start"), content);
+    m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
+}
+
+void Engine::vote(const QString &pollId, const QString &answerId) {
+    const Room *r = m_store.room(m_current);
+    const Msg *p = r ? r->find(pollId) : nullptr;
+    if (!p || p->kind != QLatin1String("poll") || p->local || r->ended.contains(pollId)) return;
+    QStringList mine = r->votes.value(pollId).value(m_user);
+    if (p->poll.maxSelections <= 1) mine = QStringList{answerId};
+    else if (mine.contains(answerId)) mine.removeAll(answerId);
+    else if (mine.size() < p->poll.maxSelections) mine << answerId;
+    else return;
+    const QJsonObject content{{"m.relates_to", QJsonObject{{"rel_type", "m.reference"}, {"event_id", pollId}}}, {"org.matrix.msc3381.poll.response", QJsonObject{{"answers", QJsonArray::fromStringList(mine)}}}};
+    m_store.applyLocalEvent(m_current, QJsonObject{{"event_id", QStringLiteral("local-vote-%1").arg(m_store.nextLocalId())}, {"type", "org.matrix.msc3381.poll.response"}, {"sender", m_user}, {"origin_server_ts", double(QDateTime::currentMSecsSinceEpoch())}, {"content", content}});
+    sendEvent(m_current, QStringLiteral("org.matrix.msc3381.poll.response"), content);
+    m_timeline.show(m_current); emit currentChanged();
+}
+
+void Engine::endPoll(const QString &pollId) {
+    const Room *r = m_store.room(m_current);
+    const Msg *p = r ? r->find(pollId) : nullptr;
+    if (!p || p->kind != QLatin1String("poll") || !m_store.mine(*p) || p->local || r->ended.contains(pollId)) return;
+    const QJsonObject content{{"m.relates_to", QJsonObject{{"rel_type", "m.reference"}, {"event_id", pollId}}}, {"org.matrix.msc1767.text", "The poll has ended."}};
+    m_store.applyLocalEvent(m_current, QJsonObject{{"event_id", QStringLiteral("local-end-%1").arg(m_store.nextLocalId())}, {"type", "org.matrix.msc3381.poll.end"}, {"sender", m_user}, {"origin_server_ts", double(QDateTime::currentMSecsSinceEpoch())}, {"content", content}});
+    sendEvent(m_current, QStringLiteral("org.matrix.msc3381.poll.end"), content);
+    m_timeline.show(m_current); emit currentChanged();
+}
+
 QString Engine::bodyOf(const QString &eventId) const { const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(eventId) : nullptr; return m ? m->body : QString(); }
 
 // Made-up chats for screenshots and for trying the screens without a server (run with --demo).
@@ -185,6 +250,11 @@ void Engine::loadDemo() {
                       ev("a7", me, "You", "See you there", 9), ev("a8", maya, "Maya", "Running 5 min late, sorry!", 2),
                       QJsonObject{{"event_id", "r1"}, {"type", "m.reaction"}, {"sender", me}, {"origin_server_ts", double(now - 10 * 60000)}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"rel_type", "m.annotation"}, {"event_id", "a5"}, {"key", "\U0001F44D"}}}}}},
                       QJsonObject{{"event_id", "r2"}, {"type", "m.reaction"}, {"sender", maya}, {"origin_server_ts", double(now - 9 * 60000)}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"rel_type", "m.annotation"}, {"event_id", "a5"}, {"key", "\U0001F525"}}}}}}};
+    mayaEv.append(QJsonObject{{"event_id", "p1"}, {"type", "org.matrix.msc3381.poll.start"}, {"sender", maya}, {"sender_name", "Maya"}, {"origin_server_ts", double(now - 90 * 1000)}, {"content", QJsonObject{{"org.matrix.msc3381.poll.start", QJsonObject{
+        {"max_selections", 1}, {"question", QJsonObject{{"body", "Where should we eat?"}}}, {"answers", QJsonArray{QJsonObject{{"id", "a1"}, {"body", "Pasta place"}}, QJsonObject{{"id", "a2"}, {"body", "Tacos"}}, QJsonObject{{"id", "a3"}, {"body", "Sushi"}}}}}}}}});
+    for (const auto &v : QList<QPair<QString, QString>>{{maya, "a1"}, {me, "a1"}, {dad, "a2"}})
+        mayaEv.append(QJsonObject{{"event_id", "v" + v.first}, {"type", "org.matrix.msc3381.poll.response"}, {"sender", v.first}, {"origin_server_ts", double(now - 60 * 1000)}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"rel_type", "m.reference"}, {"event_id", "p1"}}}, {"org.matrix.msc3381.poll.response", QJsonObject{{"answers", QJsonArray{v.second}}}}}}});
+    mayaEv.append(QJsonObject{{"event_id", "f1"}, {"type", "m.room.message"}, {"sender", me}, {"origin_server_ts", double(now - 30 * 1000)}, {"content", QJsonObject{{"msgtype", "m.file"}, {"body", "menu.pdf"}, {"url", "mxc://demo/menu"}}}});
     QJsonArray rooms{
         QJsonObject{{"id", "!maya"}, {"name", "Maya"}, {"direct", true}, {"encrypted", true}, {"unread", 2}, {"events", mayaEv}},
         QJsonObject{{"id", "!work"}, {"name", "Work chat"}, {"direct", false}, {"encrypted", true}, {"unread", 5}, {"events", QJsonArray{ev("w1", priya, "Priya", "Shipping the release now", 300), ev("w2", leo, "Leo", "Nice, I'll watch the dashboards", 295), ev("w3", priya, "Priya", "All green so far", 290)}}},

@@ -11,6 +11,7 @@
 #include <QTimer>
 #include "appearance.h"
 #include "emoji.h"
+#include "fileinfo.h"
 #include "engine.h"
 
 int main(int argc, char *argv[]) {
@@ -36,11 +37,13 @@ int main(int argc, char *argv[]) {
     Engine engine(dir, cli.isSet(demo));
     Appearance look;
     Emoji emoji;
+    FileInfo files;
 
     QQmlApplicationEngine qml;
     qml.rootContext()->setContextProperty(QStringLiteral("core"), &engine);
     qml.rootContext()->setContextProperty(QStringLiteral("look"), &look);
     qml.rootContext()->setContextProperty(QStringLiteral("emoji"), &emoji);
+    qml.rootContext()->setContextProperty(QStringLiteral("files"), &files);
     qml.load(QUrl(QStringLiteral("qrc:/Pager/qml/Main.qml")));
     if (qml.rootObjects().isEmpty()) return 1;
     auto *win = qobject_cast<QQuickWindow *>(qml.rootObjects().first());

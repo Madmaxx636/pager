@@ -9,6 +9,8 @@ QString Room::preview() const {
         t.replace(QLatin1Char('\n'), QLatin1Char(' '));
         if (t.trimmed().isEmpty()) continue;
         if (m.kind == QLatin1String("image")) t = QStringLiteral("\U0001F4F7 ") + (m.body.isEmpty() ? QStringLiteral("Photo") : m.body);
+        else if (m.kind == QLatin1String("poll")) t = QStringLiteral("\U0001F4CA ") + t;
+        else if (m.kind == QLatin1String("file")) t = QStringLiteral("\U0001F4CE ") + (m.fileName.isEmpty() ? t : m.fileName);
         return t.trimmed();
     }
     return {};
@@ -67,6 +69,45 @@ void Store::applyEvent(Room &r, const QJsonObject &ev) {
         for (Msg &m : r.msgs) if (m.id == target) { if (!m.reactions[key].contains(sender)) m.reactions[key].append(sender); return; }
         return;
     }
+    if (type == QLatin1String("org.matrix.msc3381.poll.response") || type == QLatin1String("m.poll.response")) {
+        const QString target = rel.value(QLatin1String("event_id")).toString();
+        if (target.isEmpty() || sender.isEmpty() || r.ended.contains(target)) return;
+        QJsonValue ans = content.value(QLatin1String("org.matrix.msc3381.poll.response")).toObject().value(QLatin1String("answers"));
+        if (!ans.isArray()) ans = content.value(QLatin1String("m.selections"));
+        QStringList chosen; for (const QJsonValue &a : ans.toArray()) if (a.isString()) chosen << a.toString();
+        const QString tk = target + QLatin1Char('|') + sender;
+        if (r.voteTs.value(tk, -1) > ts) return;
+        r.voteTs.insert(tk, ts); r.votes[target].insert(sender, chosen);
+        return;
+    }
+    if (type == QLatin1String("org.matrix.msc3381.poll.end") || type == QLatin1String("m.poll.end")) {
+        const QString target = rel.value(QLatin1String("event_id")).toString();
+        const Msg *p = r.find(target);
+        if (!target.isEmpty() && (!p || p->sender == sender)) r.ended.insert(target);
+        return;
+    }
+    if (type == QLatin1String("org.matrix.msc3381.poll.start") || type == QLatin1String("m.poll.start")) {
+        auto text = [](const QJsonObject &o) {
+            QString s = o.value(QLatin1String("org.matrix.msc1767.text")).toString();
+            if (s.isEmpty()) s = o.value(QLatin1String("body")).toString();
+            if (s.isEmpty()) for (const QJsonValue &x : o.value(QLatin1String("m.text")).toArray()) { s = x.toObject().value(QLatin1String("body")).toString(); if (!s.isEmpty()) break; }
+            return s;
+        };
+        const QJsonObject p = content.contains(QLatin1String("org.matrix.msc3381.poll.start")) ? content.value(QLatin1String("org.matrix.msc3381.poll.start")).toObject() : content.value(QLatin1String("m.poll")).toObject();
+        Msg m; m.id = id; m.sender = sender; m.ts = ts; m.kind = QStringLiteral("poll"); m.local = id.startsWith(QLatin1String("local-"));
+        m.senderName = ev.value(QLatin1String("sender_name")).toString(sender.mid(1).section(QLatin1Char(':'), 0, 0));
+        m.poll.question = text(p.value(QLatin1String("question")).toObject());
+        for (const QJsonValue &a : p.value(QLatin1String("answers")).toArray()) { const QJsonObject o = a.toObject(); const QString at = text(o); if (!o.value(QLatin1String("id")).toString().isEmpty() && !at.isEmpty()) m.poll.answers.append({o.value(QLatin1String("id")).toString(), at}); }
+        m.poll.maxSelections = p.value(QLatin1String("max_selections")).toInt(1);
+        m.poll.disclosed = !p.value(QLatin1String("kind")).toString().endsWith(QLatin1String("undisclosed"));
+        if (m.poll.question.isEmpty() || m.poll.answers.size() < 2) return;
+        m.body = m.poll.question;
+        for (const Msg &x : r.msgs) if (x.id == id) return;
+        if (!m_me.isEmpty() && sender == m_me)
+            for (int i = 0; i < r.msgs.size(); ++i) if (r.msgs[i].local && r.msgs[i].kind == QLatin1String("poll") && r.msgs[i].body == m.body) { r.msgs.removeAt(i); break; }
+        r.msgs.append(m);
+        return;
+    }
     const bool encrypted = type == QLatin1String("m.room.encrypted") || ev.value(QLatin1String("locked")).toBool();
     if (type != QLatin1String("m.room.message") && !encrypted) return;
 
@@ -89,6 +130,11 @@ void Store::applyEvent(Room &r, const QJsonObject &ev) {
     else {
         const QString mt = content.value(QLatin1String("msgtype")).toString();
         m.body = content.value(QLatin1String("body")).toString();
+        if (mt == QLatin1String("m.image") || mt == QLatin1String("m.file") || mt == QLatin1String("m.video") || mt == QLatin1String("m.audio")) {
+            const QJsonObject info = content.value(QLatin1String("info")).toObject();
+            m.content = content; m.width = info.value(QLatin1String("w")).toInt(); m.height = info.value(QLatin1String("h")).toInt();
+            m.fileName = content.value(QLatin1String("filename")).toString(m.body);
+        }
         if (!m.replyTo.isEmpty()) m.body = stripReplyFallback(m.body);
         m.kind = mt == QLatin1String("m.emote") ? QStringLiteral("emote") : mt == QLatin1String("m.notice") ? QStringLiteral("notice")
                : mt == QLatin1String("m.image") ? QStringLiteral("image") : (mt == QLatin1String("m.file") || mt == QLatin1String("m.video") || mt == QLatin1String("m.audio")) ? QStringLiteral("file")
@@ -156,4 +202,14 @@ QString Store::reactionIdOf(const QString &roomId, const QString &target, const 
     for (auto it = r->reactionRefs.cbegin(); it != r->reactionRefs.cend(); ++it)
         if (it.value().size() == 3 && it.value()[0] == target && it.value()[1] == key && it.value()[2] == who) return it.key();
     return {};
+}
+
+void Store::addLocalFile(const QString &roomId, const QString &path, const QString &name, bool image, int w, int h) {
+    Room *r = mutableRoom(roomId);
+    if (!r) return;
+    Msg m; m.id = QStringLiteral("local-%1").arg(++m_localCounter); m.sender = m_me; m.senderName = QStringLiteral("You"); m.body = name; m.fileName = name;
+    m.kind = image ? QStringLiteral("image") : QStringLiteral("file"); m.width = w; m.height = h;
+    m.ts = QDateTime::currentMSecsSinceEpoch(); m.local = true;
+    m_media.insert(m.id, path);
+    r->msgs.append(m);
 }

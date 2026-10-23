@@ -11,14 +11,14 @@ set(PAGER_CORE_DIR "${CMAKE_SOURCE_DIR}/build-core" CACHE PATH "Folder with libp
 add_library(pager_core SHARED IMPORTED)
 set_target_properties(pager_core PROPERTIES IMPORTED_LOCATION "${PAGER_CORE_DIR}/libpager_core.so")
 
-qt_add_executable(pager-native src/main.cpp src/engine.cpp src/store.cpp src/models.cpp src/appearance.cpp src/emoji.cpp)
+qt_add_executable(pager-native src/main.cpp src/engine.cpp src/store.cpp src/models.cpp src/appearance.cpp src/emoji.cpp src/fileinfo.cpp)
 target_include_directories(pager-native PRIVATE include src)
 target_link_libraries(pager-native PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 pager_core)
 set_target_properties(pager-native PROPERTIES INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib" BUILD_WITH_INSTALL_RPATH ON)
 
 qt_add_resources(pager-native icon PREFIX / FILES pager.svg emoji-names.tsv emoji-groups.tsv)
 qt_add_qml_module(pager-native URI Pager VERSION 1.0 RESOURCE_PREFIX / QML_FILES
-  qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml)
+  qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml qml/PollCard.qml qml/PollDialog.qml)
 install(TARGETS pager-native RUNTIME DESTINATION bin)
 
 # Tests of the parts that do not need a screen.

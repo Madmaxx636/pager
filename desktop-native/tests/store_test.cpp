@@ -66,6 +66,33 @@ private slots:
         QVERIFY(!s.room("!r")->msgs[0].locked);
         QCOMPARE(s.room("!r")->msgs[0].body, QString("now readable"));
     }
+    void pollsCountVotesAndEnd() {
+        Store s; s.setMe("@me:x");
+        auto start = QJsonObject{{"event_id", "$p"}, {"type", "org.matrix.msc3381.poll.start"}, {"sender", "@maya:x"}, {"origin_server_ts", 1000.0}, {"content", QJsonObject{{"org.matrix.msc3381.poll.start", QJsonObject{
+            {"kind", "org.matrix.msc3381.poll.disclosed"}, {"max_selections", 1}, {"question", QJsonObject{{"body", "Pizza?"}}},
+            {"answers", QJsonArray{QJsonObject{{"id", "a1"}, {"org.matrix.msc1767.text", "Yes"}}, QJsonObject{{"id", "a2"}, {"org.matrix.msc1767.text", "No"}}}}}}}}};
+        auto vote = [](const QString &id, const QString &who, const QString &ans, qint64 ts) { return QJsonObject{{"event_id", id}, {"type", "org.matrix.msc3381.poll.response"}, {"sender", who}, {"origin_server_ts", double(ts)},
+            {"content", QJsonObject{{"m.relates_to", QJsonObject{{"rel_type", "m.reference"}, {"event_id", "$p"}}}, {"org.matrix.msc3381.poll.response", QJsonObject{{"answers", QJsonArray{ans}}}}}}}; };
+        s.applyRooms({room("!r", "R", {start, vote("$v1", "@maya:x", "a1", 2000), vote("$v2", "@me:x", "a2", 3000), vote("$v3", "@me:x", "a1", 2500)})});
+        const Room *r = s.room("!r");
+        QCOMPARE(r->msgs[0].kind, QString("poll"));
+        QCOMPARE(r->msgs[0].poll.answers.size(), 2);
+        QCOMPARE(r->votes.value("$p").value("@me:x"), QStringList{"a2"});      // the older vote did not win
+        QCOMPARE(r->votes.value("$p").value("@maya:x"), QStringList{"a1"});
+        auto end = [](const QString &who) { return QJsonObject{{"event_id", "$e" + who}, {"type", "org.matrix.msc3381.poll.end"}, {"sender", who}, {"origin_server_ts", 4000.0}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"rel_type", "m.reference"}, {"event_id", "$p"}}}}}}; };
+        s.applyRooms({room("!r", "R", {end("@me:x")})});
+        QVERIFY(!r->ended.contains("$p"));                                     // only the author can end it
+        s.applyRooms({room("!r", "R", {end("@maya:x")})});
+        QVERIFY(r->ended.contains("$p"));
+    }
+    void picturesAndFilesKeepWhatIsNeededToFetchThem() {
+        Store s; s.setMe("@me:x");
+        QJsonObject img{{"msgtype", "m.image"}, {"body", "cat.png"}, {"url", "mxc://x/abc"}, {"info", QJsonObject{{"w", 640}, {"h", 480}}}};
+        s.applyRooms({room("!r", "R", {QJsonObject{{"event_id", "$i"}, {"type", "m.room.message"}, {"sender", "@maya:x"}, {"origin_server_ts", 1000.0}, {"content", img}}})});
+        const Msg &m = s.room("!r")->msgs[0];
+        QCOMPARE(m.kind, QString("image")); QCOMPARE(m.width, 640); QCOMPARE(m.height, 480);
+        QCOMPARE(m.content.value("url").toString(), QString("mxc://x/abc"));
+    }
     void ourOwnEchoReplacesTheMessageShownAtOnce() {
         Store s; s.setMe("@me:x");
         s.applyRooms({room("!r", "R", {msg("$1", "@maya:x", "hello", 1000)})});
