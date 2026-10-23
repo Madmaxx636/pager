@@ -64,3 +64,10 @@ QString FileInfo::tone(const QString &kind) const {
 #include "wallpaper.h"
 QVariantList FileInfo::wallpapers() const { return Wallpaper::list(); }
 QString FileInfo::importWallpaper(const QString &file, const QString &dir) const { return Wallpaper::importPhoto(file, dir); }
+
+#include "sounds.h"
+QVariantList FileInfo::sounds() const { return Sounds::list(); }
+QString FileInfo::soundFile(const QString &id) const { return Sounds::file(id); }
+
+#include "screeneffects.h"
+QVariantList FileInfo::effectTriggers() const { return ScreenEffects::triggers(); }

@@ -26,6 +26,10 @@ Item {
             core.sendAttention("nudge"); core.sendLocation(48.8584, 2.2945); wait(150)
             compare(core.timeline.rowCount(), n + 2)
         }
+        function test_whatsapp_status_updates_get_their_own_row_not_a_chat() {
+            const info = core.storiesInfo(); compare(info.id, "!stories"); compare(info.unread, 3)
+            for (let i = 0; i < core.rooms.rowCount(); i++) verify(core.rooms.data(core.rooms.index(i, 0), Qt.UserRole + 1) !== "!stories")
+        }
         function test_a_place_link_is_understood() {
             place.parse("https://www.openstreetmap.org/?mlat=48.858400&mlon=2.294500#map=16/48.8584/2.2945")
             verify(Math.abs(place.lat - 48.8584) < 0.0001); verify(Math.abs(place.lon - 2.2945) < 0.0001)

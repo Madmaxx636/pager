@@ -108,6 +108,8 @@ public:
     void wantAvatar(const QString &mxc) const { if (avatarWanted && !m_wantedAvatars.contains(mxc)) { m_wantedAvatars.insert(mxc); avatarWanted(mxc); } }
     void forgetWantedAvatar(const QString &mxc) const { m_wantedAvatars.remove(mxc); }
     static bool isBridgeBot(const QString &user);
+    /// WhatsApp status updates arrive in one bridge chat; the app shows it as "Stories" in its own row.
+    static bool isStoriesRoom(const Room &r);
     /// A sticker pack from the content of an im.ponies.*_emotes event.
     static QJsonObject parseStickerPack(const QString &key, const QString &fallbackName, const QJsonObject &content);
     // ---- chats shown as one (the same person on several networks)
