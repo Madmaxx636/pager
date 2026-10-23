@@ -29,6 +29,8 @@ EXPR='
   | (select(.matrix | has("message_status_events")) | .matrix.message_status_events) = false
   | (select(.matrix | has("message_error_notices")) | .matrix.message_error_notices) = false
   | (select(.network | has("send_presence_on_typing")) | .network.send_presence_on_typing) = true
+  # Google Messages: notice a silently stalled connection after 10 minutes, not almost 3 hours (the default). Messages used to sit for up to ~40 minutes.
+  | (select(.network | has("data_receive_check_interval")) | .network.data_receive_check_interval) = "10m"
   | (select(.bridge | has("send_presence_on_typing")) | .bridge.send_presence_on_typing) = true
   | (select(.network.history_sync) | .network.history_sync.request_full_sync) = true
   | (select(.network.history_sync) | .network.history_sync.max_initial_conversations) = -1
