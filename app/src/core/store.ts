@@ -262,7 +262,7 @@ async function decryptEvents(roomId: string, events: any[]): Promise<any[]> {
     // already moved past it. Keep it as a locked placeholder; it opens once encryption is ready.
     const clear = e2ee ? await e2ee.decrypt(roomId, e) : undefined;
     if (clear) out.push(clear);
-    else { out.push(unreadable(e)); if (e2ee) window.setTimeout(() => void retryWaiting([roomId]), 4000); }
+    else { out.push(unreadable(e)); if (e2ee) retrySoon(roomId); }
   }
   return out;
 }
@@ -277,6 +277,13 @@ async function decryptSync(res: any) {
 
 /** Opens messages that were waiting for a key, in the pages whose keys just arrived (or everywhere with no list). They are kept on the message itself, so this also works after a restart. */
 const askedBackup = new Map<string, number>();
+const retrying = new Map<string, number>();
+/** A message that cannot be read yet: look again after 1, 2, 4, 8, 15 and 30 seconds (the key is usually only moments behind), not once after 4 seconds and then a minute later. */
+function retrySoon(roomId: string) {
+  if (Date.now() - (retrying.get(roomId) ?? 0) < 900) return;
+  retrying.set(roomId, Date.now());
+  for (const ms of [1000, 2000, 4000, 8000, 15000, 30000]) window.setTimeout(() => void retryWaiting([roomId]), ms);
+}
 async function retryWaiting(rooms?: string[]) {
   if (!e2ee) return;
   for (const [roomId, chat] of Object.entries(state.chats)) {
@@ -285,7 +292,7 @@ async function retryWaiting(rooms?: string[]) {
       if (!m.sealed) continue;
       // The recovery backup may hold this message's key (another device of yours saved it there): ask, at most once a minute per key.
       const sid = (m.sealed as any)?.content?.session_id as string | undefined;
-      if (sid && Date.now() - (askedBackup.get(roomId + sid) ?? 0) > 60_000) { askedBackup.set(roomId + sid, Date.now()); await e2ee.fetchKeyFromBackup(roomId, sid); }
+      if (sid && Date.now() - (askedBackup.get(roomId + sid) ?? 0) > 6_000) { askedBackup.set(roomId + sid, Date.now()); await e2ee.fetchKeyFromBackup(roomId, sid); }
       const clear = await e2ee.decrypt(roomId, m.sealed as any);
       if (clear) patchChat(roomId, (c) => replaceDecrypted(c, clear));
     }
