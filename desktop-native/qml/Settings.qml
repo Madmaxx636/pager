@@ -22,52 +22,75 @@ Dialog {
     readonly property bool narrow: width < 640
     property bool showingList: true
 
+    // id, title, hint, icon, tint, group: grouped and tinted like the web app's settings home
     readonly property var pages: [
-        ["appearance", "Appearance", "Theme, colors, text size, bubbles"], ["layout", "Inbox & layout", "Tabs, pins, density, what's shown"], ["chats", "Chats", "Sending, reading, privacy, media"],
-        ["notifications", "Notifications", "Previews, scope, quiet hours"], ["bridges", "Bridges & accounts", "Connected apps and their status"], ["labels", "Labels", "Organize chats into folders"],
-        ["media", "Stickers & GIFs", "GIF search"], ["privacy", "Privacy & encryption", "Recovery key, receipts, typing"], ["shortcuts", "Keyboard shortcuts", "See and change every shortcut"],
-        ["system", "System", "Time, motion, greeting"], ["desktop", "Desktop", "Tray, startup"], ["admin", "Admin", "Profiles, bridges, signups"], ["storage", "Backup & reset", "Export, import, reset"],
-        ["advanced", "Advanced", "Developer tools"], ["starred", "Starred messages", ""], ["scheduled", "Scheduled & reminders", ""], ["about", "About", "Version, server, sign out"]
+        ["appearance", "Appearance", "Theme, colors, text size, bubbles", "palette", "#8e6cf0", "Yours"], ["layout", "Inbox & layout", "Tabs, pins, density, what's shown", "sliders-horizontal", "#3b82f6", "Yours"],
+        ["chats", "Pages", "Sending, reading, privacy, media", "message-square", "#10b981", "Yours"], ["notifications", "Notifications", "Previews, scope, quiet hours", "bell", "#ef4444", "Yours"],
+        ["shortcuts", "Keyboard shortcuts", "See and change every shortcut", "keyboard", "#6366f1", "Yours"],
+        ["labels", "Labels", "Organize pages into folders", "tag", "#f59e0b", "Extras"], ["starred", "Starred messages", "", "star", "#f59e0b", "Extras"], ["scheduled", "Scheduled & reminders", "", "hourglass", "#f97316", "Extras"],
+        ["media", "Stickers & GIFs", "Your stickers, GIF search", "smile", "#ec4899", "Extras"],
+        ["bridges", "Bridges & accounts", "Connected apps and their status", "link", "#0ea5e9", "System"], ["privacy", "Privacy & encryption", "Recovery key, receipts, typing, previews", "lock", "#64748b", "System"],
+        ["system", "System", "Time, motion, stories, greeting", "sliders-horizontal", "#0d9488", "System"], ["desktop", "Desktop", "Tray, startup, zoom", "monitor", "#0d9488", "System"],
+        ["admin", "Admin", "Profiles, bridges, signups", "shield-check", "#dc2626", "System"], ["storage", "Backup & reset", "Export, import, reset", "hard-drive", "#14b8a6", "System"],
+        ["advanced", "Advanced", "Developer tools", "code-xml", "#475569", "System"], ["about", "About", "Version, server, sign out", "info", "#6b7280", ""]
     ]
-    readonly property var visiblePages: pages.filter(p => p[0] !== "admin" || core.isAdmin)
+    property string find: ""
+    readonly property var visiblePages: pages.filter(p => (p[0] !== "admin" || core.isAdmin) && (find.length === 0 || (p[1] + " " + p[2]).toLowerCase().indexOf(find.toLowerCase()) >= 0))
 
-    function openPage(id) { for (let i = 0; i < visiblePages.length; i++) if (visiblePages[i][0] === id) { page = i; showingList = false; break } open() }
+    function openPage(id) { find = ""; findField.text = ""; for (let i = 0; i < visiblePages.length; i++) if (visiblePages[i][0] === id) { page = i; showingList = false; break } open() }
     onAboutToShow: { if (!narrow) showingList = false; note = "" }
 
     header: Rectangle {
         color: "transparent"; implicitHeight: 56
-        IconButton { visible: dlg.narrow && !dlg.showingList; x: 6; anchors.verticalCenter: parent.verticalCenter; symbol: "←"; glyphSize: 20; onClicked: dlg.showingList = true }
+        IconButton { visible: dlg.narrow && !dlg.showingList; x: 6; anchors.verticalCenter: parent.verticalCenter; ico: "chevron-left"; onClicked: dlg.showingList = true }
         Label { x: dlg.narrow && !dlg.showingList ? 52 : 20; anchors.verticalCenter: parent.verticalCenter; text: dlg.narrow && !dlg.showingList ? dlg.visiblePages[dlg.page][1] : "Settings"; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.Bold }
-        IconButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; symbol: "✕"; glyphSize: 16; onClicked: dlg.close() }
+        IconButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; ico: "x"; onClicked: dlg.close() }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: look.line }
     }
 
     contentItem: RowLayout {
         spacing: 0
         // ---- the list of pages
-        ListView {
-            id: nav
+        ColumnLayout {
             visible: !dlg.narrow || dlg.showingList
-            Layout.preferredWidth: dlg.narrow ? dlg.width : 250; Layout.fillHeight: true; clip: true; model: dlg.visiblePages; boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollBar { }
-            SmoothWheel { view: nav }
-            delegate: Rectangle {
-                width: nav.width; height: 52; color: dlg.page === index && !dlg.narrow ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.16) : (hv.hovered ? look.panel2 : "transparent")
-                HoverHandler { id: hv }
-                Column { anchors.verticalCenter: parent.verticalCenter; x: 18; width: parent.width - 36; spacing: 1
-                    Label { text: modelData[1]; color: look.text; font.pixelSize: Math.round(14 * look.textScale); font.weight: Font.DemiBold; elide: Text.ElideRight; width: parent.width }
-                    Label { visible: modelData[2].length > 0; text: modelData[2]; color: look.muted; font.pixelSize: Math.round(11 * look.textScale); elide: Text.ElideRight; width: parent.width } }
-                TapHandler { onTapped: { dlg.page = index; dlg.showingList = false } }
+            Layout.preferredWidth: dlg.narrow ? dlg.width : 300; Layout.fillHeight: true; spacing: 0
+            Rectangle { Layout.fillWidth: true; Layout.margins: 12; Layout.bottomMargin: 4; implicitHeight: 40; radius: 20; color: look.panel2
+                Row { anchors.fill: parent; anchors.leftMargin: 14; spacing: 8
+                    Icon { anchors.verticalCenter: parent.verticalCenter; name: "search"; size: 17; color: look.muted }
+                    TextField { id: findField; width: parent.width - 40; height: parent.height; placeholderText: "Search settings"; background: Item { } leftPadding: 0; color: look.text; placeholderTextColor: look.muted; onTextChanged: { dlg.find = text; dlg.page = 0 } } } }
+            ListView {
+                id: nav
+                Layout.fillWidth: true; Layout.fillHeight: true; clip: true; model: dlg.visiblePages; boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar { }
+                SmoothWheel { view: nav }
+                delegate: Column {
+                    readonly property bool firstOfGroup: index === 0 || dlg.visiblePages[index - 1][5] !== modelData[5]
+                    width: nav.width
+                    Label { visible: firstOfGroup && modelData[5].length > 0 && dlg.find.length === 0; text: modelData[5]; color: look.accent; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Bold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.7; leftPadding: 18; topPadding: 12; bottomPadding: 4 }
+                    Item { visible: firstOfGroup && modelData[5].length === 0 && dlg.find.length === 0; width: 1; height: 8 }
+                    Rectangle {
+                        width: parent.width - 16; x: 8; height: 54; radius: 12; color: dlg.page === index && !dlg.narrow ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.16) : (hv.hovered ? look.panel2 : "transparent")
+                        HoverHandler { id: hv; cursorShape: Qt.PointingHandCursor }
+                        Row { anchors.verticalCenter: parent.verticalCenter; x: 10; spacing: 12
+                            Rectangle { width: 34; height: 34; radius: 10; color: modelData[4]; anchors.verticalCenter: parent.verticalCenter; Icon { anchors.centerIn: parent; name: modelData[3]; size: 18; color: "white" } }
+                            Column { anchors.verticalCenter: parent.verticalCenter; spacing: 1; width: nav.width - 100
+                                Label { text: modelData[1]; color: look.text; font.pixelSize: Math.round(14 * look.textScale); font.weight: Font.DemiBold; elide: Text.ElideRight; width: parent.width }
+                                Label { visible: modelData[2].length > 0; text: modelData[2]; color: look.muted; font.pixelSize: Math.round(11 * look.textScale); elide: Text.ElideRight; width: parent.width } } }
+                        Icon { anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter; visible: dlg.narrow; name: "chevron-right"; size: 16; color: look.muted }
+                        TapHandler { onTapped: { dlg.page = index; dlg.showingList = false } }
+                    }
+                }
             }
         }
         Rectangle { visible: !dlg.narrow; Layout.fillHeight: true; width: 1; color: look.line }
         // ---- the page
         ScrollView {
             id: scroll
+            background: Rectangle { color: look.bg }
             visible: !dlg.narrow || !dlg.showingList
             Layout.fillWidth: true; Layout.fillHeight: true; clip: true; contentWidth: availableWidth
             Loader {
-                width: scroll.availableWidth - 48; x: 24
+                width: Math.min(scroll.availableWidth - 32, 760); x: Math.max(16, (scroll.availableWidth - width) / 2); y: 4
                 sourceComponent: { switch (dlg.visiblePages[dlg.page] ? dlg.visiblePages[dlg.page][0] : "") {
                     case "appearance": return appearance; case "layout": return layout; case "chats": return chats; case "notifications": return notifications; case "bridges": return bridges
                     case "labels": return labels; case "media": return media; case "privacy": return privacy; case "shortcuts": return shortcuts; case "system": return system
@@ -79,8 +102,9 @@ Dialog {
 
     // =============================================================== pages
     Component { id: appearance
-        SGroup { Layout.fillWidth: true; width: parent ? parent.width : 400
+        SGroup { plain: true; Layout.fillWidth: true; width: parent ? parent.width : 400
             SGroup { title: "Theme"
+                SBlock {
                 Label { text: "Mode"; color: look.text }
                 Flow { Layout.fillWidth: true; spacing: 6
                     Repeater { model: [["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black"]]
@@ -99,6 +123,7 @@ Dialog {
                         delegate: Rectangle { width: 38; height: 38; radius: 10; color: modelData.bg; border.width: look.palette === modelData.id ? 3 : 1; border.color: look.palette === modelData.id ? look.text : modelData.line
                             Rectangle { anchors.right: parent.right; anchors.bottom: parent.bottom; width: 20; height: 20; radius: 10; color: modelData.accent; anchors.margins: 4 }
                             ToolTip.visible: ph.hovered; ToolTip.text: modelData.name; HoverHandler { id: ph } TapHandler { onTapped: look.setPalette(modelData.id) } } } }
+                }
             }
             SGroup { title: "Text"
                 SSlider { key: "fontScale"; title: "Text size"; from: 0.8; to: 1.6; step: 0.05; suffix: "×"; decimals: 2 }
@@ -113,7 +138,7 @@ Dialog {
         }
     }
     Component { id: layout
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Inbox"
                 SChoice { key: "inboxStyle"; title: "Inbox style"; options: [["pro", "Pro: unread counts and network badges"], ["minimal", "Minimal: titles only"]] }
                 SChoice { key: "defaultTab"; title: "Default tab"; options: [["inbox", "Inbox"], ["unread", "Unread"]] }
@@ -139,7 +164,7 @@ Dialog {
         }
     }
     Component { id: chats
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Writing"
                 SToggle { key: "enterToSend"; title: "Enter sends"; hint: "Shift+Enter starts a new line. Off: Ctrl+Enter sends" }
                 SToggle { key: "markdown"; title: "Formatting"; hint: "**bold**, _italic_, `code` and ~~strike~~ become formatted text" }
@@ -164,7 +189,7 @@ Dialog {
         }
     }
     Component { id: notifications
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Alerts"
                 SToggle { key: "notifEnabled"; title: "Notifications" }
                 SChoice { key: "notifScope"; title: "Notify me about"; options: [["all", "Everything"], ["dm_mentions", "Direct messages and mentions"], ["favorites", "Pinned chats and mentions"]] }
@@ -190,7 +215,7 @@ Dialog {
         }
     }
     Component { id: bridges
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Accounts"
                 SAction { title: "Connect and disconnect your chat apps"; hint: "WhatsApp, Signal, Google Messages and the others"; button: "Open"; onClicked: { dlg.close(); dlg.accountsRequested() } }
             }
@@ -203,7 +228,7 @@ Dialog {
         }
     }
     Component { id: labels
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Your labels"; footer: "Add a label to a chat from its menu. Labels appear as tabs above the list."
                 Repeater { model: core.labels
                     delegate: RowLayout { Layout.fillWidth: true; spacing: 8
@@ -216,7 +241,7 @@ Dialog {
         }
     }
     Component { id: media
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "GIF search"; footer: "GIF search needs your own free key from GIPHY or Klipy."
                 SText { table: "gifKeys"; key: "giphy"; title: "GIPHY key"; secret: true }
                 SText { table: "gifKeys"; key: "klipy"; title: "Klipy key"; secret: true }
@@ -224,7 +249,7 @@ Dialog {
         }
     }
     Component { id: privacy
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Encryption"
                 SAction { title: "Restore old messages"; hint: "Enter your recovery key to read messages from before this device was added"; button: "Enter key"; onClicked: { dlg.close(); dlg.restoreRequested() } }
             }
@@ -236,7 +261,7 @@ Dialog {
         }
     }
     Component { id: shortcuts
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Shortcuts"; footer: "Click Change, then press the keys you want."
                 Repeater { model: SC.ALL
                     delegate: RowLayout { Layout.fillWidth: true; spacing: 8
@@ -248,7 +273,7 @@ Dialog {
         }
     }
     Component { id: system
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Time and motion"
                 SChoice { key: "timeFormat"; title: "Time format"; options: [["system", "System"], ["12", "12-hour"], ["24", "24-hour"]] }
                 SToggle { key: "reduceMotion"; title: "Reduce motion"; hint: "Less animation" }
@@ -259,7 +284,7 @@ Dialog {
         }
     }
     Component { id: desktop
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "On this computer"
                 SToggle { key: "closeToTray"; title: "Keep running in the tray"; hint: "Closing the window leaves Pager running so messages still reach you" }
                 SToggle { key: "startMinimized"; title: "Start in the tray" }
@@ -270,13 +295,13 @@ Dialog {
         }
     }
     Component { id: adminPage
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Server"
                 SAction { title: "Accounts, bridges and signups"; hint: "Manage your Pager server"; button: "Open"; onClicked: { dlg.close(); dlg.adminRequested() } } }
         }
     }
     Component { id: storage
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Settings backup"
                 SAction { title: "Export settings"; hint: "Save your settings to a file"; button: "Export…"; onClicked: exportDialog.open() }
                 SAction { title: "Import settings"; hint: "Load settings saved with Export"; button: "Import…"; onClicked: importDialog.open() }
@@ -286,7 +311,7 @@ Dialog {
         }
     }
     Component { id: advanced
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Reload"
                 SAction { title: "Reload everything from the server"; hint: "Fixes a list that is missing something. Your messages stay on the server."; button: "Reload"; onClicked: { core.reloadEverything(); dlg.close() } }
             }
@@ -302,7 +327,7 @@ Dialog {
         }
     }
     Component { id: starred
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Starred messages"
                 Repeater { model: core.starred()
                     delegate: Rectangle { Layout.fillWidth: true; height: 64; radius: 10; color: sh.hovered ? look.panel2 : "transparent"; HoverHandler { id: sh }
@@ -316,7 +341,7 @@ Dialog {
         }
     }
     Component { id: scheduledPage
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Scheduled messages"
                 Repeater { model: core.scheduled()
                     delegate: RowLayout { Layout.fillWidth: true
@@ -336,7 +361,7 @@ Dialog {
         }
     }
     Component { id: about
-        SGroup { Layout.fillWidth: true
+        SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Pager"
                 Label { text: "Pager native " + core.appVersion + " · engine " + core.version; color: look.text }
                 Label { text: "Signed in as " + core.user; color: look.muted }

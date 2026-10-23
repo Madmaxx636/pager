@@ -16,7 +16,7 @@ Rectangle {
 
     Component.onCompleted: {
         if (settings.defaultTab !== "inbox") core.filter(settings.defaultTab, "")
-        if (startupDialog === "settings") Qt.callLater(settingsPage.open); else if (startupDialog === "accounts") Qt.callLater(accounts.open); else if (startupDialog === "admin") Qt.callLater(admin.open)
+        if (startupDialog.indexOf("settings") === 0) Qt.callLater(() => settingsPage.openPage(startupDialog.split(":")[1] || "appearance")); else if (startupDialog === "accounts") Qt.callLater(accounts.open); else if (startupDialog === "admin") Qt.callLater(admin.open)
     }
     Accounts { id: accounts }
     Admin { id: admin }
@@ -65,15 +65,15 @@ Rectangle {
                 Menu {
                     id: menu
                     MenuItem { text: core.user; enabled: false }
-                    MenuItem { text: "Mark all as read"; onTriggered: core.markAllRead() }
-                    MenuItem { text: "Starred messages"; onTriggered: settingsPage.openPage("starred") }
+                    MenuItem { icon.name: "check-check"; text: "Mark all as read"; onTriggered: core.markAllRead() }
+                    MenuItem { icon.name: "star"; text: "Starred messages"; onTriggered: settingsPage.openPage("starred") }
                     MenuSeparator { }
-                    MenuItem { text: "Chat accounts…"; onTriggered: accounts.open() }
-                    MenuItem { text: "Server admin…"; visible: core.isAdmin; height: visible ? implicitHeight : 0; onTriggered: admin.open() }
-                    MenuItem { text: "Settings"; onTriggered: settingsPage.open() }
-                    MenuItem { text: "Restore old messages…"; onTriggered: pane.restoreRequested() }
+                    MenuItem { icon.name: "user-round"; text: "Accounts"; onTriggered: accounts.open() }
+                    MenuItem { icon.name: "shield-check"; text: "Server admin"; visible: core.isAdmin; height: visible ? implicitHeight : 0; onTriggered: admin.open() }
+                    MenuItem { icon.name: "settings"; text: "Settings"; onTriggered: settingsPage.open() }
+                    MenuItem { icon.name: "download"; text: "Restore old messages…"; onTriggered: pane.restoreRequested() }
                     MenuSeparator { }
-                    MenuItem { text: "Sign out"; onTriggered: core.logout() }
+                    MenuItem { icon.name: "log-out"; text: "Sign out"; onTriggered: core.logout() }
                 }
             }
         }
@@ -135,11 +135,43 @@ Rectangle {
                     id: pinGrid
                     x: 8; y: 8; columns: 3; rowSpacing: 6; columnSpacing: 4
                     readonly property real cell: (list.width - 16 - 8) / 3
+                    readonly property real cellH: 8 + 76 + 5 + 20 + 6 + 6
+                    property int dragFrom: -1; property int dragOver: -1   // while one is being carried: where it started and where it would land
                     Repeater {
                         model: core.pins
                         delegate: Rectangle {
+                            id: pinCell
+                            readonly property bool carried: pinGrid.dragFrom === index
+                            readonly property int slot: pinGrid.dragFrom < 0 || carried ? index
+                                : (pinGrid.dragFrom < pinGrid.dragOver && index > pinGrid.dragFrom && index <= pinGrid.dragOver ? index - 1
+                                : (pinGrid.dragFrom > pinGrid.dragOver && index < pinGrid.dragFrom && index >= pinGrid.dragOver ? index + 1 : index))
                             width: pinGrid.cell; height: 8 + 76 + 5 + 20 + 6; radius: 14
-                            color: pinHover.hovered || core.currentRoom === modelData.id ? look.panel2 : "transparent"
+                            z: carried ? 5 : 0; scale: carried ? 1.08 : 1
+                            transform: Translate {
+                                x: pinCell.carried ? pinDrag.activeTranslation.x : ((pinCell.slot % 3) - (index % 3)) * (pinGrid.cell + 4)
+                                y: pinCell.carried ? pinDrag.activeTranslation.y : (Math.floor(pinCell.slot / 3) - Math.floor(index / 3)) * pinGrid.cellH
+                                Behavior on x { enabled: !pinCell.carried; NumberAnimation { duration: settings.reduceMotion ? 0 : 180; easing.type: Easing.OutCubic } }
+                                Behavior on y { enabled: !pinCell.carried; NumberAnimation { duration: settings.reduceMotion ? 0 : 180; easing.type: Easing.OutCubic } }
+                            }
+                            color: pinHover.hovered || pinCell.carried || core.currentRoom === modelData.id ? look.panel2 : "transparent"
+                            border.width: carried ? 1 : 0; border.color: look.line
+                            DragHandler {
+                                id: pinDrag
+                                target: null; acceptedButtons: Qt.LeftButton; dragThreshold: 6
+                                onActiveChanged: {
+                                    if (active) { pinGrid.dragFrom = index; pinGrid.dragOver = index }
+                                    else {
+                                        const to = pinGrid.dragOver, from = pinGrid.dragFrom
+                                        pinGrid.dragFrom = -1; pinGrid.dragOver = -1
+                                        if (to >= 0 && to !== from) core.movePin(modelData.id, to)
+                                    }
+                                }
+                                onActiveTranslationChanged: if (active) {
+                                    const cw = pinGrid.cell + 4, cx = (index % 3) * cw + pinGrid.cell / 2 + activeTranslation.x, cy = Math.floor(index / 3) * pinGrid.cellH + pinCell.height / 2 + activeTranslation.y
+                                    const col = Math.max(0, Math.min(2, Math.floor(cx / cw))), r = Math.max(0, Math.floor(cy / pinGrid.cellH))
+                                    pinGrid.dragOver = Math.min(core.pins.length - 1, r * 3 + col)
+                                }
+                            }
                             HoverHandler { id: pinHover; cursorShape: Qt.PointingHandCursor }
                             Item { id: pav; y: 8; width: 76; height: 76; anchors.horizontalCenter: parent.horizontalCenter
                                 Loader { anchors.fill: parent; active: modelData.faces.length > 1; sourceComponent: GroupAvatar { size: 76; faces: modelData.faces } }
@@ -248,17 +280,17 @@ Rectangle {
 
     Menu {
         id: chatMenu
-        MenuItem { text: pane.menuInfo.unread > 0 || pane.menuInfo.markedUnread ? "Mark read" : "Mark unread"; onTriggered: (pane.menuInfo.unread > 0 || pane.menuInfo.markedUnread) ? core.markRead(pane.menuRoom) : core.markUnread(pane.menuRoom, true) }
-        MenuItem { text: pane.menuInfo.pinned ? "Unpin" : "Pin"; onTriggered: core.pin(pane.menuRoom, !pane.menuInfo.pinned) }
-        MenuItem { text: pane.menuInfo.muted ? "Unmute" : "Mute"; onTriggered: core.setMuted(pane.menuRoom, !pane.menuInfo.muted) }
-        MenuItem { text: pane.menuInfo.archived ? "Move to inbox" : "Archive"; onTriggered: core.archive(pane.menuRoom, !pane.menuInfo.archived) }
-        MenuItem { text: pane.menuInfo.lowPriority ? "Move to inbox" : "Low priority"; onTriggered: core.setLowPriority(pane.menuRoom, !pane.menuInfo.lowPriority) }
-        MenuItem { text: "Snooze 3 hours"; onTriggered: core.snooze(pane.menuRoom, Date.now() + 3 * 3600000) }
-        MenuItem { text: "Snooze until…"; onTriggered: { snoozeDialog.room = pane.menuRoom; snoozeDialog.open() } }
-        MenuItem { text: "Labels…"; onTriggered: labelsDialog.openFor(pane.menuRoom) }
-        MenuItem { text: "Rename…"; visible: !!pane.menuInfo.isGroup; height: visible ? implicitHeight : 0; onTriggered: renameDialog.openFor(pane.menuRoom, pane.menuInfo.name) }
+        MenuItem { icon.name: pane.menuInfo.unread > 0 || pane.menuInfo.markedUnread ? "mail-open" : "message-square-dot"; text: pane.menuInfo.unread > 0 || pane.menuInfo.markedUnread ? "Mark read" : "Mark unread"; onTriggered: (pane.menuInfo.unread > 0 || pane.menuInfo.markedUnread) ? core.markRead(pane.menuRoom) : core.markUnread(pane.menuRoom, true) }
+        MenuItem { icon.name: pane.menuInfo.pinned ? "pin-off" : "pin"; text: pane.menuInfo.pinned ? "Unpin" : "Pin"; onTriggered: core.pin(pane.menuRoom, !pane.menuInfo.pinned) }
+        MenuItem { icon.name: "bell-off"; text: pane.menuInfo.muted ? "Unmute" : "Mute"; onTriggered: core.setMuted(pane.menuRoom, !pane.menuInfo.muted) }
+        MenuItem { icon.name: pane.menuInfo.archived ? "archive-restore" : "archive"; text: pane.menuInfo.archived ? "Move to inbox" : "Archive"; onTriggered: core.archive(pane.menuRoom, !pane.menuInfo.archived) }
+        MenuItem { icon.name: "arrow-down-to-line"; text: pane.menuInfo.lowPriority ? "Move to inbox" : "Low priority"; onTriggered: core.setLowPriority(pane.menuRoom, !pane.menuInfo.lowPriority) }
+        MenuItem { icon.name: "hourglass"; text: "Snooze 3 hours"; onTriggered: core.snooze(pane.menuRoom, Date.now() + 3 * 3600000) }
+        MenuItem { icon.name: "alarm-clock"; text: "Snooze until…"; onTriggered: { snoozeDialog.room = pane.menuRoom; snoozeDialog.open() } }
+        MenuItem { icon.name: "tag"; text: "Labels…"; onTriggered: labelsDialog.openFor(pane.menuRoom) }
+        MenuItem { icon.name: "pencil"; text: "Rename…"; visible: !!pane.menuInfo.isGroup; height: visible ? implicitHeight : 0; onTriggered: renameDialog.openFor(pane.menuRoom, pane.menuInfo.name) }
         MenuSeparator { }
-        MenuItem { text: "Delete page…"; onTriggered: deleteDialog.openFor(pane.menuRoom, pane.menuInfo.name, pane.menuInfo.network) }
+        MenuItem { icon.name: "trash-2"; text: "Delete page…"; onTriggered: deleteDialog.openFor(pane.menuRoom, pane.menuInfo.name, pane.menuInfo.network) }
     }
     Dialog {
         id: deleteDialog

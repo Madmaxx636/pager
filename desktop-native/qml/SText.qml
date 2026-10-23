@@ -11,7 +11,7 @@ ColumnLayout {
     property string hint: ""
     property string placeholder: ""
     property bool secret: false
-    Layout.fillWidth: true; spacing: 4
+    Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 12; Layout.bottomMargin: 12; spacing: 4
     function current() { return table.length ? ((settings[table] || {})[key] || "") : (settings[key] || "") }
     function store(v) { if (table.length) { const t = Object.assign({}, settings[table] || {}); if (v.length) t[key] = v; else delete t[key]; settings.set(table, t) } else settings.set(key, v) }
     Label { text: col.title; color: look.text; font.pixelSize: Math.round(14 * look.textScale) }
