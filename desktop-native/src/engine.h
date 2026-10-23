@@ -101,14 +101,20 @@ public:
     Q_INVOKABLE void toggleFavoriteGif(const QVariantMap &gif);
     Q_INVOKABLE bool isFavoriteGif(const QString &url) const;
     // ---- the info panel
+    Q_INVOKABLE QVariantMap storiesInfo() const;                      // {id, unread, preview} of the Stories chat (WhatsApp status updates), or empty
     Q_INVOKABLE QVariantMap sharedMedia() const;                       // {photos:[{id,w,h}], links:[{id,url,who,when}], files:[{id,name,size,who,kind}]} of what is loaded in the open chat
     Q_INVOKABLE QString photoPath(const QString &eventId);             // a picture's file when it is here (asks for it otherwise; mediaReady(eventId) when it arrives)
+    void effectFor(const QString &text);
+    void chime(const QString &kindKey, const QString &volKey, bool convo);
+    Q_INVOKABLE void testNotification() { emit notify(QString(), QStringLiteral("Pager test"), QStringLiteral("This is how a message will look."), !(m_settings && m_settings->value(QStringLiteral("notifSound")).toBool())); if (m_settings && m_settings->value(QStringLiteral("notifSound")).toBool()) emit playSound(m_settings->value(QStringLiteral("notifSoundId")).toString(), m_settings->value(QStringLiteral("notifSoundVolume")).toDouble()); }
+    Q_INVOKABLE void previewSound(const QString &id, double volume) { emit playSound(id, volume); }
     Q_INVOKABLE QString dataDir() const { return m_dataDir; }
     Q_INVOKABLE QString aliasOf(const QString &roomId) const { return RoomListModel::s_aliases.value(roomId); }
     Q_INVOKABLE void setAlias(const QString &roomId, const QString &name);       // "rename for me": only on your side
     Q_INVOKABLE void muteFor(const QString &roomId, double ms);                   // mute, and unmute by itself later (ms <= 0: until you unmute)
     Q_INVOKABLE double muteLeftMs(const QString &roomId) const { const double t = m_muteUntil.value(roomId); return t > 0 ? t - QDateTime::currentMSecsSinceEpoch() : 0; }
     Q_INVOKABLE void enableEncryption(const QString &roomId);                    // end-to-end encrypt this chat from now on (cannot be undone); encryptionResult("") when done
+    Q_INVOKABLE void encryptAll();                                               // encrypt every chat that can take it, one after another; encryptAllProgress(done, total, failed)
     Q_INVOKABLE void loadAllHistory(const QString &roomId);                      // fetch every older page of this chat; historyProgress(count, done)
     Q_INVOKABLE QVariantList faces(const QString &roomId) const;   // up to four people of a group without a picture of its own, for its round collage
     QVariantMap filters() const { return m_filters; }
@@ -271,6 +277,9 @@ public:
     int totalUnread() const;
     void handle(const QString &kind, const QJsonObject &body);   // also used by tests and the demo
 signals:
+    void screenEffect(const QString &effect);   // a message that calls for confetti, hearts...
+    void encryptAllProgress(int done, int total, int failed);
+    void playSound(const QString &id, double volume);   // a little sound to play (send, receive, reaction, alert)
     void encryptionResult(const QString &error);
     void historyProgress(int messages, bool done);
     void attention(const QString &roomId, const QString &chat, const QString &sender, const QString &kind);   // someone is trying to get your attention
@@ -311,7 +320,9 @@ private:
     AppSettings *m_settings = nullptr;
     QHash<QString, QVariant> m_previews; QSet<QString> m_previewing;
     QHash<QString, QString> m_drafts; QString m_dataDir;
-    QSet<QString> m_solo, m_noLink; QString m_via;
+    QStringList m_encQueue; int m_encTotal = 0, m_encFailed = 0;
+    void encryptNext();
+    QSet<QString> m_solo, m_noLink; QString m_via, m_chimed;
     QHash<QString, QString> m_aliases; QHash<QString, double> m_muteUntil; QString m_allHistory; int m_allPages = 0;
     void saveAliases(); void expireMutes();
     class QNetworkAccessManager *m_net = nullptr;

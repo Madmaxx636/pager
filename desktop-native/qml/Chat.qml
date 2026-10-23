@@ -151,6 +151,8 @@ Rectangle {
                 Label { anchors.centerIn: parent; visible: core.currentRoom.length === 0; text: "Pick a chat"; color: look.muted; font.pixelSize: Math.round(16 * look.textScale) }
                 Label { anchors.centerIn: parent; visible: core.currentRoom.length > 0 && msgs.count === 0; text: core.loading ? "Loading…" : "No messages yet. Say hello!"; color: look.muted; font.pixelSize: Math.round(14 * look.textScale) }
             }
+            ScreenEffects { id: fx; anchors.fill: parent; z: 5; enabled: false }
+            Connections { target: core; function onScreenEffect(effect) { fx.play(effect) } }
             // back to the newest
             Rectangle {
                 visible: !msgs.atYEnd && msgs.count > 0

@@ -16,7 +16,7 @@ else()
   set_target_properties(pager_core PROPERTIES IMPORTED_LOCATION "${PAGER_CORE_DIR}/libpager_core.so")
 endif()
 
-qt_add_executable(pager-native src/main.cpp src/iconprovider.cpp src/roundedimage.cpp src/wallpaper.cpp src/engine.cpp src/store.cpp src/models.cpp src/appearance.cpp src/appsettings.cpp src/emoji.cpp src/fileinfo.cpp src/selfupdate.cpp src/rich.cpp src/names.cpp src/notifypolicy.cpp)
+qt_add_executable(pager-native src/main.cpp src/iconprovider.cpp src/roundedimage.cpp src/wallpaper.cpp src/screeneffects.cpp src/effectwords.cpp src/engine.cpp src/effectwords.cpp src/store.cpp src/models.cpp src/appearance.cpp src/appsettings.cpp src/emoji.cpp src/fileinfo.cpp src/sounds.cpp src/selfupdate.cpp src/rich.cpp src/names.cpp src/notifypolicy.cpp)
 target_include_directories(pager-native PRIVATE include src)
 target_link_libraries(pager-native PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Svg Qt6::Qml Qt6::Quick Qt6::QuickControls2 pager_core)
 # The program finds its engine next to itself. In the build folder a copy is put there after each build, so no build path is baked into the program.
@@ -32,7 +32,7 @@ set(PAGER_ICONS icons/alarm-clock.svg icons/archive-restore.svg icons/archive.sv
 qt_add_resources(pager-native iconset PREFIX / FILES ${PAGER_ICONS})
 qt_add_resources(pager-native icon PREFIX / FILES pager.svg emoji-names.tsv emoji-groups.tsv palettes.tsv)
 qt_add_qml_module(pager-native URI Pager VERSION 1.0 RESOURCE_PREFIX / QML_FILES
-  qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/GroupAvatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml qml/PollCard.qml qml/PollDialog.qml qml/Settings.qml qml/Accounts.qml qml/QrView.qml qml/Networks.js qml/Admin.qml qml/SmoothWheel.qml qml/AudioBubble.qml qml/ImageViewer.qml qml/ForwardDialog.qml qml/InfoPanel.qml qml/IconButton.qml qml/PSwitch.qml qml/NewChat.qml qml/SearchDialog.qml qml/WhenDialog.qml qml/Icon.qml qml/VoiceDialog.qml qml/ScheduleDialog.qml qml/FilterDialog.qml qml/LinkCard.qml qml/SGroup.qml qml/SColor.qml qml/SCollapse.qml qml/BubblePreview.qml qml/BubbleLook.qml qml/CommandBar.qml qml/MxcImage.qml qml/Gifs.js qml/GifDialog.qml qml/StickerDialog.qml qml/ContactDialog.qml qml/LocationDialog.qml qml/AttentionDialog.qml qml/AttentionOverlay.qml qml/AttentionSound.qml qml/SBlock.qml qml/SToggle.qml qml/SChoice.qml qml/SSlider.qml qml/SList.qml qml/SAction.qml qml/SText.qml qml/Shortcuts.js)
+  qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/GroupAvatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml qml/PollCard.qml qml/PollDialog.qml qml/Settings.qml qml/Accounts.qml qml/QrView.qml qml/Networks.js qml/Admin.qml qml/SmoothWheel.qml qml/AudioBubble.qml qml/ImageViewer.qml qml/ForwardDialog.qml qml/InfoPanel.qml qml/IconButton.qml qml/PSwitch.qml qml/NewChat.qml qml/SearchDialog.qml qml/WhenDialog.qml qml/Icon.qml qml/VoiceDialog.qml qml/ScheduleDialog.qml qml/FilterDialog.qml qml/LinkCard.qml qml/SGroup.qml qml/Greeting.qml qml/Greetings.js qml/STime.qml qml/SDays.qml qml/SoundPlayer.qml qml/SColor.qml qml/SCollapse.qml qml/BubblePreview.qml qml/BubbleLook.qml qml/CommandBar.qml qml/MxcImage.qml qml/Gifs.js qml/GifDialog.qml qml/StickerDialog.qml qml/ContactDialog.qml qml/LocationDialog.qml qml/AttentionDialog.qml qml/AttentionOverlay.qml qml/AttentionSound.qml qml/SBlock.qml qml/SToggle.qml qml/SChoice.qml qml/SSlider.qml qml/SList.qml qml/SAction.qml qml/SText.qml qml/Shortcuts.js)
 if(WIN32)
   set_target_properties(pager-native PROPERTIES WIN32_EXECUTABLE ON)
 endif()
@@ -49,7 +49,7 @@ target_link_libraries(store-test PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME store COMMAND store-test)
 
 # The Qt layer on top of the real engine (needs a test homeserver: see tests/engine_live_test.cpp).
-qt_add_executable(engine-live-test tests/engine_live_test.cpp src/engine.cpp src/store.cpp src/models.cpp src/selfupdate.cpp src/rich.cpp src/names.cpp src/appsettings.cpp src/notifypolicy.cpp)
+qt_add_executable(engine-live-test tests/engine_live_test.cpp src/engine.cpp src/effectwords.cpp src/store.cpp src/models.cpp src/selfupdate.cpp src/rich.cpp src/names.cpp src/appsettings.cpp src/notifypolicy.cpp)
 target_include_directories(engine-live-test PRIVATE src include)
 target_link_libraries(engine-live-test PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Test pager_core)
 set_target_properties(engine-live-test PROPERTIES INSTALL_RPATH "$ORIGIN" BUILD_WITH_INSTALL_RPATH ON)
@@ -88,7 +88,7 @@ add_test(NAME appearance COMMAND appearance-test)
 
 # QML screens with a stand-in engine (tests/tst_*.qml)
 find_package(Qt6 6.4 REQUIRED COMPONENTS QuickTest)
-qt_add_executable(qml-test tests/qml_main.cpp src/appearance.cpp src/appsettings.cpp src/fileinfo.cpp src/roundedimage.cpp src/wallpaper.cpp src/iconprovider.cpp)
+qt_add_executable(qml-test tests/qml_main.cpp src/appearance.cpp src/appsettings.cpp src/fileinfo.cpp src/sounds.cpp src/roundedimage.cpp src/wallpaper.cpp src/screeneffects.cpp src/effectwords.cpp src/iconprovider.cpp)
 target_include_directories(qml-test PRIVATE src)
 target_compile_definitions(qml-test PRIVATE QUICK_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}/tests")
 target_link_libraries(qml-test PRIVATE Qt6::Core Qt6::Gui Qt6::Svg Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::QuickTest)
@@ -107,7 +107,7 @@ endif()
 
 if(PAGER_BUILD_TESTS)
 # The real chat screens on the real engine (demo data): tests/chat/tst_*.qml
-add_executable(qml-chat-test tests/qml_chat_main.cpp src/roundedimage.cpp src/wallpaper.cpp src/iconprovider.cpp src/engine.cpp src/store.cpp src/models.cpp src/rich.cpp src/names.cpp src/notifypolicy.cpp src/emoji.cpp src/appearance.cpp src/appsettings.cpp src/fileinfo.cpp src/selfupdate.cpp src/roundedimage.cpp src/wallpaper.cpp src/iconprovider.cpp)
+add_executable(qml-chat-test tests/qml_chat_main.cpp src/roundedimage.cpp src/wallpaper.cpp src/screeneffects.cpp src/effectwords.cpp src/iconprovider.cpp src/engine.cpp src/effectwords.cpp src/store.cpp src/models.cpp src/rich.cpp src/names.cpp src/notifypolicy.cpp src/emoji.cpp src/appearance.cpp src/appsettings.cpp src/fileinfo.cpp src/sounds.cpp src/selfupdate.cpp src/roundedimage.cpp src/wallpaper.cpp src/screeneffects.cpp src/effectwords.cpp src/iconprovider.cpp)
 set_target_properties(qml-chat-test PROPERTIES AUTOMOC ON INSTALL_RPATH "$ORIGIN" BUILD_WITH_INSTALL_RPATH ON)
 target_include_directories(qml-chat-test PRIVATE src include)
 target_compile_definitions(qml-chat-test PRIVATE QUICK_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}/tests_chat")

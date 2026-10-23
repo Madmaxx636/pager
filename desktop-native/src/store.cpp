@@ -464,3 +464,8 @@ QJsonObject Store::parseStickerPack(const QString &key, const QString &fallbackN
     const QString name = content.value(QLatin1String("pack")).toObject().value(QLatin1String("display_name")).toString(fallbackName);
     return QJsonObject{{"key", key}, {"name", name}, {"stickers", out}};
 }
+
+bool Store::isStoriesRoom(const Room &r) {
+    static const QRegularExpression exact(QStringLiteral("^whatsapp status broadcast$"), QRegularExpression::CaseInsensitiveOption), fuzzy(QStringLiteral("status.?broadcast"), QRegularExpression::CaseInsensitiveOption);
+    return exact.match(r.name.trimmed()).hasMatch() || (r.network == QLatin1String("whatsapp") && fuzzy.match(r.name).hasMatch());
+}

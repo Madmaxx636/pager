@@ -2,6 +2,7 @@
 #include "rich.h"
 #include "names.h"
 #include "notifypolicy.h"
+#include "effectwords.h"
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
@@ -112,10 +113,12 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
             QString title = r->isGroup() ? chatName + QStringLiteral(" · ") + who : chatName;
             if (d.preview == QLatin1String("hidden")) { title = QStringLiteral("New message"); what = QString(); }
             else if (d.preview == QLatin1String("sender")) what = QString();
+            if (!d.silent && m_settings && m_settings->value(QStringLiteral("notifSound")).toBool()) emit playSound(m_settings->value(QStringLiteral("notifSoundId")).toString(), m_settings->value(QStringLiteral("notifSoundVolume")).toDouble());
             emit notify(id, title, what, d.silent);
         }
         m_firstRooms = false;
         emit unreadChanged(totalUnread());
+        if (m_active && !m_current.isEmpty() && !m_firstRooms) if (const Room *cr = m_store.room(m_current)) if (!cr->msgs.isEmpty() && changed.contains(m_current) && !m_store.mine(cr->msgs.last()) && !cr->msgs.last().local && m_chimed != cr->msgs.last().id) { m_chimed = cr->msgs.last().id; chime(QStringLiteral("receiveSound"), QStringLiteral("convoSoundVolume"), true); if (cr->msgs.last().kind == QLatin1String("text") && QDateTime::currentMSecsSinceEpoch() - cr->msgs.last().ts < 6000) effectFor(cr->msgs.last().body); }
         if (!m_current.isEmpty() && (changed.contains(m_current) || [&] { for (const QString &g : m_store.linkGroup(m_current)) if (changed.contains(g)) return true; return false; }())) { m_timeline.show(m_current); emit currentChanged(); if (m_active) markCurrentRead(); }
     } else if (kind == QLatin1String("history")) {
         const QString id = m_store.applyHistory(b);
@@ -297,6 +300,8 @@ void Engine::send(const QString &text, const QString &replyTo, bool markdown, co
     const QString body = text.trimmed();
     if (body.isEmpty() || m_current.isEmpty()) return;
     const QString html = markdown ? Rich::markdown(body) : QString();
+    chime(QStringLiteral("sendSound"), QStringLiteral("convoSoundVolume"), true);
+    effectFor(body);
     const QString local = m_store.addLocal(sendTarget(), body, replyTo, html);
     setTyping(false); setDraft(m_current, QString());
     m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
@@ -323,6 +328,7 @@ void Engine::react(const QString &eventId, const QString &emoji) {
         m_store.applyLocalEvent(evRoom(eventId), QJsonObject{{"event_id", QStringLiteral("local-redact-%1").arg(m_store.nextLocalId())}, {"type", "m.room.redaction"}, {"sender", m_user}, {"redacts", existing}, {"origin_server_ts", double(now)}});
     } else {
         const QJsonObject content{{"m.relates_to", QJsonObject{{"rel_type", "m.annotation"}, {"event_id", eventId}, {"key", emoji}}}};
+        chime(QStringLiteral("reactionSound"), QStringLiteral("convoSoundVolume"), true);
         m_store.applyLocalEvent(evRoom(eventId), QJsonObject{{"event_id", QStringLiteral("local-react-%1").arg(m_store.nextLocalId())}, {"type", "m.reaction"}, {"sender", m_user}, {"origin_server_ts", double(now)}, {"content", content}});
         sendEvent(evRoom(eventId), QStringLiteral("m.reaction"), content);
     }
@@ -1031,6 +1037,7 @@ void Engine::loadDemo() {
     };
     QJsonArray longEv;
     for (int i = 0; i < 400; ++i) longEv.append(ev(QStringLiteral("L%1").arg(i), i % 3 ? priya : leo, i % 3 ? "Priya" : "Leo", QStringLiteral("Message number %1 in a long chat, with enough words to wrap onto a second line sometimes").arg(i), 4000 - i * 3));
+    rooms.append(QJsonObject{{"id", "!stories"}, {"name", "WhatsApp Status Broadcast"}, {"direct", false}, {"encrypted", false}, {"unread", 3}, {"events", QJsonArray{ev("st1", QStringLiteral("@amy:demo.test"), "Amy", "New status", 20)}}});
     rooms.append(QJsonObject{{"id", "!long"}, {"name", "Long chat"}, {"direct", false}, {"encrypted", true}, {"unread", 0}, {"events", longEv}});
     m_store.applyRooms(rooms);
     double order = 0; for (const char *id : {"!maya", "!dad", "!work", "!sam"}) m_store.setTag(QString::fromLatin1(id), QStringLiteral("m.favourite"), true, order += 0.1);
@@ -1323,4 +1330,45 @@ void Engine::loadAllHistory(const QString &roomId) {
     m_allHistory = roomId; m_allPages = 0;
     const QByteArray t = r->historyToken.toUtf8(); r->historyToken.clear();
     pager_load_history(m_core, roomId.toUtf8().constData(), t.constData());
+}
+
+void Engine::chime(const QString &kindKey, const QString &volKey, bool convo) {
+    if (!m_settings) return;
+    if (convo && !m_settings->value(QStringLiteral("convoSounds")).toBool()) return;
+    const QString id = m_settings->value(kindKey).toString(); if (id.isEmpty() || id == QLatin1String("none")) return;
+    emit playSound(id, m_settings->value(volKey).toDouble());
+}
+
+void Engine::encryptAll() {
+    if (!m_encQueue.isEmpty()) return;
+    for (const QString &id : m_store.order()) if (const Room *r = m_store.room(id)) if (!r->encrypted && !m_store.isBotRoom(*r)) m_encQueue << id;
+    m_encTotal = m_encQueue.size(); m_encFailed = 0;
+    if (m_encTotal == 0) { emit encryptAllProgress(0, 0, 0); return; }
+    encryptNext();
+}
+void Engine::encryptNext() {
+    if (m_encQueue.isEmpty()) return;
+    const QString id = m_encQueue.takeFirst();
+    auto after = [this](bool ok) { if (!ok) ++m_encFailed; emit encryptAllProgress(m_encTotal - m_encQueue.size(), m_encTotal, m_encFailed); if (!m_encQueue.isEmpty()) encryptNext(); };
+    call(QStringLiteral("PUT"), QStringLiteral("/_matrix/client/v3/rooms/%1/state/m.room.encryption").arg(pct(id)),
+         QVariantMap{{"algorithm", "m.megolm.v1.aes-sha2"}, {"rotation_period_ms", 604800000}, {"rotation_period_msgs", 100}}, [this, id, after](int status, const QJsonValue &) {
+        if (status >= 200 && status < 300) { after(true); return; }
+        if (status != 403) { after(false); return; }
+        call(QStringLiteral("POST"), QStringLiteral("/api/rooms/%1/encrypt").arg(pct(id)), QVariantMap(), [after](int st, const QJsonValue &) { after(st >= 200 && st < 300); });
+    });
+}
+
+void Engine::effectFor(const QString &text) {
+    if (!m_settings || !m_settings->value(QStringLiteral("screenEffects")).toBool() || m_settings->value(QStringLiteral("reduceMotion")).toBool() || m_settings->value(QStringLiteral("lowEnd")).toBool()) return;
+    const QString e = EffectWords::effectFor(text);
+    if (!e.isEmpty()) emit screenEffect(e);
+}
+
+QVariantMap Engine::storiesInfo() const {
+    if (m_settings && m_settings->value(QStringLiteral("hideStories")).toBool()) return {};
+    for (auto it = m_store.roomsBegin(); it != m_store.roomsEnd(); ++it) if (Store::isStoriesRoom(*it)) {
+        QString preview; for (int i = it->msgs.size() - 1; i >= 0 && preview.isEmpty(); --i) preview = it->msgs[i].kind == QLatin1String("image") ? QStringLiteral("Photo") : it->msgs[i].kind == QLatin1String("video") ? QStringLiteral("Video") : it->msgs[i].body;
+        return QVariantMap{{"id", it->id}, {"unread", it->unread}, {"preview", preview.left(80)}};
+    }
+    return {};
 }

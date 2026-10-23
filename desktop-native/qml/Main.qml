@@ -20,7 +20,7 @@ ApplicationWindow {
     // Coming back to the window counts as reading what arrived while it was behind.
     Connections { target: Qt.application; function onStateChanged() { core.setActive(Qt.application.state === Qt.ApplicationActive) } }
 
-    Component.onCompleted: { if (startupDialog === "info") infoOpen = true }
+    Component.onCompleted: { if (startupDialog === "info") infoOpen = true; if (core.signedIn && !quietRun) greeting.hello() }
     Recovery { id: recovery }
     WhenDialog { id: snoozeDialog; heading: "Snooze until"; onPicked: (ms) => core.snooze(core.currentRoom, ms) }
     function runShortcut(id) {
@@ -52,6 +52,16 @@ ApplicationWindow {
         delegate: Shortcut { sequence: SC.keysFor(modelData.id, settings.shortcuts); enabled: core.signedIn; onActivated: win.runShortcut(modelData.id) }
     }
     NewChat { id: newChat }
+    Greeting { id: greeting; parent: Overlay.overlay }
+    readonly property bool quietRun: Qt.application.arguments.indexOf("--screenshot") >= 0 || Qt.application.arguments.indexOf("--demo") >= 0
+    Connections { target: core; function onStateChanged() { if (core.signedIn && !win.quietRun) greeting.hello() } }
+    Loader { id: soundLoader; active: false; source: "SoundPlayer.qml"; property string pendingFile: ""; property real pendingVolume: 0.5
+        onLoaded: item.play(pendingFile, pendingVolume) }
+    Connections { target: core
+        function onPlaySound(id, volume) {
+            const f = files.soundFile(id); if (!f.length || volume <= 0) return
+            if (soundLoader.active && soundLoader.item) soundLoader.item.play(f, volume)
+            else { soundLoader.pendingFile = f; soundLoader.pendingVolume = volume; soundLoader.active = true } } }
     CommandBar { id: palette; onNewChat: newChat.open(); onSearchAll: searchDlg.openFor("", "", ""); onOpenSettingsPage: (id) => { if (sidebarRef) sidebarRef.openSettingsPage(id) }; onSnoozeCurrent: snoozeDialog.open() }
     AttentionOverlay { id: attention; onOpenChat: (roomId) => { core.openRoom(roomId); win.showingChat = true } }
     Connections { target: core; function onAttention(roomId, chat, sender, kind) { attention.raise(roomId, chat, sender, kind) } }

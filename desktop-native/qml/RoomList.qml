@@ -122,6 +122,30 @@ Rectangle {
                 }
             }
         }
+        Loader {   // WhatsApp status updates, only when there are some
+            id: storiesLoader
+            property var info: ({})
+            function refresh() { info = core.storiesInfo() }
+            Component.onCompleted: refresh()
+            Connections { target: core; function onListChanged() { storiesLoader.refresh() } }
+            active: !!info.id && core.tab === "inbox" && core.search.length === 0
+            Layout.fillWidth: true; Layout.preferredHeight: item ? item.height : 0
+            sourceComponent: Rectangle {
+                property var info: storiesLoader.info
+                id: storiesRow
+                width: storiesLoader.width - 16; x: 8; height: 62; radius: 14; color: sh.hovered || core.currentRoom === info.id ? look.panel2 : "transparent"
+                HoverHandler { id: sh; cursorShape: Qt.PointingHandCursor }
+                Row { x: 10; anchors.verticalCenter: parent.verticalCenter; spacing: 13
+                    Rectangle { width: 46; height: 46; radius: 23; color: "transparent"; border.width: 2.5; border.color: storiesRow.info.unread > 0 ? look.accent : look.line
+                        Icon { anchors.centerIn: parent; name: "circle-dot"; size: 22; color: look.muted } }
+                    Column { anchors.verticalCenter: parent.verticalCenter; spacing: 1; width: storiesRow.width - 150
+                        Label { text: "Stories"; color: look.text; font.weight: Font.DemiBold; font.pixelSize: Math.round(15 * look.textScale) }
+                        Label { text: storiesRow.info.preview ? storiesRow.info.preview : "WhatsApp status updates show up here"; width: parent.width; elide: Text.ElideRight; color: look.muted; font.pixelSize: Math.round(13 * look.textScale) } } }
+                Rectangle { visible: storiesRow.info.unread > 0; anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; height: 20; width: Math.max(20, sbt.implicitWidth + 12); radius: 10; color: look.muted
+                    Label { id: sbt; anchors.centerIn: parent; text: storiesRow.info.unread > 99 ? "99+" : storiesRow.info.unread; color: look.bg; font.pixelSize: 12; font.weight: Font.Bold } }
+                TapHandler { onTapped: { core.openRoom(storiesRow.info.id); pane.opened() } }
+            }
+        }
         // ---- the chats (with the pinned ones as a row on top)
         ListView {
             id: list

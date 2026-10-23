@@ -31,5 +31,8 @@ public:
     /// A short alert sound made on the spot: "ring" (a phone-like double burst) or "nudge" (a sharp three-note alert). Returns the file.
     Q_INVOKABLE QVariantList wallpapers() const;
     Q_INVOKABLE QString importWallpaper(const QString &file, const QString &dir) const;
+    Q_INVOKABLE QVariantList effectTriggers() const;          // what sets off each full-screen effect
+    Q_INVOKABLE QVariantList sounds() const;                  // [[id, label]...] the built-in alert sounds
+    Q_INVOKABLE QString soundFile(const QString &id) const;   // the WAV of one of them
     Q_INVOKABLE QString tone(const QString &kind) const;
 };

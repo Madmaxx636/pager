@@ -36,6 +36,7 @@ Dialog {
         ["advanced", "Advanced", "Developer tools", "code-xml", "#475569", "System"], ["about", "About", "Version, server, sign out", "info", "#6b7280", ""]
     ]
     property string find: ""
+    property string encNote: ""
     FileDialog { id: photoPick; title: "Choose a wallpaper photo"; nameFilters: ["Pictures (*.png *.jpg *.jpeg *.webp *.bmp)"]
         onAccepted: { const f = files.importWallpaper(String(selectedFile), core.dataDir()); if (f.length) { settings.set("wallpaperPhoto", f); settings.set("wallpaper", "custom") } } }
     FileDialog { id: stickerAdder; title: "Add stickers"; fileMode: FileDialog.OpenFiles; nameFilters: ["Pictures (*.png *.jpg *.jpeg *.gif *.webp)"]; onAccepted: core.addStickers(selectedFiles.map(u => String(u))) }
@@ -183,7 +184,12 @@ Dialog {
                 SSlider { key: "wallpaperDim"; title: "Darken"; hint: settings.wallpaperDim ? "" : "Off"; from: 0; to: 70; step: 5; suffix: " %" }
             }
             SGroup { title: "Screen effects"
-                SToggle { key: "screenEffects"; title: "Screen effects"; hint: "Confetti, balloons and more play when a message says something like “congrats”, “happy birthday” or “I love you”. Nothing extra is sent." }
+                SToggle { key: "screenEffects"; title: "Screen effects"; hint: "They play when a new message, sent or received, says one of these. Nothing extra is sent." }
+                SBlock { Repeater { model: files.effectTriggers()
+                    delegate: ColumnLayout { Layout.fillWidth: true; spacing: 0
+                        Label { text: modelData.glyph + " " + modelData.name; color: look.text; font.weight: Font.DemiBold }
+                        Label { text: modelData.says; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); wrapMode: Text.Wrap; Layout.fillWidth: true }
+                        Label { text: modelData.examples; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); wrapMode: Text.Wrap; Layout.fillWidth: true } } } }
             }
             SGroup { title: "Size & font"
                 SChoice { key: "uiScale"; title: "App size"; hint: "Makes everything bigger or smaller, not only the text"; options: [["small", "Small"], ["medium", "Medium"], ["large", "Large"]] }
@@ -232,52 +238,68 @@ Dialog {
     }
     Component { id: chats
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "Writing"
-                SToggle { key: "enterToSend"; title: "Enter sends"; hint: "Shift+Enter starts a new line. Off: Ctrl+Enter sends" }
-                SToggle { key: "markdown"; title: "Formatting"; hint: "**bold**, _italic_, `code` and ~~strike~~ become formatted text" }
-                SToggle { key: "mentionSuggestions"; title: "Suggest people when you type @" }
-                SToggle { key: "confirmDelete"; title: "Ask before deleting a message" }
+            SGroup { title: "Sending"
+                SToggle { key: "enterToSend"; title: "Enter key sends"; hint: "Off: Ctrl+Enter sends and Enter adds a new line" }
+                SToggle { key: "markdown"; title: "Markdown formatting"; hint: "**bold**, _italic_, ~~strike~~ and `code` are sent as formatted text" }
+                SToggle { key: "mentionSuggestions"; title: "Mention suggestions"; hint: "Type @ in a group to pick someone" }
             }
             SGroup { title: "Reading"
-                SSlider { key: "groupGapMin"; title: "Group messages sent within"; from: 1; to: 30; step: 1; suffix: " min" }
-                SChoice { key: "markReadMode"; title: "Mark as read when"; options: [["open", "I open the chat"], ["scrolled", "I reach the newest"], ["manual", "I say so"]] }
-                SToggle { key: "openAtUnread"; title: "Open at the first unread message" }
-                SToggle { key: "unarchiveOnMessage"; title: "Bring an archived chat back when someone writes" }
+                SChoice { key: "markReadMode"; title: "Mark as read when"; options: [["open", "I open the page"], ["scrolled", "I reach the newest message"], ["manual", "I do it myself"]] }
+                SToggle { key: "openAtUnread"; title: "Open at first unread"; hint: "Jump to the 'New messages' line" }
+                SChoice { key: "groupGapMin"; title: "Message grouping"; options: [["1", "Within 1 minute"], ["5", "Within 5 minutes"], ["15", "Within 15 minutes"], ["60", "Within an hour"]] }
             }
             SGroup { title: "Privacy"
-                SToggle { key: "sendReadReceipts"; title: "Send read receipts"; hint: "Off: only you and the server know what you've read" }
+                SToggle { key: "sendReadReceipts"; title: "Send read receipts"; hint: "Off: others won't see when you've read their messages" }
                 SToggle { key: "sendTyping"; title: "Send typing indicators" }
             }
-            SGroup { title: "Media"
-                SToggle { key: "linkPreviews"; title: "Link previews" }
-                SChoice { key: "autoDownload"; title: "Download pictures"; options: [["always", "Automatically"], ["never", "When I tap them"]] }
-                SToggle { key: "autoPlayGifs"; title: "Play GIFs automatically" }
+            SGroup { title: "Media & links"
+                SToggle { key: "linkPreviews"; title: "Link previews"; hint: "Your server fetches the page to build the preview" }
+                SChoice { key: "autoDownload"; title: "Auto-download media"; options: [["always", "Always"], ["never", "Never (click to load)"]] }
+                SToggle { key: "autoPlayGifs"; title: "Auto-play GIFs" }
+            }
+            SGroup { title: "Inbox behavior"
+                SToggle { key: "unarchiveOnMessage"; title: "Unarchive on new message"; hint: "Archived pages come back when someone writes (unless muted)" }
+                SToggle { key: "confirmDelete"; title: "Confirm before deleting" }
             }
         }
     }
     Component { id: notifications
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "Alerts"
-                SToggle { key: "notifEnabled"; title: "Notifications" }
-                SChoice { key: "notifScope"; title: "Notify me about"; options: [["all", "Everything"], ["dm_mentions", "Direct messages and mentions"], ["favorites", "Pinned chats and mentions"]] }
-                SChoice { key: "notifDirectMode"; title: "Direct messages"; options: [["all", "All"], ["mentions", "Mentions only"], ["none", "None"]] }
-                SChoice { key: "notifGroupMode"; title: "Groups"; options: [["all", "All"], ["mentions", "Mentions only"], ["none", "None"]] }
-                SChoice { key: "notifPreview"; title: "What it shows"; options: [["full", "Sender and message"], ["sender", "Sender only"], ["hidden", "Nothing"]] }
+            SGroup { title: ""
+                SToggle { key: "notifEnabled"; title: "Notifications"; hint: "Master switch for message alerts" }
+                SToggle { key: "accountAlerts"; title: "Warn me when an account disconnects"; hint: "A notification when Google Messages, WhatsApp or another account loses its login"; enabled: settings.notifEnabled }
+                SToggle { visible: core.isAdmin; key: "updateAlerts"; title: "Tell me when bridges update"; hint: "A notification after the weekly automatic update, and if one had to be put back"; enabled: settings.notifEnabled }
+                SAction { title: "Send a test notification"; hint: "Check sound and how it looks"; button: "Test"; enabled: settings.notifEnabled; onClicked: core.testNotification() }
+            }
+            SGroup { title: "What to notify"; footer: "Muted and Low priority pages stay quiet except for @mentions, replies to your messages and your keywords."
+                SChoice { key: "notifScope"; title: "Notify me about"; options: [["all", "Every message"], ["dm_mentions", "Direct messages and mentions"], ["favorites", "Pinned pages and mentions"]] }
+                SChoice { key: "notifDirectMode"; title: "Direct messages"; options: [["all", "Every message"], ["mentions", "Mentions and replies only"], ["none", "Nothing"]] }
+                SChoice { key: "notifGroupMode"; title: "Group pages"; options: [["all", "Every message"], ["mentions", "Mentions and replies only"], ["none", "Nothing"]] }
+                SToggle { key: "notifGroupMentionsOnly"; title: "Groups: only when mentioned"; hint: "Group pages stay quiet unless someone @mentions you" }
+            }
+            SGroup { title: "Keywords"; footer: "A message with one of these words always notifies you, even in a muted page. Whole words only."
+                SList { key: "notifKeywords"; title: "Add a keyword"; placeholder: "Your name, a nickname…" }
+            }
+            SGroup { title: "Appearance"
+                SChoice { key: "notifPreview"; title: "Show"; options: [["full", "Name and message"], ["sender", "Name only"], ["hidden", "Hide content"]] }
                 SToggle { key: "notifSound"; title: "Sound" }
-                SList { key: "notifKeywords"; title: "Keywords"; hint: "Words that always alert you, even from muted chats"; placeholder: "Add a word" }
-                SChoice { key: "notifBadge"; title: "Count on the tray icon"; options: [["unmuted", "Unmuted chats"], ["all", "All chats"], ["off", "Off"]] }
+                SChoice { key: "notifBadge"; title: "Unread badge counts"; hint: "The number on the app icon"; options: [["unmuted", "Pages that can notify me"], ["all", "Every unread page"], ["off", "Nothing"]] }
             }
-            SGroup { title: "Quiet hours"
-                SToggle { key: "quietHoursEnabled"; title: "Quiet hours"; hint: "Alerts still show, without sound" }
-                SSlider { key: "quietStartMin"; title: "From"; from: 0; to: 1425; step: 15; suffix: " min after midnight" }
-                SSlider { key: "quietEndMin"; title: "Until"; from: 0; to: 1425; step: 15; suffix: " min after midnight" }
-                SToggle { key: "notifQuietBreakThrough"; title: "Pinned chats and mentions can still make a sound" }
+            SGroup { title: "Sounds"; footer: "Muted and quiet-hours messages stay silent. A page can have its own sound in its info page."
+                SToggle { key: "convoSounds"; title: "Sounds inside a page"; hint: "A little sound when you send or get a message in the page you have open" }
+                SChoice { key: "sendSound"; title: "Send sound"; options: files.sounds(); onPicked: (v) => core.previewSound(v, settings.convoSoundVolume) }
+                SChoice { key: "reactionSound"; title: "Reaction sound"; options: files.sounds(); onPicked: (v) => core.previewSound(v, settings.convoSoundVolume) }
+                SChoice { key: "receiveSound"; title: "Receive sound"; options: files.sounds(); onPicked: (v) => core.previewSound(v, settings.convoSoundVolume) }
+                SSlider { key: "convoSoundVolume"; title: "Page sound volume"; from: 0; to: 1; step: 0.05; decimals: 2 }
+                SChoice { key: "notifSoundId"; title: "Alert sound"; options: files.sounds(); onPicked: (v) => core.previewSound(v, settings.notifSoundVolume) }
+                SSlider { key: "notifSoundVolume"; title: "Volume"; from: 0; to: 1; step: 0.05; decimals: 2 }
             }
-            SGroup { title: "Do not disturb"
-                SAction { title: settings.dndUntil > Date.now() ? "On until " + new Date(settings.dndUntil).toLocaleTimeString(Qt.locale(), "h:mm AP") : "Off"; hint: "No alerts for a while"; button: settings.dndUntil > Date.now() ? "Turn off" : "For 1 hour"
-                    onClicked: settings.set("dndUntil", settings.dndUntil > Date.now() ? 0 : Date.now() + 3600000) }
-            }
-            SGroup { title: "Per chat"; footer: "Set a chat's own rules from its info panel."
+            SGroup { title: "Quiet hours"; footer: "Messages still arrive, silently."
+                SToggle { key: "quietHoursEnabled"; title: "Quiet hours" }
+                STime { visible: settings.quietHoursEnabled; key: "quietStartMin"; title: "From" }
+                STime { visible: settings.quietHoursEnabled; key: "quietEndMin"; title: "Until" }
+                SDays { visible: settings.quietHoursEnabled; key: "notifQuietDays"; title: "On these days" }
+                SToggle { visible: settings.quietHoursEnabled; key: "notifQuietBreakThrough"; title: "Let important ones through"; hint: "Pinned pages, mentions, replies and keywords still make a sound" }
             }
         }
     }
@@ -321,13 +343,17 @@ Dialog {
     }
     Component { id: privacy
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "Encryption"
-                SAction { title: "Restore old messages"; hint: "Enter your recovery key to read messages from before this device was added"; button: "Enter key"; onClicked: { dlg.close(); dlg.restoreRequested() } }
-            }
-            SGroup { title: "Privacy"
+            SGroup { title: "Receipts"
                 SToggle { key: "sendReadReceipts"; title: "Send read receipts" }
                 SToggle { key: "sendTyping"; title: "Send typing indicators" }
-                SToggle { key: "linkPreviews"; title: "Link previews"; hint: "Your server looks the link up for you" }
+            }
+            SGroup { title: "Encryption"; footer: "Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you."
+                SAction { title: "Recovery key"; hint: "Enter your recovery key to read messages from before this device was added"; button: "Enter key"; onClicked: { dlg.close(); dlg.restoreRequested() } }
+                SAction { title: "Encrypt all my pages"; hint: dlg.encNote.length ? dlg.encNote : "Turns on encryption for every page that can take it. Older messages stay readable on your server"; button: "Encrypt…"; onClicked: encryptAllConfirm.open() }
+            }
+            SGroup { title: "Content"; footer: "Link previews are fetched by your own server, so the sites you link to never see your device."
+                SToggle { key: "linkPreviews"; title: "Link previews" }
+                SChoice { key: "notifPreview"; title: "Notification content"; options: [["full", "Name and message"], ["sender", "Name only"], ["hidden", "Hide content"]] }
             }
         }
     }
@@ -345,23 +371,34 @@ Dialog {
     }
     Component { id: system
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "Time and motion"
-                SChoice { key: "timeFormat"; title: "Time format"; options: [["system", "System"], ["12", "12-hour"], ["24", "24-hour"]] }
-                SToggle { key: "reduceMotion"; title: "Reduce motion"; hint: "Less animation" }
-                SToggle { key: "fancyMotion"; title: "Small animations" }
-                SToggle { key: "hideStories"; title: "Hide Stories"; hint: "WhatsApp status updates" }
-                SToggle { key: "greetings"; title: "Silly hello when Pager opens" }
+            SGroup { title: "Easy on your connection and your machine"; footer: "Both are overrides: your own settings are not changed, so switching one off brings everything back."
+                SToggle { key: "lowData"; title: "Low data mode"; hint: "For a slow or limited connection: nothing downloads until you tap it, GIFs don't play by themselves, link previews and typing indicators are off, pictures arrive at half size, and less runs in the background" }
+                SToggle { key: "lowEnd"; title: "Low-end device mode"; hint: "For an older or slower computer: no blur or glass, no full-screen effects, no glowing or endlessly looping animations, and fewer messages kept in memory. Pager also draws with the processor instead of the graphics chip. Takes effect after Pager restarts." }
+            }
+            SGroup { title: "Time"
+                SChoice { key: "timeFormat"; title: "Time format"; options: [["system", "Follow system"], ["12", "12-hour"], ["24", "24-hour"]] }
+            }
+            SGroup { title: "Motion"
+                SToggle { key: "fancyMotion"; title: "Small animations"; hint: "Things slide, glide, glow, pop, breathe and fade a little. Off for none" }
+                SToggle { key: "reduceMotion"; title: "Reduce motion"; hint: "Fewer animations" }
+            }
+            SGroup { title: "Extras"
+                SToggle { key: "hideStories"; title: "Hide Stories"; hint: "Removes the Stories row (WhatsApp status updates) from the list" }
+                SToggle { key: "greetings"; title: "Silly hello"; hint: "The pager says something goofy when you open the app" }
             }
         }
     }
     Component { id: desktop
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "On this computer"
-                SToggle { key: "closeToTray"; title: "Keep running in the tray"; hint: "Closing the window leaves Pager running so messages still reach you" }
-                SToggle { key: "startMinimized"; title: "Start in the tray" }
-                RowLayout { Layout.fillWidth: true
-                    Label { text: "Start Pager when I log in"; color: look.text; Layout.fillWidth: true }
-                    PSwitch { checked: files.autostart(); onToggled: { files.setAutostart(checked); settings.set("launchAtLogin", checked) } } }
+            SGroup { title: "Window"
+                SToggle { key: "closeToTray"; title: "Keep running in the tray when closed"; hint: "Closing the window hides Pager so messages keep arriving" }
+                SBlock { RowLayout { Layout.fillWidth: true
+                    Label { text: "Launch at login"; color: look.text; Layout.fillWidth: true }
+                    PSwitch { checked: files.autostart(); onToggled: { files.setAutostart(checked); settings.set("launchAtLogin", checked) } } } }
+                SToggle { key: "startMinimized"; title: "Start minimized to tray" }
+            }
+            SGroup { title: "Look"; footer: "Takes your colors from KDE Plasma or GNOME and follows them when you change them."
+                SToggle { key: "themeFollowSystem"; title: "Match my system theme"; hint: "Light or dark follows your desktop" }
             }
         }
     }
@@ -383,18 +420,17 @@ Dialog {
     }
     Component { id: advanced
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "Reload"
-                SAction { title: "Reload everything from the server"; hint: "Fixes a list that is missing something. Your messages stay on the server."; button: "Reload"; onClicked: { core.reloadEverything(); dlg.close() } }
+            SGroup { title: "Sync"; footer: "Use this if a chat is missing, a message never showed up, or this device is out of step with your other devices. Your account and the server are not touched."
+                SAction { title: "Reload everything from the server"; hint: "Forgets what this device saved and downloads your chats again"; button: "Reload"; onClicked: { core.reloadEverything(); dlg.close() } }
             }
             SGroup { title: "Storage"
                 SAction { title: "Downloaded pictures and files"; hint: files.humanSize(core.mediaCacheSize()) + " on this computer"; button: "Clear"; onClicked: { const n = core.clearMediaCache(); dlg.note = "Freed " + files.humanSize(n) } }
-                Label { visible: dlg.note.length > 0; text: dlg.note; color: look.accent }
+                SBlock { visible: dlg.note.length > 0; Label { text: dlg.note; color: look.accent } }
             }
-            SGroup { title: "Developer"
-                SToggle { key: "developerMode"; title: "Developer mode"; hint: "Show event ids and details" }
-                SToggle { key: "lowEnd"; title: "Low-end mode"; hint: "For an older computer: draws with the processor instead of the graphics chip, less memory. Takes effect after Pager restarts." }
-                SToggle { key: "lowData"; title: "Low data"; hint: "Nothing downloads by itself and pictures are smaller" }
-                Label { text: "Log file: " + core.logPath; color: look.muted; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere } }
+            SGroup { title: "Developer"; footer: "Adds event IDs and a 'Copy event ID' action to messages."
+                SToggle { key: "developerMode"; title: "Developer mode" }
+                SBlock { Label { text: "Log file: " + core.logPath; color: look.muted; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere } }
+            }
         }
     }
     Component { id: starred
@@ -459,6 +495,9 @@ Dialog {
         onAccepted: core.renameLabel(old, renameField.text) }
     Dialog { id: resetConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Reset all settings?"; standardButtons: Dialog.Cancel | Dialog.Ok; background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
         Label { text: "Everything goes back to how Pager starts."; color: look.text } onAccepted: { settings.reset(); dlg.note = "Settings reset." } }
+    Dialog { id: encryptAllConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Encrypt all my pages?"; standardButtons: Dialog.Cancel | Dialog.Ok; width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420); background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+        Label { width: parent.width; wrapMode: Text.Wrap; color: look.text; text: "Every page that can take encryption gets it turned on. It cannot be turned off again. Messages sent before stay readable on your server. Make sure you have your recovery key." } onAccepted: { dlg.encNote = "Starting…"; core.encryptAll() } }
+    Connections { target: core; function onEncryptAllProgress(done, total, failed) { dlg.encNote = total === 0 ? "Everything is already encrypted." : (done >= total ? "Done: " + (total - failed) + " turned on" + (failed ? ", " + failed + " could not be" : "") : "Turning on… " + done + " of " + total) } }
     FileDialog { id: exportDialog; fileMode: FileDialog.SaveFile; currentFile: "file://" + files.downloadsDir() + "/pager-settings.json"; nameFilters: ["Settings (*.json)"]
         onAccepted: dlg.note = files.writeText(files.path(selectedFile), settings.exportJson()) ? "Saved." : "Couldn't save the file." }
     FileDialog { id: importDialog; nameFilters: ["Settings (*.json)", "All files (*)"]

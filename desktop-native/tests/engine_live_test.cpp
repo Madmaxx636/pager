@@ -113,6 +113,14 @@ private slots:
         QVERIFY(!e.searchLocal("", "!maya", "images").isEmpty());                     // the demo photo
         QVERIFY(e.searchLocal("", "!maya", "videos").isEmpty());
     }
+    void aPartyEmojiSetsOffConfettiButOnlyWhenEffectsAreOn() {      // needs no server
+        Engine e(QString(), true); AppSettings st; e.setSettings(&st);
+        QSignalSpy spy(&e, &Engine::screenEffect);
+        e.openRoom("!maya"); e.send("congrats \U0001F389", QString(), false);
+        QCOMPARE(spy.count(), 1); QCOMPARE(spy.first().first().toString(), QString("confetti"));
+        st.set("screenEffects", false); e.send("congrats again", QString(), false);
+        QCOMPARE(spy.count(), 1);
+    }
     void popUpsFollowTheNotificationSettings() {      // needs no server
         Engine e(QString(), true); AppSettings s; e.setSettings(&s);
         QSignalSpy pop(&e, &Engine::notify);

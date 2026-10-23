@@ -31,6 +31,7 @@ QHash<QString, QString> RoomListModel::s_aliases;
 QString RoomListModel::displayName(const Room &r) {
     if (const QString a = s_aliases.value(r.id); !a.isEmpty()) return a;
     static const QRegularExpression empty(QStringLiteral("^Empty Room( \\(was .*\\))?$"));
+    if (Store::isStoriesRoom(r)) return QStringLiteral("Stories");
     if (!r.name.trimmed().isEmpty() && r.name != r.id && !empty.match(r.name).hasMatch()) return Names::pretty(r.name);
     for (const QString &h : r.heroes) return r.nameOf(h);
     for (const QString &u : r.joined) if (u != QString() && !Store::isBridgeBot(u)) { /* someone else in it */ }
@@ -96,7 +97,7 @@ void RoomListModel::refresh() {
     QVector<const Room *> keep; QHash<QString, Store::LinkAgg> aggs;
     for (auto it = m_store->roomsBegin(); it != m_store->roomsEnd(); ++it) {
         const Room &r = *it;
-        if (m_store->isBotRoom(r) || m_hidden.contains(r.network)) continue;
+        if (m_store->isBotRoom(r) || m_hidden.contains(r.network) || Store::isStoriesRoom(r)) continue;
         const Store::LinkAgg ag = m_store->linkAgg(r);
         if (ag.top != &r) continue;                                   // shown as part of another chat of the same person
         const bool unread = ag.unread > 0 || ag.marked;

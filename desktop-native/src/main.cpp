@@ -19,6 +19,7 @@
 #include "iconprovider.h"
 #include "roundedimage.h"
 #include "wallpaper.h"
+#include "screeneffects.h"
 #include "fileinfo.h"
 #include "appsettings.h"
 #include "rich.h"
@@ -96,7 +97,7 @@ int main(int argc, char *argv[]) {
 
     QQmlApplicationEngine qml;
     qml.addImageProvider(QStringLiteral("icon"), new IconProvider);
-    qmlRegisterType<RoundedImage>("Pager.Items", 1, 0, "RoundedImage"); qmlRegisterType<Wallpaper>("Pager.Items", 1, 0, "Wallpaper");
+    qmlRegisterType<RoundedImage>("Pager.Items", 1, 0, "RoundedImage"); qmlRegisterType<Wallpaper>("Pager.Items", 1, 0, "Wallpaper"); qmlRegisterType<ScreenEffects>("Pager.Items", 1, 0, "ScreenEffects");
     qml.addImportPath(QStringLiteral("qrc:/qml"));
     qml.rootContext()->setContextProperty(QStringLiteral("core"), &engine);
     qml.rootContext()->setContextProperty(QStringLiteral("look"), &look);
