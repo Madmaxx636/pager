@@ -9,6 +9,7 @@ Item {
     ContactDialog { id: contact }
     LocationDialog { id: place }
     AttentionDialog { id: attn }
+    AttentionOverlay { id: overlay }
     TestCase {
         name: "Attach"; when: windowShown
         function test_the_dialogs_open_and_close() {
@@ -29,6 +30,9 @@ Item {
         function test_whatsapp_status_updates_get_their_own_row_not_a_chat() {
             const info = core.storiesInfo(); compare(info.id, "!stories"); compare(info.unread, 3)
             for (let i = 0; i < core.rooms.rowCount(); i++) verify(core.rooms.data(core.rooms.index(i, 0), Qt.UserRole + 1) !== "!stories")
+        }
+        function test_the_sound_libraries_stay_out_of_memory_until_a_sound_is_needed() {
+            verify(files.readText("/proc/self/maps").indexOf("ffmpegmediaplugin") < 0, "QtMultimedia was loaded at start")
         }
         function test_a_place_link_is_understood() {
             place.parse("https://www.openstreetmap.org/?mlat=48.858400&mlon=2.294500#map=16/48.8584/2.2945")
