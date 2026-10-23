@@ -97,8 +97,13 @@ fn sync_filter() -> Option<matrix_sdk::ruma::api::client::filter::FilterDefiniti
 async fn run_sync(client: Client, tell: Tell) {
     tell.say("state", &json!({ "signedIn": true, "user": client.user_id().map(|u| u.to_string()), "device": client.device_id().map(|d| d.to_string()), "syncing": true }));
     let mut waited = 0u64;
+    let mut first = true;
     loop {
-        let mut settings = SyncSettings::default().timeout(Duration::from_secs(30));
+        // Every start begins with a fresh first sync: the engine only tells the screens what a sync brings, so continuing from the saved
+        // position would show nothing but what changed since the last run (an empty list for anyone who just reopens the app).
+        let token = if first { matrix_sdk::config::SyncToken::NoToken } else { matrix_sdk::config::SyncToken::ReusePrevious };
+        first = false;
+        let mut settings = SyncSettings::default().timeout(Duration::from_secs(30)).token(token);
         if let Some(f) = sync_filter() { settings = settings.filter(matrix_sdk::ruma::api::client::sync::sync_events::v3::Filter::FilterDefinition(f)); }
         let (c2, t2) = (client.clone(), tell.clone());
         let result = client.sync_with_callback(settings, move |resp| {

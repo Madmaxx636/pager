@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(pager-native VERSION 0.1.3 LANGUAGES CXX)
+project(pager-native VERSION 0.1.4 LANGUAGES CXX)
 add_compile_definitions(PAGER_NATIVE_VERSION="${PROJECT_VERSION}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
