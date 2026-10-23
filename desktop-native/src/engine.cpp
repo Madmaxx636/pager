@@ -467,6 +467,20 @@ void Engine::applyListOptions() {
     m_rooms.setExcludePinned(pinsRow);
     m_rooms.setFilters(m_filters, drafts);
 }
+QVariantList Engine::faces(const QString &roomId) const {
+    QVariantList out; const Room *r = m_store.room(roomId);
+    if (!r || !r->avatar.isEmpty() || !r->isGroup()) return out;
+    QStringList ids = r->joined; if (ids.isEmpty()) ids = r->members.keys();
+    ids.sort();
+    for (const QString &u : ids) {
+        if (u == m_user || Store::isBridgeBot(u) || QRegularExpression(QStringLiteral("^@[a-z0-9_-]*bot:")).match(u).hasMatch()) continue;
+        const QString av = r->memberAvatars.value(u); QString path = av.isEmpty() ? QString() : m_store.mediaPath(QStringLiteral("av:") + av);
+        if (!av.isEmpty() && path.isEmpty()) m_store.wantAvatar(av);
+        out << QVariantMap{{"name", r->nameOf(u)}, {"avatar", path}};
+        if (out.size() == 4) break;
+    }
+    return out.size() > 1 ? out : QVariantList();
+}
 QVariantList Engine::pins() const {
     QVariantList out;
     const bool pinsRow = (!m_settings || m_settings->value(QStringLiteral("showPinsRow")).toBool()) && m_tab == QLatin1String("inbox") && m_search.trimmed().isEmpty() && filterCount() == 0;
@@ -478,7 +492,7 @@ QVariantList Engine::pins() const {
         const QString av = r->avatar.isEmpty() ? QString() : m_store.mediaPath(QStringLiteral("av:") + r->avatar);
         if (!r->avatar.isEmpty() && av.isEmpty()) m_store.wantAvatar(r->avatar);
         const QString name = RoomListModel::displayName(*r);
-        out << QVariantMap{{"id", r->id}, {"name", name}, {"avatar", av}, {"network", r->network}, {"unread", r->unread > 0 || r->markedUnread}, {"muted", m_store.muted(r->id)}};
+        out << QVariantMap{{"id", r->id}, {"name", name}, {"avatar", av}, {"network", r->network}, {"unread", r->unread > 0 || r->markedUnread}, {"count", r->unread}, {"muted", m_store.muted(r->id)}, {"faces", faces(r->id)}};
     }
     return out;
 }
@@ -981,6 +995,8 @@ void Engine::loadDemo() {
     QJsonArray longEv;
     for (int i = 0; i < 400; ++i) longEv.append(ev(QStringLiteral("L%1").arg(i), i % 3 ? priya : leo, i % 3 ? "Priya" : "Leo", QStringLiteral("Message number %1 in a long chat, with enough words to wrap onto a second line sometimes").arg(i), 4000 - i * 3));
     rooms.append(QJsonObject{{"id", "!long"}, {"name", "Long chat"}, {"direct", false}, {"encrypted", true}, {"unread", 0}, {"events", longEv}});
-    m_store.applyRooms(rooms); m_rooms.refresh();
+    m_store.applyRooms(rooms);
+    double order = 0; for (const char *id : {"!maya", "!dad", "!work", "!sam"}) m_store.setTag(QString::fromLatin1(id), QStringLiteral("m.favourite"), true, order += 0.1);
+    m_rooms.refresh();
     openRoom(QStringLiteral("!maya"));
 }
