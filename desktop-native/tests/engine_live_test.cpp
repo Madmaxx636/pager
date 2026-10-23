@@ -1,6 +1,7 @@
 // The Qt side on top of the real engine, against a real homeserver (PAGER_TEST_SERVER and PAGER_TEST_ALICE=name:password; without them this does nothing).
 // A fresh sign-in on a new "device": it must show the account's chats, open one, and send a message that appears at once and is not shown twice.
 #include <QJSEngine>
+#include <QUrl>
 #include <QJsonArray>
 #include <QQmlEngine>
 #include <QJsonObject>
@@ -161,6 +162,46 @@ private slots:
         e.setActive(false);
         e.handle("rooms", room("!a", "@x:d", "$5", now + 4000));          // window behind: pop-up
         QCOMPARE(pop.count(), 2);
+    }
+    /// Actions on a chat reach the real server: tags, unread flag, mute rule, typing, search.
+    void chatActionsReachTheServer() {
+        const QString server = qEnvironmentVariable("PAGER_TEST_SERVER"), alice = qEnvironmentVariable("PAGER_TEST_ALICE");
+        if (server.isEmpty() || !alice.contains(':')) QSKIP("no test server given");
+        QTemporaryDir dir; Engine e(dir.path());
+        QJSEngine js; js.newQObject(&e); QQmlEngine::setObjectOwnership(&e, QQmlEngine::CppOwnership);
+        QTRY_VERIFY_WITH_TIMEOUT(!e.starting(), 20000);
+        e.login(server, alice.section(':', 0, 0), alice.section(':', 1));
+        QTRY_VERIFY_WITH_TIMEOUT(e.signedIn(), 60000);
+        auto *rooms = qobject_cast<RoomListModel *>(e.rooms());
+        QTRY_VERIFY_WITH_TIMEOUT(rooms->rowCount() >= 1 && !e.loading(), 60000);
+        const QString id = rooms->data(rooms->index(0), RoomListModel::IdRole).toString();
+        const QString me = e.user();
+        // ask the server a question and wait for the answer
+        auto get = [&](const QString &path) { js.globalObject().setProperty("answer", QJSValue()); js.evaluate("answer = undefined");
+            e.api("GET", path, QVariant(), js.evaluate("(function(s, b) { answer = { status: s, body: b } })"));
+            [&] { QTRY_VERIFY_WITH_TIMEOUT(!js.globalObject().property("answer").isUndefined(), 20000); }(); return js.globalObject().property("answer").toVariant().toMap(); };
+        const QString enc = QString::fromUtf8(QUrl::toPercentEncoding(id)), encMe = QString::fromUtf8(QUrl::toPercentEncoding(me));
+        e.pin(id, true); e.archive(id, true); e.addLabel(id, "Work");
+        QVERIFY(e.roomInfo(id).value("pinned").toBool()); QVERIFY(e.roomInfo(id).value("archived").toBool());                  // at once
+        QTRY_VERIFY_WITH_TIMEOUT(get("/_matrix/client/v3/user/" + encMe + "/rooms/" + enc + "/tags").value("body").toMap().value("tags").toMap().contains("u.label.Work"), 20000);
+        const QVariantMap tags = get("/_matrix/client/v3/user/" + encMe + "/rooms/" + enc + "/tags").value("body").toMap().value("tags").toMap();
+        QVERIFY(tags.contains("m.favourite")); QVERIFY(tags.contains("u.archived"));
+        e.pin(id, false); e.archive(id, false); e.removeLabel(id, "Work");
+        QTRY_VERIFY_WITH_TIMEOUT(get("/_matrix/client/v3/user/" + encMe + "/rooms/" + enc + "/tags").value("body").toMap().value("tags").toMap().isEmpty(), 20000);
+        e.markUnread(id, true);
+        QTRY_VERIFY_WITH_TIMEOUT(get("/_matrix/client/v3/user/" + encMe + "/rooms/" + enc + "/account_data/m.marked_unread").value("body").toMap().value("unread").toBool(), 20000);
+        e.markRead(id);
+        QTRY_VERIFY_WITH_TIMEOUT(!get("/_matrix/client/v3/user/" + encMe + "/rooms/" + enc + "/account_data/m.marked_unread").value("body").toMap().value("unread").toBool(), 20000);
+        e.setMuted(id, true);
+        QTRY_VERIFY_WITH_TIMEOUT(get("/_matrix/client/v3/pushrules/global/override/" + enc).value("status").toInt() == 200, 20000);
+        QVERIFY(e.roomInfo(id).value("muted").toBool());
+        e.setMuted(id, false);
+        QTRY_VERIFY_WITH_TIMEOUT(get("/_matrix/client/v3/pushrules/global/override/" + enc).value("status").toInt() == 404, 20000);
+        e.openRoom(id); e.setTyping(true); e.setTyping(false);
+        // a message sent from here can be found again
+        const QString word = QStringLiteral("findme%1").arg(QDateTime::currentMSecsSinceEpoch());
+        e.send(word); QTRY_VERIFY_WITH_TIMEOUT(!e.searchLocal(word, id, "all").isEmpty(), 20000);
+        e.logout(); QTRY_VERIFY_WITH_TIMEOUT(!e.signedIn(), 30000);
     }
     void signInOpenAndSend() {
         const QString server = qEnvironmentVariable("PAGER_TEST_SERVER"), alice = qEnvironmentVariable("PAGER_TEST_ALICE");
