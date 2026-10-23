@@ -170,8 +170,10 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
         r.filterKeys { it != me && !isBridgeBot(it) }.values.maxOfOrNull { id -> messages.indexOfFirst { it.id == id } } ?: -1
     }
     // Delivered = the bridge says it reached the other network (its bot sends that receipt).
-    val deliveredIndex = remember(messages, chat?.receipts) {
-        (chat?.receipts ?: emptyMap()).filterKeys { isBridgeBot(it) }.values.maxOfOrNull { id -> messages.indexOfFirst { it.id == id } } ?: -1
+    val deliveredIndex = remember(messages, chat?.receipts, chat?.deliveredTo, chat?.statusSeen) {
+        // Once the bridge reports deliveries in this chat, only those count (its own receipt then just means "sent"); until then its receipt is the best we have.
+        if (chat?.statusSeen == true) (chat?.deliveredTo?.keys.orEmpty()).maxOfOrNull { id -> messages.indexOfFirst { it.id == id } } ?: -1
+        else (chat?.receipts ?: emptyMap()).filterKeys { isBridgeBot(it) }.values.maxOfOrNull { id -> messages.indexOfFirst { it.id == id } } ?: -1
     }
     val group = remember(messages, chat?.memberCount, chat?.roomType) { (chat?.isGroup ?: false) || messages.map { it.sender }.toSet().size > 2 }
     val images = remember(messages) { messages.filter { it.type == "m.image" && it.mxc != null && !it.sticker } }

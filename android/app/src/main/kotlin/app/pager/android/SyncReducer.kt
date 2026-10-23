@@ -119,7 +119,7 @@ object SyncReducer {
     }
 
     /** The core event loop shared by sync and history. */
-    private fun process(start: ChatState, events: List<JsonObject>, applyStates: Boolean, onNew: ((Msg, String?) -> Unit)?, onReaction: ((String, String, Msg?) -> Unit)? = null): ChatState {
+    internal fun process(start: ChatState, events: List<JsonObject>, applyStates: Boolean, onNew: ((Msg, String?) -> Unit)?, onReaction: ((String, String, Msg?) -> Unit)? = null): ChatState {
         if (events.isEmpty()) return start
         var chat = start
         val msgs = start.messages.toMutableList()
@@ -128,6 +128,8 @@ object SyncReducer {
         val refs = start.reactionRefs.toMutableMap()
         val votes = start.pollVotes.mapValues { (_, v) -> v.toMutableMap() }.toMutableMap()
         val ended = start.pollEnded.toMutableSet()
+        val deliveredTo = start.deliveredTo.toMutableMap()
+        var statusSeen = start.statusSeen
 
         for (e in events) {
             if (e["state_key"] != null) {
@@ -184,6 +186,13 @@ object SyncReducer {
                         if (sender !in list) { list.add(sender); onReaction?.invoke(sender, key, msgs.firstOrNull { it.id == target }) }
                     }
                 }
+                "com.beeper.message_send_status" -> {
+                    // The bridge's own report on a message you sent: it reached the other network, and (when it knows) who it was delivered to.
+                    val target = content["m.relates_to"].obj()["event_id"].str() ?: continue
+                    statusSeen = true
+                    val who = content["delivered_to"].arr().mapNotNull { it.str() }
+                    if (who.isNotEmpty()) deliveredTo[target] = who
+                }
                 "m.room.redaction" -> {
                     val target = e["redacts"].str() ?: content["redacts"].str() ?: continue
                     if (msgs.removeAll { it.id == target }) ids.remove(target)
@@ -201,6 +210,8 @@ object SyncReducer {
             reactionRefs = refs,
             pollVotes = votes.mapValues { (_, v) -> v.toMap() },
             pollEnded = ended,
+            deliveredTo = deliveredTo,
+            statusSeen = statusSeen,
         )
     }
 

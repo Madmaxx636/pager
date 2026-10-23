@@ -86,6 +86,10 @@ data class ChatState(
     val receipts: Map<String, String> = emptyMap(),
     /** When each user's read receipt was sent (ms). */
     val receiptTs: Map<String, Long> = emptyMap(),
+    /** Message event id -> who it was delivered to, as the bridge reports it (the second tick in the other app). */
+    val deliveredTo: Map<String, List<String>> = emptyMap(),
+    /** The bridge sends delivery reports in this chat, so its own receipt only means "sent". */
+    val statusSeen: Boolean = false,
     val tags: Set<String> = emptySet(),
     val markedUnread: Boolean = false,
     val memberCount: Int = 0,
