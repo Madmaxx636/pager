@@ -59,7 +59,9 @@ fn store_key(dir: &std::path::Path) -> std::io::Result<String> {
 
 async fn build_client(dir: &std::path::Path, homeserver: &str) -> anyhow::Result<Client> {
     let key = store_key(dir)?;
-    Ok(Client::builder().homeserver_url(homeserver).sqlite_store(store_dir(dir), Some(&key)).build().await?)
+    // A first sync of a big account can take well over the 30 seconds an HTTP request is allowed by default.
+    Ok(Client::builder().homeserver_url(homeserver).sqlite_store(store_dir(dir), Some(&key))
+        .request_config(matrix_sdk::config::RequestConfig::new().timeout(Duration::from_secs(300)).retry_limit(4)).build().await?)
 }
 
 // ---- what is told to the interface -----------------------------------------------------------------------------------------------------
@@ -83,30 +85,49 @@ async fn room_json(room: &matrix_sdk::Room, events: Vec<Value>) -> Value {
     })
 }
 
+/// What the server is asked to send: a short stretch of each chat (like the other Pager apps), people filled in only as needed, no presence.
+/// Without this a big account's first answer is enormous and slow.
+fn sync_filter() -> Option<matrix_sdk::ruma::api::client::filter::FilterDefinition> {
+    serde_json::from_value(json!({
+        "presence": { "types": [] },
+        "room": { "timeline": { "limit": 20 }, "state": { "lazy_load_members": true }, "ephemeral": { "types": ["m.receipt"] } }
+    })).ok()
+}
+
 async fn run_sync(client: Client, tell: Tell) {
     tell.say("state", &json!({ "signedIn": true, "user": client.user_id().map(|u| u.to_string()), "device": client.device_id().map(|d| d.to_string()), "syncing": true }));
-    let settings = SyncSettings::default().timeout(Duration::from_secs(30));
-    let c2 = client.clone(); let t2 = tell.clone();
-    let result = client.sync_with_callback(settings, move |resp| {
-        let (client, tell) = (c2.clone(), t2.clone());
-        async move {
-            let mut rooms = Vec::new();
-            for (id, update) in resp.rooms.joined.iter() {
-                let Some(room) = client.get_room(id) else { continue };
-                let mut events = Vec::new();
-                for ev in update.timeline.events.iter() { events.push(event_json(&room, ev).await); }
-                let mut r = room_json(&room, events).await;
-                r["limited"] = json!(update.timeline.limited); r["prev_batch"] = json!(update.timeline.prev_batch);
-                rooms.push(r);
+    let mut waited = 0u64;
+    loop {
+        let mut settings = SyncSettings::default().timeout(Duration::from_secs(30));
+        if let Some(f) = sync_filter() { settings = settings.filter(matrix_sdk::ruma::api::client::sync::sync_events::v3::Filter::FilterDefinition(f)); }
+        let (c2, t2) = (client.clone(), tell.clone());
+        let result = client.sync_with_callback(settings, move |resp| {
+            let (client, tell) = (c2.clone(), t2.clone());
+            async move {
+                let mut rooms = Vec::new();
+                for (id, update) in resp.rooms.joined.iter() {
+                    let Some(room) = client.get_room(id) else { continue };
+                    let mut events = Vec::new();
+                    for ev in update.timeline.events.iter() { events.push(event_json(&room, ev).await); }
+                    let mut r = room_json(&room, events).await;
+                    r["limited"] = json!(update.timeline.limited); r["prev_batch"] = json!(update.timeline.prev_batch);
+                    rooms.push(r);
+                }
+                // Bridges and people invite you into chats: say yes, like the other Pager apps do.
+                for id in resp.rooms.invited.keys() { if let Some(room) = client.get_room(id) { if let Err(e) = room.join().await { tell.problem("could not join an invitation", e); } } }
+                for id in resp.rooms.left.keys() { tell.say("left", &json!({ "id": id })); }
+                if !rooms.is_empty() { tell.say("rooms", &json!({ "rooms": rooms })); }
+                tell.say("synced", &json!({ "rooms": rooms.len() }));
+                LoopCtrl::Continue
             }
-            // Bridges and people invite you into chats: say yes, like the other Pager apps do.
-            for id in resp.rooms.invited.keys() { if let Some(room) = client.get_room(id) { if let Err(e) = room.join().await { tell.problem("could not join an invitation", e); } } }
-            for id in resp.rooms.left.keys() { tell.say("left", &json!({ "id": id })); }
-            if !rooms.is_empty() { tell.say("rooms", &json!({ "rooms": rooms })); }
-            LoopCtrl::Continue
-        }
-    }).await;
-    if let Err(e) = result { tell.problem("sync stopped", e); tell.say("state", &json!({ "signedIn": true, "syncing": false })); }
+        }).await;
+        // The loop only ends when something went wrong: say so, wait a little (longer each time) and start again.
+        if let Err(e) = result { tell.problem("sync stopped, trying again", e); }
+        tell.say("state", &json!({ "signedIn": true, "syncing": false }));
+        waited = (waited + 5).min(60);
+        tokio::time::sleep(Duration::from_secs(waited)).await;
+        tell.say("state", &json!({ "signedIn": true, "syncing": true }));
+    }
 }
 
 impl Engine {

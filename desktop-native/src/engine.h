@@ -23,6 +23,7 @@ class Engine : public QObject {
     Q_PROPERTY(QString currentSub READ currentSub NOTIFY currentChanged)
     Q_PROPERTY(bool currentIsDirect READ currentIsDirect NOTIFY currentChanged)
     Q_PROPERTY(int currentLocked READ currentLocked NOTIFY currentChanged)   // messages of the open chat that cannot be read yet
+    Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)   // signed in, but the first load of your chats has not finished
     Q_PROPERTY(bool isAdmin READ isAdmin NOTIFY stateChanged)
     Q_PROPERTY(QString updateState READ updateState NOTIFY updateChanged)   // idle, checking, available, downloading, installing, error
     Q_PROPERTY(QString updateVersion READ updateVersion NOTIFY updateChanged)
@@ -50,6 +51,7 @@ public:
     QString currentSub() const;
     bool currentIsDirect() const { const Room *r = m_store.room(m_current); return r && r->direct; }
     int currentLocked() const { const Room *r = m_store.room(m_current); int n = 0; if (r) for (const Msg &m : r->msgs) if (m.locked) ++n; return n; }
+    bool loading() const { return m_signedIn && !m_synced; }
     bool isAdmin() const { return m_admin; }
     QString updateState() const { return m_updState; }
     QString updateVersion() const { return m_updVersion; }
@@ -115,6 +117,8 @@ private:
     void loadDemo();
     void sendEvent(const QString &room, const QString &type, const QJsonObject &content);
     PagerEngine *m_core = nullptr;
+    QString m_logFile;
+    void log(const QString &line);
     Store m_store;
     RoomListModel m_rooms{&m_store};
     TimelineModel m_timeline{&m_store};
@@ -128,6 +132,6 @@ private:
     int m_updProgress = 0;
     bool m_updQuiet = false;
     QHash<QString, QString> m_seen;      // room -> id of the newest message we have already looked at
-    bool m_admin = false, m_active = true, m_recovering = false, m_recoveryDone = false;
+    bool m_synced = false, m_admin = false, m_active = true, m_recovering = false, m_recoveryDone = false;
     QString m_user, m_error, m_problem, m_current, m_recoveryMessage, m_lastRead;
 };
