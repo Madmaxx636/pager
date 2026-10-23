@@ -10,6 +10,7 @@
 #include <QStandardPaths>
 #include <QTimer>
 #include "appearance.h"
+#include "emoji.h"
 #include "engine.h"
 
 int main(int argc, char *argv[]) {
@@ -34,10 +35,12 @@ int main(int argc, char *argv[]) {
     QDir().mkpath(dir);
     Engine engine(dir, cli.isSet(demo));
     Appearance look;
+    Emoji emoji;
 
     QQmlApplicationEngine qml;
     qml.rootContext()->setContextProperty(QStringLiteral("core"), &engine);
     qml.rootContext()->setContextProperty(QStringLiteral("look"), &look);
+    qml.rootContext()->setContextProperty(QStringLiteral("emoji"), &emoji);
     qml.load(QUrl(QStringLiteral("qrc:/Pager/qml/Main.qml")));
     if (qml.rootObjects().isEmpty()) return 1;
     auto *win = qobject_cast<QQuickWindow *>(qml.rootObjects().first());

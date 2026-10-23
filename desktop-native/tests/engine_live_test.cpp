@@ -10,6 +10,25 @@
 class EngineLiveTest : public QObject {
     Q_OBJECT
 private slots:
+    void reactEditAndDeleteShowAtOnce() {            // needs no server
+        Engine e(QString(), true);                     // demo chats: "!maya" is open, a3 and a4 are mine, a1 is Maya's
+        const Room *r = e.store()->room("!maya");
+        e.react("a1", "🔥");
+        QCOMPARE(r->find("a1")->reactions.value("🔥"), QStringList{"@me:demo.test"});
+        e.react("a1", "🔥");                           // again takes it back
+        QVERIFY(!r->find("a1")->reactions.contains("🔥"));
+        e.edit("a3", "Yes! Booking sounds perfect");
+        QCOMPARE(r->find("a3")->body, QString("Yes! Booking sounds perfect"));
+        QVERIFY(r->find("a3")->edited);
+        e.edit("a1", "hacked");                        // not mine: refused
+        QVERIFY(r->find("a1")->body != "hacked");
+        e.deleteMessage("a1");                         // not mine: refused
+        QVERIFY(r->find("a1"));
+        e.deleteMessage("a4");
+        QVERIFY(!r->find("a4"));
+        e.send("on my way", "a8");
+        QCOMPARE(r->msgs.last().replyTo, QString("a8"));
+    }
     void popUpsOnlyForNewMessagesFromOthers() {      // needs no server
         Engine e(QString(), true);
         QSignalSpy pop(&e, &Engine::notify);

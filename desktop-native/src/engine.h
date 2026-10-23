@@ -46,7 +46,13 @@ public:
     Q_INVOKABLE void login(const QString &homeserver, const QString &user, const QString &password);
     Q_INVOKABLE void logout();
     Q_INVOKABLE void openRoom(const QString &id);
-    Q_INVOKABLE void send(const QString &text);
+    Q_INVOKABLE void send(const QString &text, const QString &replyTo = QString());
+    /// Adds your reaction to a message, or takes it back if you already reacted with that emoji.
+    Q_INVOKABLE void react(const QString &eventId, const QString &emoji);
+    Q_INVOKABLE void deleteMessage(const QString &eventId);
+    Q_INVOKABLE void edit(const QString &eventId, const QString &text);
+    /// Text of one of your messages in the open chat (to edit it).
+    Q_INVOKABLE QString bodyOf(const QString &eventId) const;
     Q_INVOKABLE void loadOlder();
     /// Restores the keys to old messages from the server's key backup.
     Q_INVOKABLE void recover(const QString &recoveryKey);
@@ -69,6 +75,7 @@ signals:
 private:
     static void callback(void *user, const char *kind, const char *json);
     void loadDemo();
+    void sendEvent(const QString &room, const QString &type, const QJsonObject &content);
     PagerEngine *m_core = nullptr;
     Store m_store;
     RoomListModel m_rooms{&m_store};
