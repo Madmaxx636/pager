@@ -19,7 +19,11 @@ endif()
 qt_add_executable(pager-native src/main.cpp src/engine.cpp src/store.cpp src/models.cpp src/appearance.cpp src/emoji.cpp src/fileinfo.cpp src/selfupdate.cpp src/prefs.h)
 target_include_directories(pager-native PRIVATE include src)
 target_link_libraries(pager-native PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 pager_core)
+# The program finds its engine next to itself. In the build folder a copy is put there after each build, so no build path is baked into the program.
 set_target_properties(pager-native PROPERTIES INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib" BUILD_WITH_INSTALL_RPATH ON)
+if(NOT WIN32)
+  add_custom_command(TARGET pager-native POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PAGER_CORE_DIR}/libpager_core.so" "$<TARGET_FILE_DIR:pager-native>/libpager_core.so")
+endif()
 
 qt_add_resources(pager-native icon PREFIX / FILES pager.svg emoji-names.tsv emoji-groups.tsv palettes.tsv)
 qt_add_qml_module(pager-native URI Pager VERSION 1.0 RESOURCE_PREFIX / QML_FILES
@@ -44,6 +48,7 @@ qt_add_executable(engine-live-test tests/engine_live_test.cpp src/engine.cpp src
 target_include_directories(engine-live-test PRIVATE src include)
 target_link_libraries(engine-live-test PRIVATE Qt6::Core Qt6::Qml Qt6::Test pager_core)
 set_target_properties(engine-live-test PROPERTIES INSTALL_RPATH "$ORIGIN" BUILD_WITH_INSTALL_RPATH ON)
+add_custom_command(TARGET engine-live-test POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PAGER_CORE_DIR}/libpager_core.so" "$<TARGET_FILE_DIR:engine-live-test>/libpager_core.so")
 add_test(NAME engine-live COMMAND engine-live-test)
 
 qt_add_executable(emoji-test tests/emoji_test.cpp src/emoji.cpp)
