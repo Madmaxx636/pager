@@ -10,7 +10,11 @@ qt_standard_project_setup(REQUIRES 6.4)
 # The Rust engine (built by build-core.sh) sits next to the program.
 set(PAGER_CORE_DIR "${CMAKE_SOURCE_DIR}/build-core" CACHE PATH "Folder with libpager_core.so")
 add_library(pager_core SHARED IMPORTED)
-set_target_properties(pager_core PROPERTIES IMPORTED_LOCATION "${PAGER_CORE_DIR}/libpager_core.so")
+if(WIN32)
+  set_target_properties(pager_core PROPERTIES IMPORTED_LOCATION "${PAGER_CORE_DIR}/pager_core.dll" IMPORTED_IMPLIB "${PAGER_CORE_DIR}/libpager_core.dll.a")
+else()
+  set_target_properties(pager_core PROPERTIES IMPORTED_LOCATION "${PAGER_CORE_DIR}/libpager_core.so")
+endif()
 
 qt_add_executable(pager-native src/main.cpp src/engine.cpp src/store.cpp src/models.cpp src/appearance.cpp src/emoji.cpp src/fileinfo.cpp src/selfupdate.cpp src/prefs.h)
 target_include_directories(pager-native PRIVATE include src)
@@ -20,8 +24,13 @@ set_target_properties(pager-native PROPERTIES INSTALL_RPATH "$ORIGIN:$ORIGIN/../
 qt_add_resources(pager-native icon PREFIX / FILES pager.svg emoji-names.tsv emoji-groups.tsv palettes.tsv)
 qt_add_qml_module(pager-native URI Pager VERSION 1.0 RESOURCE_PREFIX / QML_FILES
   qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml qml/PollCard.qml qml/PollDialog.qml qml/Settings.qml qml/Accounts.qml qml/QrView.qml qml/Networks.js qml/Admin.qml)
+if(WIN32)
+  set_target_properties(pager-native PROPERTIES WIN32_EXECUTABLE ON)
+endif()
 install(TARGETS pager-native RUNTIME DESTINATION bin)
 
+option(PAGER_BUILD_TESTS "Build the tests" ON)
+if(PAGER_BUILD_TESTS)
 # Tests of the parts that do not need a screen.
 enable_testing()
 find_package(Qt6 6.4 REQUIRED COMPONENTS Test)
@@ -59,3 +68,4 @@ qt_add_executable(selfupdate-test tests/selfupdate_test.cpp src/selfupdate.cpp)
 target_include_directories(selfupdate-test PRIVATE src)
 target_link_libraries(selfupdate-test PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME selfupdate COMMAND selfupdate-test)
+endif()

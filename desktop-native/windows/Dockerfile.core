@@ -1,0 +1,4 @@
+# The Rust compiler plus the MinGW cross compiler, to build the Windows engine (pager_core.dll). Remove afterwards with: docker rmi pager-native-wincore
+FROM docker.io/library/rust:1-bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix nasm cmake golang-go && rm -rf /var/lib/apt/lists/* \
+ && rustup target add x86_64-pc-windows-gnu

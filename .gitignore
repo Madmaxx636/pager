@@ -24,3 +24,5 @@ desktop-native/build/
 desktop-native/build-core/
 desktop-native/core/target/
 desktop-native/dist/
+desktop-native/build-win/
+desktop-native/build-core-win/
