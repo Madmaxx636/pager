@@ -24,10 +24,12 @@ void DiffModel::applyIds(const QStringList &next) {
 QHash<int, QByteArray> RoomListModel::roleNames() const {
     return {{IdRole, "roomId"}, {NameRole, "name"}, {PreviewRole, "preview"}, {TimeRole, "time"}, {UnreadRole, "unread"}, {DirectRole, "direct"}, {EncryptedRole, "encrypted"}, {LetterRole, "letter"},
             {AvatarRole, "avatar"}, {NetworkRole, "network"}, {PinnedRole, "pinned"}, {ArchivedRole, "archived"}, {LowRole, "lowPriority"}, {MutedRole, "muted"}, {MarkedUnreadRole, "markedUnread"},
-            {TypingRole, "typing"}, {GroupRole, "isGroup"}, {MentionRole, "mention"}, {LabelsRole, "labels"}, {TickRole, "tick"}};
+            {TypingRole, "typing"}, {GroupRole, "isGroup"}, {MentionRole, "mention"}, {LabelsRole, "labels"}, {TickRole, "tick"}, {LinkedRole, "linked"}};
 }
 
+QHash<QString, QString> RoomListModel::s_aliases;
 QString RoomListModel::displayName(const Room &r) {
+    if (const QString a = s_aliases.value(r.id); !a.isEmpty()) return a;
     static const QRegularExpression empty(QStringLiteral("^Empty Room( \\(was .*\\))?$"));
     if (!r.name.trimmed().isEmpty() && r.name != r.id && !empty.match(r.name).hasMatch()) return Names::pretty(r.name);
     for (const QString &h : r.heroes) return r.nameOf(h);
@@ -68,36 +70,39 @@ static QString timeLabel(qint64 ts) {
     return d.date().toString(d.date().year() == QDate::currentDate().year() ? QStringLiteral("MMM d") : QStringLiteral("M/d/yy"));
 }
 
-static bool isUnread(const Room &r) { return r.unread > 0 || r.markedUnread; }
+
 
 QString RoomListModel::signature(const QString &id) const {
     const Room *r = m_store->room(id);
     if (!r) return {};
-    QString s = displayName(*r) + QLatin1Char('\x1f') + previewOf(*r, m_store->me()) + QLatin1Char('\x1f') + QString::number(r->lastTs()) + QLatin1Char('\x1f') + QString::number(r->unread) + QLatin1Char('\x1f')
-        + (r->markedUnread ? '1' : '0') + (r->pinned() ? '1' : '0') + (r->archived() ? '1' : '0') + (r->lowPriority() ? '1' : '0') + (m_store->muted(id) ? '1' : '0') + (r->encrypted ? '1' : '0') + (r->isGroup() ? '1' : '0')
+    const Store::LinkAgg a = m_store->linkAgg(*r);
+    QString s = displayName(*r) + QLatin1Char('\x1f') + previewOf(*r, m_store->me()) + QLatin1Char('\x1f') + QString::number(r->lastTs()) + QLatin1Char('\x1f') + QString::number(a.unread) + QLatin1Char('\x1f')
+        + (a.marked ? '1' : '0') + (a.pinned ? '1' : '0') + (a.archived ? '1' : '0') + (r->lowPriority() ? '1' : '0') + (a.muted ? '1' : '0') + (r->encrypted ? '1' : '0') + (r->isGroup() ? '1' : '0')
         + QLatin1Char('\x1f') + r->network + QLatin1Char('\x1f') + m_store->mediaPath(QStringLiteral("av:") + r->avatar) + QLatin1Char('\x1f') + r->typing.join(QLatin1Char(',')) + QLatin1Char('\x1f') + r->labels().join(QLatin1Char(','))
-        + QLatin1Char('\x1f') + QString::number(r->highlights);
+        + QLatin1Char('\x1f') + QString::number(r->highlights) + QLatin1Char('\x1f') + a.ids.join(QLatin1Char(','));
     return s;
 }
 
 int RoomListModel::unreadChats() const {
     int n = 0;
-    for (auto it = m_store->roomsBegin(); it != m_store->roomsEnd(); ++it) { const Room &r = *it; if (!r.archived() && !m_store->muted(r.id) && !r.lowPriority() && isUnread(r) && !m_store->isBotRoom(r)) ++n; }
+    for (auto it = m_store->roomsBegin(); it != m_store->roomsEnd(); ++it) { const Room &r = *it; if (m_store->isBotRoom(r)) continue; const Store::LinkAgg a = m_store->linkAgg(r); if (a.top == &r && !a.archived && !a.muted && !r.lowPriority() && (a.unread > 0 || a.marked)) ++n; }
     return n;
 }
 
 void RoomListModel::setFilter(const QString &tab, const QString &search) { m_tab = tab; m_search = search.trimmed(); refresh(); }
 
 void RoomListModel::refresh() {
-    QStringList ids;
     const QString q = m_search.toLower();
-    QVector<const Room *> keep;
+    QVector<const Room *> keep; QHash<QString, Store::LinkAgg> aggs;
     for (auto it = m_store->roomsBegin(); it != m_store->roomsEnd(); ++it) {
         const Room &r = *it;
         if (m_store->isBotRoom(r) || m_hidden.contains(r.network)) continue;
-        if (m_tab == QLatin1String("archive")) { if (!r.archived()) continue; }
-        else if (r.archived()) { if (q.isEmpty()) continue; }
-        else if (m_tab == QLatin1String("unread")) { if (!isUnread(r)) continue; }
+        const Store::LinkAgg ag = m_store->linkAgg(r);
+        if (ag.top != &r) continue;                                   // shown as part of another chat of the same person
+        const bool unread = ag.unread > 0 || ag.marked;
+        if (m_tab == QLatin1String("archive")) { if (!ag.archived) continue; }
+        else if (ag.archived) { if (q.isEmpty()) continue; }
+        else if (m_tab == QLatin1String("unread")) { if (!unread) continue; }
         else if (m_tab == QLatin1String("low")) { if (!r.lowPriority()) continue; }
         else if (m_tab.startsWith(QLatin1String("label:"))) { if (!r.labels().contains(m_tab.mid(6))) continue; }
         else if (m_tab == QLatin1String("inbox")) { if (r.lowPriority() && q.isEmpty()) continue; }
@@ -106,19 +111,22 @@ void RoomListModel::refresh() {
         if (m_filters.value("drafts").toBool() && !m_drafts.contains(r.id)) continue;
         if (m_filters.value("unanswered").toBool() && (r.msgs.isEmpty() || r.msgs.last().sender == m_store->me())) continue;
         if (!m_filters.value("network").toString().isEmpty() && r.network != m_filters.value("network").toString()) continue;
-        if (m_excludePinned && r.pinned() && !r.archived() && !r.lowPriority()) continue;
+        if (m_excludePinned && ag.pinned && !ag.archived && !r.lowPriority()) continue;
         if (!q.isEmpty()) {
             bool hit = displayName(r).toLower().contains(q);
             if (!hit) for (int i = r.msgs.size() - 1; i >= 0 && i >= r.msgs.size() - 40 && !hit; --i) hit = r.msgs[i].body.toLower().contains(q) || r.msgs[i].caption.toLower().contains(q);
             if (!hit) continue;
         }
-        keep.append(&r);
+        keep.append(&r); aggs.insert(r.id, ag);
     }
+    QStringList ids;
     const bool pinsFirst = q.isEmpty() && (m_tab == QLatin1String("inbox") || m_tab == QLatin1String("unread"));
     std::sort(keep.begin(), keep.end(), [&](const Room *a, const Room *b) {
-        if (pinsFirst && a->pinned() != b->pinned()) return a->pinned();
-        if (pinsFirst && a->pinned() && b->pinned() && a->pinOrder != b->pinOrder) return a->pinOrder < b->pinOrder;
-        if (m_unreadFirst && pinsFirst && isUnread(*a) != isUnread(*b)) return isUnread(*a);
+        const Store::LinkAgg &x = aggs[a->id], &y = aggs[b->id];
+        if (pinsFirst && x.pinned != y.pinned) return x.pinned;
+        if (pinsFirst && x.pinned && y.pinned && a->pinOrder != b->pinOrder) return a->pinOrder < b->pinOrder;
+        const bool ux = x.unread > 0 || x.marked, uy = y.unread > 0 || y.marked;
+        if (m_unreadFirst && pinsFirst && ux != uy) return ux;
         const qint64 ta = a->lastTs(), tb = b->lastTs();
         return ta != tb ? ta > tb : a->id < b->id;
     });
@@ -139,7 +147,7 @@ QVariant RoomListModel::data(const QModelIndex &i, int role) const {
     case NameRole: return displayName(*r);
     case PreviewRole: return previewOf(*r, m_store->me());
     case TimeRole: return timeLabel(r->lastTs());
-    case UnreadRole: return r->unread;
+    case UnreadRole: return m_store->linkAgg(*r).unread;
     case DirectRole: return r->direct;
     case EncryptedRole: return r->encrypted;
     case LetterRole: { const QString n = displayName(*r).trimmed(); return n.isEmpty() ? QStringLiteral("#") : n.left(1).toUpper(); }
@@ -150,11 +158,12 @@ QVariant RoomListModel::data(const QModelIndex &i, int role) const {
         return p;
     }
     case NetworkRole: return r->network;
-    case PinnedRole: return r->pinned();
-    case ArchivedRole: return r->archived();
+    case PinnedRole: return m_store->linkAgg(*r).pinned;
+    case ArchivedRole: return m_store->linkAgg(*r).archived;
     case LowRole: return r->lowPriority();
-    case MutedRole: return m_store->muted(r->id);
-    case MarkedUnreadRole: return r->markedUnread;
+    case MutedRole: return m_store->linkAgg(*r).muted;
+    case MarkedUnreadRole: return m_store->linkAgg(*r).marked;
+    case LinkedRole: { QVariantList out; for (const QString &id : m_store->linkAgg(*r).ids) if (const Room *x = m_store->room(id)) out << QVariantMap{{"id", id}, {"network", x->network}}; return out; }
     case TypingRole: {
         if (r->typing.isEmpty()) return QString();
         QStringList names; for (const QString &u : r->typing) names << r->nameOf(u).section(QLatin1Char(' '), 0, 0);
@@ -231,7 +240,7 @@ void TimelineModel::show(const QString &roomId) {
         beginResetModel(); m_room = roomId; m_ids.clear(); m_rows.clear(); endResetModel();
         if (roomId.isEmpty()) return;
     }
-    const Room *r = m_store->room(roomId);
+    const Room *r = m_store->view(roomId, m_merged, true);
     if (!r) { if (!m_ids.isEmpty()) { beginResetModel(); m_ids.clear(); m_rows.clear(); endResetModel(); } return; }
     const int n = r->msgs.size();
     // How far the others have read and how far the bridge says it was delivered (as an index in the oldest-first list).
@@ -297,7 +306,7 @@ QVariant TimelineModel::data(const QModelIndex &i, int role) const {
     case GifRole: return m.gifLike || m.mime == QLatin1String("image/gif");
     case GeoRole: return m.geo;
     case SenderAvatarRole: {
-        const Room *r = m_store->room(m_room);
+        const Room *r = m_store->view(m_room, m_merged, false);
         const QString av = r ? r->memberAvatars.value(m.sender) : QString();
         if (av.isEmpty()) return QString();
         const QString p = m_store->mediaPath(QStringLiteral("av:") + av);
@@ -306,7 +315,7 @@ QVariant TimelineModel::data(const QModelIndex &i, int role) const {
     }
     case PollRole: {
         if (m.kind != QLatin1String("poll")) return {};
-        const Room *r = m_store->room(m_room);
+        const Room *r = m_store->view(m_room, m_merged, false);
         const bool ended = r && r->ended.contains(m.id);
         const QHash<QString, QStringList> votes = r ? r->votes.value(m.id) : QHash<QString, QStringList>();
         int voters = 0; QStringList mine = votes.value(m_store->me());
@@ -323,7 +332,7 @@ QVariant TimelineModel::data(const QModelIndex &i, int role) const {
     case ReactionsRole: {
         QVariantList out;
         for (auto it = m.reactions.cbegin(); it != m.reactions.cend(); ++it) {
-            const Room *r = m_store->room(m_room); QStringList names;
+            const Room *r = m_store->view(m_room, m_merged, false); QStringList names;
             for (const QString &u : it.value()) names << (u == m_store->me() ? QStringLiteral("You") : (r ? r->nameOf(u) : u));
             out << QVariantMap{{QStringLiteral("key"), it.key()}, {QStringLiteral("count"), it.value().size()}, {QStringLiteral("mine"), it.value().contains(m_store->me())}, {QStringLiteral("who"), names.join(QStringLiteral(", "))}};
         }

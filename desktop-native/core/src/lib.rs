@@ -315,6 +315,65 @@ pub extern "C" fn pager_send_file(h: *mut Arc<Engine>, room_id: *const c_char, p
     });
 }
 
+/// Sends a file like pager_send_file but with extra fields in the message ([extra_json], an object: view-once, a full-screen attention picture...).
+/// The file is encrypted in encrypted chats. Answers like pager_send_event.
+#[no_mangle]
+pub extern "C" fn pager_send_media(h: *mut Arc<Engine>, room_id: *const c_char, path: *const c_char, mime_type: *const c_char, caption: *const c_char, width: u32, height: u32, txn: *const c_char, extra_json: *const c_char) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (rid, path, mime_s, caption, txn, extra) = (s(room_id), s(path), s(mime_type), s(caption), s(txn), s(extra_json));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let fail = |why: String| e2.tell.say("send_failed", &json!({ "room": rid, "txn": txn, "error": why }));
+        let Some(client) = e2.client() else { return fail("Not signed in".into()) };
+        let Ok(id) = OwnedRoomId::try_from(rid.as_str()) else { return fail("Bad chat id".into()) };
+        let Some(room) = client.get_room(&id) else { return fail("That chat isn't available".into()) };
+        let data = match std::fs::read(&path) { Ok(d) => d, Err(err) => return fail(format!("Couldn't read the file: {err}")) };
+        let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into());
+        let mime: mime::Mime = mime_s.parse().unwrap_or(mime::APPLICATION_OCTET_STREAM);
+        let encrypted = room.latest_encryption_state().await.map(|st| st.is_encrypted()).unwrap_or(false);
+        let msgtype = match mime.type_() { mime::IMAGE => "m.image", mime::VIDEO => "m.video", mime::AUDIO => "m.audio", _ => "m.file" };
+        let mut info = json!({ "mimetype": mime_s, "size": data.len() });
+        if width > 0 && height > 0 { info["w"] = json!(width); info["h"] = json!(height); }
+        let mut content = json!({ "msgtype": msgtype, "body": if caption.is_empty() { name.clone() } else { caption.clone() }, "info": info });
+        if !caption.is_empty() { content["filename"] = json!(name); }
+        if encrypted {
+            let mut cursor = std::io::Cursor::new(&data);
+            match client.upload_encrypted_file(&mut cursor).await {
+                Ok(f) => match serde_json::to_value(&f) { Ok(v) => content["file"] = v, Err(err) => return fail(err.to_string()) },
+                Err(err) => return fail(err.to_string()),
+            }
+        } else {
+            match client.media().upload(&mime, data, None).await {
+                Ok(r) => content["url"] = json!(r.content_uri),
+                Err(err) => return fail(err.to_string()),
+            }
+        }
+        if let Ok(Value::Object(more)) = serde_json::from_str::<Value>(&extra) { for (k, v) in more { content[k] = v; } }
+        match room.send_raw("m.room.message", content).await {
+            Ok(r) => e2.tell.say("sent", &json!({ "room": rid, "txn": txn, "event_id": r.response.event_id })),
+            Err(err) => fail(err.to_string()),
+        }
+    });
+}
+
+/// Uploads a file (not encrypted) and answers "uploaded" {key, url} or {key, error}. For stickers.
+#[no_mangle]
+pub extern "C" fn pager_upload(h: *mut Arc<Engine>, key: *const c_char, path: *const c_char, mime_type: *const c_char) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (key, path, mime_s) = (s(key), s(path), s(mime_type));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let fail = |why: String| e2.tell.say("uploaded", &json!({ "key": key, "error": why }));
+        let Some(client) = e2.client() else { return fail("Not signed in".into()) };
+        let data = match std::fs::read(&path) { Ok(d) => d, Err(err) => return fail(format!("Couldn't read the file: {err}")) };
+        let mime: mime::Mime = mime_s.parse().unwrap_or(mime::APPLICATION_OCTET_STREAM);
+        match client.media().upload(&mime, data, None).await {
+            Ok(r) => e2.tell.say("uploaded", &json!({ "key": key, "url": r.content_uri })),
+            Err(err) => fail(err.to_string()),
+        }
+    });
+}
+
 /// Fetches a picture or file of a message and saves it under the data folder (decrypting it if it was sent encrypted).
 /// [content_json] is the message's content (it has the "url" or the encrypted "file"). The answer is "media" {key, path} or {key, error}.
 #[no_mangle]

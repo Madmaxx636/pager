@@ -4,6 +4,7 @@
 #include <functional>
 #include <QSet>
 #include <QObject>
+#include <QJsonArray>
 #include <QPointer>
 #include "models.h"
 #include "appsettings.h"
@@ -69,6 +70,45 @@ public:
     QString currentSub() const;
     bool currentIsDirect() const { const Room *r = m_store.room(m_current); return r && r->direct; }
     QVariantList pins() const;
+    // ---- the same person on several networks, shown as one chat (saved in your account like the web app's "links")
+    Q_PROPERTY(bool merged READ merged NOTIFY currentChanged)
+    Q_PROPERTY(QVariantList linkedChats READ linkedChats NOTIFY currentChanged)     // the open chat's group: {id, network, name, unread, here}
+    Q_PROPERTY(QString sendNetwork READ sendNetwork NOTIFY currentChanged)           // the network a message would go out on now
+    bool merged() const { return !m_current.isEmpty() && !m_solo.contains(m_current) && m_store.linkGroup(m_current).size() > 1; }
+    QVariantList linkedChats() const;
+    QString sendNetwork() const { const Room *r = m_store.room(sendTarget()); return r ? r->network : QString(); }
+    Q_INVOKABLE QString sendTarget() const;                    // where a new message goes: the open chat, or in a merged view the one picked (else the one that spoke last)
+    QString evRoom(const QString &eventId) const;  // the chat an event belongs to (differs from the open one in a merged view)
+    Q_INVOKABLE void setSolo(const QString &roomId, bool solo);    // look at one network of a linked person on its own (true), or all together
+    Q_INVOKABLE void setVia(const QString &roomId) { m_via = roomId; emit currentChanged(); }
+    Q_INVOKABLE void link(const QString &a, const QString &b);
+    Q_INVOKABLE void unlink(const QString &roomId);
+    Q_INVOKABLE QVariantMap linkOffer() const;      // {a, b, name, network}: another chat that looks like the same person as the open one
+    Q_INVOKABLE void dismissOffer(const QString &a, const QString &b);
+    Q_INVOKABLE QVariantList linkOptions(const QString &roomId) const;   // chats that could be joined with [roomId]
+    Q_INVOKABLE bool isLinked(const QString &roomId) const { return m_store.linkGroup(roomId).size() > 1; }
+    // ---- the + menu: stickers, GIFs, contact, place, attention
+    Q_INVOKABLE QVariantList stickerPacks() const;                    // [{name, stickers:[{shortcode, url, body, w, h, mime}]}]: yours, then this chat's
+    Q_INVOKABLE void sendSticker(const QVariantMap &sticker);
+    Q_INVOKABLE void addStickers(const QStringList &paths);           // uploads pictures and adds them to your sticker pack
+    Q_INVOKABLE void saveAsSticker(const QString &eventId);
+    Q_INVOKABLE void sendAttention(const QString &kind);              // nudge, ring or video
+    Q_INVOKABLE void sendLocation(double lat, double lon);
+    Q_INVOKABLE void sendContact(const QString &name, const QString &phone);
+    Q_INVOKABLE void sendGif(const QString &url, const QString &title, int w, int h);
+    Q_INVOKABLE void sendMedia(const QString &path, const QString &mime, int w, int h, const QString &caption, const QVariantMap &extra);   // with extra message fields (view once)
+    Q_INVOKABLE QVariantList favoriteGifs() const { return m_favGifs.toVariantList(); }
+    Q_INVOKABLE void toggleFavoriteGif(const QVariantMap &gif);
+    Q_INVOKABLE bool isFavoriteGif(const QString &url) const;
+    // ---- the info panel
+    Q_INVOKABLE QVariantMap sharedMedia() const;                       // {photos:[{id,w,h}], links:[{id,url,who,when}], files:[{id,name,size,who,kind}]} of what is loaded in the open chat
+    Q_INVOKABLE QString photoPath(const QString &eventId);             // a picture's file when it is here (asks for it otherwise; mediaReady(eventId) when it arrives)
+    Q_INVOKABLE QString aliasOf(const QString &roomId) const { return RoomListModel::s_aliases.value(roomId); }
+    Q_INVOKABLE void setAlias(const QString &roomId, const QString &name);       // "rename for me": only on your side
+    Q_INVOKABLE void muteFor(const QString &roomId, double ms);                   // mute, and unmute by itself later (ms <= 0: until you unmute)
+    Q_INVOKABLE double muteLeftMs(const QString &roomId) const { const double t = m_muteUntil.value(roomId); return t > 0 ? t - QDateTime::currentMSecsSinceEpoch() : 0; }
+    Q_INVOKABLE void enableEncryption(const QString &roomId);                    // end-to-end encrypt this chat from now on (cannot be undone); encryptionResult("") when done
+    Q_INVOKABLE void loadAllHistory(const QString &roomId);                      // fetch every older page of this chat; historyProgress(count, done)
     Q_INVOKABLE QVariantList faces(const QString &roomId) const;   // up to four people of a group without a picture of its own, for its round collage
     QVariantMap filters() const { return m_filters; }
     int filterCount() const { int n = 0; for (const char *k : {"groups", "dms", "drafts", "unanswered"}) if (m_filters.value(QLatin1String(k)).toBool()) ++n; if (!m_filters.value("network").toString().isEmpty()) ++n; return n; }
@@ -101,7 +141,7 @@ public:
     Q_INVOKABLE void login(const QString &homeserver, const QString &user, const QString &password);
     Q_INVOKABLE void logout();
     Q_INVOKABLE void openRoom(const QString &id);
-    Q_INVOKABLE void send(const QString &text, const QString &replyTo = QString(), bool markdown = true);
+    Q_INVOKABLE void send(const QString &text, const QString &replyTo = QString(), bool markdown = true, const QStringList &mentions = QStringList());
     /// Adds your reaction to a message, or takes it back if you already reacted with that emoji.
     Q_INVOKABLE void react(const QString &eventId, const QString &emoji);
     Q_INVOKABLE void deleteMessage(const QString &eventId);
@@ -136,6 +176,7 @@ public:
     Q_INVOKABLE void movePin(const QString &roomId, int toIndex);   // rearrange the pinned row
     Q_INVOKABLE void archive(const QString &roomId, bool on) { setTag(roomId, QStringLiteral("u.archived"), on); }
     Q_INVOKABLE void setLowPriority(const QString &roomId, bool on) { setTag(roomId, QStringLiteral("m.lowpriority"), on); }
+    Q_INVOKABLE void setLabel(const QString &roomId, const QString &label, bool on) { setTag(roomId, QStringLiteral("u.label.") + label, on); }
     Q_INVOKABLE void addLabel(const QString &roomId, const QString &label) { setTag(roomId, QStringLiteral("u.label.") + label, true); }
     Q_INVOKABLE void removeLabel(const QString &roomId, const QString &label) { setTag(roomId, QStringLiteral("u.label.") + label, false); }
     Q_INVOKABLE void markUnread(const QString &roomId, bool on);
@@ -229,6 +270,9 @@ public:
     int totalUnread() const;
     void handle(const QString &kind, const QJsonObject &body);   // also used by tests and the demo
 signals:
+    void encryptionResult(const QString &error);
+    void historyProgress(int messages, bool done);
+    void attention(const QString &roomId, const QString &chat, const QString &sender, const QString &kind);   // someone is trying to get your attention
     void stateChanged();
     void problemChanged();
     void currentChanged();
@@ -266,6 +310,13 @@ private:
     AppSettings *m_settings = nullptr;
     QHash<QString, QVariant> m_previews; QSet<QString> m_previewing;
     QHash<QString, QString> m_drafts; QString m_dataDir;
+    QSet<QString> m_solo, m_noLink; QString m_via;
+    QHash<QString, QString> m_aliases; QHash<QString, double> m_muteUntil; QString m_allHistory; int m_allPages = 0;
+    void saveAliases(); void expireMutes();
+    class QNetworkAccessManager *m_net = nullptr;
+    QJsonArray m_userStickers, m_favGifs; QHash<QString, std::function<void(const QString &)>> m_uploads;
+    void loadExtras(); void saveStickers(); void saveFavorites(); void upload(const QString &path, const QString &mime, std::function<void(const QString &)> done);
+    void loadLinks(); void saveLinks(bool toServer); void afterLinksChanged();
     void saveDrafts();
     void trimHistory();
     void saveSaved();

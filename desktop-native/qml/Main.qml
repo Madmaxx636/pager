@@ -26,6 +26,8 @@ ApplicationWindow {
     function runShortcut(id) {
         const info = core.roomInfo(core.currentRoom), has = core.currentRoom.length > 0
         switch (id) {
+        case "palette": palette.open(); break
+        case "help": if (sidebarRef) sidebarRef.openSettingsPage("shortcuts"); break
         case "newChat": newChat.open(); break
         case "search": searchDlg.openFor("", "", ""); break
         case "inChatSearch": if (has) searchDlg.openFor(core.currentRoom, core.currentName, ""); break
@@ -50,6 +52,9 @@ ApplicationWindow {
         delegate: Shortcut { sequence: SC.keysFor(modelData.id, settings.shortcuts); enabled: core.signedIn; onActivated: win.runShortcut(modelData.id) }
     }
     NewChat { id: newChat }
+    CommandBar { id: palette; onNewChat: newChat.open(); onSearchAll: searchDlg.openFor("", "", ""); onOpenSettingsPage: (id) => { if (sidebarRef) sidebarRef.openSettingsPage(id) }; onSnoozeCurrent: snoozeDialog.open() }
+    AttentionOverlay { id: attention; onOpenChat: (roomId) => { core.openRoom(roomId); win.showingChat = true } }
+    Connections { target: core; function onAttention(roomId, chat, sender, kind) { attention.raise(roomId, chat, sender, kind) } }
     SearchDialog { id: searchDlg; onChosen: (roomId, eventId) => core.openAt(roomId, eventId) }
     Connections { target: core; function onJumpRequested(id) { win.pendingJump = id } }
     property string pendingJump: ""
@@ -80,6 +85,7 @@ ApplicationWindow {
             }
             Rectangle { Layout.fillHeight: true; width: 1; color: look.line; visible: win.wide }
             Chat {
+                id: chatPane
                 Layout.fillWidth: true; Layout.fillHeight: true
                 visible: (win.wide || win.showingChat) && !(win.infoOpen && !win.roomy)
                 showBack: !win.wide
@@ -87,13 +93,16 @@ ApplicationWindow {
                 onBack: win.showingChat = false
                 onToggleInfo: win.infoOpen = !win.infoOpen
                 onRestoreRequested: recovery.open()
+                onOpenStickerSettings: if (sidebarRef) sidebarRef.openSettingsPage("media")
                 onSearchRequested: searchDlg.openFor(core.currentRoom, core.currentName, "")
                 jumpTarget: win.pendingJump
             }
             InfoPanel {
-                Layout.preferredWidth: win.roomy ? 310 : win.width; Layout.fillHeight: true
+                Layout.preferredWidth: win.roomy ? 330 : 0; Layout.fillWidth: !win.roomy; Layout.fillHeight: true
                 visible: win.infoOpen && core.currentRoom.length > 0 && (win.roomy || win.showingChat || win.wide)
                 onCloseRequested: win.infoOpen = false
+                onViewImage: (id) => chatPane.openViewer(id)
+                onSearchInChat: searchDlg.openFor(core.currentRoom, core.currentName, "")
             }
         }
     }

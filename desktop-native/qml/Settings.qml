@@ -35,6 +35,7 @@ Dialog {
         ["advanced", "Advanced", "Developer tools", "code-xml", "#475569", "System"], ["about", "About", "Version, server, sign out", "info", "#6b7280", ""]
     ]
     property string find: ""
+    FileDialog { id: stickerAdder; title: "Add stickers"; fileMode: FileDialog.OpenFiles; nameFilters: ["Pictures (*.png *.jpg *.jpeg *.gif *.webp)"]; onAccepted: core.addStickers(selectedFiles.map(u => String(u))) }
     readonly property var visiblePages: pages.filter(p => (p[0] !== "admin" || core.isAdmin) && (find.length === 0 || (p[1] + " " + p[2]).toLowerCase().indexOf(find.toLowerCase()) >= 0))
 
     function openPage(id) { find = ""; findField.text = ""; for (let i = 0; i < visiblePages.length; i++) if (visiblePages[i][0] === id) { page = i; showingList = false; break } open() }
@@ -242,9 +243,13 @@ Dialog {
     }
     Component { id: media
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "GIF search"; footer: "GIF search needs your own free key from GIPHY or Klipy."
-                SText { table: "gifKeys"; key: "giphy"; title: "GIPHY key"; secret: true }
-                SText { table: "gifKeys"; key: "klipy"; title: "Klipy key"; secret: true }
+            SGroup { title: "GIF search"; footer: "Add a free key from either (or both) and each gets its own tab in the GIF picker. Pager doesn't ship a shared key. Keys stay on this device."
+                SText { table: "gifKeys"; key: "giphy"; title: "GIPHY"; hint: "developers.giphy.com"; secret: true }
+                SText { table: "gifKeys"; key: "klipy"; title: "KLIPY"; hint: "partner.klipy.com"; secret: true }
+            }
+            SGroup { title: "My stickers"; footer: "Stickers are saved to your Matrix account, so they follow you to other devices."
+                SAction { title: "Add stickers from images…"; button: "Add"; onClicked: stickerAdder.open() }
+                SBlock { Label { text: core.stickerPacks().length && core.stickerPacks()[0].key === "user" ? core.stickerPacks()[0].stickers.length + " stickers" : "No stickers yet"; color: look.muted } }
             }
         }
     }

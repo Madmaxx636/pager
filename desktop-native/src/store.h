@@ -22,6 +22,7 @@ struct Poll {
 
 struct Msg {
     QString id, sender, senderName, body, kind, replyTo;
+    QString room;                                          // in a merged view: the chat this message really belongs to
     QString type, caption, html, captionHtml, mime, geo, attention, txn, poster;   // type = the Matrix msgtype
     QStringList mentions;
     qint64 ts = 0, size = 0, durationMs = 0;
@@ -54,6 +55,7 @@ struct Room {
     QHash<QString, QHash<QString, QStringList>> votes;   // poll id -> who -> chosen answer ids
     QHash<QString, qint64> voteTs;                        // poll id + who -> when, so an old vote never beats a newer one
     QSet<QString> ended;                                  // polls that were closed
+    QVector<QJsonObject> stickerPacks;                    // this chat's sticker packs: {key, name, stickers:[{shortcode, url, body, w, h, mime}]}
     qint64 lastTs() const { return msgs.isEmpty() ? 0 : msgs.last().ts; }
     QString preview() const;
     const Msg *find(const QString &id) const;
@@ -106,6 +108,18 @@ public:
     void wantAvatar(const QString &mxc) const { if (avatarWanted && !m_wantedAvatars.contains(mxc)) { m_wantedAvatars.insert(mxc); avatarWanted(mxc); } }
     void forgetWantedAvatar(const QString &mxc) const { m_wantedAvatars.remove(mxc); }
     static bool isBridgeBot(const QString &user);
+    /// A sticker pack from the content of an im.ponies.*_emotes event.
+    static QJsonObject parseStickerPack(const QString &key, const QString &fallbackName, const QJsonObject &content);
+    // ---- chats shown as one (the same person on several networks)
+    struct LinkAgg { const Room *top = nullptr; int unread = 0; bool marked = false, pinned = false, muted = false, archived = false; QStringList ids; };
+    void setLinks(const QList<QStringList> &groups) { m_links = groups; }
+    const QList<QStringList> &links() const { return m_links; }
+    /// The chats that exist in [id]'s group (two or more), or nothing when it is not linked.
+    QStringList linkGroup(const QString &id) const;
+    /// What the list shows for [r]: the group's newest chat stands for all of them, their unread counts added up. top == nullptr: [r] is hidden behind another chat of its group.
+    LinkAgg linkAgg(const Room &r) const;
+    /// The chat to show for [id]; with [merged] and a group, one chat made of every member's messages (valid until the next call that rebuilds).
+    const Room *view(const QString &id, bool merged, bool rebuild = true) const;
     bool mine(const Msg &m) const { return !m_me.isEmpty() && m.sender == m_me; }
     /// "h:mm AP" or "HH:mm" depending on [format] (system, 12 or 24)
     /// What an unreadable message says: first it waits for its key; after ten minutes it was most likely sent before this device existed.
@@ -127,4 +141,6 @@ private:
     void applyRoomAccountData(Room &r, const QJsonObject &ev);
     QSet<QString> ownGhosts(const Room &r) const;
     int m_localCounter = 0;
+    QList<QStringList> m_links;
+    mutable Room m_view; mutable QString m_viewId;
 };

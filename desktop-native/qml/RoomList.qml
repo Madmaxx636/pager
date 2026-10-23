@@ -45,6 +45,7 @@ Rectangle {
     }
     WhenDialog { id: snoozeDialog; heading: "Snooze until"; property string room; onPicked: (ms) => core.snooze(room, ms) }
     function openSettings() { settingsPage.open() }
+    function openSettingsPage(id) { settingsPage.openPage(id) }
     function showMenu(id) { menuRoom = id; menuInfo = core.roomInfo(id); chatMenu.popup() }
 
     ColumnLayout {
@@ -190,7 +191,7 @@ Rectangle {
             delegate: Rectangle {
                 id: row
                 width: list.width - 16; x: 8; height: settings.density === "compact" ? 58 : 70; radius: 14
-                readonly property bool current: core.currentRoom === roomId
+                readonly property bool current: core.currentRoom === roomId || linked.some(l => l.id === core.currentRoom)
                 readonly property bool isUnread: unread > 0 || markedUnread
                 color: current ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.15) : (hover.hovered ? look.panel2 : "transparent")
                 HoverHandler { id: hover }
@@ -214,7 +215,9 @@ Rectangle {
                                 Label { id: minBadge; anchors.centerIn: parent; text: unread > 99 ? "99+" : (unread > 0 ? unread : ""); color: look.accentInk; font.pixelSize: 12; font.weight: Font.Bold } }
                             Label { visible: !hover.hovered && settings.inboxStyle !== "minimal"; text: model.time; color: row.isUnread && !muted ? look.accent : look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Medium }
                         }
-                        Label { visible: settings.showNetworkNameInRows && model.network.length > 0; text: N.meta(model.network).label; color: N.meta(model.network).color; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Medium }
+                        Row { visible: linked.length > 1; spacing: 8
+                            Repeater { model: linked; delegate: Label { text: "● " + N.meta(modelData.network).label; color: N.meta(modelData.network).color; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Medium } } }
+                        Label { visible: settings.showNetworkNameInRows && model.network.length > 0 && linked.length < 2; text: N.meta(model.network).label; color: N.meta(model.network).color; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Medium }
                         RowLayout {
                             visible: settings.inboxStyle !== "minimal"
                             Layout.fillWidth: true; spacing: 6

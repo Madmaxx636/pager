@@ -107,6 +107,11 @@ void Store::applyState(Room &r, const QJsonObject &ev) {
     const QJsonObject c = ev.value(QLatin1String("content")).toObject();
     if (type == QLatin1String("m.room.name")) r.ownName = c.value(QLatin1String("name")).toString();
     else if (type == QLatin1String("m.room.encryption")) r.encrypted = true;
+    else if (type == QLatin1String("im.ponies.room_emotes")) {
+        const QJsonObject pack = parseStickerPack(key.isEmpty() ? QStringLiteral("room") : key, c.value(QLatin1String("pack")).toObject().value(QLatin1String("display_name")).toString(QStringLiteral("Room stickers")), c);
+        for (int i = 0; i < r.stickerPacks.size(); ++i) if (r.stickerPacks[i].value(QLatin1String("key")) == pack.value(QLatin1String("key"))) { r.stickerPacks.removeAt(i); break; }
+        r.stickerPacks.append(pack);
+    }
     else if (type == QLatin1String("m.room.avatar")) { const QString u = c.value(QLatin1String("url")).toString(); if (!u.isEmpty()) r.avatar = u; }
     else if (type == QLatin1String("m.bridge") || type == QLatin1String("uk.half-shot.bridge")) {
         const QString id = c.value(QLatin1String("protocol")).toObject().value(QLatin1String("id")).toString();
@@ -396,4 +401,66 @@ int Store::trimRoom(const QString &id, int keep) {
     for (const QString &g : gone) { r->votes.remove(g); r->deliveredTo.remove(g); r->ended.remove(g); m_media.remove(g); m_media.remove(QStringLiteral("poster:") + g); m_media.remove(QStringLiteral("full:") + g); }
     r->historyToken.clear(); r->reachedStart = false; r->historyAsked = false;     // the way back to what was dropped is asked for again
     return drop;
+}
+
+// ---- chats shown as one ---------------------------------------------------------------------------------------------------------------------------
+QStringList Store::linkGroup(const QString &id) const {
+    for (const QStringList &g : m_links) if (g.contains(id)) { QStringList out; for (const QString &x : g) if (m_rooms.contains(x)) out << x; return out.size() > 1 ? out : QStringList(); }
+    return {};
+}
+
+Store::LinkAgg Store::linkAgg(const Room &r) const {
+    LinkAgg a; a.top = &r;
+    const QStringList g = m_links.isEmpty() ? QStringList() : linkGroup(r.id);
+    if (g.isEmpty()) { a.unread = r.unread; a.marked = r.markedUnread; a.pinned = r.pinned(); a.muted = muted(r.id); a.archived = r.archived(); return a; }
+    a.muted = true; a.archived = true;
+    for (const QString &id : g) {
+        const Room *m = room(id); if (!m) continue;
+        if (m->lastTs() > a.top->lastTs() || (m->lastTs() == a.top->lastTs() && m->id < a.top->id)) a.top = m;
+        a.unread += m->unread; a.marked = a.marked || m->markedUnread; a.pinned = a.pinned || m->pinned();
+        a.muted = a.muted && muted(id); a.archived = a.archived && m->archived();
+    }
+    a.ids = g;
+    return a;
+}
+
+const Room *Store::view(const QString &id, bool merged, bool rebuild) const {
+    const Room *prim = room(id);
+    if (!prim || !merged) return prim;
+    const QStringList g = linkGroup(id);
+    if (g.size() < 2) return prim;
+    if (!rebuild && m_viewId == id) return &m_view;
+    Room v = *prim; v.msgs.clear();
+    QSet<QString> seen; v.unread = 0; v.markedUnread = false; v.encrypted = true; v.reachedStart = true;
+    for (const QString &x : g) {
+        const Room *r = room(x); if (!r) continue;
+        for (Msg m : r->msgs) if (!seen.contains(m.id)) { seen.insert(m.id); m.room = x; v.msgs.append(m); }
+        v.unread += r->unread; v.markedUnread = v.markedUnread || r->markedUnread; v.encrypted = v.encrypted && r->encrypted; v.reachedStart = v.reachedStart && r->reachedStart;
+        if (x == id) continue;
+        for (auto it = r->receipts.cbegin(); it != r->receipts.cend(); ++it) if (!v.receipts.contains(it.key()) || it.key() != m_me) v.receipts.insert(it.key(), it.value());
+        for (auto it = r->deliveredTo.cbegin(); it != r->deliveredTo.cend(); ++it) v.deliveredTo.insert(it.key(), it.value());
+        for (auto it = r->votes.cbegin(); it != r->votes.cend(); ++it) v.votes.insert(it.key(), it.value());
+        for (auto it = r->members.cbegin(); it != r->members.cend(); ++it) if (!v.members.contains(it.key())) v.members.insert(it.key(), it.value());
+        for (auto it = r->memberAvatars.cbegin(); it != r->memberAvatars.cend(); ++it) if (!v.memberAvatars.contains(it.key())) v.memberAvatars.insert(it.key(), it.value());
+        for (const QString &e : r->ended) v.ended.insert(e);
+        for (const QString &t : r->typing) if (!v.typing.contains(t)) v.typing << t;
+        v.statusSeen = v.statusSeen || r->statusSeen;
+    }
+    for (Msg &m : v.msgs) if (m.room.isEmpty()) m.room = id;
+    std::stable_sort(v.msgs.begin(), v.msgs.end(), [](const Msg &a, const Msg &b) { return a.ts < b.ts; });
+    m_view = v; m_viewId = id;
+    return &m_view;
+}
+
+QJsonObject Store::parseStickerPack(const QString &key, const QString &fallbackName, const QJsonObject &content) {
+    QJsonArray out; const QJsonObject images = content.value(QLatin1String("images")).toObject();
+    for (auto it = images.begin(); it != images.end(); ++it) {
+        const QJsonObject o = it.value().toObject(); const QJsonArray usage = o.value(QLatin1String("usage")).toArray();
+        bool ok = usage.isEmpty(); for (const QJsonValue &u : usage) if (u.toString() == QLatin1String("sticker")) ok = true;
+        if (!ok || !o.value(QLatin1String("url")).isString()) continue;
+        const QJsonObject info = o.value(QLatin1String("info")).toObject();
+        out.append(QJsonObject{{"shortcode", it.key()}, {"url", o.value(QLatin1String("url")).toString()}, {"body", o.value(QLatin1String("body")).toString(it.key())}, {"w", info.value(QLatin1String("w")).toInt()}, {"h", info.value(QLatin1String("h")).toInt()}, {"mime", info.value(QLatin1String("mimetype")).toString()}});
+    }
+    const QString name = content.value(QLatin1String("pack")).toObject().value(QLatin1String("display_name")).toString(fallbackName);
+    return QJsonObject{{"key", key}, {"name", name}, {"stickers", out}};
 }
