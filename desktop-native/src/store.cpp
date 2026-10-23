@@ -23,6 +23,9 @@ const Msg *Room::find(const QString &id) const {
     return nullptr;
 }
 
+QString Store::lockedText(qint64 ts) {
+    return QDateTime::currentMSecsSinceEpoch() - ts < 10 * 60000 ? QStringLiteral("Waiting for the key to read this message…") : QStringLiteral("Can't be read on this device. It was probably sent before this device was added.");
+}
 QString Store::s_timeFormat = QStringLiteral("system");
 QString Store::clock(qint64 ms) {
     const QTime t = QDateTime::fromMSecsSinceEpoch(ms).time();
@@ -381,4 +384,16 @@ QString Store::addLocalFile(const QString &roomId, const QString &path, const QS
 
 void Store::removeMessage(const QString &roomId, const QString &id) {
     if (Room *r = mutableRoom(roomId)) for (int i = 0; i < r->msgs.size(); ++i) if (r->msgs[i].id == id) { r->msgs.removeAt(i); return; }
+}
+
+int Store::trimRoom(const QString &id, int keep) {
+    Room *r = mutableRoom(id);
+    if (!r || r->msgs.size() <= keep) return 0;
+    const int drop = r->msgs.size() - keep;
+    QSet<QString> gone; for (int i = 0; i < drop; ++i) gone.insert(r->msgs[i].id);
+    r->msgs.remove(0, drop);
+    for (auto it = r->reactionRefs.begin(); it != r->reactionRefs.end();) { if (gone.contains(it.value().value(0))) it = r->reactionRefs.erase(it); else ++it; }
+    for (const QString &g : gone) { r->votes.remove(g); r->deliveredTo.remove(g); r->ended.remove(g); m_media.remove(g); m_media.remove(QStringLiteral("poster:") + g); m_media.remove(QStringLiteral("full:") + g); }
+    r->historyToken.clear(); r->reachedStart = false; r->historyAsked = false;     // the way back to what was dropped is asked for again
+    return drop;
 }

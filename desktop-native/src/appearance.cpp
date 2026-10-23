@@ -4,9 +4,9 @@
 #include <QStyleHints>
 
 namespace {
-struct Accent { const char *name, *dark, *light; };
-const Accent kAccents[] = {{"teal", "#2dd4bf", "#0d9488"}, {"blue", "#60a5fa", "#2563eb"}, {"purple", "#c4a1ff", "#7c3aed"}, {"pink", "#f9a8d4", "#db2777"},
-                           {"orange", "#fdba74", "#ea580c"}, {"green", "#86efac", "#16a34a"}, {"red", "#fca5a5", "#dc2626"}};
+struct Accent { const char *name, *dark, *light, *onDark, *onLight; };
+const Accent kAccents[] = {{"teal", "#2dd4bf", "#0d9488", "#04201c", "#ffffff"}, {"blue", "#60a5fa", "#2563eb", "#061a38", "#ffffff"}, {"purple", "#c4a1ff", "#7c3aed", "#1e0b3d", "#ffffff"},
+                           {"pink", "#f9a8d4", "#db2777", "#3b0a23", "#ffffff"}, {"orange", "#fdba74", "#ea580c", "#3a1a04", "#ffffff"}, {"green", "#86efac", "#16a34a", "#062b12", "#ffffff"}, {"red", "#fca5a5", "#dc2626", "#3b0a0a", "#ffffff"}};
 QColor inkFor(const QColor &c) { return (0.299 * c.redF() + 0.587 * c.greenF() + 0.114 * c.blueF()) > 0.6 ? QColor("#0b0b0b") : QColor("#ffffff"); }
 }
 
@@ -41,14 +41,15 @@ void Appearance::recompute() {
         m_c = {pal->bg, pal->panel, pal->panel2, pal->line, pal->text, pal->muted, pal->accent, inkFor(pal->accent), pal->theirs};
     } else {
         m_dark = m_mode == QLatin1String("dark") || m_mode == QLatin1String("black") || (m_mode == QLatin1String("system") && m_systemDark);
-        if (m_mode == QLatin1String("black")) m_c = {QColor("#000000"), QColor("#0a0a0a"), QColor("#161616"), QColor("#1f1f1f"), QColor("#e8ecf2"), QColor("#8b95a5"), {}, {}, QColor("#161616")};
-        else if (m_dark) m_c = {QColor("#0b0e13"), QColor("#12161d"), QColor("#1c222c"), QColor("#232a35"), QColor("#e8ecf2"), QColor("#8b95a5"), {}, {}, QColor("#1c222c")};
-        else m_c = {QColor("#ffffff"), QColor("#f6f7f9"), QColor("#eceff3"), QColor("#e3e6ea"), QColor("#14171a"), QColor("#6b7480"), {}, {}, QColor("#eceff3")};
-        QColor a;
-        for (const Accent &x : kAccents) if (m_accent == QLatin1String(x.name)) a = QColor(m_dark ? x.dark : x.light);
-        if (!a.isValid()) a = QColor(m_accent);
-        if (!a.isValid()) a = QColor(m_dark ? "#2dd4bf" : "#0d9488");
-        m_c.accent = a; m_c.ink = inkFor(a);
+        // the same colours as the web app
+        if (m_mode == QLatin1String("black")) m_c = {QColor("#000000"), QColor("#0a0a0a"), QColor("#161616"), QColor("#1d1d1d"), QColor("#e8ecf2"), QColor("#8b95a5"), {}, {}, QColor("#121212")};
+        else if (m_dark) m_c = {QColor("#0b0e13"), QColor("#12161d"), QColor("#1c222c"), QColor("#232a35"), QColor("#e8ecf2"), QColor("#8b95a5"), {}, {}, QColor("#161b23")};
+        else m_c = {QColor("#f2f4f7"), QColor("#ffffff"), QColor("#e9ecf1"), QColor("#e1e5ec"), QColor("#111418"), QColor("#5f6b7a"), {}, {}, QColor("#ffffff")};
+        QColor a, ink; bool known = false;
+        for (const Accent &x : kAccents) if (m_accent == QLatin1String(x.name)) { a = QColor(m_dark ? x.dark : x.light); ink = QColor(m_dark ? x.onDark : x.onLight); known = true; }
+        if (!known) { a = QColor(m_accent); if (a.isValid()) ink = inkFor(a); }
+        if (!a.isValid()) { a = QColor(m_dark ? "#2dd4bf" : "#0d9488"); ink = QColor(m_dark ? "#04201c" : "#ffffff"); }
+        m_c.accent = a; m_c.ink = ink;
     }
     emit changed();
 }

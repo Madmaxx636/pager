@@ -34,6 +34,10 @@ public:
     void refresh();
     /// What to show: tab is inbox, unread, archive, low, pinned or label:NAME; [search] matches names and previews.
     void setFilter(const QString &tab, const QString &search);
+    /// The filters of the filter window: {groups, dms, drafts, unanswered, network}. [drafts] are the chats you have an unsent draft in.
+    void setFilters(const QVariantMap &f, const QSet<QString> &drafts) { m_filters = f; m_drafts = drafts; refresh(); }
+    /// With the row of pinned chats shown above the list, the list itself leaves them out.
+    void setExcludePinned(bool on) { m_excludePinned = on; }
     /// Networks whose chats stay out of the list, and whether unread chats come first.
     void setOptions(const QStringList &hiddenNetworks, bool unreadFirst) { m_hidden = hiddenNetworks; m_unreadFirst = unreadFirst; }
     QString tab() const { return m_tab; }
@@ -47,7 +51,8 @@ private:
     QString signature(const QString &id) const;
     Store *m_store;
     QString m_tab = QStringLiteral("inbox"), m_search;
-    QStringList m_hidden; bool m_unreadFirst = false;
+    QStringList m_hidden; bool m_unreadFirst = false, m_excludePinned = false;
+    QVariantMap m_filters; QSet<QString> m_drafts;
     QVector<QString> m_sig;
 };
 

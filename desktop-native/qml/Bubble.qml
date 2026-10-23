@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Effects
+import Pager.Items
 import QtQuick.Layouts
 import "Networks.js" as N
 
@@ -65,17 +65,16 @@ Item {
     readonly property color softInk: outlined ? look.muted : (mine ? Qt.rgba(look.accentInk.r, look.accentInk.g, look.accentInk.b, 0.72) : look.muted)
     readonly property real tailRadius: settings.bubbleStyle === "tail" ? 3 : settings.bubbleStyle === "curved" ? 7 : 5
 
-    Component.onCompleted: if ((kind === "image" || kind === "video") && media.length === 0 && poster.length === 0 && eventId.length && !local && settings.autoDownload === "always") core.fetchMedia(eventId)
+    Component.onCompleted: if ((kind === "image" || kind === "video") && media.length === 0 && poster.length === 0 && eventId.length && !local && settings.autoDownload === "always" && !settings.lowData) core.fetchMedia(eventId)
 
     Column {
         id: col
         width: parent.width
         spacing: 2
-        Label {   // the day heading sits above the first message of that day
-            visible: row.day.length > 0
-            anchors.horizontalCenter: parent.horizontalCenter
-            topPadding: 12; bottomPadding: 8
-            text: row.day; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.DemiBold
+        Item {   // the day heading sits above the first message of that day
+            visible: row.day.length > 0; width: parent.width; height: visible ? 44 : 0
+            Rectangle { anchors.centerIn: parent; width: dayLabel.implicitWidth + 26; height: 24; radius: 12; color: look.panel
+                Label { id: dayLabel; anchors.centerIn: parent; text: row.day; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Medium } }
         }
         Item {   // where the unread messages begin
             visible: row.unreadDivider; width: parent.width; height: visible ? 30 : 0
@@ -135,9 +134,9 @@ Item {
                     Label { visible: row.edited; text: "edited"; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale); font.italic: true }
                     Label { visible: settings.showMessageTimes; text: row.time; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale)
                         ToolTip.visible: tipHover.hovered; ToolTip.text: row.fullTime; ToolTip.delay: 500; HoverHandler { id: tipHover } }
-                    Label { visible: row.mine && row.tick > 0 && settings.showReadTicks; font.pixelSize: Math.round(11 * look.textScale)
-                        text: row.tick === 1 ? "⏱" : row.tick === 2 ? "!" : row.tick === 5 ? "✓✓" : row.tick === 4 ? "✓✓" : "✓"
-                        color: row.tick === 5 ? (row.mine ? "#9be7ff" : look.accent) : (row.tick === 2 ? look.danger : row.softInk) }
+                    Icon { visible: row.mine && row.tick > 0 && settings.showReadTicks; anchors.verticalCenter: parent.verticalCenter; size: 14
+                        name: row.tick === 1 ? "clock" : row.tick === 2 ? "circle-alert" : row.tick >= 4 ? "check-check" : "check"
+                        color: row.tick === 5 ? (row.outlined ? look.accent : "#bff3ff") : (row.tick === 2 ? look.danger : row.softInk) }
                 }
                 TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = bubble.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
                 TapHandler { acceptedButtons: Qt.LeftButton; enabled: row.status === 2; onTapped: core.retry(row.eventId) }
@@ -150,9 +149,9 @@ Item {
                 x: row.mine ? bubble.x - width - 6 : bubble.x + bubble.width + 6
                 y: Math.max(0, (bubble.height - height) / 2); spacing: 2
                 Repeater {
-                    model: [["☺", "React"], ["↩", "Reply"], ["⋯", "More"]]
-                    delegate: Rectangle { width: 26; height: 26; radius: 13; color: tHover.hovered ? look.panel2 : "transparent"; border.width: 1; border.color: look.line
-                        Label { anchors.centerIn: parent; text: modelData[0]; color: look.muted; font.pixelSize: 14 }
+                    model: [["smile", "React"], ["reply", "Reply"], ["ellipsis", "More"]]
+                    delegate: Rectangle { width: 30; height: 28; radius: 9; color: tHover.hovered ? look.panel2 : look.panel; border.width: 1; border.color: look.line
+                        Icon { anchors.centerIn: parent; name: modelData[0]; size: 16; color: look.muted }
                         HoverHandler { id: tHover }
                         TapHandler { onTapped: { if (index === 1) row.replyRequested(row.eventId); else { const g = parent.mapToItem(null, 0, 26); row.menuRequested(row.eventId, row.mine, g.x, g.y) } } }
                     }
@@ -162,14 +161,14 @@ Item {
         Label { visible: row.status === 2; x: row.mine ? row.width - width - 16 : 56; text: "Not sent · click the message to try again"; color: look.danger; font.pixelSize: Math.round(11 * look.textScale) }
         Flow {   // reactions
             visible: row.reactions.length > 0
-            x: row.mine ? Math.max(14, row.width - width - 16) : 14 + (row.showName && settings.showAvatars ? 40 : 0)
-            width: row.maxW; spacing: 4
+            x: row.mine ? row.width - row.maxW - 16 : 14 + (row.showName && settings.showAvatars ? 40 : 0)
+            width: row.maxW; spacing: 4; layoutDirection: row.mine ? Qt.RightToLeft : Qt.LeftToRight
             Repeater {
                 model: row.reactions
                 delegate: Rectangle {
                     height: 26; width: chipRow.implicitWidth + 16; radius: 13
-                    color: modelData.mine ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.22) : look.panel2
-                    border.width: modelData.mine ? 1 : 0; border.color: look.accent
+                    color: modelData.mine ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.20) : look.panel
+                    border.width: 1; border.color: modelData.mine ? look.accent : look.line
                     Row { id: chipRow; anchors.centerIn: parent; spacing: 4
                         Label { text: modelData.key; font.pixelSize: Math.round(15 * look.textScale); color: look.text }
                         Label { visible: modelData.count > 1; text: modelData.count; font.pixelSize: Math.round(12 * look.textScale); color: look.muted; anchors.verticalCenter: parent.verticalCenter } }
@@ -190,10 +189,15 @@ Item {
             Text {
                 id: msgText
                 width: Math.min(implicitWidth, row.maxW - 28)
-                text: rich.render(row.body, row.html); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
+                text: "<style>a { color: " + (row.mine ? row.ink : look.accent) + "; }</style>" + rich.render(row.body, row.html); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
                 font.pixelSize: Math.round(15 * look.textScale); font.italic: row.kind === "emote" || row.kind === "notice"
                 onLinkActivated: (link) => files.openUrl(link)
                 HoverHandler { cursorShape: msgText.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor }
+            }
+            Loader {   // a web address in the message: show what it is
+                readonly property string link: settings.linkPreviews && !settings.lowData && row.kind === "text" ? rich.firstUrl(row.body) : ""
+                active: link.length > 0; width: Math.min(300, row.maxW - 28); height: item ? item.height : 0
+                sourceComponent: LinkCard { url: parent.link; ink: row.ink; softInk: row.softInk; width: parent.width }
             }
             Item { width: 1; height: metaRow.visible ? 13 : 0 }
         }
@@ -215,12 +219,9 @@ Item {
                 id: frame
                 readonly property real ratio: row.imgWidth > 0 && row.imgHeight > 0 ? Math.min(2.2, Math.max(0.4, row.imgHeight / row.imgWidth)) : 0.75
                 width: Math.min(row.maxW, 340); height: Math.max(90, Math.min(width * ratio, 420))
-                Rectangle { id: ph; anchors.fill: parent; radius: 14; color: row.bubbleColor; opacity: 0.8; visible: pic.status !== Image.Ready
-                    Label { anchors.centerIn: parent; text: row.media.length ? "" : (settings.autoDownload === "always" ? "Loading…" : "Tap to load"); color: row.softInk; font.pixelSize: 13 } }
-                Image { id: pic; anchors.fill: parent; visible: false; source: row.media.length ? "file://" + row.media : ""; fillMode: Image.PreserveAspectCrop; asynchronous: true; cache: false; sourceSize.width: 720
-                    autoTransform: true }
-                MultiEffect { anchors.fill: parent; source: pic; visible: pic.status === Image.Ready; maskEnabled: true; maskSource: picMask; maskThresholdMin: 0.5; maskSpreadAtMin: 1.0 }
-                Item { id: picMask; anchors.fill: parent; visible: false; layer.enabled: true; Rectangle { anchors.fill: parent; radius: 14; color: "black" } }
+                Rectangle { id: ph; anchors.fill: parent; radius: 14; color: Qt.darker(look.panel2, look.dark ? 0.85 : 1.07); visible: pic.status !== 2
+                    Label { anchors.centerIn: parent; text: row.media.length ? "" : (settings.autoDownload === "always" && !settings.lowData ? "Loading…" : "Tap to load"); color: row.softInk; font.pixelSize: 13 } }
+                RoundedImage { id: pic; anchors.fill: parent; source: row.media; radius: 14; maxSide: 900 }
                 Label { visible: row.gifLike || row.mime === "image/gif"; text: "GIF"; color: "white"; font.bold: true; font.pixelSize: 11; leftPadding: 6; rightPadding: 6; topPadding: 2; bottomPadding: 2; x: 8; y: 8
                     background: Rectangle { radius: 6; color: "#99000000" } }
                 Row {   // time over the picture when there are no words with it
@@ -229,7 +230,7 @@ Item {
                 TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { if (row.media.length === 0) core.fetchMedia(row.eventId); row.openMedia(row.eventId) } }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
-            Text { visible: row.caption.length > 0; width: Math.min(implicitWidth, frame.width); text: rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
+            Text { visible: row.caption.length > 0; width: Math.min(implicitWidth, frame.width); text: "<style>a { color: " + (row.mine ? row.ink : look.accent) + "; }</style>" + rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
                 font.pixelSize: Math.round(15 * look.textScale); onLinkActivated: (link) => files.openUrl(link) }
             Item { width: 1; height: row.caption.length > 0 && metaRow.visible ? 13 : 0 }
         }
@@ -250,9 +251,7 @@ Item {
                 readonly property real ratio: row.imgWidth > 0 && row.imgHeight > 0 ? Math.min(2.0, Math.max(0.45, row.imgHeight / row.imgWidth)) : 0.56
                 width: Math.min(row.maxW, 340); height: Math.max(100, Math.min(width * ratio, 420))
                 Rectangle { anchors.fill: parent; radius: 14; color: "#222"; }
-                Image { id: vpic; anchors.fill: parent; visible: false; source: row.poster.length ? "file://" + row.poster : ""; fillMode: Image.PreserveAspectCrop; asynchronous: true; sourceSize.width: 720 }
-                MultiEffect { anchors.fill: parent; source: vpic; visible: vpic.status === Image.Ready; maskEnabled: true; maskSource: vMask; maskThresholdMin: 0.5; maskSpreadAtMin: 1.0 }
-                Item { id: vMask; anchors.fill: parent; visible: false; layer.enabled: true; Rectangle { anchors.fill: parent; radius: 14; color: "black" } }
+                RoundedImage { id: vpic; anchors.fill: parent; source: row.poster; radius: 14; maxSide: 900 }
                 Rectangle { anchors.centerIn: parent; width: 54; height: 54; radius: 27; color: "#aa000000"; Label { anchors.centerIn: parent; text: "▶"; color: "white"; font.pixelSize: 22; leftPadding: 3 } }
                 Label { visible: row.durationMs > 0; x: 8; y: 8; text: Math.floor(row.durationMs / 60000) + ":" + ("0" + Math.floor(row.durationMs / 1000) % 60).slice(-2); color: "white"; font.pixelSize: 11; leftPadding: 6; rightPadding: 6; topPadding: 2; bottomPadding: 2; background: Rectangle { radius: 6; color: "#99000000" } }
                 Row { visible: row.caption.length === 0; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 6
@@ -260,7 +259,7 @@ Item {
                 TapHandler { onTapped: row.openMedia(row.eventId) }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
-            Text { visible: row.caption.length > 0; width: Math.min(implicitWidth, vframe.width); text: rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
+            Text { visible: row.caption.length > 0; width: Math.min(implicitWidth, vframe.width); text: "<style>a { color: " + (row.mine ? row.ink : look.accent) + "; }</style>" + rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
                 font.pixelSize: Math.round(15 * look.textScale); onLinkActivated: (link) => files.openUrl(link) }
             Item { width: 1; height: row.caption.length > 0 && metaRow.visible ? 13 : 0 }
         }
@@ -268,7 +267,11 @@ Item {
     Component {
         id: audioC
         Column {
-            AudioBubble { eventId: row.eventId; voice: row.voice; durationMs: row.durationMs; fileName: row.fileName; ink: row.ink; softInk: row.softInk; accentColor: row.mine ? row.ink : look.accent; width: Math.min(row.maxW - 28, 280) }
+            Loader {   // the sound player (and the multimedia libraries behind it) is only loaded when a chat has a sound
+                width: Math.min(row.maxW - 28, 280); height: 40
+                source: "AudioBubble.qml"
+                onLoaded: { item.eventId = row.eventId; item.voice = row.voice; item.durationMs = row.durationMs; item.fileName = row.fileName; item.ink = row.ink; item.softInk = row.softInk; item.accentColor = row.mine ? row.ink : look.accent; item.width = width }
+            }
             Item { width: 1; height: metaRow.visible ? 13 : 0 }
         }
     }

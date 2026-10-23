@@ -89,6 +89,8 @@ public:
     int nextLocalId() { return ++m_localCounter; }
     QString mediaPath(const QString &eventId) const { return m_media.value(eventId); }
     void setMediaPath(const QString &eventId, const QString &path) { m_media.insert(eventId, path); }
+    /// Keeps only the newest [keep] messages of a chat (older ones are fetched again when you scroll up). Returns how many were dropped.
+    int trimRoom(const QString &id, int keep);
     void removeRoom(const QString &id) { m_rooms.remove(id); }
     void clearRooms() { m_rooms.clear(); }
     void forgetMedia() { m_media.clear(); m_wantedAvatars.clear(); }
@@ -106,6 +108,8 @@ public:
     static bool isBridgeBot(const QString &user);
     bool mine(const Msg &m) const { return !m_me.isEmpty() && m.sender == m_me; }
     /// "h:mm AP" or "HH:mm" depending on [format] (system, 12 or 24)
+    /// What an unreadable message says: first it waits for its key; after ten minutes it was most likely sent before this device existed.
+    static QString lockedText(qint64 ts);
     static QString clock(qint64 ms);
     static void setTimeFormat(const QString &format) { s_timeFormat = format; }
     static QString s_timeFormat;

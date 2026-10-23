@@ -83,6 +83,26 @@ private slots:
         l.setOptions({}, true); l.refresh(); QCOMPARE(l.rowCount(), 3); QCOMPARE(l.data(l.index(0), RoomListModel::NameRole).toString(), QString("Unread one"));     // oldest, but unread: first
         l.setOptions({}, false); l.refresh(); QCOMPARE(l.data(l.index(0), RoomListModel::NameRole).toString(), QString("On WhatsApp"));
     }
+    void filtersNarrowTheList() {
+        Store s; s.setMe("@me:x"); RoomListModel l(&s);
+        QJsonObject dm = room("!d", "Direct", {msg("$1", "@x:y", "they wrote last", 3000)});
+        QJsonObject group = room("!g", "Group", {msg("$2", "@me:x", "I wrote last", 2000)}); group["member_count"] = 5;
+        QJsonObject wa = room("!w", "WhatsApp one", {msg("$3", "@x:y", "hi", 1000)}); wa["state"] = QJsonArray{QJsonObject{{"type", "m.bridge"}, {"state_key", "x"}, {"content", QJsonObject{{"protocol", QJsonObject{{"id", "whatsapp"}}}, {"com.beeper.room_type", "dm"}}}}};
+        s.applyRooms({dm, group, wa}); l.refresh(); QCOMPARE(l.rowCount(), 3);
+        l.setFilters({{"groups", true}}, {}); QCOMPARE(l.rowCount(), 1); QCOMPARE(l.data(l.index(0), RoomListModel::NameRole).toString(), QString("Group"));
+        l.setFilters({{"dms", true}}, {}); QCOMPARE(l.rowCount(), 2);
+        l.setFilters({{"unanswered", true}}, {}); QCOMPARE(l.rowCount(), 2);                                // "Direct" and "WhatsApp one": they wrote last
+        l.setFilters({{"network", "whatsapp"}}, {}); QCOMPARE(l.rowCount(), 1);
+        l.setFilters({{"drafts", true}}, {"!g"}); QCOMPARE(l.rowCount(), 1); QCOMPARE(l.data(l.index(0), RoomListModel::NameRole).toString(), QString("Group"));
+        l.setFilters({}, {}); QCOMPARE(l.rowCount(), 3);
+    }
+    void thePinsRowTakesPinnedChatsOutOfTheList() {
+        Store s; s.setMe("@me:x"); RoomListModel l(&s);
+        QJsonObject pinned = room("!p", "Pinned one", {msg("$1", "@x:y", "a", 1000)}); pinned["account_data"] = QJsonArray{QJsonObject{{"type", "m.tag"}, {"content", QJsonObject{{"tags", QJsonObject{{"m.favourite", QJsonObject{{"order", 1}}}}}}}}};
+        s.applyRooms({pinned, room("!o", "Other", {msg("$2", "@x:y", "b", 2000)})});
+        l.setExcludePinned(true); l.refresh(); QCOMPARE(l.rowCount(), 1); QCOMPARE(l.data(l.index(0), RoomListModel::NameRole).toString(), QString("Other"));
+        l.setExcludePinned(false); l.refresh(); QCOMPARE(l.rowCount(), 2);
+    }
     void roomListMovesRowsInsteadOfResetting() {
         Store s; s.setMe("@me:x"); RoomListModel l(&s); QAbstractItemModelTester check(&l);
         s.applyRooms({room("!a", "Alpha", {msg("$1", "@x:y", "a", 1000)}), room("!b", "Beta", {msg("$2", "@x:y", "b", 2000)}), room("!c", "Gamma", {msg("$3", "@x:y", "c", 3000)})});

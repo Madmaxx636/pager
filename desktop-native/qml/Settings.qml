@@ -289,6 +289,8 @@ Dialog {
             }
             SGroup { title: "Developer"
                 SToggle { key: "developerMode"; title: "Developer mode"; hint: "Show event ids and details" }
+                SToggle { key: "lowEnd"; title: "Low-end mode"; hint: "For an older computer: draws with the processor instead of the graphics chip, less memory. Takes effect after Pager restarts." }
+                SToggle { key: "lowData"; title: "Low data"; hint: "Nothing downloads by itself and pictures are smaller" }
                 Label { text: "Log file: " + core.logPath; color: look.muted; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere } }
         }
     }
