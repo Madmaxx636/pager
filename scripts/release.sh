@@ -14,7 +14,10 @@ PUBLISH_ONLY=0; BUILD_ONLY=0; KEEP_ANDROID=0; KEEP_WINDOWS=0
 while [[ "${1:-}" == --* ]]; do case "$1" in --publish-only) PUBLISH_ONLY=1;; --build-only) BUILD_ONLY=1;; --keep-android) KEEP_ANDROID=1;; --keep-windows) KEEP_WINDOWS=1;; *) echo "Unknown option $1" >&2; exit 1;; esac; shift; done
 V="${1:?Usage: $0 [--publish-only] <version like 0.4.1> \"notes\"}"; NOTES="${2:-}"
 [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must look like 0.4.1" >&2; exit 1; }
-SERVER="${SERVER:-lane@192.168.1.126}"; SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519_pager_server}"; REMOTE_DIR="${REMOTE_DIR:-pager/server/updates}"
+# Where to publish: SERVER (user@host), SSH_KEY and REMOTE_DIR come from the environment or from ~/.config/pager/release.env (kept out of the repo).
+[ -f "$HOME/.config/pager/release.env" ] && . "$HOME/.config/pager/release.env"
+SERVER="${SERVER:-}"; SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"; REMOTE_DIR="${REMOTE_DIR:-pager/server/updates}"
+[ -n "$SERVER" ] || { echo "Say which server to publish to: set SERVER=user@host (and SSH_KEY) in ~/.config/pager/release.env" >&2; exit 1; }
 KEY="$HOME/.config/pager/update-signing.pem"
 [ -f "$KEY" ] || { echo "No release key at $KEY" >&2; exit 1; }
 cmp -s <(openssl pkey -in "$KEY" -pubout) desktop/update-pubkey.pem || { echo "The release key doesn't match desktop/update-pubkey.pem, installed apps would reject this release" >&2; exit 1; }
