@@ -195,13 +195,15 @@ data class AppSettings(
 
 class SettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("pager-settings", Context.MODE_PRIVATE)
+    /** Android Go phones and other very small ones (a couple of GB of memory) report themselves as "low RAM". */
+    private val lowRam = runCatching { (context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).isLowRamDevice }.getOrDefault(false)
     private val _state = MutableStateFlow(load())
     val state: StateFlow<AppSettings> = _state.asStateFlow()
     val value get() = _state.value
 
     private fun load(): AppSettings = runCatching {
         // The alert delay and the per-network settings were taken out of Settings, so whatever was saved for them is switched off.
-        json.decodeFromString(AppSettings.serializer(), prefs.getString("json", null) ?: return@runCatching AppSettings()).copy(notifDelaySec = 0, notifNetworkMode = emptyMap(), notifMutedNetworks = emptySet()).let { x ->
+        json.decodeFromString(AppSettings.serializer(), prefs.getString("json", null) ?: return@runCatching AppSettings(lowEnd = lowRam)).copy(notifDelaySec = 0, notifNetworkMode = emptyMap(), notifMutedNetworks = emptySet()).let { x ->
             // One GIPHY key from before several sources existed moves into the new place. (A Tenor key is dropped: that service no longer exists.)
             if (x.gifKey.isNotBlank() && x.gifProvider != "tenor" && x.gifKeys["giphy"].isNullOrBlank()) x.copy(gifKeys = x.gifKeys + ("giphy" to x.gifKey)) else x
         }.let { it.copy(bubbleStyle = migrateBubbleStyle(it.bubbleStyle), outStyle = if (it.outStyle.isEmpty()) "" else migrateBubbleStyle(it.outStyle)) }

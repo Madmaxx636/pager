@@ -34,9 +34,22 @@ echo "== Android"
 [ -n "${DEBUG_SIGN:-}" ] || [ -f "${PAGER_ANDROID_SIGNING:-$HOME/.config/pager/android-signing.properties}" ] || { echo "No Android release key. Make one first (see SECURITY.md) or use DEBUG_SIGN=1 for a trial build." >&2; exit 1; }
 (cd android && ./gradlew :app:testDebugUnitTest :app:assembleRelease ${DEBUG_SIGN:+-PdebugSign} -q)
 cp android/app/build/outputs/apk/release/*.apk "$OUT/pager-android-$V.apk"
+# The same app for phones that cannot run 64-bit code (small Android Go phones and the like): only the 32-bit native code, so about half the size.
+(cd android && ./gradlew :app:assembleRelease ${DEBUG_SIGN:+-PdebugSign} -Pabis=armeabi-v7a -q)
+cp android/app/build/outputs/apk/release/*.apk "$OUT/pager-android-$V-32bit.apk"
+# Check what is really inside: the normal file carries both kinds of native code, the 32-bit one only the 32-bit kind.
+libs() { unzip -l "$1" | awk '/lib\/[a-z0-9_-]+\//{split($4,a,"/"); print a[2]}' | sort -u | tr '\n' ' '; }
+echo "   normal APK native code: $(libs "$OUT/pager-android-$V.apk")"; echo "   32-bit APK native code: $(libs "$OUT/pager-android-$V-32bit.apk")"
+libs "$OUT/pager-android-$V-32bit.apk" | grep -q "arm64" && { echo "The 32-bit APK contains 64-bit code" >&2; exit 1; }
+libs "$OUT/pager-android-$V-32bit.apk" | grep -q "armeabi-v7a" || { echo "The 32-bit APK has no 32-bit code" >&2; exit 1; }
 echo "== Desktop"; (cd desktop && npm test --silent && npm run dist >/dev/null)
 cp "desktop/release/pager-desktop_${V}_amd64.deb" "$OUT/"
-if [ "$KEEP_WINDOWS" = 1 ]; then echo "== Windows (kept as it is on the server)"; else echo "== Windows"; if [ -n "${WIN_BUILD:-}" ]; then (cd desktop && eval "$WIN_BUILD" >/dev/null); else (cd desktop && npx electron-builder --win --x64 >/dev/null); fi; cp "desktop/release/pager-desktop-setup-${V}.exe" "$OUT/"; fi
+if [ "$KEEP_WINDOWS" = 1 ]; then echo "== Windows (kept as it is on the server)"; else echo "== Windows"; if [ -n "${WIN_BUILD:-}" ]; then (cd desktop && eval "$WIN_BUILD" >/dev/null); else (cd desktop && npx electron-builder --win --x64 >/dev/null); fi; cp "desktop/release/pager-desktop-setup-${V}.exe" "$OUT/"
+  # And for 32-bit Windows 10 or newer (older and smaller PCs). Same file name as above, so it is copied out before the next build and renamed.
+  echo "== Windows 32-bit"; if [ -n "${WIN_BUILD:-}" ]; then (cd desktop && eval "${WIN_BUILD/--x64/--ia32}" >/dev/null); else (cd desktop && npx electron-builder --win --ia32 >/dev/null); fi
+  cp "desktop/release/pager-desktop-setup-${V}.exe" "$OUT/pager-desktop-setup-${V}-32bit.exe"
+  file "$OUT/pager-desktop-setup-${V}-32bit.exe" | grep -q "PE32 executable" || { echo "The 32-bit Windows installer is not a 32-bit program" >&2; exit 1; }
+fi
 
 CODE=$(awk -F. '{print $1*10000+$2*100+$3}' <<<"$V")
 # The key the Android app is signed with: phones refuse an update signed by any other key, so the apps compare this before downloading.
@@ -45,9 +58,9 @@ PREV=""; { [ "$KEEP_ANDROID" = 1 ] || [ "$KEEP_WINDOWS" = 1 ]; } && PREV="$(ssh_
 PREV="$PREV" KEEPA="$KEEP_ANDROID" KEEPW="$KEEP_WINDOWS" SIGNER="$SIGNER" node -e '
 const fs=require("fs"),c=require("crypto");const [v,code,notes]=process.argv.slice(1);
 const sha=f=>c.createHash("sha256").update(fs.readFileSync("release-out/"+f)).digest("hex");
-const a=`pager-android-${v}.apk`,d=`pager-desktop_${v}_amd64.deb`,w=`pager-desktop-setup-${v}.exe`;
+const a=`pager-android-${v}.apk`,a32=`pager-android-${v}-32bit.apk`,d=`pager-desktop_${v}_amd64.deb`,w=`pager-desktop-setup-${v}.exe`,w32=`pager-desktop-setup-${v}-32bit.exe`;const has=f=>fs.existsSync("release-out/"+f);
 const prev=process.env.PREV?JSON.parse(process.env.PREV):null;const keep=prev&&process.env.KEEPA==="1"?prev.android:null,keepW=prev&&process.env.KEEPW==="1"?prev.windows:null;
-fs.writeFileSync("release-out/latest.json",JSON.stringify({released:new Date().toISOString(),android:keep??{version:v,code:+code,file:a,sha256:sha(a),notes,signer:process.env.SIGNER},desktop:{version:v,file:d,sha256:sha(d),notes},windows:keepW??{version:v,file:w,sha256:sha(w),notes}},null,2));
+fs.writeFileSync("release-out/latest.json",JSON.stringify({released:new Date().toISOString(),android:keep??{version:v,code:+code,file:a,sha256:sha(a),notes,signer:process.env.SIGNER},...(has(a32)&&!keep?{android32:{version:v,code:+code,file:a32,sha256:sha(a32),notes,signer:process.env.SIGNER}}:{}),desktop:{version:v,file:d,sha256:sha(d),notes},windows:keepW??{version:v,file:w,sha256:sha(w),notes},...(has(w32)&&!keepW?{windows32:{version:v,file:w32,sha256:sha(w32),notes}}:{})},null,2));
 ' "$V" "$CODE" "$NOTES"
 openssl pkeyutl -sign -inkey "$KEY" -rawin -in "$OUT/latest.json" -out "$OUT/latest.json.sig"
 fi
@@ -56,8 +69,8 @@ fi
 echo "== Publishing to $SERVER"
 ssh_ "mkdir -p ~/$REMOTE_DIR"
 # Files first, the signed information last: an app never sees a version whose files are not there yet.
-FILES=("$OUT/pager-desktop_${V}_amd64.deb"); [ "$KEEP_WINDOWS" = 1 ] || FILES+=("$OUT/pager-desktop-setup-${V}.exe"); [ "$KEEP_ANDROID" = 1 ] || FILES+=("$OUT/pager-android-$V.apk")
+FILES=("$OUT/pager-desktop_${V}_amd64.deb"); [ "$KEEP_WINDOWS" = 1 ] || FILES+=("$OUT/pager-desktop-setup-${V}.exe" "$OUT/pager-desktop-setup-${V}-32bit.exe"); [ "$KEEP_ANDROID" = 1 ] || FILES+=("$OUT/pager-android-$V.apk" "$OUT/pager-android-$V-32bit.apk")
 scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "${FILES[@]}" "$SERVER:$REMOTE_DIR/"
 scp -q -i "$SSH_KEY" -o IdentitiesOnly=yes "$OUT/latest.json" "$OUT/latest.json.sig" "$SERVER:$REMOTE_DIR/"
-ssh_ "cd ~/$REMOTE_DIR && ls -t pager-android-*.apk | tail -n +4 | xargs -r rm -f; ls -t pager-desktop_*.deb | tail -n +4 | xargs -r rm -f; ls -t pager-desktop-setup-*.exe | tail -n +4 | xargs -r rm -f"
+ssh_ "cd ~/$REMOTE_DIR && ls -t pager-android-*.apk | grep -v 32bit | tail -n +4 | xargs -r rm -f; ls -t pager-android-*-32bit.apk | tail -n +4 | xargs -r rm -f; ls -t pager-desktop_*.deb | tail -n +4 | xargs -r rm -f; ls -t pager-desktop-setup-*.exe | grep -v 32bit | tail -n +4 | xargs -r rm -f; ls -t pager-desktop-setup-*-32bit.exe | tail -n +4 | xargs -r rm -f"
 echo "Published $V. Remember to commit VERSION and desktop/package.json."

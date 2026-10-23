@@ -15,6 +15,12 @@ const parts = (v) => String(v).split(".").map((n) => parseInt(n, 10) || 0);
 /** True when version a is newer than b (1.2.10 > 1.2.9). */
 function newer(a, b) { const x = parts(a), y = parts(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; }
 
+/** Which entry of the update information this computer takes: a 32-bit Windows PC needs the 32-bit installer, never the 64-bit one. Undefined when none fits. */
+function entryFor(all, platform, arch) {
+  if (platform === "win32") return arch === "ia32" ? all.windows32 : all.windows;
+  return all.desktop;
+}
+
 /** The manifest bytes are trusted only if the signature next to them was made with the release key. */
 function verify(manifest, signature, publicKeyPem) {
   try { return crypto.verify(null, manifest, publicKeyPem, signature); } catch { return false; }
@@ -50,7 +56,8 @@ async function checkForUpdates({ server, win, quiet }) {
     const sig = man && (await get(base + "latest.json.sig", { maxBytes: 4096 }));
     if (!man) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: "Your server doesn't publish updates yet." }); return; }
     if (!sig || !verify(man.body, sig.body, PUBLIC_KEY())) throw new Error("the update information isn't signed by the Pager release key, so it was ignored");
-    const all = JSON.parse(man.body.toString("utf8")); const d = win32 ? all.windows : all.desktop;
+    const all = JSON.parse(man.body.toString("utf8")); const d = entryFor(all, process.platform, process.arch);
+    if (!d && win32 && process.arch === "ia32") { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: "Your server doesn't publish a 32-bit Windows version yet." }); return; }
     if (!d || !d.version || !d.file || !/^[0-9a-f]{64}$/.test(String(d.sha256).toLowerCase()) || /[\/\\]/.test(d.file)) throw new Error("the update information is incomplete");
     if (!newer(d.version, app.getVersion())) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: `You're up to date (${app.getVersion()}).` }); return; }
     const asked = await dialog.showMessageBox(win ?? undefined, { type: "info", message: `Pager ${d.version} is available`, detail: (d.notes || "") + (win32 ? "\n\nPager will close, update and reopen." : "\n\nYour computer will ask for your password to install it."), buttons: ["Update now", "Later"], defaultId: 0, cancelId: 1 });
@@ -153,4 +160,4 @@ async function install(file, win) {
   await viaTerminal(file);
 }
 
-module.exports = { checkForUpdates, newer, verify, terminalPlan, asUserService };
+module.exports = { checkForUpdates, entryFor, newer, verify, terminalPlan, asUserService };

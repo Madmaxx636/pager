@@ -33,4 +33,9 @@ class UpdaterTest {
         val i = Updater.parse(json.replace(""""notes":"Fixes"""", """"notes":"Fixes","signer":"23:F7:19:AB""""), "https://s")!!
         assertEquals("23f719ab", i.signer)
     }
+
+    private val both = """{"android":{"version":"0.5.71","code":571,"file":"pager-android-0.5.71.apk","sha256":"aa"},"android32":{"version":"0.5.71","code":571,"file":"pager-android-0.5.71-32bit.apk","sha256":"bb"}}"""
+    @Test fun a64BitPhoneTakesTheNormalFile() { assertEquals("pager-android-0.5.71.apk", Updater.parse(both, "https://s", listOf("arm64-v8a", "armeabi-v7a", "armeabi"))!!.url.substringAfterLast('/')) }
+    @Test fun a32BitOnlyPhoneTakesTheLighterFile() { assertEquals("pager-android-0.5.71-32bit.apk", Updater.parse(both, "https://s", listOf("armeabi-v7a", "armeabi"))!!.url.substringAfterLast('/')) }
+    @Test fun a32BitPhoneUsesTheNormalFileWhenThereIsNoLighterOne() { assertEquals("pager-android-0.4.1.apk", Updater.parse(json, "https://s", listOf("armeabi-v7a"))!!.url.substringAfterLast('/')) }
 }

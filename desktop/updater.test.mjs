@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const Module = require("node:module");
 const orig = Module._load;
 Module._load = (req, ...a) => (req === "electron" ? { app: {}, dialog: {}, shell: {} } : orig(req, ...a));
-const { newer, verify, terminalPlan, asUserService } = require("./updater.js");
+const { newer, verify, terminalPlan, asUserService, entryFor } = require("./updater.js");
 
 test("compares versions by number, not text", () => {
   assert.equal(newer("0.4.10", "0.4.9"), true);
@@ -45,4 +45,12 @@ test("the terminal install runs as a service of the user's systemd, so sudo is a
   assert.ok(run.args.includes("--setenv=DISPLAY") && run.args.includes("--setenv=WAYLAND_DISPLAY") && !run.args.includes("--setenv=HOME"));
   assert.equal(run.args[run.args.indexOf("konsole") - 0], "konsole");
   assert.deepEqual(asUserService(plan, {}, () => false), plan); // no systemd-run: the plain terminal command
+});
+
+test("a 32-bit Windows PC takes the 32-bit installer and never the 64-bit one", () => {
+  const all = { windows: { file: "x64.exe" }, windows32: { file: "32bit.exe" }, desktop: { file: "pager.deb" } };
+  assert.equal(entryFor(all, "win32", "x64").file, "x64.exe");
+  assert.equal(entryFor(all, "win32", "ia32").file, "32bit.exe");
+  assert.equal(entryFor({ windows: { file: "x64.exe" } }, "win32", "ia32"), undefined);
+  assert.equal(entryFor(all, "linux", "x64").file, "pager.deb");
 });
