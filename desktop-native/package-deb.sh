@@ -33,7 +33,7 @@ Maintainer: Pager <noreply@users.noreply.github.com>
 Installed-Size: $SIZE
 Section: net
 Priority: optional
-Depends: libc6 (>= 2.38), libstdc++6, libgcc-s1, libqt6core6t64 | libqt6core6, libqt6gui6, libqt6widgets6, libqt6qml6, libqt6quick6, libqt6quickcontrols2-6, libqt6network6, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates, qml6-module-qtquick-dialogs, qml6-module-qtqml, qml6-module-qtqml-models, qml6-module-qtqml-workerscript
+Depends: libc6 (>= 2.38), libstdc++6, libgcc-s1, libqt6core6t64 | libqt6core6, libqt6gui6, libqt6widgets6, libqt6qml6, libqt6quick6, libqt6quickcontrols2-6, libqt6network6, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-templates, qml6-module-qtquick-dialogs, qml6-module-qtqml, qml6-module-qtqml-models, qml6-module-qtqml-workerscript, qml6-module-qtquick-effects, qml6-module-qtmultimedia, libqt6multimedia6
 Description: Pager, the native app
  A native (Qt and Rust) Pager client: your chat apps in one place, end-to-end encrypted,
  with no web page and no Chromium.
