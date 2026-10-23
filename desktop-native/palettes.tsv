@@ -1,0 +1,63 @@
+paper	Paper	classic	0	#f4efe6	#fbf8f2	#ebe4d6	#dcd3c1	#fbf8f2	#2b2620	#7a6f5f	#b45309
+ocean	Ocean	classic	0	#e8f2f7	#ffffff	#d6e8f0	#c3dbe7	#ffffff	#0f2a38	#55758a	#0a7ea4
+rose	Rose	classic	0	#fbeff2	#fff8fa	#f5dde3	#ebc9d2	#fff8fa	#3a1d26	#8a5d6b	#d6336c
+midnight	Midnight	classic	1	#0a1020	#101830	#18223f	#202c4d	#131c36	#e6ebf7	#8a96b5	#7aa2ff
+forest	Forest	classic	1	#0c1410	#121d17	#1a2a21	#223629	#15221b	#e3efe7	#86a091	#5ad28a
+sunset	Sunset	classic	1	#1a0f14	#241419	#321c23	#3d232b	#2a171d	#f6e9e6	#b89aa0	#ff8a5c
+slate	Slate	classic	1	#14171c	#1b1f26	#252a33	#2f3540	#20252d	#e4e7ec	#8f98a6	#9db4d3
+terminal	Terminal	classic	1	#000000	#031003	#0a1f0a	#0f3a0f	#031003	#6dff6d	#3fae3f	#39ff14
+pager	Pager (amber)	classic	1	#1b1608	#241d0b	#332a10	#44381a	#2a2210	#ffcf5a	#b08e35	#ffb000
+red-white	Red on white	white	0	#faf4f4	#ffffff	#f4e6e6	#e6d1d1	#f6eaea	#281515	#785e5e	#bb1b1b
+red-black	Red on black	black	1	#000000	#170c0c	#281515	#3d2424	#241414	#f3eded	#aa9292	#f65151
+red-solid	Red solid	solid	1	#6f2020	#5b1a1a	#471515	#8d3535	#531818	#ffffff	#dfc3c3	#ffb3b3
+orange-white	Orange on white	white	0	#faf7f4	#ffffff	#f4ece6	#e6d9d1	#f6eeea	#281d15	#78695e	#bb5b1b
+orange-black	Orange on black	black	1	#000000	#17110c	#281d15	#3d2e24	#241a14	#f3efed	#aa9c92	#f69351
+orange-solid	Orange solid	solid	1	#6f4020	#5b341a	#472915	#8d5835	#533018	#ffffff	#dfcec3	#ffd1b3
+amber-white	Amber on white	white	0	#faf8f4	#ffffff	#f4f0e6	#e6dfd1	#f6f2ea	#282215	#786f5e	#bb861b
+amber-black	Amber on black	black	1	#000000	#17140c	#282215	#3d3424	#241f14	#f3f1ed	#aaa292	#f6bf51
+amber-solid	Amber solid	solid	1	#6f5420	#5b451a	#473615	#8d6f35	#533f18	#ffffff	#dfd6c3	#ffe5b3
+yellow-white	Yellow on white	white	0	#faf9f4	#ffffff	#f4f2e6	#e6e2d1	#f6f4ea	#282515	#78745e	#bba11b
+yellow-black	Yellow on black	black	1	#000000	#17150c	#282515	#3d3924	#242214	#f3f2ed	#aaa692	#f6da51
+yellow-solid	Yellow solid	solid	1	#6f6220	#5b501a	#473f15	#8d7e35	#534918	#ffffff	#dfdac3	#fff2b3
+lime-white	Lime on white	white	0	#f8faf4	#ffffff	#eff4e6	#dde6d1	#f1f6ea	#202815	#6e785e	#7bbb1b
+lime-black	Lime on black	black	1	#000000	#13170c	#202815	#333d24	#1e2414	#f0f3ed	#a0aa92	#b4f651
+lime-solid	Lime solid	solid	1	#4f6f20	#415b1a	#334715	#6a8d35	#3b5318	#ffffff	#d4dfc3	#e0ffb3
+green-white	Green on white	white	0	#f4faf5	#ffffff	#e6f4e8	#d1e6d4	#eaf6ec	#152818	#5e7863	#1bbb36
+green-black	Green on black	black	1	#000000	#0c170e	#152818	#243d28	#142416	#edf3ee	#92aa96	#51f66c
+green-solid	Green solid	solid	1	#206f2d	#1a5b25	#15471d	#358d44	#185322	#ffffff	#c3dfc8	#b3ffbf
+emerald-white	Emerald on white	white	0	#f4faf8	#ffffff	#e6f4ee	#d1e6dd	#eaf6f1	#152820	#5e786d	#1bbb78
+emerald-black	Emerald on black	black	1	#000000	#0c1713	#152820	#243d32	#14241d	#edf3f0	#92aaa0	#51f6b1
+emerald-solid	Emerald solid	solid	1	#206f4e	#1a5b40	#154732	#358d68	#18533a	#ffffff	#c3dfd3	#b3ffdf
+teal-white	Teal on white	white	0	#f4fafa	#ffffff	#e6f4f3	#d1e6e4	#eaf6f5	#152826	#5e7876	#1bbbae
+teal-black	Teal on black	black	1	#000000	#0c1716	#152826	#243d3b	#142423	#edf3f2	#92aaa8	#51f6e8
+teal-solid	Teal solid	solid	1	#206f68	#1a5b56	#154743	#358d85	#18534e	#ffffff	#c3dfdd	#b3fff9
+cyan-white	Cyan on white	white	0	#f4f9fa	#ffffff	#e6f2f4	#d1e2e6	#eaf4f6	#152528	#5e7478	#1ba1bb
+cyan-black	Cyan on black	black	1	#000000	#0c1517	#152528	#24393d	#142224	#edf2f3	#92a6aa	#51daf6
+cyan-solid	Cyan solid	solid	1	#20626f	#1a505b	#153f47	#357e8d	#184953	#ffffff	#c3dadf	#b3f2ff
+sky-white	Sky on white	white	0	#f4f8fa	#ffffff	#e6eef4	#d1dde6	#eaf1f6	#152028	#5e6d78	#1b78bb
+sky-black	Sky on black	black	1	#000000	#0c1317	#152028	#24323d	#141d24	#edf0f3	#92a0aa	#51b1f6
+sky-solid	Sky solid	solid	1	#204e6f	#1a405b	#153247	#35688d	#183a53	#ffffff	#c3d3df	#b3dfff
+blue-white	Blue on white	white	0	#f4f6fa	#ffffff	#e6ebf4	#d1d8e6	#eaeef6	#151c28	#5e6778	#1b50bb
+blue-black	Blue on black	black	1	#000000	#0c1017	#151c28	#242c3d	#141924	#edeff3	#929aaa	#5188f6
+blue-solid	Blue solid	solid	1	#203a6f	#1a305b	#152547	#35528d	#182c53	#ffffff	#c3cddf	#b3ccff
+indigo-white	Indigo on white	white	0	#f4f4fa	#ffffff	#e6e6f4	#d1d1e6	#eaeaf6	#151528	#5e5e78	#1b1bbb
+indigo-black	Indigo on black	black	1	#000000	#0c0c17	#151528	#24243d	#141424	#ededf3	#9292aa	#5151f6
+indigo-solid	Indigo solid	solid	1	#20206f	#1a1a5b	#151547	#35358d	#181853	#ffffff	#c3c3df	#b3b3ff
+violet-white	Violet on white	white	0	#f7f4fa	#ffffff	#ebe6f4	#d8d1e6	#eeeaf6	#1c1528	#685e78	#561bbb
+violet-black	Violet on black	black	1	#000000	#100c17	#1c1528	#2d243d	#1a1424	#efedf3	#9b92aa	#8d51f6
+violet-solid	Violet solid	solid	1	#3d206f	#321a5b	#271547	#55358d	#2e1853	#ffffff	#cdc3df	#cfb3ff
+purple-white	Purple on white	white	0	#f9f4fa	#ffffff	#f0e6f4	#e0d1e6	#f2eaf6	#221528	#705e78	#8b1bbb
+purple-black	Purple on black	black	1	#000000	#140c17	#221528	#35243d	#1f1424	#f1edf3	#a392aa	#c451f6
+purple-solid	Purple solid	solid	1	#57206f	#481a5b	#381547	#72358d	#411853	#ffffff	#d7c3df	#e8b3ff
+fuchsia-white	Fuchsia on white	white	0	#faf4fa	#ffffff	#f4e6f4	#e6d1e6	#f6eaf6	#281528	#785e78	#bb1bbb
+fuchsia-black	Fuchsia on black	black	1	#000000	#170c17	#281528	#3d243d	#241424	#f3edf3	#aa92aa	#f651f6
+fuchsia-solid	Fuchsia solid	solid	1	#6f206f	#5b1a5b	#471547	#8d358d	#531853	#ffffff	#dfc3df	#ffb3ff
+pink-white	Pink on white	white	0	#faf4f7	#ffffff	#f4e6ed	#e6d1db	#f6eaf0	#28151f	#785e6b	#bb1b6b
+pink-black	Pink on black	black	1	#000000	#170c12	#28151f	#3d2430	#24141c	#f3edf0	#aa929e	#f651a3
+pink-solid	Pink solid	solid	1	#6f2047	#5b1a3b	#47152e	#8d3561	#531836	#ffffff	#dfc3d1	#ffb3d9
+rose-white	Rose on white	white	0	#faf4f6	#ffffff	#f4e6e9	#e6d1d5	#f6eaec	#281519	#785e63	#bb1b3b
+rose-black	Rose on black	black	1	#000000	#170c0f	#281519	#3d2429	#241417	#f3edee	#aa9297	#f65172
+rose-solid	Rose solid	solid	1	#6f2030	#5b1a27	#47151f	#8d3547	#531824	#ffffff	#dfc3c9	#ffb3c2
+grey-white	Grey on white	white	0	#f7f7f7	#ffffff	#ededed	#dbdbdb	#f0f0f0	#1f1f1f	#6b6b6b	#6b6b6b
+grey-black	Grey on black	black	1	#000000	#121212	#1f1f1f	#303030	#1c1c1c	#f0f0f0	#9e9e9e	#a3a3a3
+grey-solid	Grey solid	solid	1	#474747	#3b3b3b	#2e2e2e	#616161	#363636	#ffffff	#d1d1d1	#d9d9d9

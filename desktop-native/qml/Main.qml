@@ -20,7 +20,7 @@ ApplicationWindow {
         anchors.fill: parent
         sourceComponent: core.starting ? splash : (core.signedIn ? main : login)
     }
-    Component { id: splash; Rectangle { color: look.bg; Label { anchors.centerIn: parent; text: "Pager"; color: look.muted; font.pixelSize: 22 } } }
+    Component { id: splash; Rectangle { color: look.bg; Label { anchors.centerIn: parent; text: "Pager"; color: look.muted; font.pixelSize: Math.round(22 * look.textScale) } } }
     Component { id: login; Login { } }
     Component {
         id: main

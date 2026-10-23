@@ -10,7 +10,7 @@ Dialog {
     property var answers: ["", ""]
     onOpened: { question.text = ""; answers = ["", ""]; multi.checked = false; hidden.checked = false; question.forceActiveFocus() }
     background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
-    header: Label { text: dlg.title; color: look.text; font.pixelSize: 18; font.weight: Font.Bold; padding: 18; bottomPadding: 4 }
+    header: Label { text: dlg.title; color: look.text; font.pixelSize: Math.round(18 * look.textScale); font.weight: Font.Bold; padding: 18; bottomPadding: 4 }
     function filled() { let n = 0; for (const a of answers) if (a.trim().length) n++; return n }
     contentItem: ColumnLayout {
         spacing: 8

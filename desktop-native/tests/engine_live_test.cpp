@@ -42,7 +42,7 @@ private slots:
                 {"answers", QJsonArray{QJsonObject{{"id", "a1"}, {"body", "Pizza"}}, QJsonObject{{"id", "a2"}, {"body", "Tacos"}}}}}}}}}}}}}}});
         QVERIFY(!r->find("$poll")->local);
         int polls = 0; for (const Msg &m : r->msgs) if (m.kind == "poll") ++polls;
-        QCOMPARE(polls, 1);                                     // the local copy was replaced, not duplicated
+        QCOMPARE(polls, 2);                                     // the demo chat has one already; the local copy was replaced, not duplicated
         e.vote("$poll", "a2");
         QCOMPARE(r->votes.value("$poll").value("@me:demo.test"), QStringList{"a2"});
         e.vote("$poll", "a1");                                  // single choice: replaces

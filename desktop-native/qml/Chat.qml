@@ -23,15 +23,15 @@ Rectangle {
                 anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 16; spacing: 10
                 ToolButton {
                     id: backBtn; visible: pane.showBack; text: "←"
-                    contentItem: Label { text: backBtn.text; color: look.text; font.pixelSize: 22; horizontalAlignment: Text.AlignHCenter }
+                    contentItem: Label { text: backBtn.text; color: look.text; font.pixelSize: Math.round(22 * look.textScale); horizontalAlignment: Text.AlignHCenter }
                     background: Rectangle { color: "transparent" }
                     onClicked: pane.back()
                 }
                 Avatar { visible: core.currentRoom.length > 0; letter: core.currentName.length ? core.currentName[0].toUpperCase() : "?"; seed: core.currentName; size: 40 }
                 ColumnLayout {
                     spacing: 0
-                    Label { text: core.currentName; color: look.text; font.pixelSize: 16; font.weight: Font.DemiBold }
-                    Label { text: core.currentSub; color: look.muted; font.pixelSize: 12 }
+                    Label { text: core.currentName; color: look.text; font.pixelSize: Math.round(16 * look.textScale); font.weight: Font.DemiBold }
+                    Label { text: core.currentSub; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) }
                 }
                 Item { Layout.fillWidth: true }
             }
@@ -57,13 +57,13 @@ Rectangle {
             }
             // reaching the oldest message asks for older ones
             onAtYEndChanged: if (atYEnd && count > 0) core.loadOlder()
-            Label { anchors.centerIn: parent; visible: core.currentRoom.length === 0; text: "Pick a chat"; color: look.muted; font.pixelSize: 16 }
+            Label { anchors.centerIn: parent; visible: core.currentRoom.length === 0; text: "Pick a chat"; color: look.muted; font.pixelSize: Math.round(16 * look.textScale) }
         }
         Rectangle {   // what the composer is answering or editing
             visible: pane.barText.length > 0
             Layout.fillWidth: true; implicitHeight: 34; color: look.panel2
             RowLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 8
-                Label { Layout.fillWidth: true; text: pane.barText; color: look.muted; font.pixelSize: 13; elide: Text.ElideRight }
+                Label { Layout.fillWidth: true; text: pane.barText; color: look.muted; font.pixelSize: Math.round(13 * look.textScale); elide: Text.ElideRight }
                 ToolButton { text: "✕"; onClicked: { pane.replyingTo = ""; pane.editing = ""; input.clear() } } }
         }
         // composer
@@ -75,7 +75,7 @@ Rectangle {
                 anchors.fill: parent; anchors.margins: 12; spacing: 10
                 ToolButton {
                     id: plus; Layout.alignment: Qt.AlignBottom; text: "＋"
-                    contentItem: Label { text: "＋"; color: look.muted; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    contentItem: Label { text: "＋"; color: look.muted; font.pixelSize: Math.round(24 * look.textScale); horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     background: Rectangle { implicitWidth: 40; implicitHeight: 40; radius: 20; color: plus.hovered ? look.panel2 : "transparent" }
                     onClicked: attachMenu.popup()
                     Menu {
@@ -89,17 +89,21 @@ Rectangle {
                     TextArea {
                         id: input
                         placeholderText: "Message"
-                        placeholderTextColor: look.muted; color: look.text; font.pixelSize: 15
+                        placeholderTextColor: look.muted; color: look.text; font.pixelSize: Math.round(15 * look.textScale)
                         wrapMode: TextArea.Wrap; leftPadding: 16; rightPadding: 16; topPadding: 9; bottomPadding: 9
                         background: Rectangle { radius: 20; color: look.panel2 }
-                        Keys.onPressed: (e) => { if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter) && !(e.modifiers & Qt.ShiftModifier)) { e.accepted = true; sendIt() } }
+                        Keys.onPressed: (e) => {
+                            if (e.key !== Qt.Key_Return && e.key !== Qt.Key_Enter) return
+                            const wantsSend = prefs.enterSends ? !(e.modifiers & Qt.ShiftModifier) : (e.modifiers & Qt.ControlModifier)
+                            if (wantsSend) { e.accepted = true; sendIt() }
+                        }
                     }
                 }
                 Button {
                     id: sendBtn
                     Layout.alignment: Qt.AlignBottom
                     enabled: input.text.trim().length > 0
-                    contentItem: Label { text: "➤"; color: look.accentInk; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    contentItem: Label { text: "➤"; color: look.accentInk; font.pixelSize: Math.round(18 * look.textScale); horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     background: Rectangle { implicitWidth: 40; implicitHeight: 40; radius: 20; color: sendBtn.enabled ? look.accent : look.muted }
                     onClicked: sendIt()
                 }
@@ -125,12 +129,12 @@ Rectangle {
                 model: emoji.quick()
                 delegate: Rectangle { width: 36; height: 36; radius: 8; color: h.hovered ? look.panel2 : "transparent"
                     HoverHandler { id: h }
-                    Label { anchors.centerIn: parent; text: modelData; font.pixelSize: 22 }
+                    Label { anchors.centerIn: parent; text: modelData; font.pixelSize: Math.round(22 * look.textScale) }
                     TapHandler { onTapped: { core.react(pane.target, modelData); actions.close() } } }
             }
             Rectangle { width: 36; height: 36; radius: 8; color: hm.hovered ? look.panel2 : "transparent"
                 HoverHandler { id: hm }
-                Label { anchors.centerIn: parent; text: "＋"; font.pixelSize: 20; color: look.muted }
+                Label { anchors.centerIn: parent; text: "＋"; font.pixelSize: Math.round(20 * look.textScale); color: look.muted }
                 TapHandler { onTapped: { actions.close(); picker.open() } } }
         }
         MenuItem { text: "Reply"; onTriggered: { pane.editing = ""; pane.replyingTo = pane.target; input.forceActiveFocus() } }

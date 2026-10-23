@@ -28,9 +28,9 @@ Item {
             visible: row.day.length > 0
             anchors.horizontalCenter: parent.horizontalCenter
             topPadding: 10; bottomPadding: 6
-            text: row.day; color: look.muted; font.pixelSize: 12; font.weight: Font.DemiBold
+            text: row.day; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.DemiBold
         }
-        Label { visible: row.showName && !row.mine && row.first; leftPadding: 18; text: row.senderName; color: look.muted; font.pixelSize: 12; font.weight: Font.DemiBold }
+        Label { visible: row.showName && !row.mine && row.first; leftPadding: 18; text: row.senderName; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.DemiBold }
         Item {   // a picture
             visible: row.kind === "image"
             width: parent.width; height: visible ? pic.height : 0
@@ -42,7 +42,7 @@ Item {
                 width: Math.min(300, row.width * 0.7); height: Math.max(80, Math.min(width * ratio, 380))
                 radius: 14; color: row.mine ? look.accent : look.theirs; clip: true; opacity: row.local ? 0.7 : 1
                 Image { anchors.fill: parent; source: row.media.length ? "file://" + row.media : ""; fillMode: Image.PreserveAspectCrop; asynchronous: true; cache: true; sourceSize.width: 640 }
-                Label { anchors.centerIn: parent; visible: row.media.length === 0; text: "Loading picture…"; color: row.mine ? look.accentInk : look.muted; font.pixelSize: 13 }
+                Label { anchors.centerIn: parent; visible: row.media.length === 0; text: "Loading picture…"; color: row.mine ? look.accentInk : look.muted; font.pixelSize: Math.round(13 * look.textScale) }
                 TapHandler { acceptedButtons: Qt.LeftButton; onTapped: if (row.media.length) files.open(row.media) }
                 TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = pic.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
             }
@@ -57,9 +57,9 @@ Item {
                 width: Math.min(300, row.width * 0.74); height: 54; radius: 14; color: row.mine ? look.accent : look.theirs; opacity: row.local ? 0.7 : 1
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 10
-                    Label { text: "📎"; font.pixelSize: 22 }
-                    Label { Layout.fillWidth: true; text: row.fileName || row.body; elide: Text.ElideMiddle; color: row.mine ? look.accentInk : look.text; font.pixelSize: 14 }
-                    Label { text: row.media.length ? "Open" : (row.wantOpen ? "…" : "Download"); color: row.mine ? look.accentInk : look.accent; font.pixelSize: 13; font.weight: Font.DemiBold }
+                    Label { text: "📎"; font.pixelSize: Math.round(22 * look.textScale) }
+                    Label { Layout.fillWidth: true; text: row.fileName || row.body; elide: Text.ElideMiddle; color: row.mine ? look.accentInk : look.text; font.pixelSize: Math.round(14 * look.textScale) }
+                    Label { text: row.media.length ? "Open" : (row.wantOpen ? "…" : "Download"); color: row.mine ? look.accentInk : look.accent; font.pixelSize: Math.round(13 * look.textScale); font.weight: Font.DemiBold }
                 }
                 TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { if (row.media.length) files.open(row.media); else { row.wantOpen = true; core.fetchMedia(row.eventId) } } }
                 TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = fileBox.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
@@ -100,7 +100,7 @@ Item {
                     x: 10; y: 8; width: bubble.width - 20; height: visible ? quoteText.implicitHeight + 8 : 0; radius: 8
                     color: Qt.rgba(0, 0, 0, row.mine ? 0.18 : 0.07)
                     Text { id: quoteText; x: 8; y: 4; width: parent.width - 16; text: core.bodyOf(row.replyTo) || "Message"; elide: Text.ElideRight; maximumLineCount: 2; wrapMode: Text.Wrap
-                           color: row.mine ? look.accentInk : look.muted; font.pixelSize: 12; textFormat: Text.PlainText }
+                           color: row.mine ? look.accentInk : look.muted; font.pixelSize: Math.round(12 * look.textScale); textFormat: Text.PlainText }
                 }
                 Text {
                     id: text
@@ -110,14 +110,14 @@ Item {
                     textFormat: Text.PlainText
                     wrapMode: Text.Wrap
                     color: row.locked ? look.muted : (row.mine ? look.accentInk : look.text)
-                    font.pixelSize: 15; font.italic: row.locked || row.kind === "emote"
+                    font.pixelSize: Math.round(15 * look.textScale); font.italic: row.locked || row.kind === "emote"
                 }
                 Label {
                     id: meta
                     visible: row.last
                     anchors.right: parent.right; anchors.rightMargin: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 5
                     text: (row.edited ? "edited · " : "") + row.time + (row.local ? " · sending" : "")
-                    color: row.mine ? Qt.rgba(look.accentInk.r, look.accentInk.g, look.accentInk.b, 0.75) : look.muted; font.pixelSize: 11
+                    color: row.mine ? Qt.rgba(look.accentInk.r, look.accentInk.g, look.accentInk.b, 0.75) : look.muted; font.pixelSize: Math.round(11 * look.textScale)
                 }
             }
         }
@@ -134,7 +134,7 @@ Item {
                     color: modelData.mine ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.22) : look.panel2
                     border.width: modelData.mine ? 1 : 0; border.color: look.accent
                     TapHandler { onTapped: row.reactionTapped(row.eventId, modelData.key) }
-                    Label { id: chip; anchors.centerIn: parent; text: modelData.key + (modelData.count > 1 ? " " + modelData.count : ""); font.pixelSize: 15; color: look.text }
+                    Label { id: chip; anchors.centerIn: parent; text: modelData.key + (modelData.count > 1 ? " " + modelData.count : ""); font.pixelSize: Math.round(15 * look.textScale); color: look.text }
                 }
             }
         }
