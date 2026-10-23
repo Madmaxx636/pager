@@ -65,6 +65,16 @@ private slots:
         QVERIFY(q.value("size").toInt() >= 21);
         QCOMPARE(q.value("rows").toList().size(), q.value("size").toInt());
     }
+    void adminsAreRecognisedFromTheServerAnswer() {   // needs no server
+        Engine e(QString(), true);
+        QVERIFY(!e.isAdmin());
+        e.api("GET", "/api/me", QVariant(), QJSValue());           // the first call made is api-1
+        e.handle("http", QJsonObject{{"key", "api-1"}, {"status", 200}, {"body", QJsonObject{{"user_id", "@me:demo.test"}, {"admin", true}}}});
+        QVERIFY(e.isAdmin());
+        e.api("GET", "/api/me", QVariant(), QJSValue());
+        e.handle("http", QJsonObject{{"key", "api-2"}, {"status", 403}, {"body", QJsonObject{{"error", "no"}}}});
+        QVERIFY(!e.isAdmin());
+    }
     void popUpsOnlyForNewMessagesFromOthers() {      // needs no server
         Engine e(QString(), true);
         QSignalSpy pop(&e, &Engine::notify);

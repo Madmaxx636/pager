@@ -8,7 +8,8 @@ Rectangle {
     signal opened()
     Recovery { id: recovery }
     Accounts { id: accounts }
-    Component.onCompleted: if (startupDialog === "settings") Qt.callLater(settings.open); else if (startupDialog === "accounts") Qt.callLater(accounts.open)
+    Admin { id: admin }
+    Component.onCompleted: if (startupDialog === "settings") Qt.callLater(settings.open); else if (startupDialog === "accounts") Qt.callLater(accounts.open); else if (startupDialog === "admin") Qt.callLater(admin.open)
     Settings { id: settings; onRestoreRequested: recovery.open() }
 
     ColumnLayout {
@@ -26,6 +27,7 @@ Rectangle {
                     id: menu
                     MenuItem { text: core.user; enabled: false }
                     MenuItem { text: "Chat accounts…"; onTriggered: accounts.open() }
+                    MenuItem { text: "Server admin…"; visible: core.isAdmin; height: visible ? implicitHeight : 0; onTriggered: admin.open() }
                     MenuItem { text: "Settings"; onTriggered: settings.open() }
                     MenuItem { text: "Restore old messages…"; onTriggered: recovery.open() }
                     MenuItem { text: "Sign out"; onTriggered: core.logout() }
