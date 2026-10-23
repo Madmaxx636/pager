@@ -16,7 +16,7 @@ else()
   set_target_properties(pager_core PROPERTIES IMPORTED_LOCATION "${PAGER_CORE_DIR}/libpager_core.so")
 endif()
 
-qt_add_executable(pager-native src/main.cpp src/engine.cpp src/store.cpp src/models.cpp src/appearance.cpp src/emoji.cpp src/fileinfo.cpp src/selfupdate.cpp src/prefs.h)
+qt_add_executable(pager-native src/main.cpp src/engine.cpp src/store.cpp src/models.cpp src/appearance.cpp src/emoji.cpp src/fileinfo.cpp src/selfupdate.cpp src/rich.cpp src/prefs.h)
 target_include_directories(pager-native PRIVATE include src)
 target_link_libraries(pager-native PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 pager_core)
 # The program finds its engine next to itself. In the build folder a copy is put there after each build, so no build path is baked into the program.
@@ -44,12 +44,17 @@ target_link_libraries(store-test PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME store COMMAND store-test)
 
 # The Qt layer on top of the real engine (needs a test homeserver: see tests/engine_live_test.cpp).
-qt_add_executable(engine-live-test tests/engine_live_test.cpp src/engine.cpp src/store.cpp src/models.cpp src/selfupdate.cpp)
+qt_add_executable(engine-live-test tests/engine_live_test.cpp src/engine.cpp src/store.cpp src/models.cpp src/selfupdate.cpp src/rich.cpp)
 target_include_directories(engine-live-test PRIVATE src include)
 target_link_libraries(engine-live-test PRIVATE Qt6::Core Qt6::Qml Qt6::Test pager_core)
 set_target_properties(engine-live-test PROPERTIES INSTALL_RPATH "$ORIGIN" BUILD_WITH_INSTALL_RPATH ON)
 add_custom_command(TARGET engine-live-test POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PAGER_CORE_DIR}/libpager_core.so" "$<TARGET_FILE_DIR:engine-live-test>/libpager_core.so")
 add_test(NAME engine-live COMMAND engine-live-test)
+
+qt_add_executable(rich-test tests/rich_test.cpp src/rich.cpp)
+target_include_directories(rich-test PRIVATE src)
+target_link_libraries(rich-test PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME rich COMMAND rich-test)
 
 qt_add_executable(emoji-test tests/emoji_test.cpp src/emoji.cpp)
 target_include_directories(emoji-test PRIVATE src)
@@ -73,4 +78,9 @@ qt_add_executable(selfupdate-test tests/selfupdate_test.cpp src/selfupdate.cpp)
 target_include_directories(selfupdate-test PRIVATE src)
 target_link_libraries(selfupdate-test PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME selfupdate COMMAND selfupdate-test)
+
+qt_add_executable(models-test tests/models_test.cpp src/models.cpp src/store.cpp src/rich.cpp)
+target_include_directories(models-test PRIVATE src)
+target_link_libraries(models-test PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME models COMMAND models-test)
 endif()

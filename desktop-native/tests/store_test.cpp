@@ -93,6 +93,58 @@ private slots:
         QCOMPARE(m.kind, QString("image")); QCOMPARE(m.width, 640); QCOMPARE(m.height, 480);
         QCOMPARE(m.content.value("url").toString(), QString("mxc://x/abc"));
     }
+    void bridgeStateTellsWhichNetworkAndKindOfChat() {
+        Store s; s.setMe("@me:x");
+        QJsonObject bridge{{"type", "m.bridge"}, {"state_key", "x"}, {"content", QJsonObject{{"protocol", QJsonObject{{"id", "whatsapp"}}}, {"com.beeper.room_type", "dm"}}}};
+        QJsonObject member{{"type", "m.room.member"}, {"state_key", "@maya:x"}, {"content", QJsonObject{{"membership", "join"}, {"displayname", "Maya"}, {"avatar_url", "mxc://x/a"}}}};
+        QJsonObject o = room("!r", "Maya", {}); o["state"] = QJsonArray{bridge, member}; o["member_count"] = 3;
+        s.applyRooms({o});
+        const Room *r = s.room("!r");
+        QCOMPARE(r->network, QString("whatsapp")); QVERIFY(!r->isGroup());
+        QCOMPARE(r->members.value("@maya:x"), QString("Maya")); QCOMPARE(r->memberAvatars.value("@maya:x"), QString("mxc://x/a"));
+        o["state"] = QJsonArray{QJsonObject{{"type", "m.room.member"}, {"state_key", "@maya:x"}, {"content", QJsonObject{{"membership", "leave"}}}}};
+        s.applyRooms({o}); QVERIFY(!r->joined.contains("@maya:x"));
+    }
+    void typingReceiptsTagsAndUnreadFlagsComeFromTheirOwnEvents() {
+        Store s; s.setMe("@me:x");
+        QJsonObject o = room("!r", "R", {msg("$1", "@me:x", "hi", 1000)});
+        o["ephemeral"] = QJsonArray{QJsonObject{{"type", "m.typing"}, {"content", QJsonObject{{"user_ids", QJsonArray{"@maya:x", "@me:x"}}}}},
+            QJsonObject{{"type", "m.receipt"}, {"content", QJsonObject{{"$1", QJsonObject{{"m.read", QJsonObject{{"@maya:x", QJsonObject{{"ts", 5000}}}}}}}}}}};
+        o["account_data"] = QJsonArray{QJsonObject{{"type", "m.tag"}, {"content", QJsonObject{{"tags", QJsonObject{{"m.favourite", QJsonObject{{"order", 0.5}}}, {"u.archived", QJsonObject{}}, {"u.label.Work", QJsonObject{}}}}}}},
+            QJsonObject{{"type", "m.marked_unread"}, {"content", QJsonObject{{"unread", true}}}}};
+        s.applyRooms({o});
+        const Room *r = s.room("!r");
+        QCOMPARE(r->typing, QStringList{"@maya:x"});                       // never you
+        QCOMPARE(r->receipts.value("@maya:x"), QString("$1")); QCOMPARE(r->receiptTs.value("@maya:x"), qint64(5000));
+        QVERIFY(r->pinned() && r->archived() && !r->lowPriority()); QCOMPARE(r->labels(), QStringList{"Work"}); QCOMPARE(r->pinOrder, 0.5);
+        QVERIFY(r->markedUnread);
+    }
+    void whatYouWroteOnYourPhoneCountsAsYours() {
+        Store s; s.setMe("@me:x"); s.setOwnIdentity({"Lane McDonald"}, {});
+        QJsonObject o = room("!r", "R", {msg("$1", "@wa_123:x", "from my phone", 1000)});
+        o["state"] = QJsonArray{QJsonObject{{"type", "m.room.member"}, {"state_key", "@wa_123:x"}, {"content", QJsonObject{{"membership", "join"}, {"displayname", "Lane McDonald (WA)"}}}}};
+        s.applyRooms({o});
+        QVERIFY(s.mine(s.room("!r")->msgs[0]));
+    }
+    void deliveryReportsAndCaptionsAndStickers() {
+        Store s; s.setMe("@me:x");
+        QJsonObject status{{"event_id", "$st"}, {"type", "com.beeper.message_send_status"}, {"sender", "@bot:x"}, {"origin_server_ts", 2000.0}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"event_id", "$1"}}}, {"delivered_to", QJsonArray{"@maya:x"}}}}};
+        QJsonObject img = msg("$i", "@maya:x", "look at this", 3000, {{"msgtype", "m.image"}, {"filename", "cat.png"}, {"url", "mxc://x/c"}, {"info", QJsonObject{{"w", 10}, {"h", 20}, {"mimetype", "image/png"}, {"size", 99}}}});
+        QJsonObject stk{{"event_id", "$s"}, {"type", "m.sticker"}, {"sender", "@maya:x"}, {"origin_server_ts", 4000.0}, {"content", QJsonObject{{"body", "wave"}, {"url", "mxc://x/s"}, {"info", QJsonObject{{"w", 100}, {"h", 100}}}}}};
+        s.applyRooms({room("!r", "R", {msg("$1", "@me:x", "hello", 1000), status, img, stk})});
+        const Room *r = s.room("!r");
+        QVERIFY(r->statusSeen); QCOMPARE(r->deliveredTo.value("$1"), QStringList{"@maya:x"});
+        const Msg *m = r->find("$i");
+        QCOMPARE(m->caption, QString("look at this")); QCOMPARE(m->body, QString("cat.png")); QCOMPARE(m->mime, QString("image/png")); QCOMPARE(m->size, qint64(99));
+        QVERIFY(r->find("$s")->sticker); QCOMPARE(r->find("$s")->kind, QString("image"));
+    }
+    void aGapInTheSyncStartsTheChatAgain() {
+        Store s; s.setMe("@me:x");
+        s.applyRooms({room("!r", "R", {msg("$1", "@maya:x", "old", 1000)})});
+        QJsonObject o = room("!r", "R", {msg("$9", "@maya:x", "new", 9000)}); o["limited"] = true; o["prev_batch"] = "tok";
+        s.applyRooms({o});
+        QCOMPARE(s.room("!r")->msgs.size(), 1); QCOMPARE(s.room("!r")->historyToken, QString("tok")); QVERIFY(!s.room("!r")->reachedStart);
+    }
     void ourOwnEchoReplacesTheMessageShownAtOnce() {
         Store s; s.setMe("@me:x");
         s.applyRooms({room("!r", "R", {msg("$1", "@maya:x", "hello", 1000)})});

@@ -79,9 +79,12 @@ async fn event_json(room: &matrix_sdk::Room, ev: &matrix_sdk::deserialized_respo
 async fn room_json(room: &matrix_sdk::Room, events: Vec<Value>) -> Value {
     let name = room.display_name().await.map(|n| n.to_string()).unwrap_or_else(|_| room.room_id().to_string());
     let counts = room.unread_notification_counts();
+    let heroes: Vec<String> = room.heroes().await.iter().map(|h| h.user_id.to_string()).collect();
     json!({
         "id": room.room_id(), "name": name, "direct": room.is_direct().await.unwrap_or(false), "encrypted": room.encryption_state().is_encrypted(),
         "unread": counts.notification_count, "highlights": counts.highlight_count, "avatar": room.avatar_url().map(|u| u.to_string()), "events": events,
+        "heroes": heroes, "member_count": room.joined_members_count(),
+        "own_name": room.name(),
     })
 }
 
@@ -116,6 +119,11 @@ async fn run_sync(client: Client, tell: Tell) {
                     for ev in update.timeline.events.iter() { events.push(event_json(&room, ev).await); }
                     let mut r = room_json(&room, events).await;
                     r["limited"] = json!(update.timeline.limited); r["prev_batch"] = json!(update.timeline.prev_batch);
+                    let raw = |v: &str| serde_json::from_str::<Value>(v).unwrap_or(Value::Null);
+                    let state: Vec<Value> = match &update.state { matrix_sdk::sync::State::Before(v) => v.iter().map(|e| raw(e.json().get())).collect(), matrix_sdk::sync::State::After(v) => v.iter().map(|e| raw(e.json().get())).collect() };
+                    r["state"] = json!(state);
+                    r["ephemeral"] = json!(update.ephemeral.iter().map(|e| raw(e.json().get())).collect::<Vec<_>>());
+                    r["account_data"] = json!(update.account_data.iter().map(|e| raw(e.json().get())).collect::<Vec<_>>());
                     rooms.push(r);
                 }
                 // Bridges and people invite you into chats: say yes, like the other Pager apps do.
@@ -298,7 +306,7 @@ pub extern "C" fn pager_send_file(h: *mut Arc<Engine>, room_id: *const c_char, p
 /// [content_json] is the message's content (it has the "url" or the encrypted "file"). The answer is "media" {key, path} or {key, error}.
 #[no_mangle]
 pub extern "C" fn pager_fetch_media(h: *mut Arc<Engine>, key: *const c_char, content_json: *const c_char, thumbnail: bool) {
-    use matrix_sdk::media::{MediaFormat, MediaRequestParameters};
+    use matrix_sdk::media::{MediaFormat, MediaRequestParameters, MediaThumbnailSettings};
     use matrix_sdk::ruma::events::room::MediaSource;
     let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
     let (key, content) = (s(key), s(content_json));
@@ -307,17 +315,21 @@ pub extern "C" fn pager_fetch_media(h: *mut Arc<Engine>, key: *const c_char, con
         let fail = |why: String| e2.tell.say("media", &json!({ "key": key, "error": why }));
         let Some(client) = e2.client() else { return fail("Not signed in".into()) };
         let Ok(c) = serde_json::from_str::<Value>(&content) else { return fail("Bad message".into()) };
-        let source_json = if thumbnail && (c.get("info").and_then(|i| i.get("thumbnail_url")).is_some() || c.get("info").and_then(|i| i.get("thumbnail_file")).is_some()) {
-            let i = &c["info"]; if let Some(f) = i.get("thumbnail_file") { json!({ "file": f }) } else { json!({ "url": i["thumbnail_url"] }) }
-        } else { c.clone() };
+        // "thumb": {w, h} asks the server for a small version (people's pictures); otherwise a picture's own preview, or the whole file.
+        let want_thumb = c.get("thumb").and_then(|t| Some((t.get("w")?.as_u64()? as u32, t.get("h")?.as_u64()? as u32)));
+        let source_json = if want_thumb.is_some() { json!({ "url": c["url"] }) }
+            else if thumbnail && (c.get("info").and_then(|i| i.get("thumbnail_url")).is_some() || c.get("info").and_then(|i| i.get("thumbnail_file")).is_some()) {
+                let i = &c["info"]; if let Some(f) = i.get("thumbnail_file") { json!({ "file": f }) } else { json!({ "url": i["thumbnail_url"] }) }
+            } else { c.clone() };
         let source: MediaSource = match serde_json::from_value(source_json) { Ok(m) => m, Err(_) => return fail("This message has no file".into()) };
         let ext = c.get("body").and_then(|b| b.as_str()).and_then(|b| std::path::Path::new(b).extension()).map(|x| x.to_string_lossy().into_owned()).unwrap_or_default();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        std::hash::Hash::hash(&(&key, thumbnail), &mut hasher);
+        std::hash::Hash::hash(&(&key, thumbnail, want_thumb), &mut hasher);
         let file = e2.dir.join("media").join(format!("{:016x}{}", std::hash::Hasher::finish(&hasher), if ext.is_empty() { String::new() } else { format!(".{ext}") }));
         if file.exists() { return e2.tell.say("media", &json!({ "key": key, "path": file })); }
         let _ = std::fs::create_dir_all(file.parent().unwrap());
-        match client.media().get_media_content(&MediaRequestParameters { source, format: MediaFormat::File }, false).await {
+        let format = match want_thumb { Some((w, hh)) => MediaFormat::Thumbnail(MediaThumbnailSettings::new(w.into(), hh.into())), None => MediaFormat::File };
+        match client.media().get_media_content(&MediaRequestParameters { source, format }, false).await {
             Ok(bytes) => match std::fs::write(&file, bytes) { Ok(_) => e2.tell.say("media", &json!({ "key": key, "path": file })), Err(err) => fail(err.to_string()) },
             Err(err) => fail(err.to_string()),
         }
