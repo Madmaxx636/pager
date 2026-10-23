@@ -13,6 +13,7 @@
 #include "emoji.h"
 #include "fileinfo.h"
 #include "prefs.h"
+#include "rich.h"
 #include "selfupdate.h"
 #include <QDesktopServices>
 #include <QProcess>
@@ -45,6 +46,7 @@ int main(int argc, char *argv[]) {
     Emoji emoji;
     FileInfo files;
     Prefs prefs;
+    Rich rich;
 
     QQmlApplicationEngine qml;
     qml.rootContext()->setContextProperty(QStringLiteral("core"), &engine);
@@ -52,6 +54,7 @@ int main(int argc, char *argv[]) {
     qml.rootContext()->setContextProperty(QStringLiteral("emoji"), &emoji);
     qml.rootContext()->setContextProperty(QStringLiteral("files"), &files);
     qml.rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
+    qml.rootContext()->setContextProperty(QStringLiteral("rich"), &rich);
     qml.rootContext()->setContextProperty(QStringLiteral("startupDialog"), cli.value(open));
     qml.load(QUrl(QStringLiteral("qrc:/Pager/qml/Main.qml")));
     if (qml.rootObjects().isEmpty()) return 1;

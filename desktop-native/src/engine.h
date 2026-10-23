@@ -1,6 +1,7 @@
 #pragma once
 #include <QHash>
 #include <QJSValue>
+#include <functional>
 #include <QSet>
 #include <QObject>
 #include <QPointer>
@@ -22,6 +23,13 @@ class Engine : public QObject {
     Q_PROPERTY(QString currentName READ currentName NOTIFY currentChanged)
     Q_PROPERTY(QString currentSub READ currentSub NOTIFY currentChanged)
     Q_PROPERTY(bool currentIsDirect READ currentIsDirect NOTIFY currentChanged)
+    Q_PROPERTY(QString tab READ tab NOTIFY listChanged)
+    Q_PROPERTY(QString search READ search NOTIFY listChanged)
+    Q_PROPERTY(int unreadChats READ unreadChats NOTIFY listChanged)     // chats with something new (the badge on the Unread tab)
+    Q_PROPERTY(QStringList labels READ labels NOTIFY listChanged)
+    Q_PROPERTY(QString currentNetwork READ currentNetwork NOTIFY currentChanged)
+    Q_PROPERTY(bool currentIsGroup READ currentIsGroupChat NOTIFY currentChanged)
+    Q_PROPERTY(QString currentTyping READ currentTyping NOTIFY currentChanged)
     Q_PROPERTY(int currentLocked READ currentLocked NOTIFY currentChanged)   // messages of the open chat that cannot be read yet
     Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)   // signed in, but the first load of your chats has not finished
     Q_PROPERTY(bool isAdmin READ isAdmin NOTIFY stateChanged)
@@ -50,6 +58,13 @@ public:
     QString currentName() const;
     QString currentSub() const;
     bool currentIsDirect() const { const Room *r = m_store.room(m_current); return r && r->direct; }
+    QString tab() const { return m_tab; }
+    QString search() const { return m_search; }
+    int unreadChats() const { return m_rooms.unreadChats(); }
+    QStringList labels() const;
+    QString currentNetwork() const { const Room *r = m_store.room(m_current); return r ? r->network : QString(); }
+    bool currentIsGroupChat() const { const Room *r = m_store.room(m_current); return r && r->isGroup(); }
+    QString currentTyping() const;
     int currentLocked() const { const Room *r = m_store.room(m_current); int n = 0; if (r) for (const Msg &m : r->msgs) if (m.locked) ++n; return n; }
     bool loading() const { return m_signedIn && !m_synced; }
     bool isAdmin() const { return m_admin; }
@@ -73,6 +88,11 @@ public:
     Q_INVOKABLE void edit(const QString &eventId, const QString &text);
     /// Fetches the picture or file of a message (once); the row updates by itself when it arrives.
     Q_INVOKABLE void fetchMedia(const QString &eventId);
+    /// The original file of a picture, video, voice message or file (for viewing, playing and saving). Answered by mediaReady(key).
+    Q_INVOKABLE void fetchFull(const QString &eventId);
+    Q_INVOKABLE QString fullPath(const QString &eventId) const { return m_store.mediaPath(QStringLiteral("full:") + eventId); }
+    /// Copies a downloaded file somewhere the person chose.
+    Q_INVOKABLE bool saveCopy(const QString &eventId, const QString &destination) const;
     Q_INVOKABLE void sendFile(const QString &path, const QString &mime, int width, int height, const QString &caption = QString());
     Q_INVOKABLE void createPoll(const QString &question, const QStringList &answers, int maxSelections, bool disclosed);
     /// Picks (or un-picks, in polls that allow several) an answer.
@@ -87,6 +107,24 @@ public:
     Q_INVOKABLE void installUpdate();
     /// The screen tells us how putting the downloaded update in place went ("" = fine; the app then restarts).
     Q_INVOKABLE void updateInstalled(const QString &error);
+    /// Which chats the list shows: tab is inbox, unread, pinned, low, archive or label:NAME; [search] matches names and what was said.
+    Q_INVOKABLE void filter(const QString &tab, const QString &search);
+    Q_INVOKABLE void setTag(const QString &roomId, const QString &tag, bool on, double order = 0);
+    Q_INVOKABLE void pin(const QString &roomId, bool on);
+    Q_INVOKABLE void archive(const QString &roomId, bool on) { setTag(roomId, QStringLiteral("u.archived"), on); }
+    Q_INVOKABLE void setLowPriority(const QString &roomId, bool on) { setTag(roomId, QStringLiteral("m.lowpriority"), on); }
+    Q_INVOKABLE void addLabel(const QString &roomId, const QString &label) { setTag(roomId, QStringLiteral("u.label.") + label, true); }
+    Q_INVOKABLE void removeLabel(const QString &roomId, const QString &label) { setTag(roomId, QStringLiteral("u.label.") + label, false); }
+    Q_INVOKABLE void markUnread(const QString &roomId, bool on);
+    Q_INVOKABLE void markRead(const QString &roomId);
+    Q_INVOKABLE void markAllRead();
+    Q_INVOKABLE void setMuted(const QString &roomId, bool on);
+    /// Takes a chat out of Pager. [atSource] asks the bridge to delete the conversation on its own network as well.
+    Q_INVOKABLE void leaveRoom(const QString &roomId, bool atSource);
+    Q_INVOKABLE void renameRoom(const QString &roomId, const QString &name);
+    Q_INVOKABLE void setTyping(bool on);
+    /// What the list shows about one chat (for menus): {pinned, archived, lowPriority, muted, unread, markedUnread, labels, isGroup, name}.
+    Q_INVOKABLE QVariantMap roomInfo(const QString &roomId) const;
     /// Text of one of your messages in the open chat (to edit it).
     Q_INVOKABLE QString bodyOf(const QString &eventId) const;
     Q_INVOKABLE void loadOlder();
@@ -104,6 +142,8 @@ signals:
     void stateChanged();
     void problemChanged();
     void currentChanged();
+    void listChanged();
+    void mediaReady(const QString &key);
     void recoveryChanged();
     void updateChanged();
     /// The update has been downloaded and checked: the screen puts it in place and restarts.
@@ -115,10 +155,18 @@ signals:
 private:
     static void callback(void *user, const char *kind, const char *json);
     void loadDemo();
-    void sendEvent(const QString &room, const QString &type, const QJsonObject &content);
+    void sendEvent(const QString &room, const QString &type, const QJsonObject &content, const QString &txn = QString());
+    static QString pct(const QString &s);
     PagerEngine *m_core = nullptr;
     QString m_logFile;
     void log(const QString &line);
+    void call(const QString &method, const QString &path, const QVariant &body, std::function<void(int, const QJsonValue &)> done = {});
+    void loadPushRules();
+    void loadIdentity();
+    void refreshLists() { m_rooms.refresh(); emit listChanged(); emit unreadChanged(totalUnread()); }
+    QHash<QString, std::function<void(int, const QJsonValue &)>> m_internal;
+    QString m_tab = QStringLiteral("inbox"), m_search;
+    qint64 m_lastTyping = 0;
     Store m_store;
     RoomListModel m_rooms{&m_store};
     TimelineModel m_timeline{&m_store};

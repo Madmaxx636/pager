@@ -2,6 +2,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
+#include <QFile>
 #include <QFileInfo>
 #include <QJSEngine>
 #include <QQmlEngine>
@@ -10,8 +11,14 @@
 #include <QJsonDocument>
 #include <QMetaObject>
 #include <QTimer>
+#include <QUrl>
 
 Engine::Engine(const QString &dataDir, bool demo, QObject *parent) : QObject(parent) {
+    m_store.avatarWanted = [this](const QString &mxc) {
+        if (!m_core) return;
+        const QByteArray json = QJsonDocument(QJsonObject{{"url", mxc}, {"thumb", QJsonObject{{"w", 96}, {"h", 96}}}}).toJson(QJsonDocument::Compact);
+        pager_fetch_media(m_core, ("av:" + mxc).toUtf8().constData(), json.constData(), true);
+    };
     m_logFile = dataDir.isEmpty() ? QString() : dataDir + QStringLiteral("/pager-native.log");
     if (demo) { loadDemo(); return; }
     m_core = pager_start(dataDir.toUtf8().constData(), &Engine::callback, this);
@@ -43,14 +50,14 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
         m_signedIn = b.value(QLatin1String("signedIn")).toBool();
         if (m_signedIn) {
             m_user = b.value(QLatin1String("user")).toString(m_user); m_store.setMe(m_user); m_error.clear();
-            if (m_core) api(QStringLiteral("GET"), QStringLiteral("/api/me"), QVariant(), QJSValue());   // is this an admin? (answered below)
+            if (m_core) { api(QStringLiteral("GET"), QStringLiteral("/api/me"), QVariant(), QJSValue()); loadPushRules(); loadIdentity(); }   // admin? muted chats? your own accounts on other networks?
         }
         else { m_user.clear(); m_synced = false; m_error = b.value(QLatin1String("error")).toString(); }
         m_working = false;
         emit stateChanged();
     } else if (kind == QLatin1String("rooms")) {
         const QStringList changed = m_store.applyRooms(b.value(QLatin1String("rooms")).toArray());
-        m_rooms.refresh();
+        refreshLists();
         for (const QString &id : changed) {        // pop-ups: only for new messages from others, never for the first catch-up or the chat in front of you
             const Room *r = m_store.room(id);
             if (!r || r->msgs.isEmpty()) continue;
@@ -67,11 +74,11 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
     } else if (kind == QLatin1String("history")) {
         const QString id = m_store.applyHistory(b);
         if (id == m_current) { m_timeline.show(id); emit currentChanged(); }
-        m_rooms.refresh();
+        refreshLists();
     } else if (kind == QLatin1String("left")) {
         m_store.removeRoom(b.value(QLatin1String("id")).toString());
         if (m_current == b.value(QLatin1String("id")).toString()) { m_current.clear(); m_timeline.show({}); emit currentChanged(); }
-        m_rooms.refresh();
+        refreshLists();
     } else if (kind == QLatin1String("synced")) {
         if (!m_synced) { m_synced = true; emit stateChanged(); }
     } else if (kind == QLatin1String("recovery")) {
@@ -89,9 +96,14 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
     } else if (kind == QLatin1String("media")) {
         const QString key = b.value(QLatin1String("key")).toString();
         m_fetching.remove(key);
-        if (b.contains(QLatin1String("path"))) { m_store.setMediaPath(key, b.value(QLatin1String("path")).toString()); m_timeline.touch(key); }
+        if (b.contains(QLatin1String("path")) && (key.startsWith(QLatin1String("full:")))) { m_store.setMediaPath(key, b.value(QLatin1String("path")).toString()); emit mediaReady(key); }
+        else if (b.contains(QLatin1String("path"))) {
+            m_store.setMediaPath(key, b.value(QLatin1String("path")).toString());
+            if (key.startsWith(QLatin1String("av:"))) { m_rooms.refresh(); m_timeline.show(m_current); } else { m_timeline.touch(key); emit mediaReady(key); }
+        } else if (key.startsWith(QLatin1String("av:"))) m_store.forgetWantedAvatar(key.mid(3));
     } else if (kind == QLatin1String("http")) {
         const QString key = b.value(QLatin1String("key")).toString();
+        if (m_internal.contains(key)) { auto fn = m_internal.take(key); fn(b.value(QLatin1String("status")).toInt(), b.value(QLatin1String("body"))); return; }
         if (m_meKey == key) { m_meKey.clear(); const bool a = b.value(QLatin1String("status")).toInt() == 200 && b.value(QLatin1String("body")).toObject().value(QLatin1String("admin")).toBool(); if (a != m_admin) { m_admin = a; emit stateChanged(); } return; }
         QJSValue cb = m_calls.take(key);
         if (cb.isCallable()) {
@@ -124,6 +136,8 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
     } else if (kind == QLatin1String("update_failed")) {
         m_updState = QStringLiteral("error"); m_updMessage = b.value(QLatin1String("error")).toString(); emit updateChanged();
     } else if (kind == QLatin1String("send_failed")) {
+        const QString txn = b.value(QLatin1String("txn")).toString();
+        if (txn.startsWith(QLatin1String("local-"))) { m_store.markFailed(b.value(QLatin1String("room")).toString(), txn); if (b.value(QLatin1String("room")).toString() == m_current) m_timeline.show(m_current); m_rooms.refresh(); }
         m_problem = QStringLiteral("Could not send: ") + b.value(QLatin1String("error")).toString();
         emit problemChanged();
     } else if (kind == QLatin1String("problem")) {
@@ -150,23 +164,45 @@ void Engine::recover(const QString &key) {
     m_recovering = true; m_recoveryDone = false; m_recoveryMessage = QStringLiteral("Checking your recovery key…"); emit recoveryChanged();
     pager_recover(m_core, key.toUtf8().constData());
 }
-void Engine::markCurrentRead() {
-    const Room *r = m_store.room(m_current);
-    if (!m_core || !r || r->msgs.isEmpty()) return;
-    const Msg &last = r->msgs.last();
-    if (last.local || last.id.isEmpty()) return;
-    const bool needed = r->unread > 0 || m_lastRead != last.id;
-    if (!needed) return;
-    m_lastRead = last.id;
-    if (Room *w = m_store.mutableRoom(m_current)) { w->unread = 0; w->highlights = 0; }
-    m_rooms.refresh();
-    pager_mark_read(m_core, m_current.toUtf8().constData(), last.id.toUtf8().constData());
+void Engine::markCurrentRead() { if (!m_current.isEmpty()) markRead(m_current); }
+
+void Engine::markRead(const QString &roomId) {
+    Room *r = m_store.mutableRoom(roomId);
+    if (!m_core || !r) return;
+    const Msg *lastMsg = nullptr;
+    for (int i = r->msgs.size() - 1; i >= 0; --i) if (!r->msgs[i].local && !r->msgs[i].id.isEmpty()) { lastMsg = &r->msgs[i]; break; }
+    const bool wasMarked = r->markedUnread;
+    if (!lastMsg || (r->unread == 0 && !wasMarked && (roomId != m_current || m_lastRead == lastMsg->id))) return;
+    if (roomId == m_current) m_lastRead = lastMsg->id;
+    const QString id = lastMsg->id;
+    r->unread = 0; r->highlights = 0; r->markedUnread = false;
+    refreshLists();
+    pager_mark_read(m_core, roomId.toUtf8().constData(), id.toUtf8().constData());
+    if (wasMarked) call(QStringLiteral("PUT"), QStringLiteral("/_matrix/client/v3/user/%1/rooms/%2/account_data/m.marked_unread").arg(pct(m_user), pct(roomId)), QVariantMap{{"unread", false}});
 }
+void Engine::markAllRead() { for (const QString &id : m_store.order()) if (const Room *r = m_store.room(id)) if (r->unread > 0 || r->markedUnread) markRead(id); }
+void Engine::markUnread(const QString &roomId, bool on) {
+    m_store.setMarkedUnread(roomId, on); refreshLists();
+    call(QStringLiteral("PUT"), QStringLiteral("/_matrix/client/v3/user/%1/rooms/%2/account_data/m.marked_unread").arg(pct(m_user), pct(roomId)), QVariantMap{{"unread", on}});
+}
+
 void Engine::logout() { if (m_core) pager_logout(m_core); }
 
 void Engine::openRoom(const QString &id) {
+    if (id != m_current) setTyping(false);
     m_current = id; m_lastRead.clear();
-    m_timeline.show(id);
+    // Where the unread messages begin: the first one from someone else after what you last read.
+    QString divider;
+    if (const Room *rr = m_store.room(id)) {
+        const QString read = rr->receipts.value(m_user);
+        int from = -1;
+        for (int i = rr->msgs.size() - 1; i >= 0 && !read.isEmpty(); --i) if (rr->msgs[i].id == read) { from = i + 1; break; }
+        if (from < 0) from = rr->unread > 0 ? qMax(0, rr->msgs.size() - rr->unread) : rr->msgs.size();
+        for (int i = from; i < rr->msgs.size(); ++i) if (!m_store.mine(rr->msgs[i])) { divider = rr->msgs[i].id; break; }
+        if (rr->markedUnread && divider.isEmpty()) divider.clear();
+    }
+    m_timeline.setUnreadBefore(divider);
+    m_timeline.show(QString()); m_timeline.show(id);          // a different chat: start the list over
     emit currentChanged();
     markCurrentRead();
     Room *r = m_store.mutableRoom(id);
@@ -184,17 +220,19 @@ void Engine::loadOlder() {
 void Engine::send(const QString &text, const QString &replyTo) {
     const QString body = text.trimmed();
     if (body.isEmpty() || m_current.isEmpty()) return;
-    m_store.addLocal(m_current, body, replyTo);
+    const QString local = m_store.addLocal(m_current, body, replyTo);
+    setTyping(false);
     m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
     if (!m_core) return;
-    if (replyTo.isEmpty()) { pager_send_text(m_core, m_current.toUtf8().constData(), body.toUtf8().constData()); return; }
-    sendEvent(m_current, QStringLiteral("m.room.message"), QJsonObject{{"msgtype", "m.text"}, {"body", body}, {"m.relates_to", QJsonObject{{"m.in_reply_to", QJsonObject{{"event_id", replyTo}}}}}});
+    QJsonObject content{{"msgtype", "m.text"}, {"body", body}};
+    if (!replyTo.isEmpty()) content.insert("m.relates_to", QJsonObject{{"m.in_reply_to", QJsonObject{{"event_id", replyTo}}}});
+    sendEvent(m_current, QStringLiteral("m.room.message"), content, local);
 }
 
-void Engine::sendEvent(const QString &room, const QString &type, const QJsonObject &content) {
+void Engine::sendEvent(const QString &room, const QString &type, const QJsonObject &content, const QString &txn) {
     if (!m_core) return;
     const QByteArray json = QJsonDocument(content).toJson(QJsonDocument::Compact);
-    pager_send_event(m_core, room.toUtf8().constData(), type.toUtf8().constData(), json.constData(), "");
+    pager_send_event(m_core, room.toUtf8().constData(), type.toUtf8().constData(), json.constData(), txn.toUtf8().constData());
 }
 
 void Engine::react(const QString &eventId, const QString &emoji) {
@@ -236,18 +274,46 @@ void Engine::edit(const QString &eventId, const QString &text) {
 void Engine::fetchMedia(const QString &eventId) {
     const Room *r = m_store.room(m_current);
     const Msg *m = r ? r->find(eventId) : nullptr;
-    if (!m_core || !m || m->content.isEmpty() || !m_store.mediaPath(eventId).isEmpty() || m_fetching.contains(eventId)) return;
-    m_fetching.insert(eventId);
+    if (!m_core || !m || m->content.isEmpty()) return;
+    auto start = [&](const QString &key, QJsonObject content, bool thumbnail) {
+        if (!m_store.mediaPath(key).isEmpty() || m_fetching.contains(key)) return;
+        m_fetching.insert(key);
+        const QByteArray json = QJsonDocument(content).toJson(QJsonDocument::Compact);
+        pager_fetch_media(m_core, key.toUtf8().constData(), json.constData(), thumbnail);
+    };
+    if (m->kind == QLatin1String("video")) { start(QStringLiteral("poster:") + eventId, m->content, true); return; }
+    if (m->kind != QLatin1String("image")) return;
+    const bool gif = m->mime == QLatin1String("image/gif") || m->gifLike;
+    QJsonObject c = m->content;
+    if (!gif && c.contains(QLatin1String("url")) && !c.contains(QLatin1String("file"))) c.insert(QStringLiteral("thumb"), QJsonObject{{"w", 640}, {"h", 640}});   // a small copy is enough in the chat
+    start(eventId, c, false);
+}
+
+void Engine::fetchFull(const QString &eventId) {
+    const Room *r = m_store.room(m_current);
+    const Msg *m = r ? r->find(eventId) : nullptr;
+    const QString key = QStringLiteral("full:") + eventId;
+    if (!m_core || !m || m->content.isEmpty()) return;
+    if (!m_store.mediaPath(key).isEmpty()) { emit mediaReady(key); return; }
+    if (m_fetching.contains(key)) return;
+    m_fetching.insert(key);
     const QByteArray json = QJsonDocument(m->content).toJson(QJsonDocument::Compact);
-    pager_fetch_media(m_core, eventId.toUtf8().constData(), json.constData(), m->kind == QLatin1String("image"));
+    pager_fetch_media(m_core, key.toUtf8().constData(), json.constData(), false);
+}
+
+bool Engine::saveCopy(const QString &eventId, const QString &destination) const {
+    const QString src = fullPath(eventId);
+    if (src.isEmpty() || destination.isEmpty()) return false;
+    QFile::remove(destination);
+    return QFile::copy(src, destination);
 }
 
 void Engine::sendFile(const QString &path, const QString &mime, int w, int h, const QString &caption) {
     if (m_current.isEmpty()) return;
     const QString name = QFileInfo(path).fileName();
-    m_store.addLocalFile(m_current, path, name, mime.startsWith(QLatin1String("image/")), w, h);
+    const QString localFile = m_store.addLocalFile(m_current, path, name, mime.startsWith(QLatin1String("image/")), w, h);
     m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
-    if (m_core) pager_send_file(m_core, m_current.toUtf8().constData(), path.toUtf8().constData(), mime.toUtf8().constData(), caption.toUtf8().constData(), w, h, "");
+    if (m_core) pager_send_file(m_core, m_current.toUtf8().constData(), path.toUtf8().constData(), mime.toUtf8().constData(), caption.toUtf8().constData(), w, h, localFile.toUtf8().constData());
 }
 
 void Engine::createPoll(const QString &question, const QStringList &answers, int maxSelections, bool disclosed) {
@@ -326,6 +392,121 @@ void Engine::installUpdate() {
 void Engine::updateInstalled(const QString &error) {
     if (error.isEmpty()) { emit restartRequested(); return; }
     m_updState = QStringLiteral("error"); m_updMessage = error; emit updateChanged();
+}
+
+QString Engine::pct(const QString &s) { return QString::fromUtf8(QUrl::toPercentEncoding(s)); }
+
+void Engine::call(const QString &method, const QString &path, const QVariant &body, std::function<void(int, const QJsonValue &)> done) {
+    const QString key = QStringLiteral("int-%1").arg(++m_callCounter);
+    if (done) m_internal.insert(key, done);
+    if (!m_core) return;
+    const QByteArray json = body.isValid() && !body.isNull() ? QJsonDocument::fromVariant(body).toJson(QJsonDocument::Compact) : QByteArray();
+    pager_http(m_core, key.toUtf8().constData(), method.toUtf8().constData(), path.toUtf8().constData(), json.constData());
+}
+
+void Engine::filter(const QString &tab, const QString &search) { m_tab = tab; m_search = search; m_rooms.setFilter(tab, search); emit listChanged(); }
+QStringList Engine::labels() const {
+    QSet<QString> all; for (auto it = m_store.roomsBegin(); it != m_store.roomsEnd(); ++it) for (const QString &l : it->labels()) all.insert(l);
+    QStringList out(all.cbegin(), all.cend()); out.sort(Qt::CaseInsensitive); return out;
+}
+QString Engine::currentTyping() const {
+    const Room *r = m_store.room(m_current);
+    if (!r || r->typing.isEmpty()) return {};
+    QStringList names; for (const QString &u : r->typing) names << r->nameOf(u).section(QLatin1Char(' '), 0, 0);
+    return r->isGroup() ? names.join(QStringLiteral(", ")) + (names.size() > 1 ? QStringLiteral(" are typing…") : QStringLiteral(" is typing…")) : QStringLiteral("typing…");
+}
+QVariantMap Engine::roomInfo(const QString &id) const {
+    const Room *r = m_store.room(id);
+    if (!r) return {};
+    return QVariantMap{{"name", RoomListModel::displayName(*r)}, {"pinned", r->pinned()}, {"archived", r->archived()}, {"lowPriority", r->lowPriority()}, {"muted", m_store.muted(id)},
+                       {"unread", r->unread}, {"markedUnread", r->markedUnread}, {"labels", r->labels()}, {"isGroup", r->isGroup()}, {"network", r->network}, {"encrypted", r->encrypted}};
+}
+
+void Engine::setTag(const QString &roomId, const QString &tag, bool on, double order) {
+    m_store.setTag(roomId, tag, on, order); refreshLists(); if (roomId == m_current) emit currentChanged();
+    const QString path = QStringLiteral("/_matrix/client/v3/user/%1/rooms/%2/tags/%3").arg(pct(m_user), pct(roomId), pct(tag));
+    if (on) call(QStringLiteral("PUT"), path, order != 0 ? QVariant(QVariantMap{{"order", order}}) : QVariant(QVariantMap()));
+    else call(QStringLiteral("DELETE"), path, QVariant());
+}
+void Engine::pin(const QString &roomId, bool on) {
+    if (!on) { setTag(roomId, QStringLiteral("m.favourite"), false); return; }
+    double last = 0; for (auto it = m_store.roomsBegin(); it != m_store.roomsEnd(); ++it) if (it->pinned() && it->id != roomId) last = qMax(last, it->pinOrder);
+    setTag(roomId, QStringLiteral("m.favourite"), true, last + 1);
+}
+void Engine::setMuted(const QString &roomId, bool on) {
+    QSet<QString> s = m_store.mutedSet(); if (on) s.insert(roomId); else s.remove(roomId);
+    m_store.setMuted(s); refreshLists();
+    const QString path = QStringLiteral("/_matrix/client/v3/pushrules/global/override/") + pct(roomId);
+    if (on) call(QStringLiteral("PUT"), path, QVariantMap{{"actions", QVariantList()}, {"conditions", QVariantList{QVariantMap{{"kind", "event_match"}, {"key", "room_id"}, {"pattern", roomId}}}}});
+    else call(QStringLiteral("DELETE"), path, QVariant());
+}
+void Engine::leaveRoom(const QString &roomId, bool atSource) {
+    m_store.removeRoom(roomId);
+    if (m_current == roomId) { m_current.clear(); m_timeline.show({}); emit currentChanged(); }
+    refreshLists();
+    auto leave = [this, roomId] {
+        call(QStringLiteral("POST"), QStringLiteral("/_matrix/client/v3/rooms/%1/leave").arg(pct(roomId)), QVariantMap(), [this, roomId](int, const QJsonValue &) {
+            call(QStringLiteral("POST"), QStringLiteral("/_matrix/client/v3/rooms/%1/forget").arg(pct(roomId)), QVariantMap());
+        });
+    };
+    if (atSource) {
+        sendEvent(roomId, QStringLiteral("com.beeper.delete_chat"), QJsonObject{{"delete_for_everyone", false}}, QString());
+        QTimer::singleShot(2500, this, leave);
+    } else leave();
+}
+void Engine::renameRoom(const QString &roomId, const QString &name) {
+    Room *r = m_store.mutableRoom(roomId); if (!r || name.trimmed().isEmpty()) return;
+    r->name = name.trimmed(); refreshLists(); if (roomId == m_current) emit currentChanged();
+    call(QStringLiteral("PUT"), QStringLiteral("/_matrix/client/v3/rooms/%1/state/m.room.name").arg(pct(roomId)), QVariantMap{{"name", name.trimmed()}});
+}
+void Engine::setTyping(bool on) {
+    if (m_current.isEmpty() || !m_core) return;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (on && now - m_lastTyping < 4000) return;
+    if (!on && m_lastTyping == 0) return;
+    m_lastTyping = on ? now : 0;
+    call(QStringLiteral("PUT"), QStringLiteral("/_matrix/client/v3/rooms/%1/typing/%2").arg(pct(m_current), pct(m_user)),
+         on ? QVariant(QVariantMap{{"typing", true}, {"timeout", 6000}}) : QVariant(QVariantMap{{"typing", false}}));
+}
+
+void Engine::loadPushRules() {
+    call(QStringLiteral("GET"), QStringLiteral("/_matrix/client/v3/pushrules/"), QVariant(), [this](int status, const QJsonValue &v) {
+        if (status != 200) return;
+        QSet<QString> muted;
+        const QJsonObject global = v.toObject().value(QLatin1String("global")).toObject();
+        auto silent = [](const QJsonObject &rule) { if (rule.value(QLatin1String("enabled")).isBool() && !rule.value(QLatin1String("enabled")).toBool()) return false; for (const QJsonValue &a : rule.value(QLatin1String("actions")).toArray()) if (a.toString() == QLatin1String("notify")) return false; return true; };
+        for (const QJsonValue &rv : global.value(QLatin1String("override")).toArray()) {
+            const QJsonObject rule = rv.toObject(); if (!silent(rule)) continue;
+            const QJsonArray cond = rule.value(QLatin1String("conditions")).toArray();
+            if (cond.size() != 1) continue;
+            const QJsonObject c = cond[0].toObject();
+            if (c.value(QLatin1String("kind")).toString() == QLatin1String("event_match") && c.value(QLatin1String("key")).toString() == QLatin1String("room_id")) muted.insert(c.value(QLatin1String("pattern")).toString());
+        }
+        for (const QJsonValue &rv : global.value(QLatin1String("room")).toArray()) { const QJsonObject rule = rv.toObject(); if (silent(rule)) muted.insert(rule.value(QLatin1String("rule_id")).toString()); }
+        m_store.setMuted(muted); refreshLists();
+    });
+}
+
+static QString escLocalpart(const QString &s) {
+    QString out;
+    for (const QChar c : s) { const ushort u = c.unicode(); if ((u >= 'a' && u <= 'z') || (u >= '0' && u <= '9') || u == '-' || u == '.' || u == '_' || u == '/') out += c; else out += QStringLiteral("=%1").arg(u, 2, 16, QLatin1Char('0')); }
+    return out;
+}
+void Engine::loadIdentity() {
+    call(QStringLiteral("GET"), QStringLiteral("/api/bridges"), QVariant(), [this](int status, const QJsonValue &v) {
+        if (status != 200) return;
+        const QString domain = m_user.section(QLatin1Char(':'), 1);
+        QStringList names, ids;
+        for (const QJsonValue &nv : v.toObject().value(QLatin1String("networks")).toArray()) {
+            const QJsonObject n = nv.toObject();
+            for (const QJsonValue &lv : n.value(QLatin1String("logins")).toArray()) {
+                const QJsonObject l = lv.toObject();
+                ids << QStringLiteral("@%1_%2:%3").arg(n.value(QLatin1String("id")).toString(), escLocalpart(l.value(QLatin1String("id")).toString()), domain);
+                for (const QString &nm : {l.value(QLatin1String("name")).toString(), l.value(QLatin1String("profile")).toObject().value(QLatin1String("name")).toString()}) if (!nm.isEmpty()) names << nm;
+            }
+        }
+        m_store.setOwnIdentity(names, ids); m_timeline.show(m_current); refreshLists();
+    });
 }
 
 QString Engine::bodyOf(const QString &eventId) const { const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(eventId) : nullptr; return m ? m->body : QString(); }
