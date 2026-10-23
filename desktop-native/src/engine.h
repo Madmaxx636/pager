@@ -197,6 +197,8 @@ public:
     Q_INVOKABLE void resetRecovery() { m_recoveryMessage.clear(); m_recoveryDone = false; emit recoveryChanged(); }
     /// Tells everyone the newest message of the open chat has been read (call when the window is in front).
     Q_INVOKABLE void markCurrentRead();
+    /// The chat's newest message is on screen (or not): with "mark as read when I reach the newest" this is what marks it read.
+    Q_INVOKABLE void setAtBottom(bool atBottom) { const bool was = m_atBottom; m_atBottom = atBottom; if (atBottom && !was && m_active) markCurrentRead(); }
     /// The screen says whether the window is in front; only then do new messages count as read.
     Q_INVOKABLE void setActive(bool active) { m_active = active; if (active) markCurrentRead(); }
     Store *store() { return &m_store; }
@@ -248,7 +250,7 @@ private:
     QSet<QString> m_fetching;
     QHash<QString, QJSValue> m_calls;
     int m_callCounter = 0;
-    QString m_meKey, m_server;
+    QString m_meKey, m_server; bool m_atBottom = true;
     QString m_updState = QStringLiteral("idle"), m_updVersion, m_updNotes, m_updMessage, m_updFile, m_updSha, m_updBase;
     int m_updProgress = 0;
     bool m_updQuiet = false;

@@ -204,7 +204,13 @@ void Engine::recover(const QString &key) {
     m_recovering = true; m_recoveryDone = false; m_recoveryMessage = QStringLiteral("Checking your recovery key…"); emit recoveryChanged();
     pager_recover(m_core, key.toUtf8().constData());
 }
-void Engine::markCurrentRead() { if (!m_current.isEmpty()) markRead(m_current); }
+void Engine::markCurrentRead() {
+    if (m_current.isEmpty()) return;
+    const QString mode = m_settings ? m_settings->value(QStringLiteral("markReadMode")).toString() : QStringLiteral("open");
+    if (mode == QLatin1String("manual")) return;                      // only when you say so (mark as read, or opening a chat's menu)
+    if (mode == QLatin1String("scrolled") && !m_atBottom) return;      // wait until you reach the newest message
+    markRead(m_current);
+}
 
 void Engine::markRead(const QString &roomId) {
     Room *r = m_store.mutableRoom(roomId);

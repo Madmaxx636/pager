@@ -15,12 +15,14 @@ Rectangle {
     property var menuInfo: ({})
 
     Component.onCompleted: {
+        if (settings.defaultTab !== "inbox") core.filter(settings.defaultTab, "")
         if (startupDialog === "settings") Qt.callLater(settingsPage.open); else if (startupDialog === "accounts") Qt.callLater(accounts.open); else if (startupDialog === "admin") Qt.callLater(admin.open)
     }
     Accounts { id: accounts }
     Admin { id: admin }
     Settings { id: settingsPage; onRestoreRequested: pane.restoreRequested(); onAccountsRequested: accounts.open(); onAdminRequested: admin.open(); onOpenMessage: (r, e) => core.openAt(r, e) }
 
+    function openSettings() { settingsPage.open() }
     function showMenu(id) { menuRoom = id; menuInfo = core.roomInfo(id); chatMenu.popup() }
 
     ColumnLayout {
@@ -68,7 +70,7 @@ Rectangle {
             Row {
                 id: tabRow; x: 14; spacing: 6
                 Repeater {
-                    model: [["inbox", "Inbox"], ["unread", "Unread"], ["pinned", "Pinned"], ["low", "Low priority"], ["archive", "Archive"]].concat(core.labels.map(l => ["label:" + l, l]))
+                    model: [["inbox", "Inbox"], ["unread", "Unread"], ["pinned", "Pinned"], ["low", "Low priority"], ["archive", "Archive"]].concat(settings.showLabelsInFilterBar ? core.labels.map(l => ["label:" + l, l]) : [])
                     delegate: Rectangle {
                         readonly property bool on: core.tab === modelData[0]
                         height: 32; width: tl.implicitWidth + 24 + (modelData[0] === "unread" && core.unreadChats > 0 ? badge.width + 6 : 0); radius: 16
@@ -94,7 +96,7 @@ Rectangle {
             SmoothWheel { view: list }
             delegate: Rectangle {
                 id: row
-                width: list.width; height: 70
+                width: list.width; height: settings.density === "compact" ? 58 : 70
                 readonly property bool current: core.currentRoom === roomId
                 color: current ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.16) : (hover.hovered ? look.panel2 : "transparent")
                 HoverHandler { id: hover }
@@ -103,7 +105,7 @@ Rectangle {
                 TapHandler { acceptedDevices: PointerDevice.TouchScreen; longPressThreshold: 0.5; onLongPressed: pane.showMenu(roomId) }
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 12
-                    Avatar { source: model.avatar; letter: model.letter; seed: model.name; size: 48; network: model.network }
+                    Avatar { visible: settings.showAvatars; source: model.avatar; letter: model.letter; seed: model.name; size: settings.density === "compact" ? 40 : 48; network: settings.showNetworkBadges ? model.network : "" }
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 3
                         RowLayout {
@@ -117,7 +119,7 @@ Rectangle {
                             Layout.fillWidth: true; spacing: 6
                             Label { visible: model.tick === 3 || model.tick === 5 || model.tick === 4; text: model.tick === 5 ? "✓✓" : "✓"; color: model.tick === 5 ? look.accent : look.muted; font.pixelSize: 12 }
                             Label {
-                                text: model.typing.length ? model.typing : model.preview; elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true
+                                text: model.typing.length ? model.typing : (settings.showPreviews ? model.preview : ""); elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true
                                 color: model.typing.length ? look.accent : (unread > 0 ? look.text : look.muted); font.pixelSize: Math.round(13 * look.textScale); font.italic: model.typing.length > 0
                             }
                             Label { visible: mention; text: "@"; color: look.accentInk; font.bold: true; font.pixelSize: 11; leftPadding: 5; rightPadding: 5; background: Rectangle { radius: 9; color: look.accent } }

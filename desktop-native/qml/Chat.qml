@@ -112,6 +112,7 @@ Rectangle {
                     onReplyRequested: (id) => { pane.editing = ""; pane.replyingTo = id; input.forceActiveFocus() }
                     Rectangle { anchors.fill: parent; z: -1; color: look.accent; opacity: pane.highlight === eventId ? 0.18 : 0; Behavior on opacity { NumberAnimation { duration: 300 } } }
                 }
+                onAtYEndChanged: core.setAtBottom(atYEnd)
                 // reaching the oldest message asks for older ones
                 onContentYChanged: if (count > 0 && !dragging && contentY - originY < 900) core.loadOlder()
                 Label { anchors.centerIn: parent; visible: core.currentRoom.length === 0; text: "Pick a chat"; color: look.muted; font.pixelSize: Math.round(16 * look.textScale) }
@@ -230,7 +231,7 @@ Rectangle {
         Row {
             padding: 6; spacing: 2
             Repeater {
-                model: emoji.quick()
+                model: settings.quickReactions
                 delegate: Rectangle { width: 36; height: 36; radius: 8; color: h.hovered ? look.panel2 : "transparent"
                     HoverHandler { id: h }
                     Label { anchors.centerIn: parent; text: modelData; font.pixelSize: 22 }
