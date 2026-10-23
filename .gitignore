@@ -23,3 +23,4 @@ server/data-moved-old/
 desktop-native/build/
 desktop-native/build-core/
 desktop-native/core/target/
+desktop-native/dist/

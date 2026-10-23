@@ -13,6 +13,9 @@
 #include "emoji.h"
 #include "fileinfo.h"
 #include "prefs.h"
+#include "selfupdate.h"
+#include <QDesktopServices>
+#include <QProcess>
 #include "engine.h"
 
 int main(int argc, char *argv[]) {
@@ -66,6 +69,26 @@ int main(int argc, char *argv[]) {
         tray.show();
     } else QApplication::setQuitOnLastWindowClosed(true);   // no tray on this desktop: closing the window quits
     QObject::connect(&app, &QGuiApplication::lastWindowClosed, [&] { if (!prefs.closeToTray() || !tray.isVisible()) app.quit(); });
+    QObject::connect(&engine, &Engine::updateReady, [&](const QString &path) {
+#ifdef Q_OS_WIN
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));   // the installer closes Pager itself and starts it again afterwards
+        engine.updateInstalled(QString());
+#else
+        engine.updateInstalled(SelfUpdate::installArchive(path, QCoreApplication::applicationDirPath()));
+#endif
+    });
+    QObject::connect(&engine, &Engine::restartRequested, [&] {
+#ifndef Q_OS_WIN
+        QProcess::startDetached(QCoreApplication::applicationFilePath(), QCoreApplication::arguments().mid(1));
+#endif
+        app.quit();
+    });
+    if (!testing) {                                              // look for a newer version a little after start, then every six hours
+        QTimer::singleShot(20000, &engine, [&] { if (engine.signedIn()) engine.checkForUpdates(true); });
+        auto *every = new QTimer(&app); every->setInterval(6 * 60 * 60 * 1000);
+        QObject::connect(every, &QTimer::timeout, &engine, [&] { if (engine.signedIn()) engine.checkForUpdates(true); });
+        every->start();
+    }
     static QString notifiedRoom;
     QObject::connect(&engine, &Engine::notify, [&](const QString &room, const QString &title, const QString &body) {
         if (!tray.isVisible() || !prefs.notifications()) return;

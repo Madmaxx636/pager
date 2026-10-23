@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(pager-native VERSION 0.1.0 LANGUAGES CXX)
+add_compile_definitions(PAGER_NATIVE_VERSION="${PROJECT_VERSION}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -11,7 +12,7 @@ set(PAGER_CORE_DIR "${CMAKE_SOURCE_DIR}/build-core" CACHE PATH "Folder with libp
 add_library(pager_core SHARED IMPORTED)
 set_target_properties(pager_core PROPERTIES IMPORTED_LOCATION "${PAGER_CORE_DIR}/libpager_core.so")
 
-qt_add_executable(pager-native src/main.cpp src/engine.cpp src/store.cpp src/models.cpp src/appearance.cpp src/emoji.cpp src/fileinfo.cpp src/prefs.h)
+qt_add_executable(pager-native src/main.cpp src/engine.cpp src/store.cpp src/models.cpp src/appearance.cpp src/emoji.cpp src/fileinfo.cpp src/selfupdate.cpp src/prefs.h)
 target_include_directories(pager-native PRIVATE include src)
 target_link_libraries(pager-native PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 pager_core)
 set_target_properties(pager-native PROPERTIES INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib" BUILD_WITH_INSTALL_RPATH ON)
@@ -30,7 +31,7 @@ target_link_libraries(store-test PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME store COMMAND store-test)
 
 # The Qt layer on top of the real engine (needs a test homeserver: see tests/engine_live_test.cpp).
-qt_add_executable(engine-live-test tests/engine_live_test.cpp src/engine.cpp src/store.cpp src/models.cpp)
+qt_add_executable(engine-live-test tests/engine_live_test.cpp src/engine.cpp src/store.cpp src/models.cpp src/selfupdate.cpp)
 target_include_directories(engine-live-test PRIVATE src include)
 target_link_libraries(engine-live-test PRIVATE Qt6::Core Qt6::Qml Qt6::Test pager_core)
 set_target_properties(engine-live-test PROPERTIES INSTALL_RPATH "$ORIGIN" BUILD_WITH_INSTALL_RPATH ON)
@@ -53,3 +54,8 @@ target_include_directories(qml-test PRIVATE src)
 target_compile_definitions(qml-test PRIVATE QUICK_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}/tests")
 target_link_libraries(qml-test PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::QuickTest)
 add_test(NAME qml COMMAND qml-test -platform offscreen)
+
+qt_add_executable(selfupdate-test tests/selfupdate_test.cpp src/selfupdate.cpp)
+target_include_directories(selfupdate-test PRIVATE src)
+target_link_libraries(selfupdate-test PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME selfupdate COMMAND selfupdate-test)

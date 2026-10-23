@@ -262,3 +262,80 @@ fn the_engine_can_call_the_server_api_and_draw_qr_codes() {
     pager_stop(engine);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A tiny web server that hands out fixed files (name -> bytes), for the update test.
+fn serve(files: std::collections::HashMap<String, Vec<u8>>) -> u16 {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut s) = stream else { continue };
+            let mut buf = [0u8; 2048]; let n = s.read(&mut buf).unwrap_or(0);
+            let req = String::from_utf8_lossy(&buf[..n]).to_string();
+            let path = req.split_whitespace().nth(1).unwrap_or("/").trim_start_matches("/updates/").to_string();
+            match files.get(&path) {
+                Some(body) => { let _ = write!(s, "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n", body.len()); let _ = s.write_all(body); }
+                None => { let _ = s.write_all(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"); }
+            }
+        }
+    });
+    port
+}
+
+#[test]
+fn updates_are_checked_against_the_release_key_and_downloads_against_their_checksum() {
+    use base64::Engine as _;
+    use ed25519_dalek::Signer;
+    use sha2::Digest;
+    let key = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
+    std::env::set_var("PAGER_TEST_UPDATE_PUBKEY", base64::engine::general_purpose::STANDARD.encode(key.verifying_key().to_bytes()));
+    let payload = b"pretend this is the app".to_vec();
+    let sha: String = sha2::Sha256::digest(&payload).iter().map(|b| format!("{b:02x}")).collect();
+    let manifest = serde_json::json!({ "released": "now", "native": { "version": "0.2.0", "file": "pager-native-0.2.0.tar.gz", "sha256": sha, "notes": "Faster" },
+                                       "evil": { "version": "9.9.9", "file": "../x", "sha256": "00" } }).to_string().into_bytes();
+    let good_sig = key.sign(&manifest).to_bytes().to_vec();
+    let mut bad_sig = good_sig.clone(); bad_sig[0] ^= 1;
+    let mut files = std::collections::HashMap::new();
+    files.insert("latest.json".to_string(), manifest.clone()); files.insert("latest.json.sig".to_string(), good_sig);
+    files.insert("pager-native-0.2.0.tar.gz".to_string(), payload.clone());
+    let good_port = serve(files.clone());
+    files.insert("latest.json.sig".to_string(), bad_sig);
+    let bad_port = serve(files);
+    let empty_port = serve(std::collections::HashMap::new());
+
+    let dir = std::env::temp_dir().join(format!("pager-upd-{}", std::process::id())); let _ = std::fs::remove_dir_all(&dir);
+    let (tx, rx) = channel::<(String, Value)>(); let tx = Box::leak(Box::new(tx));
+    let dirc = CString::new(dir.to_str().unwrap()).unwrap();
+    let engine = pager_start(dirc.as_ptr(), on_event, tx as *mut _ as *mut c_void);
+    assert!(wait_for(&rx, 20, |k, _| k == "state").is_some());
+    let check = |port: u16, current: &str, entry: &str| {
+        let url = CString::new(format!("http://127.0.0.1:{port}")).unwrap(); let (c, e) = (CString::new(current).unwrap(), CString::new(entry).unwrap());
+        pager_update_check(engine, url.as_ptr(), c.as_ptr(), e.as_ptr());
+        wait_for(&rx, 30, |k, _| k == "update").expect("an answer")
+    };
+    assert_eq!(check(good_port, "0.1.0", "native")["state"], "available");
+    let up = check(good_port, "0.1.0", "native");
+    assert_eq!(up["version"], "0.2.0"); assert_eq!(up["notes"], "Faster");
+    assert_eq!(check(good_port, "0.2.0", "native")["state"], "none");              // already current
+    assert_eq!(check(good_port, "0.1.0", "nativeWindows")["state"], "none");       // nothing for this computer
+    assert_eq!(check(good_port, "0.1.0", "evil")["state"], "error");               // a file name that tries to leave the folder
+    assert_eq!(check(bad_port, "0.1.0", "native")["state"], "error");              // wrong signature: ignored
+    assert_eq!(check(empty_port, "0.1.0", "native")["state"], "none");             // server publishes nothing
+
+    // download: right checksum is kept, a wrong one is thrown away
+    let (base, file) = (CString::new(up["base"].as_str().unwrap()).unwrap(), CString::new("pager-native-0.2.0.tar.gz").unwrap());
+    let dest = dir.join("dl"); let destc = CString::new(dest.to_str().unwrap()).unwrap();
+    let shac = CString::new(sha.clone()).unwrap();
+    pager_update_download(engine, base.as_ptr(), file.as_ptr(), shac.as_ptr(), destc.as_ptr());
+    let ready = wait_for(&rx, 30, |k, _| k == "update_ready" || k == "update_failed").unwrap();
+    let path = ready["path"].as_str().unwrap_or_else(|| panic!("{ready}")).to_string();
+    assert_eq!(std::fs::read(&path).unwrap(), payload);
+    let wrong = CString::new("0".repeat(64)).unwrap();
+    pager_update_download(engine, base.as_ptr(), file.as_ptr(), wrong.as_ptr(), destc.as_ptr());
+    let failed = wait_for(&rx, 30, |k, _| k == "update_ready" || k == "update_failed").unwrap();
+    assert!(failed["error"].as_str().unwrap().contains("checksum"), "{failed}");
+    assert!(!std::path::Path::new(&path).exists(), "a download that fails its checksum must be deleted");
+    pager_stop(engine);
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -75,6 +75,25 @@ private slots:
         e.handle("http", QJsonObject{{"key", "api-2"}, {"status", 403}, {"body", QJsonObject{{"error", "no"}}}});
         QVERIFY(!e.isAdmin());
     }
+    void updateStatesFollowTheEnginesAnswers() {      // needs no server
+        Engine e(QString(), true);
+        QSignalSpy ready(&e, &Engine::updateReady), restart(&e, &Engine::restartRequested);
+        QCOMPARE(e.updateState(), QString("idle"));
+        e.handle("update", QJsonObject{{"state", "available"}, {"version", "0.2.0"}, {"notes", "Faster"}, {"file", "p.tar.gz"}, {"sha256", "ab"}, {"base", "http://x/updates/"}});
+        QCOMPARE(e.updateState(), QString("available")); QCOMPARE(e.updateVersion(), QString("0.2.0")); QCOMPARE(e.updateNotes(), QString("Faster"));
+        e.handle("update_progress", QJsonObject{{"done", 50}, {"total", 200}});
+        QCOMPARE(e.updateProgress(), 25);
+        e.handle("update_ready", QJsonObject{{"path", "/tmp/p.tar.gz"}});
+        QCOMPARE(e.updateState(), QString("installing")); QCOMPARE(ready.count(), 1);
+        e.updateInstalled("The update file couldn't be unpacked.");
+        QCOMPARE(e.updateState(), QString("error")); QCOMPARE(restart.count(), 0);
+        e.handle("update", QJsonObject{{"state", "none"}, {"note", "You're up to date (0.1.0)."}});
+        QCOMPARE(e.updateState(), QString("idle")); QCOMPARE(e.updateMessage(), QString("You're up to date (0.1.0)."));
+        e.updateInstalled(QString());
+        QCOMPARE(restart.count(), 1);
+        e.handle("update_failed", QJsonObject{{"error", "The download doesn't match its checksum, so it was not installed."}});
+        QCOMPARE(e.updateState(), QString("error")); QVERIFY(e.updateMessage().contains("checksum"));
+    }
     void popUpsOnlyForNewMessagesFromOthers() {      // needs no server
         Engine e(QString(), true);
         QSignalSpy pop(&e, &Engine::notify);

@@ -22,6 +22,8 @@ void pager_fetch_media(PagerEngine *e, const char *key, const char *content_json
 void pager_http(PagerEngine *e, const char *key, const char *method, const char *path, const char *body_json);
 char *pager_qr(const char *text);
 void pager_free_string(char *s);
+void pager_update_check(PagerEngine *e, const char *server, const char *current, const char *entry);
+void pager_update_download(PagerEngine *e, const char *base, const char *file, const char *sha256, const char *dest_dir);
 void pager_recover(PagerEngine *e, const char *recovery_key);
 // Says you have read up to this event.
 void pager_mark_read(PagerEngine *e, const char *room_id, const char *event_id);

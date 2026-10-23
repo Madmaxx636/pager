@@ -3,6 +3,7 @@
 #include <QFileInfo>
 #include <QJSEngine>
 #include <QQmlEngine>
+#include <QStandardPaths>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMetaObject>
@@ -86,6 +87,27 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
             const QJSValue r = cb.call(args);
             if (r.isError()) qWarning("api callback failed: %s", qPrintable(r.toString()));
         }
+    } else if (kind == QLatin1String("update")) {
+        const QString st = b.value(QLatin1String("state")).toString();
+        if (st == QLatin1String("available")) {
+            m_updState = QStringLiteral("available"); m_updVersion = b.value(QLatin1String("version")).toString(); m_updNotes = b.value(QLatin1String("notes")).toString();
+            m_updFile = b.value(QLatin1String("file")).toString(); m_updSha = b.value(QLatin1String("sha256")).toString(); m_updBase = b.value(QLatin1String("base")).toString(); m_updMessage.clear();
+        } else if (st == QLatin1String("none")) {
+            m_updState = QStringLiteral("idle"); m_updMessage = m_updQuiet ? QString() : b.value(QLatin1String("note")).toString();
+        } else {
+            m_updState = QStringLiteral("error"); m_updMessage = m_updQuiet ? QString() : b.value(QLatin1String("error")).toString();
+            if (m_updQuiet) m_updState = QStringLiteral("idle");
+        }
+        emit updateChanged();
+    } else if (kind == QLatin1String("update_progress")) {
+        const double total = b.value(QLatin1String("total")).toDouble();
+        m_updProgress = total > 0 ? int(b.value(QLatin1String("done")).toDouble() * 100 / total) : 0;
+        emit updateChanged();
+    } else if (kind == QLatin1String("update_ready")) {
+        m_updState = QStringLiteral("installing"); m_updProgress = 100; emit updateChanged();
+        emit updateReady(b.value(QLatin1String("path")).toString());
+    } else if (kind == QLatin1String("update_failed")) {
+        m_updState = QStringLiteral("error"); m_updMessage = b.value(QLatin1String("error")).toString(); emit updateChanged();
     } else if (kind == QLatin1String("send_failed")) {
         m_problem = QStringLiteral("Could not send: ") + b.value(QLatin1String("error")).toString();
         emit problemChanged();
@@ -266,6 +288,29 @@ QVariantMap Engine::qr(const QString &text) const {
     const QJsonObject o = QJsonDocument::fromJson(QByteArray(raw)).object();
     pager_free_string(raw);
     return o.toVariantMap();
+}
+
+void Engine::checkForUpdates(bool quiet) {
+    if (!m_core || m_updState == QLatin1String("checking") || m_updState == QLatin1String("downloading") || m_updState == QLatin1String("installing")) return;
+    m_updQuiet = quiet; m_updState = QStringLiteral("checking"); if (!quiet) m_updMessage.clear(); emit updateChanged();
+#ifdef Q_OS_WIN
+    const char *entry = "nativeWindows";
+#else
+    const char *entry = "native";
+#endif
+    pager_update_check(m_core, "", PAGER_NATIVE_VERSION, entry);
+}
+
+void Engine::installUpdate() {
+    if (!m_core || m_updState != QLatin1String("available")) return;
+    m_updState = QStringLiteral("downloading"); m_updProgress = 0; m_updMessage.clear(); emit updateChanged();
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/updates");
+    pager_update_download(m_core, m_updBase.toUtf8().constData(), m_updFile.toUtf8().constData(), m_updSha.toUtf8().constData(), dir.toUtf8().constData());
+}
+
+void Engine::updateInstalled(const QString &error) {
+    if (error.isEmpty()) { emit restartRequested(); return; }
+    m_updState = QStringLiteral("error"); m_updMessage = error; emit updateChanged();
 }
 
 QString Engine::bodyOf(const QString &eventId) const { const Room *r = m_store.room(m_current); const Msg *m = r ? r->find(eventId) : nullptr; return m ? m->body : QString(); }
