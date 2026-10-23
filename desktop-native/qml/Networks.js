@@ -29,3 +29,27 @@ function parseCookies(text) {
   for (const part of raw.split(/;\s*/)) { const i = part.indexOf("="); if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim() }
   return out
 }
+
+function phoneKey(n) { const d = String(n || "").replace(/\D/g, ""); return d.length >= 7 ? d.slice(-10) : "" }
+/** "+1 (912) 555-0100" -> "+19125550100"; empty when it isn't a phone number. */
+function dialable(detail) { const d = String(detail || "").replace(/^tel:/i, "").replace(/[^\d+]/g, ""); return /^\+?\d{6,15}$/.test(d) ? d : "" }
+function couldNotResolve(message) { return /resolv|not known|identifier|not found/i.test(String(message || "")) }
+function startError(message) { return couldNotResolve(message) ? "Pager couldn't find a number for that contact. Type their phone number in the search box instead." : String(message || "Couldn't start that chat") }
+/** Everyone from every account on every network, one row per person (merged by phone number, else by name). found: [{c:{id,name,detail}, way:{net,login,id,detail}}] */
+function mergePeople(found, prettyName) {
+  const byKey = {}, list = []
+  for (const f of found) {
+    const name = prettyName(f.c.name)
+    const num = f.c.detail ? phoneKey(f.c.detail) : ""
+    const key = num || "n:" + name.toLowerCase()
+    let p = byKey[key]
+    if (!p) { p = byKey[key] = { key: key, name: name, detail: f.c.detail || "", ways: [] }; list.push(p) }
+    if (!p.ways.some(w => w.net.id === f.way.net.id && w.login === f.way.login)) p.ways.push(f.way)
+    if (!p.detail && f.c.detail) p.detail = f.c.detail
+  }
+  return list.sort((a, b) => a.name.localeCompare(b.name))
+}
+function parseContacts(o) {
+  const arr = (o && (o.contacts || o.results)) || []
+  return arr.map(c => ({ id: c.id || "", name: c.name || (c.identifiers && c.identifiers[0]) || c.id, detail: c.identifiers && c.identifiers[0] ? String(c.identifiers[0]).replace(/^tel:/, "") : "" })).filter(c => c.id)
+}

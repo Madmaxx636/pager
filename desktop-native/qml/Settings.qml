@@ -13,7 +13,7 @@ Dialog {
     header: Rectangle {
         color: "transparent"; implicitHeight: 56
         Label { x: 20; anchors.verticalCenter: parent.verticalCenter; text: "Settings"; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.Bold }
-        ToolButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "✕"; onClicked: dlg.close() }
+        IconButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; symbol: "✕"; glyphSize: 16; onClicked: dlg.close() }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: look.line }
     }
 
@@ -33,7 +33,7 @@ Dialog {
         ColumnLayout { Layout.fillWidth: true; spacing: 1
             Label { text: sr.title; color: look.text; font.pixelSize: Math.round(14 * look.textScale) }
             Label { visible: sr.hint.length > 0; Layout.fillWidth: true; text: sr.hint; wrapMode: Text.Wrap; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) } }
-        Switch { id: sw; onToggled: sr.toggled(checked) }
+        PSwitch { id: sw; onToggled: sr.toggled(checked) }
     }
 
     contentItem: ScrollView {

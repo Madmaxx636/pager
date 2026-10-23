@@ -102,6 +102,15 @@ private slots:
         e.handle("history", QJsonObject{{"room", "!maya"}, {"events", QJsonArray{QJsonObject{{"event_id", "$l"}, {"type", "m.room.message"}, {"sender", "@maya:demo.test"}, {"origin_server_ts", 9e12}, {"content", QJsonObject{{"msgtype", "m.text"}, {"body", "now readable"}}}}}}});
         QCOMPARE(e.currentLocked(), 0);
     }
+    void searchFindsMessagesInOneChatOrAll() {        // needs no server
+        Engine e(QString(), true);
+        const QVariantList all = e.searchLocal("dinner", "", "all");
+        QVERIFY(!all.isEmpty()); QCOMPARE(all.first().toMap().value("chat").toString(), QString("Maya"));
+        QVERIFY(e.searchLocal("dinner", "!work", "all").isEmpty());                   // not in that chat
+        QVERIFY(e.searchLocal("", "", "all").isEmpty());                              // nothing to look for
+        QVERIFY(!e.searchLocal("", "!maya", "files").isEmpty());                      // a file in the chat
+        QVERIFY(e.searchLocal("", "!maya", "images").isEmpty());
+    }
     void popUpsOnlyForNewMessagesFromOthers() {      // needs no server
         Engine e(QString(), true);
         QSignalSpy pop(&e, &Engine::notify);

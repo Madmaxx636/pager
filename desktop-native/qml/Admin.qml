@@ -63,7 +63,7 @@ Dialog {
     header: Rectangle {
         color: "transparent"; implicitHeight: 100
         Label { x: 20; y: 14; text: "Server admin"; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.Bold }
-        ToolButton { anchors.right: parent.right; anchors.rightMargin: 8; y: 8; text: "✕"; onClicked: dlg.close() }
+        IconButton { anchors.right: parent.right; anchors.rightMargin: 8; y: 8; symbol: "✕"; glyphSize: 16; onClicked: dlg.close() }
         Row {
             x: 16; y: 54; spacing: 6
             Repeater {
@@ -266,7 +266,7 @@ Dialog {
                     ColumnLayout { Layout.fillWidth: true; spacing: 0
                         Label { text: modelData.label; color: look.text }
                         Label { visible: !!modelData.hint; Layout.fillWidth: true; wrapMode: Text.Wrap; text: modelData.hint; color: look.muted; font.pixelSize: Math.round(11 * look.textScale) } }
-                    Switch { visible: modelData.kind === "bool"; checked: !!bridgeSettings.vals[modelData.key]; onToggled: { const v = bridgeSettings.vals; v[modelData.key] = checked; bridgeSettings.vals = v } }
+                    PSwitch { visible: modelData.kind === "bool"; checked: !!bridgeSettings.vals[modelData.key]; onToggled: { const v = bridgeSettings.vals; v[modelData.key] = checked; bridgeSettings.vals = v } }
                     SpinBox { visible: modelData.kind === "number"; from: 0; to: 100000; value: Number(bridgeSettings.vals[modelData.key]); onValueModified: { const v = bridgeSettings.vals; v[modelData.key] = value; bridgeSettings.vals = v } }
                 }
             }

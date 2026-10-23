@@ -65,7 +65,7 @@ Dialog {
         color: "transparent"; implicitHeight: 56
         ToolButton { visible: dlg.net.length > 0; x: 6; anchors.verticalCenter: parent.verticalCenter; text: "←"; onClicked: dlg.cancelFlow() }
         Label { x: dlg.net.length ? 52 : 20; anchors.verticalCenter: parent.verticalCenter; text: dlg.net.length ? "Connect " + N.meta(dlg.net).label : "Chat accounts"; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.Bold }
-        ToolButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "✕"; onClicked: dlg.close() }
+        IconButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; symbol: "✕"; glyphSize: 16; onClicked: dlg.close() }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: look.line }
     }
 

@@ -27,7 +27,7 @@ endif()
 
 qt_add_resources(pager-native icon PREFIX / FILES pager.svg emoji-names.tsv emoji-groups.tsv palettes.tsv)
 qt_add_qml_module(pager-native URI Pager VERSION 1.0 RESOURCE_PREFIX / QML_FILES
-  qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml qml/PollCard.qml qml/PollDialog.qml qml/Settings.qml qml/Accounts.qml qml/QrView.qml qml/Networks.js qml/Admin.qml qml/SmoothWheel.qml qml/AudioBubble.qml qml/ImageViewer.qml qml/ForwardDialog.qml qml/InfoPanel.qml)
+  qml/Main.qml qml/Login.qml qml/RoomList.qml qml/Chat.qml qml/Avatar.qml qml/Bubble.qml qml/Recovery.qml qml/EmojiPicker.qml qml/PollCard.qml qml/PollDialog.qml qml/Settings.qml qml/Accounts.qml qml/QrView.qml qml/Networks.js qml/Admin.qml qml/SmoothWheel.qml qml/AudioBubble.qml qml/ImageViewer.qml qml/ForwardDialog.qml qml/InfoPanel.qml qml/IconButton.qml qml/PSwitch.qml qml/NewChat.qml qml/SearchDialog.qml)
 if(WIN32)
   set_target_properties(pager-native PROPERTIES WIN32_EXECUTABLE ON)
 endif()

@@ -32,6 +32,11 @@ public:
     }
     Q_INVOKABLE QVariantMap qr(const QString &) const { return QVariantMap{{"size", 21}, {"rows", QVariantList()}}; }
     Q_INVOKABLE void logout() {}
+    Q_INVOKABLE void addToPhonebook(const QVariantList &) {}
+    Q_INVOKABLE QString prettyName(const QString &s) const { return s; }
+    Q_INVOKABLE void openWhenAvailable(const QString &id) { m_opened = id; }
+    Q_INVOKABLE QString opened() const { return m_opened; }
+    Q_INVOKABLE int importContacts(const QString &) { return 0; }
     QString upd() const { return QStringLiteral("idle"); } int prog() const { return 0; }
     Q_INVOKABLE void checkForUpdates(bool) {} Q_INVOKABLE void installUpdate() {}
     bool recovering() const { return false; } bool recoveryDone() const { return m_done; } QString recoveryMessage() const { return m_msg; }
@@ -41,7 +46,7 @@ public:
 signals:
     void recoveryChanged();
 private:
-    bool m_done = false; QString m_msg, m_lastKey;
+    bool m_done = false; QString m_msg, m_lastKey, m_opened;
     QVariantList m_calls; QHash<QString, QPair<int, QVariant>> m_replies;
 };
 
