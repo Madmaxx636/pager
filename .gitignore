@@ -20,3 +20,6 @@ release-out/
 server/data-moved-old/
 *.log
 .claude/
+desktop-native/build/
+desktop-native/build-core/
+desktop-native/core/target/

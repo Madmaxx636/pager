@@ -1,0 +1,150 @@
+#include "engine.h"
+#include <QCoreApplication>
+#include <QJsonDocument>
+#include <QMetaObject>
+#include <QTimer>
+
+Engine::Engine(const QString &dataDir, bool demo, QObject *parent) : QObject(parent) {
+    if (demo) { loadDemo(); return; }
+    m_core = pager_start(dataDir.toUtf8().constData(), &Engine::callback, this);
+}
+Engine::~Engine() { if (m_core) pager_stop(m_core); }
+QString Engine::version() const { return QString::fromUtf8(pager_core_version()); }
+
+void Engine::callback(void *user, const char *kind, const char *json) {
+    // Called from the engine's own threads: hop over to the screen's thread before touching anything.
+    QPointer<Engine> self(static_cast<Engine *>(user));
+    const QString k = QString::fromUtf8(kind);
+    const QJsonObject body = QJsonDocument::fromJson(QByteArray(json)).object();
+    QMetaObject::invokeMethod(QCoreApplication::instance(), [self, k, body] { if (self) self->handle(k, body); }, Qt::QueuedConnection);
+}
+
+void Engine::handle(const QString &kind, const QJsonObject &b) {
+    if (kind == QLatin1String("state")) {
+        m_starting = false;
+        m_signedIn = b.value(QLatin1String("signedIn")).toBool();
+        if (m_signedIn) { m_user = b.value(QLatin1String("user")).toString(m_user); m_store.setMe(m_user); m_error.clear(); }
+        else { m_user.clear(); m_error = b.value(QLatin1String("error")).toString(); }
+        m_working = false;
+        emit stateChanged();
+    } else if (kind == QLatin1String("rooms")) {
+        const QStringList changed = m_store.applyRooms(b.value(QLatin1String("rooms")).toArray());
+        m_rooms.refresh();
+        for (const QString &id : changed) {        // pop-ups: only for new messages from others, never for the first catch-up or the chat in front of you
+            const Room *r = m_store.room(id);
+            if (!r || r->msgs.isEmpty()) continue;
+            const Msg &last = r->msgs.last();
+            if (m_seen.value(id) == last.id) continue;
+            m_seen.insert(id, last.id);
+            if (m_firstRooms || last.local || m_store.mine(last) || last.locked || (m_active && id == m_current)) continue;
+            const QString who = r->direct ? r->name : last.senderName;
+            emit notify(id, r->direct ? r->name : r->name + QStringLiteral(" · ") + who, last.kind == QLatin1String("image") ? QStringLiteral("Sent a photo") : last.kind == QLatin1String("file") ? QStringLiteral("Sent a file") : last.body);
+        }
+        m_firstRooms = false;
+        emit unreadChanged(totalUnread());
+        if (!m_current.isEmpty() && changed.contains(m_current)) { m_timeline.show(m_current); emit currentChanged(); if (m_active) markCurrentRead(); }
+    } else if (kind == QLatin1String("history")) {
+        const QString id = m_store.applyHistory(b);
+        if (id == m_current) { m_timeline.show(id); emit currentChanged(); }
+        m_rooms.refresh();
+    } else if (kind == QLatin1String("left")) {
+        m_store.removeRoom(b.value(QLatin1String("id")).toString());
+        if (m_current == b.value(QLatin1String("id")).toString()) { m_current.clear(); m_timeline.show({}); emit currentChanged(); }
+        m_rooms.refresh();
+    } else if (kind == QLatin1String("recovery")) {
+        m_recoveryMessage = QStringLiteral("Restoring messages… %1 of %2 chats").arg(b.value(QLatin1String("done")).toInt()).arg(b.value(QLatin1String("total")).toInt());
+        emit recoveryChanged();
+    } else if (kind == QLatin1String("recovered")) {
+        m_recovering = false;
+        m_recoveryDone = b.value(QLatin1String("ok")).toBool();
+        m_recoveryMessage = m_recoveryDone ? QStringLiteral("Done. Your old messages are readable again.") : b.value(QLatin1String("error")).toString();
+        emit recoveryChanged();
+        if (m_recoveryDone) {                       // look at every chat again: what was locked may be readable now
+            for (const QString &id : m_store.order()) { if (Room *r = m_store.mutableRoom(id)) { r->historyAsked = id == m_current; } }
+            if (m_core && !m_current.isEmpty()) pager_load_history(m_core, m_current.toUtf8().constData(), "");
+        }
+    } else if (kind == QLatin1String("problem")) {
+        m_problem = b.value(QLatin1String("what")).toString() + QStringLiteral(": ") + b.value(QLatin1String("message")).toString();
+        emit problemChanged();
+    }
+}
+
+int Engine::totalUnread() const { int n = 0; for (const QString &id : m_store.order()) if (const Room *r = m_store.room(id)) n += r->unread; return n; }
+QString Engine::currentName() const { const Room *r = m_store.room(m_current); return r ? (r->name.isEmpty() ? r->id : r->name) : QString(); }
+QString Engine::currentSub() const {
+    const Room *r = m_store.room(m_current);
+    if (!r) return {};
+    return r->encrypted ? QStringLiteral("End-to-end encrypted") : QStringLiteral("Not encrypted");
+}
+
+void Engine::login(const QString &hs, const QString &user, const QString &pw) {
+    if (!m_core) return;
+    m_working = true; m_error.clear(); emit stateChanged();
+    pager_login(m_core, hs.toUtf8().constData(), user.toUtf8().constData(), pw.toUtf8().constData());
+}
+void Engine::recover(const QString &key) {
+    if (!m_core || m_recovering || key.trimmed().isEmpty()) return;
+    m_recovering = true; m_recoveryDone = false; m_recoveryMessage = QStringLiteral("Checking your recovery key…"); emit recoveryChanged();
+    pager_recover(m_core, key.toUtf8().constData());
+}
+void Engine::markCurrentRead() {
+    const Room *r = m_store.room(m_current);
+    if (!m_core || !r || r->msgs.isEmpty()) return;
+    const Msg &last = r->msgs.last();
+    if (last.local || last.id.isEmpty()) return;
+    const bool needed = r->unread > 0 || m_lastRead != last.id;
+    if (!needed) return;
+    m_lastRead = last.id;
+    if (Room *w = m_store.mutableRoom(m_current)) { w->unread = 0; w->highlights = 0; }
+    m_rooms.refresh();
+    pager_mark_read(m_core, m_current.toUtf8().constData(), last.id.toUtf8().constData());
+}
+void Engine::logout() { if (m_core) pager_logout(m_core); }
+
+void Engine::openRoom(const QString &id) {
+    m_current = id; m_lastRead.clear();
+    m_timeline.show(id);
+    emit currentChanged();
+    markCurrentRead();
+    Room *r = m_store.mutableRoom(id);
+    if (!r) return;
+    // A room we only know from the latest sync has a few messages at best: ask for the newest page once.
+    if (m_core && !r->historyAsked && r->msgs.size() < 25) { r->historyAsked = true; pager_load_history(m_core, id.toUtf8().constData(), ""); }
+}
+void Engine::loadOlder() {
+    Room *r = m_store.mutableRoom(m_current);
+    if (!m_core || !r || r->reachedStart || r->historyToken.isEmpty()) return;
+    const QByteArray token = r->historyToken.toUtf8();
+    r->historyToken.clear();                       // one request at a time: the answer brings the next token
+    pager_load_history(m_core, m_current.toUtf8().constData(), token.constData());
+}
+void Engine::send(const QString &text) {
+    const QString body = text.trimmed();
+    if (body.isEmpty() || m_current.isEmpty()) return;
+    m_store.addLocal(m_current, body);
+    m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
+    if (m_core) pager_send_text(m_core, m_current.toUtf8().constData(), body.toUtf8().constData());
+}
+
+// Made-up chats for screenshots and for trying the screens without a server (run with --demo).
+void Engine::loadDemo() {
+    m_starting = false; m_signedIn = true; m_user = QStringLiteral("@me:demo.test"); m_store.setMe(m_user);
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    auto ev = [&](const QString &id, const QString &who, const QString &name, const QString &body, qint64 minAgo) {
+        return QJsonObject{{"event_id", id}, {"type", "m.room.message"}, {"sender", who}, {"sender_name", name}, {"origin_server_ts", double(now - minAgo * 60000)}, {"content", QJsonObject{{"msgtype", "m.text"}, {"body", body}}}};
+    };
+    const QString maya = QStringLiteral("@maya:demo.test"), me = m_user, dad = QStringLiteral("@dad:demo.test"), priya = QStringLiteral("@priya:demo.test"), leo = QStringLiteral("@leo:demo.test");
+    QJsonArray mayaEv{ev("a1", maya, "Maya", "Are we still on for dinner tonight?", 62), ev("a2", maya, "Maya", "I can book somewhere around 7", 61), ev("a3", me, "You", "Yes! Booking sounds great", 55),
+                      ev("a4", me, "You", "Can we do Italian?", 54), ev("a5", maya, "Maya", "Perfect, I know a place \U0001F35D", 12), ev("a6", maya, "Maya", "Sending the address now", 11),
+                      ev("a7", me, "You", "See you there", 9), ev("a8", maya, "Maya", "Running 5 min late, sorry!", 2),
+                      QJsonObject{{"event_id", "r1"}, {"type", "m.reaction"}, {"sender", me}, {"origin_server_ts", double(now - 10 * 60000)}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"rel_type", "m.annotation"}, {"event_id", "a5"}, {"key", "\U0001F44D"}}}}}},
+                      QJsonObject{{"event_id", "r2"}, {"type", "m.reaction"}, {"sender", maya}, {"origin_server_ts", double(now - 9 * 60000)}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"rel_type", "m.annotation"}, {"event_id", "a5"}, {"key", "\U0001F525"}}}}}}};
+    QJsonArray rooms{
+        QJsonObject{{"id", "!maya"}, {"name", "Maya"}, {"direct", true}, {"encrypted", true}, {"unread", 2}, {"events", mayaEv}},
+        QJsonObject{{"id", "!work"}, {"name", "Work chat"}, {"direct", false}, {"encrypted", true}, {"unread", 5}, {"events", QJsonArray{ev("w1", priya, "Priya", "Shipping the release now", 300), ev("w2", leo, "Leo", "Nice, I'll watch the dashboards", 295), ev("w3", priya, "Priya", "All green so far", 290)}}},
+        QJsonObject{{"id", "!dad"}, {"name", "Dad"}, {"direct", true}, {"encrypted", true}, {"unread", 0}, {"events", QJsonArray{ev("d1", dad, "Dad", "Call me when you land", 190), ev("d2", me, "You", "Will do", 185)}}},
+        QJsonObject{{"id", "!sam"}, {"name", "Sam"}, {"direct", true}, {"encrypted", false}, {"unread", 0}, {"events", QJsonArray{ev("s1", QStringLiteral("@sam:demo.test"), "Sam", "lol that's great", 1500), ev("s2", me, "You", "I know right", 1490)}}},
+    };
+    m_store.applyRooms(rooms); m_rooms.refresh();
+    openRoom(QStringLiteral("!maya"));
+}
