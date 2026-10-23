@@ -39,5 +39,5 @@ Description: Pager, the native app
  with no web page and no Chromium.
 C
 mkdir -p "$HERE/dist"; OUT="$HERE/dist/pager-native_${V}_amd64.deb"
-dpkg-deb --root-owner-group --build "$S" "$OUT" >/dev/null
+dpkg-deb -Zxz --root-owner-group --build "$S" "$OUT" >/dev/null
 echo "$OUT"; dpkg-deb -I "$OUT" | grep -E "Package|Version|Installed-Size"; sha256sum "$OUT"
