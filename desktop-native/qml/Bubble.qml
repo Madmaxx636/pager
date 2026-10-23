@@ -56,7 +56,8 @@ Item {
     signal replyRequested(string eventId)
 
     readonly property real maxW: Math.min(width * 0.76, 560)
-    readonly property bool bare: sticker || bigEmoji || ((kind === "image" || kind === "video") && caption.length === 0 && !sticker)
+    readonly property bool bare: sticker || bigEmoji
+    readonly property bool framed: !bare && (kind === "image" || kind === "video")   // a picture sits in its bubble with a thin edge, like the web
     width: ListView.view ? ListView.view.width : 400
     height: col.implicitHeight + (first ? 7 : 1.5)
     readonly property color bubbleColor: settings.bubbleStyle === "outline" ? "transparent" : (mine ? look.accent : look.theirs)
@@ -100,8 +101,8 @@ Item {
             Rectangle {
                 id: bubble
                 x: row.mine ? row.width - width - 14 : 14 + (row.showName && !row.mine && settings.showAvatars ? 40 : 0)
-                width: Math.max(contentLoader.implicitWidth + (row.bare ? 0 : 26), metaRow.visible && !row.bare ? metaRow.implicitWidth + 26 : 0)
-                height: contentLoader.implicitHeight + (row.bare ? 0 : 14 + (metaRow.visible ? metaRow.implicitHeight + 1 : 0) + (quote.visible ? quote.height + 5 : 0))
+                width: Math.max(contentLoader.implicitWidth + (row.bare ? 0 : row.framed ? 8 : 26), metaRow.visible && !row.bare ? metaRow.implicitWidth + 26 : 0, quote.visible ? 180 : 0)
+                height: contentLoader.implicitHeight + (row.bare ? 0 : (row.framed ? 8 : 14) + (quote.visible ? quote.height + 6 : 0))
                 radius: row.bare ? 14 : 18
                 topLeftRadius: row.bare ? 14 : (!row.mine && !row.first ? 5 : 18); bottomLeftRadius: row.bare ? 14 : (!row.mine && !row.last ? 5 : (!row.mine && row.last && settings.bubbleStyle !== "round" && settings.bubbleStyle !== "outline" ? row.tailRadius : 18))
                 topRightRadius: row.bare ? 14 : (row.mine && !row.first ? 5 : 18); bottomRightRadius: row.bare ? 14 : (row.mine && !row.last ? 5 : (row.mine && row.last && settings.bubbleStyle !== "round" && settings.bubbleStyle !== "outline" ? row.tailRadius : 18))
@@ -109,28 +110,27 @@ Item {
                 border.width: row.mentioned && !row.bare ? 2 : (row.status === 2 ? 1 : (row.outlined && !row.bare ? 1.5 : 0)); border.color: row.status === 2 ? look.danger : (row.outlined && !row.mentioned ? (row.mine ? look.accent : look.line) : look.accent)
                 opacity: row.local && row.status !== 2 ? 0.72 : 1
 
-                Rectangle {   // the message this one answers
+                Item {   // the message this one answers: a bar and two lines, no box
                     id: quote
                     visible: row.replyTo.length > 0 && !row.bare
-                    x: 9; y: 8; width: bubble.width - 18; height: visible ? qcol.implicitHeight + 10 : 0; radius: 9
-                    color: Qt.rgba(0, 0, 0, row.mine ? 0.16 : 0.06)
-                    Rectangle { x: 0; width: 3; height: parent.height; radius: 1.5; color: row.mine ? row.ink : look.accent }
-                    Column { id: qcol; x: 11; y: 5; width: parent.width - 18
-                        Label { text: row.replyName; width: parent.width; elide: Text.ElideRight; color: row.mine ? row.ink : look.accent; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Bold; visible: text.length > 0 }
-                        Label { text: row.replyText || "Message"; width: parent.width; elide: Text.ElideRight; maximumLineCount: 2; wrapMode: Text.Wrap; color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) } }
+                    x: row.framed ? 8 : 13; y: row.framed ? 8 : 8; width: bubble.width - (row.framed ? 16 : 26); height: visible ? qcol.implicitHeight : 0
+                    Rectangle { x: 0; width: 3; height: parent.height; radius: 1.5; color: Qt.rgba(row.ink.r, row.ink.g, row.ink.b, 0.5) }
+                    Column { id: qcol; x: 12; width: parent.width - 12
+                        Label { text: row.replyName; width: parent.width; elide: Text.ElideRight; color: row.ink; opacity: 0.85; font.pixelSize: Math.round(13 * look.textScale); font.weight: Font.Bold; visible: text.length > 0 }
+                        Label { text: row.replyText || "Message"; width: parent.width; elide: Text.ElideRight; maximumLineCount: 2; wrapMode: Text.Wrap; color: row.ink; opacity: 0.85; font.pixelSize: Math.round(13 * look.textScale) } }
                     TapHandler { onTapped: row.jumpTo(row.replyTo) }
                 }
 
                 Loader {
                     id: contentLoader
-                    x: row.bare ? 0 : 13; y: row.bare ? 0 : 7 + (quote.visible ? quote.height + 5 : 0)
+                    x: row.bare ? 0 : row.framed ? 4 : 13; y: row.bare ? 0 : (row.framed ? 4 : 7) + (quote.visible ? quote.height + 14 - (row.framed ? 6 : 6) : 0)
                     sourceComponent: row.locked ? lockedC : row.kind === "poll" ? pollC : row.kind === "image" ? (row.sticker ? stickerC : imageC) : row.kind === "video" ? videoC
                         : row.kind === "audio" ? audioC : row.kind === "file" ? fileC : row.kind === "location" ? locationC : row.bigEmoji ? bigC : textC
                 }
                 Row {   // time, edited, delivery marks
                     id: metaRow
                     visible: row.last && !row.bare && row.kind !== "poll"
-                    anchors.right: parent.right; anchors.rightMargin: 12; anchors.bottom: parent.bottom; anchors.bottomMargin: 5; spacing: 4
+                    anchors.right: parent.right; anchors.rightMargin: row.framed ? 10 : 12; anchors.bottom: parent.bottom; anchors.bottomMargin: row.framed ? 4 : 5; spacing: 4
                     Label { visible: row.edited; text: "edited"; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale); font.italic: true }
                     Label { visible: settings.showMessageTimes; text: row.time; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale)
                         ToolTip.visible: tipHover.hovered; ToolTip.text: row.fullTime; ToolTip.delay: 500; HoverHandler { id: tipHover } }
@@ -218,21 +218,19 @@ Item {
             Item {
                 id: frame
                 readonly property real ratio: row.imgWidth > 0 && row.imgHeight > 0 ? Math.min(2.2, Math.max(0.4, row.imgHeight / row.imgWidth)) : 0.75
-                width: Math.min(row.maxW, 340); height: Math.max(90, Math.min(width * ratio, 420))
+                readonly property real fit: Math.min(row.imgWidth > 0 ? row.imgWidth : 270, 320, row.maxW - 8)
+                height: Math.min(fit * ratio, 380); width: height / ratio
                 Rectangle { id: ph; anchors.fill: parent; radius: 14; color: Qt.darker(look.panel2, look.dark ? 0.85 : 1.07); visible: pic.status !== 2
                     Label { anchors.centerIn: parent; text: row.media.length ? "" : (settings.autoDownload === "always" && !settings.lowData ? "Loading…" : "Tap to load"); color: row.softInk; font.pixelSize: 13 } }
                 RoundedImage { id: pic; anchors.fill: parent; source: row.media; radius: 14; maxSide: 900 }
                 Label { visible: row.gifLike || row.mime === "image/gif"; text: "GIF"; color: "white"; font.bold: true; font.pixelSize: 11; leftPadding: 6; rightPadding: 6; topPadding: 2; bottomPadding: 2; x: 8; y: 8
                     background: Rectangle { radius: 6; color: "#99000000" } }
-                Row {   // time over the picture when there are no words with it
-                    visible: row.caption.length === 0; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 6
-                    Label { text: row.time + (row.mine ? (row.tick === 5 ? "  ✓✓" : "  ✓") : ""); color: "white"; font.pixelSize: 11; leftPadding: 7; rightPadding: 7; topPadding: 2; bottomPadding: 2; background: Rectangle { radius: 9; color: "#99000000" } } }
                 TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { if (row.media.length === 0) core.fetchMedia(row.eventId); row.openMedia(row.eventId) } }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
-            Text { visible: row.caption.length > 0; width: Math.min(implicitWidth, frame.width); text: "<style>a { color: " + (row.mine ? row.ink : look.accent) + "; }</style>" + rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
+            Text { visible: row.caption.length > 0; leftPadding: 8; rightPadding: 8; topPadding: 2; width: Math.min(implicitWidth, frame.width); text: "<style>a { color: " + (row.mine ? row.ink : look.accent) + "; }</style>" + rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
                 font.pixelSize: Math.round(15 * look.textScale); onLinkActivated: (link) => files.openUrl(link) }
-            Item { width: 1; height: row.caption.length > 0 && metaRow.visible ? 13 : 0 }
+            Item { width: 1; height: metaRow.visible ? 15 : 0 }
         }
     }
     Component {
@@ -249,19 +247,18 @@ Item {
             Item {
                 id: vframe
                 readonly property real ratio: row.imgWidth > 0 && row.imgHeight > 0 ? Math.min(2.0, Math.max(0.45, row.imgHeight / row.imgWidth)) : 0.56
-                width: Math.min(row.maxW, 340); height: Math.max(100, Math.min(width * ratio, 420))
+                readonly property real fit: Math.min(row.imgWidth > 0 ? row.imgWidth : 320, 320, row.maxW - 8)
+                height: Math.min(fit * ratio, 380); width: height / ratio
                 Rectangle { anchors.fill: parent; radius: 14; color: "#222"; }
                 RoundedImage { id: vpic; anchors.fill: parent; source: row.poster; radius: 14; maxSide: 900 }
                 Rectangle { anchors.centerIn: parent; width: 54; height: 54; radius: 27; color: "#aa000000"; Label { anchors.centerIn: parent; text: "▶"; color: "white"; font.pixelSize: 22; leftPadding: 3 } }
                 Label { visible: row.durationMs > 0; x: 8; y: 8; text: Math.floor(row.durationMs / 60000) + ":" + ("0" + Math.floor(row.durationMs / 1000) % 60).slice(-2); color: "white"; font.pixelSize: 11; leftPadding: 6; rightPadding: 6; topPadding: 2; bottomPadding: 2; background: Rectangle { radius: 6; color: "#99000000" } }
-                Row { visible: row.caption.length === 0; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 6
-                    Label { text: row.time; color: "white"; font.pixelSize: 11; leftPadding: 7; rightPadding: 7; topPadding: 2; bottomPadding: 2; background: Rectangle { radius: 9; color: "#99000000" } } }
                 TapHandler { onTapped: row.openMedia(row.eventId) }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
             }
-            Text { visible: row.caption.length > 0; width: Math.min(implicitWidth, vframe.width); text: "<style>a { color: " + (row.mine ? row.ink : look.accent) + "; }</style>" + rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
+            Text { visible: row.caption.length > 0; leftPadding: 8; rightPadding: 8; topPadding: 2; width: Math.min(implicitWidth, vframe.width); text: "<style>a { color: " + (row.mine ? row.ink : look.accent) + "; }</style>" + rich.render(row.caption, row.captionHtml); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
                 font.pixelSize: Math.round(15 * look.textScale); onLinkActivated: (link) => files.openUrl(link) }
-            Item { width: 1; height: row.caption.length > 0 && metaRow.visible ? 13 : 0 }
+            Item { width: 1; height: metaRow.visible ? 15 : 0 }
         }
     }
     Component {

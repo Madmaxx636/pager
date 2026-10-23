@@ -22,6 +22,27 @@ Rectangle {
     Admin { id: admin }
     Settings { id: settingsPage; onRestoreRequested: pane.restoreRequested(); onAccountsRequested: accounts.open(); onAdminRequested: admin.open(); onOpenMessage: (r, e) => core.openAt(r, e) }
     FilterDialog { id: filterDialog }
+    function rowAction(a, unread, pinned, muted, low, archived) {
+        switch (a) {
+        case "archive": return { label: archived ? "Move to inbox" : "Archive", icon: archived ? "archive-restore" : "archive" }
+        case "read": return { label: unread ? "Mark read" : "Mark unread", icon: unread ? "mail-open" : "message-square-dot" }
+        case "pin": return { label: pinned ? "Unpin" : "Pin", icon: pinned ? "pin-off" : "pin" }
+        case "mute": return { label: muted ? "Unmute" : "Mute", icon: "bell-off" }
+        case "low": return { label: low ? "Move to inbox" : "Low priority", icon: "arrow-down-to-line" }
+        case "snooze": return { label: "Snooze 3 hours", icon: "hourglass" }
+        }
+        return null
+    }
+    function runRowAction(a, id, unread, pinned, muted, low, archived) {
+        switch (a) {
+        case "archive": core.archive(id, !archived); break
+        case "read": unread ? core.markRead(id) : core.markUnread(id, true); break
+        case "pin": core.pin(id, !pinned); break
+        case "mute": core.setMuted(id, !muted); break
+        case "low": core.setLowPriority(id, !low); break
+        case "snooze": core.snooze(id, Date.now() + 3 * 3600000); break
+        }
+    }
     WhenDialog { id: snoozeDialog; heading: "Snooze until"; property string room; onPicked: (ms) => core.snooze(room, ms) }
     function openSettings() { settingsPage.open() }
     function showMenu(id) { menuRoom = id; menuInfo = core.roomInfo(id); chatMenu.popup() }
@@ -149,13 +170,20 @@ Rectangle {
                             Layout.fillWidth: true; spacing: 6
                             Label { text: model.name; color: look.text; font.pixelSize: Math.round(15 * look.textScale); font.weight: row.isUnread ? Font.ExtraBold : Font.DemiBold; elide: Text.ElideRight; Layout.fillWidth: true }
                             Icon { visible: muted; name: "bell-off"; size: 13; color: look.muted }
-                            Label { visible: !hover.hovered; text: model.time; color: row.isUnread && !muted ? look.accent : look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Medium }
+                            Icon { visible: pinned && !settings.showPinsRow; name: "pin"; size: 13; color: look.muted }
+                            Rectangle { visible: settings.inboxStyle === "minimal" && row.isUnread && !hover.hovered; radius: 10; height: 20; width: Math.max(20, minBadge.implicitWidth + 12); color: muted || lowPriority ? look.muted : look.accent
+                                Label { id: minBadge; anchors.centerIn: parent; text: unread > 99 ? "99+" : (unread > 0 ? unread : ""); color: look.accentInk; font.pixelSize: 12; font.weight: Font.Bold } }
+                            Label { visible: !hover.hovered && settings.inboxStyle !== "minimal"; text: model.time; color: row.isUnread && !muted ? look.accent : look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Medium }
                         }
+                        Label { visible: settings.showNetworkNameInRows && model.network.length > 0; text: N.meta(model.network).label; color: N.meta(model.network).color; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Medium }
                         RowLayout {
+                            visible: settings.inboxStyle !== "minimal"
                             Layout.fillWidth: true; spacing: 6
                             Icon { visible: model.tick >= 3; name: model.tick === 5 ? "check-check" : "check"; size: 14; color: model.tick === 5 ? look.accent : look.muted }
                             Label {
-                                text: model.typing.length ? model.typing : (settings.showPreviews ? model.preview : ""); elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true
+                                readonly property string dr: model.typing.length || row.current ? "" : core.draft(roomId)
+                                textFormat: dr.length ? Text.StyledText : Text.PlainText
+                                text: model.typing.length ? model.typing : dr.length ? "<font color='" + look.accent + "'><b>Draft:</b></font> " + dr.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, " ") : (settings.showPreviews ? model.preview : ""); elide: Text.ElideRight; maximumLineCount: 1; Layout.fillWidth: true
                                 color: model.typing.length ? look.accent : look.muted; font.pixelSize: Math.round(14 * look.textScale); font.italic: model.typing.length > 0
                             }
                             Rectangle { visible: mention; radius: 10; height: 20; width: 20; color: look.accent; Label { anchors.centerIn: parent; text: "@"; color: look.accentInk; font.bold: true; font.pixelSize: 12 } }
@@ -166,18 +194,19 @@ Rectangle {
                         }
                     }
                 }
-                Row {   // quick actions on hover
+                Row {   // quick actions on hover (which two is a setting)
                     visible: hover.hovered; anchors.right: parent.right; anchors.rightMargin: 10; anchors.top: parent.top; anchors.topMargin: 8; spacing: 2
-                    Rectangle { width: 30; height: 28; radius: 9; color: qa1.hovered ? look.panel2 : look.panel; border.width: 1; border.color: look.line
-                        Icon { anchors.centerIn: parent; name: row.isUnread ? "mail-open" : "message-square-dot"; size: 16; color: look.muted }
-                        HoverHandler { id: qa1; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: row.isUnread ? core.markRead(roomId) : core.markUnread(roomId, true) }
-                        ToolTip.visible: qa1.hovered; ToolTip.text: row.isUnread ? "Mark read" : "Mark unread"; ToolTip.delay: 500 }
-                    Rectangle { width: 30; height: 28; radius: 9; color: qa2.hovered ? look.panel2 : look.panel; border.width: 1; border.color: look.line
-                        Icon { anchors.centerIn: parent; name: archived ? "archive-restore" : "archive"; size: 16; color: look.muted }
-                        HoverHandler { id: qa2; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: core.archive(roomId, !archived) }
-                        ToolTip.visible: qa2.hovered; ToolTip.text: archived ? "Move to inbox" : "Archive"; ToolTip.delay: 500 }
+                    Repeater {
+                        model: [settings.rowAction1, settings.rowAction2]
+                        delegate: Rectangle {
+                            readonly property var act: pane.rowAction(modelData, row.isUnread, pinned, muted, lowPriority, archived)
+                            visible: !!act; width: visible ? 30 : 0; height: 28; radius: 9; color: qa.hovered ? look.panel2 : look.panel; border.width: 1; border.color: look.line
+                            Icon { anchors.centerIn: parent; name: parent.act ? parent.act.icon : "x"; size: 16; color: look.muted }
+                            HoverHandler { id: qa; cursorShape: Qt.PointingHandCursor }
+                            TapHandler { onTapped: pane.runRowAction(modelData, roomId, row.isUnread, pinned, muted, lowPriority, archived) }
+                            ToolTip.visible: qa.hovered && !!act; ToolTip.text: act ? act.label : ""; ToolTip.delay: 500
+                        }
+                    }
                 }
             }
             footer: Rectangle {

@@ -114,20 +114,27 @@ Dialog {
     }
     Component { id: layout
         SGroup { Layout.fillWidth: true
-            SGroup { title: "Chat list"
-                SChoice { key: "density"; title: "Density"; options: [["comfortable", "Comfortable"], ["compact", "Compact"]] }
-                SChoice { key: "defaultTab"; title: "Start on"; options: [["inbox", "Inbox"], ["unread", "Unread"]] }
-                SToggle { key: "showAvatars"; title: "Show pictures" }
-                SToggle { key: "showNetworkBadges"; title: "Show which app each chat is on" }
-                SToggle { key: "showPreviews"; title: "Show the last message" }
-                SToggle { key: "showPinsRow"; title: "Keep pinned chats at the top" }
-                SToggle { key: "sortUnreadFirst"; title: "Unread chats first" }
-                SToggle { key: "showLabelsInFilterBar"; title: "Show your labels as tabs" }
-                SSlider { key: "sidebarWidth"; title: "List width"; from: 280; to: 520; step: 10; suffix: " px" }
+            SGroup { title: "Inbox"
+                SChoice { key: "inboxStyle"; title: "Inbox style"; options: [["pro", "Pro: unread counts and network badges"], ["minimal", "Minimal: titles only"]] }
+                SChoice { key: "defaultTab"; title: "Default tab"; options: [["inbox", "Inbox"], ["unread", "Unread"]] }
+                SToggle { key: "showPinsRow"; title: "Pinned pages row"; hint: "Pinned pages sit above the list as circles" }
+                SToggle { key: "sortUnreadFirst"; title: "Unread pages first"; hint: "Unread above read, newest first" }
+                SToggle { key: "showFilterBar"; title: "Show filter bar" }
+                SToggle { key: "showLabelsInFilterBar"; title: "Show labels in the filter bar"; enabled: settings.showFilterBar }
             }
-            SGroup { title: "In a chat"
-                SToggle { key: "showReadTicks"; title: "Show sent, delivered and read marks" }
-                SToggle { key: "showMessageTimes"; title: "Show the time on messages" }
+            SGroup { title: "Page list"
+                SChoice { key: "density"; title: "Density"; options: [["comfortable", "Comfortable"], ["compact", "Compact"]] }
+                SChoice { key: "rowAction1"; title: "Hover action 1"; hint: "Quick button when you point at a page"; options: [["none", "Nothing"], ["read", "Mark read / unread"], ["archive", "Archive"], ["pin", "Pin"], ["mute", "Mute"], ["low", "Low priority"], ["snooze", "Snooze 3 hours"]] }
+                SChoice { key: "rowAction2"; title: "Hover action 2"; options: [["none", "Nothing"], ["read", "Mark read / unread"], ["archive", "Archive"], ["pin", "Pin"], ["mute", "Mute"], ["low", "Low priority"], ["snooze", "Snooze 3 hours"]] }
+                SSlider { key: "sidebarWidth"; title: "Sidebar width"; from: 240; to: 640; step: 10; suffix: " px" }
+                SToggle { key: "showAvatars"; title: "Show avatars" }
+                SToggle { key: "showNetworkBadges"; title: "Show network badges"; hint: "The small WhatsApp / Signal icon on avatars" }
+                SToggle { key: "showNetworkNameInRows"; title: "Show network name"; hint: "Under each page name" }
+                SToggle { key: "showPreviews"; title: "Show message previews" }
+            }
+            SGroup { title: "Conversation"
+                SToggle { key: "showMessageTimes"; title: "Show message times" }
+                SToggle { key: "showReadTicks"; title: "Show delivery & read ticks" }
             }
         }
     }
