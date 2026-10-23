@@ -1,5 +1,6 @@
 import { FONTS, PALETTES, PALETTE_GROUPS } from "../core/palettes";
 import { LOOKS } from "../core/looks";
+import { lastProblem } from "./ErrorBoundary";
 import { hasCustomSound, importSound, onCustomSoundChange, playCustom, removeCustomSound } from "../core/customsound";
 import { APP_ICONS } from "../core/appicons";
 import { GIF_SOURCES, KEY_PROVIDERS, keyFingerprint, searchGifs } from "../core/gifs";
@@ -701,7 +702,7 @@ function PerfRow() {
       domNodes: document.getElementsByTagName("*").length, jsHeapMB: heap ? Math.round(heap / 1048576) : undefined,
       blurred: [...document.querySelectorAll("*")].filter((e) => getComputedStyle(e).backdropFilter !== "none").length,
       idleAttr: document.documentElement.hasAttribute("data-idle"), lowEnd: document.documentElement.hasAttribute("data-lowend"), motion: document.documentElement.dataset.motion ?? "full",
-      dpr: window.devicePixelRatio, window: `${innerWidth}x${innerHeight}`,
+      lastProblem: lastProblem(), dpr: window.devicePixelRatio, window: `${innerWidth}x${innerHeight}`,
     };
   };
   const [r, setR] = useState(read);

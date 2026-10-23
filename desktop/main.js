@@ -10,6 +10,18 @@ const { checkForUpdates } = require("./updater.js");
 app.commandLine.appendSwitch("ozone-platform-hint", "auto"); // native Wayland when available
 
 const prefsFile = path.join(app.getPath("userData"), "desktop.json");
+// A small log of what went wrong (page errors, a page or graphics process that died, a page that stopped answering): userData/pager.log, kept to about 200 KB.
+const logFile = path.join(app.getPath("userData"), "pager.log");
+function note(line) {
+  try {
+    if (fs.existsSync(logFile) && fs.statSync(logFile).size > 200_000) fs.renameSync(logFile, logFile + ".old");
+    fs.appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`);
+  } catch { /* the log is a convenience */ }
+}
+let lastBeat = Date.now();
+ipcMain.on("log", (_e, line) => note(`page: ${line}`));
+ipcMain.on("beat", () => { lastBeat = Date.now(); });
+app.on("child-process-gone", (_e, d) => note(`${d.type} process gone: ${d.reason} (exit ${d.exitCode})`));
 const readPrefs = () => { try { return { closeToTray: true, startMinimized: false, ...JSON.parse(fs.readFileSync(prefsFile, "utf8")) }; } catch { return { closeToTray: true, startMinimized: false }; } };
 let prefs = readPrefs();
 const savePrefs = () => { try { fs.mkdirSync(path.dirname(prefsFile), { recursive: true }); fs.writeFileSync(prefsFile, JSON.stringify(prefs)); } catch { /* read-only profile */ } };
@@ -108,6 +120,18 @@ function createWindow() {
     if (!quitting && prefs.closeToTray && tray) { e.preventDefault(); win.hide(); }
   });
   win.on("closed", () => { win = null; });
+  // A page that died, or went blank, starts again by itself, and the reason is written down.
+  win.webContents.on("render-process-gone", (_e, d) => { note(`page process gone: ${d.reason} (exit ${d.exitCode})`); if (win && !win.isDestroyed() && d.reason !== "clean-exit") setTimeout(() => { if (win && !win.isDestroyed()) win.reload(); }, 500); });
+  win.webContents.on("unresponsive", () => note("page stopped responding"));
+  win.webContents.on("responsive", () => note("page responds again"));
+  win.webContents.on("did-fail-load", (_e, code, desc) => note(`page failed to load: ${desc} (${code})`));
+  win.webContents.on("did-finish-load", () => { lastBeat = Date.now(); });
+  for (const ev of ["show", "restore", "focus"]) win.on(ev, () => { lastBeat = Date.now(); });
+  // Nothing from the page for a while although the window is on screen: the page is blank or stuck. Start it again.
+  setInterval(() => {
+    if (!win || win.isDestroyed() || !win.isVisible() || win.isMinimized()) { lastBeat = Date.now(); return; }
+    if (Date.now() - lastBeat > 45_000) { note("no sign of life from the page for 45 s: reloading it"); lastBeat = Date.now(); win.reload(); }
+  }, 15_000).unref();
   ipcMain.removeAllListeners("repaint");
   ipcMain.on("repaint", () => { if (win && !win.isDestroyed() && win.isVisible()) win.webContents.invalidate(); });
   // Whether the window is really in front of you: the page can't tell when another window sits on top of it (Wayland especially).

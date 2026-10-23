@@ -1057,6 +1057,8 @@ declare global {
       onOpenRoom(cb: (roomId: string) => void): void;
       onWindowActive?(cb: (active: boolean) => void): void;
       repaint?(): void;
+      log?(line: string): void;
+      beat?(): void;
       onMemory?(cb: (level: string) => void): void;
       setTitleBar?(o: { color: string; symbolColor: string }): void;
       setIcon?(png: string): void;
