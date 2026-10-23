@@ -12,7 +12,7 @@
 #include "appearance.h"
 #include "emoji.h"
 #include "fileinfo.h"
-#include "prefs.h"
+#include "appsettings.h"
 #include "rich.h"
 #include "selfupdate.h"
 #include <QDesktopServices>
@@ -42,10 +42,11 @@ int main(int argc, char *argv[]) {
     const QString dir = cli.isSet(data) ? cli.value(data) : QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(dir);
     Engine engine(dir, cli.isSet(demo));
-    Appearance look;
+    AppSettings settings(dir + QStringLiteral("/settings.json"));
+    engine.setSettings(&settings);
+    Appearance look(&settings);
     Emoji emoji;
     FileInfo files;
-    Prefs prefs;
     Rich rich;
 
     QQmlApplicationEngine qml;
@@ -53,7 +54,7 @@ int main(int argc, char *argv[]) {
     qml.rootContext()->setContextProperty(QStringLiteral("look"), &look);
     qml.rootContext()->setContextProperty(QStringLiteral("emoji"), &emoji);
     qml.rootContext()->setContextProperty(QStringLiteral("files"), &files);
-    qml.rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
+    qml.rootContext()->setContextProperty(QStringLiteral("settings"), &settings);
     qml.rootContext()->setContextProperty(QStringLiteral("rich"), &rich);
     qml.rootContext()->setContextProperty(QStringLiteral("startupDialog"), cli.value(open));
     qml.load(QUrl(QStringLiteral("qrc:/Pager/qml/Main.qml")));
@@ -71,7 +72,7 @@ int main(int argc, char *argv[]) {
         QObject::connect(&tray, &QSystemTrayIcon::activated, [&](QSystemTrayIcon::ActivationReason why) { if (why == QSystemTrayIcon::Trigger) { if (win->isVisible() && win->isActive()) win->hide(); else showWindow(); } });
         tray.show();
     } else QApplication::setQuitOnLastWindowClosed(true);   // no tray on this desktop: closing the window quits
-    QObject::connect(&app, &QGuiApplication::lastWindowClosed, [&] { if (!prefs.closeToTray() || !tray.isVisible()) app.quit(); });
+    QObject::connect(&app, &QGuiApplication::lastWindowClosed, [&] { if (!settings.value(QStringLiteral("closeToTray")).toBool() || !tray.isVisible()) app.quit(); });
     QObject::connect(&engine, &Engine::updateReady, [&](const QString &path) {
 #ifdef Q_OS_WIN
         // The installer (per user, no administrator rights) closes this Pager, replaces the files and starts the new one.
@@ -94,9 +95,10 @@ int main(int argc, char *argv[]) {
         every->start();
     }
     static QString notifiedRoom;
-    QObject::connect(&engine, &Engine::notify, [&](const QString &room, const QString &title, const QString &body) {
-        if (!tray.isVisible() || !prefs.notifications()) return;
+    QObject::connect(&engine, &Engine::notify, [&](const QString &room, const QString &title, const QString &body, bool silent) {
+        if (!tray.isVisible() || !settings.value(QStringLiteral("notifEnabled")).toBool()) return;
         notifiedRoom = room;
+        Q_UNUSED(silent)   // the desktop decides on the sound of its own pop-ups
         tray.showMessage(title, body.left(200), QSystemTrayIcon::NoIcon, 8000);
     });
     QObject::connect(&tray, &QSystemTrayIcon::messageClicked, [&] { showWindow(); if (!notifiedRoom.isEmpty()) engine.openRoom(notifiedRoom); });

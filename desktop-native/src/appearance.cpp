@@ -10,8 +10,7 @@ const Accent kAccents[] = {{"teal", "#2dd4bf", "#0d9488"}, {"blue", "#60a5fa", "
 QColor inkFor(const QColor &c) { return (0.299 * c.redF() + 0.587 * c.greenF() + 0.114 * c.blueF()) > 0.6 ? QColor("#0b0b0b") : QColor("#ffffff"); }
 }
 
-Appearance::Appearance(QObject *parent, const QString &settingsFile, const QByteArray &palettesTsv) : QObject(parent) {
-    m_settings.reset(settingsFile.isEmpty() ? new QSettings() : new QSettings(settingsFile, QSettings::IniFormat));
+Appearance::Appearance(AppSettings *settings, QObject *parent, const QByteArray &palettesTsv) : QObject(parent), m_settings(settings) {
     QByteArray tsv = palettesTsv;
     if (tsv.isEmpty()) { QFile f(QStringLiteral(":/palettes.tsv")); if (f.open(QIODevice::ReadOnly)) tsv = f.readAll(); }
     for (const QByteArray &line : tsv.split('\n')) {
@@ -20,20 +19,22 @@ Appearance::Appearance(QObject *parent, const QString &settingsFile, const QByte
         auto s = [&](int i) { return QString::fromUtf8(p[i]); };
         m_pals.append({s(0), s(1), s(2), p[3] == "1", QColor(s(4)), QColor(s(5)), QColor(s(6)), QColor(s(7)), QColor(s(8)), QColor(s(9)), QColor(s(10)), QColor(s(11))});
     }
-    m_mode = m_settings->value(QStringLiteral("look/mode"), m_mode).toString();
-    m_accent = m_settings->value(QStringLiteral("look/accent"), m_accent).toString();
-    m_palette = m_settings->value(QStringLiteral("look/palette")).toString();
-    m_scale = qBound(0.8, m_settings->value(QStringLiteral("look/textScale"), 1.0).toDouble(), 1.6);
-    if (!settingsFile.isEmpty()) m_systemDark = false;
+    if (!QGuiApplication::instance() || m_settings->file().isEmpty()) m_systemDark = false;
     else if (auto *hints = QGuiApplication::styleHints()) {
         m_systemDark = hints->colorScheme() == Qt::ColorScheme::Dark;
         connect(hints, &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme s) { setSystemDark(s == Qt::ColorScheme::Dark); });
     }
+    connect(m_settings, &AppSettings::valueChanged, this, [this](const QString &k) { if (k == QLatin1String("themeMode") || k == QLatin1String("accent") || k == QLatin1String("accentCustom") || k == QLatin1String("palette") || k == QLatin1String("fontScale")) recompute(); });
     recompute();
 }
 
 void Appearance::recompute() {
     const Pal *pal = nullptr;
+    m_mode = m_settings->value(QStringLiteral("themeMode")).toString();
+    const QString acc = m_settings->value(QStringLiteral("accent")).toString();
+    m_accent = acc == QLatin1String("custom") ? m_settings->value(QStringLiteral("accentCustom")).toString() : acc;
+    m_palette = m_settings->value(QStringLiteral("palette")).toString(); if (m_palette == QLatin1String("none")) m_palette.clear();
+    m_scale = qBound(0.8, m_settings->value(QStringLiteral("fontScale")).toDouble(), 1.6);
     for (const Pal &p : m_pals) if (p.id == m_palette) pal = &p;
     if (pal) {
         m_dark = pal->dark;
@@ -52,27 +53,27 @@ void Appearance::recompute() {
     emit changed();
 }
 
-void Appearance::save() const {
-    m_settings->setValue(QStringLiteral("look/mode"), m_mode); m_settings->setValue(QStringLiteral("look/accent"), m_accent);
-    m_settings->setValue(QStringLiteral("look/palette"), m_palette); m_settings->setValue(QStringLiteral("look/textScale"), m_scale);
-    m_settings->sync();
-}
-
 void Appearance::setMode(const QString &mode) {
     if (mode != QLatin1String("system") && mode != QLatin1String("light") && mode != QLatin1String("dark") && mode != QLatin1String("black")) return;
-    m_mode = mode; m_palette.clear(); save(); recompute();       // choosing a mode goes back to your own mix, like the other apps
+    m_settings->set(QStringLiteral("palette"), QStringLiteral("none"));            // choosing a mode goes back to your own mix, like the other apps
+    m_settings->set(QStringLiteral("themeMode"), mode);
+    recompute();
 }
 void Appearance::setAccent(const QString &nameOrHex) {
     bool known = QColor(nameOrHex).isValid() && nameOrHex.startsWith(QLatin1Char('#'));
     for (const Accent &x : kAccents) if (nameOrHex == QLatin1String(x.name)) known = true;
     if (!known) return;
-    m_accent = nameOrHex; m_palette.clear(); save(); recompute();
+    m_settings->set(QStringLiteral("palette"), QStringLiteral("none"));
+    if (nameOrHex.startsWith(QLatin1Char('#'))) { m_settings->set(QStringLiteral("accentCustom"), nameOrHex); m_settings->set(QStringLiteral("accent"), QStringLiteral("custom")); }
+    else m_settings->set(QStringLiteral("accent"), nameOrHex);
+    recompute();
 }
 void Appearance::setPalette(const QString &id) {
     if (!id.isEmpty()) { bool ok = false; for (const Pal &p : m_pals) ok |= p.id == id; if (!ok) return; }
-    m_palette = id; save(); recompute();
+    m_settings->set(QStringLiteral("palette"), id.isEmpty() ? QStringLiteral("none") : id);
+    recompute();
 }
-void Appearance::setTextScale(qreal s) { m_scale = qBound(0.8, s, 1.6); save(); recompute(); }
+void Appearance::setTextScale(qreal s) { m_settings->set(QStringLiteral("fontScale"), qBound(0.8, s, 1.6)); recompute(); }
 
 QVariantList Appearance::palettes() const {
     QVariantList out;

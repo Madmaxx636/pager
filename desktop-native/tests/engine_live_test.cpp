@@ -111,6 +111,21 @@ private slots:
         QVERIFY(!e.searchLocal("", "!maya", "files").isEmpty());                      // a file in the chat
         QVERIFY(e.searchLocal("", "!maya", "images").isEmpty());
     }
+    void popUpsFollowTheNotificationSettings() {      // needs no server
+        Engine e(QString(), true); AppSettings s; e.setSettings(&s);
+        QSignalSpy pop(&e, &Engine::notify);
+        auto room = [](const QString &id, const QString &evId, qint64 ts) {
+            return QJsonObject{{"rooms", QJsonArray{QJsonObject{{"id", id}, {"name", id == "!a" ? "Alpha" : "Beta"}, {"direct", true}, {"events", QJsonArray{QJsonObject{{"event_id", evId}, {"type", "m.room.message"}, {"sender", "@x:d"}, {"sender_name", "Someone"}, {"origin_server_ts", double(ts)}, {"content", QJsonObject{{"msgtype", "m.text"}, {"body", "hello " + evId}}}}}}}}}};
+        };
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        e.handle("rooms", room("!a", "$0", now));
+        e.setActive(false);
+        e.handle("rooms", room("!a", "$1", now + 1000)); QCOMPARE(pop.count(), 1); QCOMPARE(pop.last().at(2).toString(), QString("hello $1"));
+        s.set("notifPreview", "hidden"); e.handle("rooms", room("!a", "$2", now + 2000)); QCOMPARE(pop.count(), 2); QCOMPARE(pop.last().at(1).toString(), QString("New message")); QVERIFY(pop.last().at(2).toString().isEmpty());
+        s.set("notifPreview", "full"); s.setEntry("notifChat", "!a", "mode", "none"); e.handle("rooms", room("!a", "$3", now + 3000)); QCOMPARE(pop.count(), 2);      // this chat is switched off
+        e.setMuted("!b", true); e.handle("rooms", room("!b", "$4", now + 4000)); e.handle("rooms", room("!b", "$5", now + 5000)); QCOMPARE(pop.count(), 2);              // muted
+        s.set("notifEnabled", false); s.setEntry("notifChat", "!a", "mode", "all"); e.handle("rooms", room("!a", "$6", now + 6000)); QCOMPARE(pop.count(), 2);           // master switch
+    }
     void popUpsOnlyForNewMessagesFromOthers() {      // needs no server
         Engine e(QString(), true);
         QSignalSpy pop(&e, &Engine::notify);

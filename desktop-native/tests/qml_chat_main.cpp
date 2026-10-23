@@ -6,21 +6,20 @@
 #include "emoji.h"
 #include "engine.h"
 #include "fileinfo.h"
-#include "prefs.h"
+#include "appsettings.h"
 #include "rich.h"
 
 class Setup : public QObject {
     Q_OBJECT
 public slots:
     void qmlEngineAvailable(QQmlEngine *e) {
-        static Engine core(QString(), true); static Appearance look(nullptr, QStringLiteral("/tmp/pager-qml-chat-look.ini")); static FileInfo files; static Emoji emoji; static Rich rich;
-        static Prefs prefs(nullptr, QStringLiteral("/tmp/pager-qml-chat-prefs.ini"));
+        static Engine core(QString(), true); static AppSettings settings(QStringLiteral("/tmp/pager-qml-chat-settings.json")); static Appearance look(&settings); static FileInfo files; static Emoji emoji; static Rich rich;
         e->rootContext()->setContextProperty(QStringLiteral("core"), &core);
         e->rootContext()->setContextProperty(QStringLiteral("look"), &look);
         e->rootContext()->setContextProperty(QStringLiteral("files"), &files);
         e->rootContext()->setContextProperty(QStringLiteral("emoji"), &emoji);
         e->rootContext()->setContextProperty(QStringLiteral("rich"), &rich);
-        e->rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
+        e->rootContext()->setContextProperty(QStringLiteral("settings"), &settings);
         e->rootContext()->setContextProperty(QStringLiteral("startupDialog"), QString());
     }
 };

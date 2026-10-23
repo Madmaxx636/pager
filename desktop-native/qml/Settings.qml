@@ -94,11 +94,11 @@ Dialog {
             }
 
             Section { text: "Chats" }
-            SwitchRow { title: "Enter sends"; hint: prefs.enterSends ? "Shift+Enter starts a new line" : "Ctrl+Enter sends, Enter starts a new line"; checked: prefs.enterSends; onToggled: (on) => prefs.enterSends = on }
+            SwitchRow { title: "Enter sends"; hint: settings.enterToSend ? "Shift+Enter starts a new line" : "Ctrl+Enter sends, Enter starts a new line"; checked: settings.enterToSend; onToggled: (on) => settings.enterToSend = on }
 
             Section { text: "Notifications" }
-            SwitchRow { title: "Pop-ups for new messages"; checked: prefs.notifications; onToggled: (on) => prefs.notifications = on }
-            SwitchRow { title: "Keep running in the tray"; hint: "Closing the window leaves Pager running so messages still reach you"; checked: prefs.closeToTray; onToggled: (on) => prefs.closeToTray = on }
+            SwitchRow { title: "Pop-ups for new messages"; checked: settings.notifEnabled; onToggled: (on) => settings.notifEnabled = on }
+            SwitchRow { title: "Keep running in the tray"; hint: "Closing the window leaves Pager running so messages still reach you"; checked: settings.closeToTray; onToggled: (on) => settings.closeToTray = on }
 
             Section { text: "Encryption" }
             RowLayout { Layout.fillWidth: true

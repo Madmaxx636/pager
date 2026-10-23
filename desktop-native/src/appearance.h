@@ -1,7 +1,7 @@
 #pragma once
 #include <QColor>
 #include <QObject>
-#include <QSettings>
+#include "appsettings.h"
 #include <QVariantList>
 #include <memory>
 
@@ -24,8 +24,8 @@ class Appearance : public QObject {
     Q_PROPERTY(QString palette READ palette NOTIFY changed)     // id of a ready-made look, or empty
     Q_PROPERTY(qreal textScale READ textScale NOTIFY changed)
 public:
-    /// [settingsFile] and [palettesTsv] are for tests; normally the app's own saved settings and built-in palettes are used.
-    explicit Appearance(QObject *parent = nullptr, const QString &settingsFile = QString(), const QByteArray &palettesTsv = QByteArray());
+    /// The look is kept in [settings] (themeMode, accent, accentCustom, palette, fontScale). [palettesTsv] is for tests; normally the built-in palettes are used.
+    explicit Appearance(AppSettings *settings, QObject *parent = nullptr, const QByteArray &palettesTsv = QByteArray());
     bool dark() const { return m_dark; }
     QColor bg() const { return m_c.bg; }
     QColor panel() const { return m_c.panel; }
@@ -50,15 +50,14 @@ public:
     /// [{name, color}] of the ready accents.
     Q_INVOKABLE QVariantList accents() const;
     void setSystemDark(bool d) { if (d != m_systemDark) { m_systemDark = d; recompute(); } }
+    Q_INVOKABLE void recompute();
 signals:
     void changed();
 private:
     struct Colors { QColor bg, panel, panel2, line, text, muted, accent, ink, theirs; };
     struct Pal { QString id, name, group; bool dark; QColor bg, panel, panel2, line, theirs, text, muted, accent; };
-    void recompute();
-    void save() const;
     QVector<Pal> m_pals;
-    std::unique_ptr<QSettings> m_settings;
+    AppSettings *m_settings;
     Colors m_c;
     QString m_mode = QStringLiteral("system"), m_accent = QStringLiteral("teal"), m_palette;
     qreal m_scale = 1.0;

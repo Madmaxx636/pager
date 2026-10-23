@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QPointer>
 #include "models.h"
+#include "appsettings.h"
 #include "pager_core.h"
 
 /// The bridge between the Rust engine and the screens: it owns the store and the two models, and turns the engine's messages into changes you can see.
@@ -141,6 +142,8 @@ public:
     Q_INVOKABLE void searchRemote(const QString &term, const QString &roomId, const QJSValue &callback);
     /// Opens a chat at a message, fetching it first when it is older than what is loaded. Emits jumpRequested(eventId) when it is there.
     Q_INVOKABLE void openAt(const QString &roomId, const QString &eventId);
+    /// Where the settings live (notification rules, mostly). Without them every message from someone else alerts.
+    void setSettings(AppSettings *s) { m_settings = s; }
     Q_INVOKABLE void retry(const QString &localId);
     Q_INVOKABLE QString draft(const QString &roomId) const { return m_drafts.value(roomId); }
     Q_INVOKABLE void setDraft(const QString &roomId, const QString &text);
@@ -185,7 +188,7 @@ signals:
     void updateReady(const QString &path);
     void restartRequested();
     /// A message arrived that deserves a pop-up: which chat, who from, what it says.
-    void notify(const QString &roomId, const QString &title, const QString &body);
+    void notify(const QString &roomId, const QString &title, const QString &body, bool silent);
     void unreadChanged(int total);
 private:
     static void callback(void *user, const char *kind, const char *json);
@@ -201,6 +204,7 @@ private:
     void refreshLists() { m_rooms.refresh(); emit listChanged(); emit unreadChanged(totalUnread()); }
     QHash<QString, std::function<void(int, const QJsonValue &)>> m_internal;
     QString m_tab = QStringLiteral("inbox"), m_search, m_pendingOpen;
+    AppSettings *m_settings = nullptr;
     QHash<QString, QString> m_drafts; QString m_dataDir;
     void saveDrafts();
     qint64 m_lastTyping = 0;
