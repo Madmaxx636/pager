@@ -62,8 +62,12 @@ object Updater {
         _stage.value = Stage.IDLE
     }
 
-    internal fun parse(json: String, server: String): Info? {
-        val a = (Json.parseToJsonElement(json).jsonObject["android"] as? JsonObject) ?: return null
+    /** Phones that cannot run 64-bit code (a few small and older ones) take the lighter 32-bit file when the server publishes one. */
+    internal fun entryFor(all: JsonObject, abis: List<String>): String = if (abis.none { it == "arm64-v8a" || it == "x86_64" } && all["android32"] is JsonObject) "android32" else "android"
+
+    internal fun parse(json: String, server: String, abis: List<String> = runCatching { Build.SUPPORTED_ABIS.toList() }.getOrDefault(listOf("arm64-v8a"))): Info? {
+        val all = Json.parseToJsonElement(json).jsonObject
+        val a = (all[entryFor(all, abis)] as? JsonObject) ?: return null
         fun s(k: String) = (a[k] as? JsonPrimitive)?.contentOrNull
         val code = (a["code"] as? JsonPrimitive)?.longOrNull ?: return null
         val file = s("file") ?: return null
