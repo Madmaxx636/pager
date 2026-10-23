@@ -21,12 +21,14 @@ private:
 class TimelineModel : public QAbstractListModel {
     Q_OBJECT
 public:
-    enum Role { IdRole = Qt::UserRole + 1, SenderRole, SenderNameRole, BodyRole, KindRole, TimeRole, MineRole, LockedRole, LocalRole, FirstRole, LastRole, ReactionsRole, DayRole, EditedRole, ReplyRole };
+    enum Role { IdRole = Qt::UserRole + 1, SenderRole, SenderNameRole, BodyRole, KindRole, TimeRole, MineRole, LockedRole, LocalRole, FirstRole, LastRole, ReactionsRole, DayRole, EditedRole, ReplyRole, MediaRole, WidthRole, HeightRole, FileNameRole, PollRole };
     explicit TimelineModel(Store *store, QObject *parent = nullptr) : QAbstractListModel(parent), m_store(store) {}
     int rowCount(const QModelIndex &p = {}) const override { return p.isValid() ? 0 : m_rows.size(); }
     QVariant data(const QModelIndex &i, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
     void show(const QString &roomId);
+    /// One message changed on its own (its picture arrived): redraw just that row.
+    void touch(const QString &eventId);
     QString roomId() const { return m_room; }
 private:
     Store *m_store;

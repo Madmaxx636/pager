@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 Rectangle {
     id: pane
@@ -49,6 +50,7 @@ Rectangle {
                 body: model.body; kind: model.kind; time: model.time; senderName: model.senderName
                 mine: model.mine; locked: model.locked; local: model.local; first: model.first; last: model.last; edited: model.edited
                 reactions: model.reactions; day: model.day; eventId: model.eventId; replyTo: model.replyTo
+                media: model.media; imgWidth: model.imgWidth; imgHeight: model.imgHeight; fileName: model.fileName; poll: model.poll
                 onMenuRequested: (id, mine, gx, gy) => { pane.target = id; pane.targetMine = mine; actions.popup() }
                 onReactionTapped: (id, key) => core.react(id, key)
                 showName: !core.currentIsDirect
@@ -71,6 +73,17 @@ Rectangle {
             Rectangle { width: parent.width; height: 1; color: look.line }
             RowLayout {
                 anchors.fill: parent; anchors.margins: 12; spacing: 10
+                ToolButton {
+                    id: plus; Layout.alignment: Qt.AlignBottom; text: "＋"
+                    contentItem: Label { text: "＋"; color: look.muted; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle { implicitWidth: 40; implicitHeight: 40; radius: 20; color: plus.hovered ? look.panel2 : "transparent" }
+                    onClicked: attachMenu.popup()
+                    Menu {
+                        id: attachMenu
+                        MenuItem { text: "Photo or file…"; onTriggered: filePicker.open() }
+                        MenuItem { text: "Poll…"; onTriggered: pollDialog.open() }
+                    }
+                }
                 ScrollView {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     TextArea {
@@ -97,6 +110,11 @@ Rectangle {
         if (!input.text.trim().length) return
         if (editing) core.edit(editing, input.text); else core.send(input.text, replyingTo)
         input.clear(); editing = ""; replyingTo = ""
+    }
+    PollDialog { id: pollDialog }
+    FileDialog {
+        id: filePicker; title: "Send a photo or file"; fileMode: FileDialog.OpenFiles
+        onAccepted: { for (const u of selectedFiles) { const p = files.path(u); const sz = files.imageSize(p); core.sendFile(p, files.mime(p), sz.width, sz.height) } }
     }
     EmojiPicker { id: picker; onPicked: (e) => core.react(pane.target, e) }
     Menu {

@@ -1,5 +1,6 @@
 #pragma once
 #include <QHash>
+#include <QSet>
 #include <QObject>
 #include <QPointer>
 #include "models.h"
@@ -51,6 +52,13 @@ public:
     Q_INVOKABLE void react(const QString &eventId, const QString &emoji);
     Q_INVOKABLE void deleteMessage(const QString &eventId);
     Q_INVOKABLE void edit(const QString &eventId, const QString &text);
+    /// Fetches the picture or file of a message (once); the row updates by itself when it arrives.
+    Q_INVOKABLE void fetchMedia(const QString &eventId);
+    Q_INVOKABLE void sendFile(const QString &path, const QString &mime, int width, int height, const QString &caption = QString());
+    Q_INVOKABLE void createPoll(const QString &question, const QStringList &answers, int maxSelections, bool disclosed);
+    /// Picks (or un-picks, in polls that allow several) an answer.
+    Q_INVOKABLE void vote(const QString &pollId, const QString &answerId);
+    Q_INVOKABLE void endPoll(const QString &pollId);
     /// Text of one of your messages in the open chat (to edit it).
     Q_INVOKABLE QString bodyOf(const QString &eventId) const;
     Q_INVOKABLE void loadOlder();
@@ -82,6 +90,7 @@ private:
     TimelineModel m_timeline{&m_store};
     bool m_signedIn = false, m_starting = true, m_working = false;
     bool m_firstRooms = true;
+    QSet<QString> m_fetching;
     QHash<QString, QString> m_seen;      // room -> id of the newest message we have already looked at
     bool m_active = true, m_recovering = false, m_recoveryDone = false;
     QString m_user, m_error, m_problem, m_current, m_recoveryMessage, m_lastRead;
