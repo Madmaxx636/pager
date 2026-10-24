@@ -32,16 +32,42 @@ Popup {
                 delegate: Rectangle {
                     width: 41; height: 46; radius: 8; color: index === pop.group ? look.panel2 : "transparent"
                     Label { anchors.centerIn: parent; text: modelData.icon; font.pixelSize: Math.round(22.5 * look.textScale) }
-                    TapHandler { onTapped: pop.group = index }
+                    TapHandler { onTapped: { pop.group = index; sections.positionViewAtIndex(index, ListView.Beginning) } }
                 }
             }
         }
-        Label { visible: search.text.trim().length === 0 && pop.groups.length > 0; Layout.topMargin: 2; text: pop.groups.length ? (pop.groups[Math.min(pop.group, pop.groups.length - 1)].name || "Recent") : ""; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Bold }
-        GridView {
+        ListView {   // browsing: every group in one scroll, a heading over each
+            id: sections
+            visible: search.text.trim().length === 0
+            Layout.fillWidth: true; Layout.fillHeight: true; clip: true; boundsBehavior: Flickable.StopAtBounds; cacheBuffer: 4000
+            ScrollBar.vertical: ScrollBar { }
+            SmoothWheel { view: sections }
+            model: pop.groups
+            onContentYChanged: { const i = indexAt(10, contentY + 24); if (i >= 0 && i !== pop.group) pop.group = i }
+            delegate: Column {
+                width: sections.width
+                readonly property var gx: modelData
+                Label { topPadding: 10; bottomPadding: 4; text: modelData.name || "Recent"; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Bold }
+                Grid {
+                    columns: 7; width: parent.width
+                    Repeater {
+                        model: gx.emoji
+                        delegate: Rectangle {
+                            width: Math.floor(sections.width / 7); height: 51; radius: 10; color: sh.hovered ? look.panel2 : "transparent"
+                            HoverHandler { id: sh }
+                            Label { anchors.centerIn: parent; text: modelData; font.pixelSize: Math.round(30 * look.textScale) }
+                            TapHandler { onTapped: { pop.remember(modelData); pop.picked(modelData); pop.close() } }
+                        }
+                    }
+                }
+            }
+        }
+        GridView {   // searching: the matches
             id: grid
+            visible: search.text.trim().length > 0
             Layout.fillWidth: true; Layout.fillHeight: true; clip: true
             cellWidth: Math.floor(width / 7); cellHeight: 51
-            model: pop.shown
+            model: search.text.trim().length ? pop.shown : []
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar { }
             delegate: Rectangle {
