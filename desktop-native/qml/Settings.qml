@@ -15,12 +15,15 @@ Dialog {
     signal openMessage(string roomId, string eventId)
     property int page: 0
     property string note: ""
-    modal: true; anchors.centerIn: Overlay.overlay
-    width: Math.min(880, Overlay.overlay ? Overlay.overlay.width - 24 : 880)
-    height: Math.min(Qt.application.arguments.indexOf("--screenshot") >= 0 ? 4000 : 720, Overlay.overlay ? Overlay.overlay.height - 24 : 720)
+    // a page that fills the right-hand side next to the list of chats, like the web app's settings
+    modal: false; dim: false; closePolicy: Popup.CloseOnEscape
+    readonly property real sideW: parent && Overlay.overlay && parent.width < Overlay.overlay.width - 100 ? parent.width : 0
+    x: sideW; y: 0
+    width: (Overlay.overlay ? Overlay.overlay.width : 880) - sideW
+    height: Overlay.overlay ? Overlay.overlay.height : 720
     padding: 0
-    background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
-    readonly property bool narrow: width < 640
+    background: Rectangle { color: look.bg }
+    readonly property bool narrow: true
     property bool showingList: true
 
     // id, title, hint, icon, tint, group: grouped and tinted like the web app's settings home
@@ -77,13 +80,15 @@ Dialog {
     readonly property var visiblePages: pages.filter(p => (p[0] !== "admin" || core.isAdmin) && (find.length === 0 || (p[1] + " " + p[2]).toLowerCase().indexOf(find.toLowerCase()) >= 0))
 
     function openPage(id) { find = ""; findField.text = ""; for (let i = 0; i < visiblePages.length; i++) if (visiblePages[i][0] === id) { page = i; showingList = false; break } open() }
-    onAboutToShow: { if (!narrow) showingList = false; note = "" }
+    onAboutToShow: { note = "" }
+    readonly property string openRoom: core.currentRoom
+    onOpenRoomChanged: if (visible) close()   // opening a chat leaves settings, as on the web
+    function openHome() { find = ""; findField.text = ""; showingList = true; open() }
 
     header: Rectangle {
-        color: "transparent"; implicitHeight: 56
-        IconButton { visible: dlg.narrow && !dlg.showingList; x: 6; anchors.verticalCenter: parent.verticalCenter; ico: "chevron-left"; onClicked: dlg.showingList = true }
-        Label { x: dlg.narrow && !dlg.showingList ? 52 : 20; anchors.verticalCenter: parent.verticalCenter; text: dlg.narrow && !dlg.showingList ? dlg.visiblePages[dlg.page][1] : "Settings"; color: look.text; font.pixelSize: Math.round(18.75 * look.textScale); font.weight: Font.Bold }
-        IconButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; ico: "x"; onClicked: dlg.close() }
+        color: look.panel; implicitHeight: 64
+        IconButton { x: 16; anchors.verticalCenter: parent.verticalCenter; ico: "chevron-left"; onClicked: dlg.showingList ? dlg.close() : dlg.showingList = true; ToolTip.text: "Back"; ToolTip.visible: hovered }
+        Label { x: 62; anchors.verticalCenter: parent.verticalCenter; text: !dlg.showingList && dlg.visiblePages[dlg.page] ? dlg.visiblePages[dlg.page][1] : "Settings"; color: look.text; font.pixelSize: Math.round(18.75 * look.textScale); font.weight: Font.Bold }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: look.line }
     }
 
@@ -92,8 +97,8 @@ Dialog {
         // ---- the list of pages
         ColumnLayout {
             visible: !dlg.narrow || dlg.showingList
-            Layout.preferredWidth: dlg.narrow ? dlg.width : 300; Layout.fillHeight: true; spacing: 0
-            Rectangle { Layout.fillWidth: true; Layout.margins: 12; Layout.bottomMargin: 4; implicitHeight: 40; radius: 20; color: look.panel2
+            Layout.preferredWidth: dlg.width; Layout.fillHeight: true; spacing: 0
+            Rectangle { Layout.fillWidth: true; Layout.margins: 16; Layout.bottomMargin: 0; Layout.topMargin: 14; Layout.maximumWidth: 760; Layout.alignment: Qt.AlignHCenter; implicitHeight: 44; radius: 22; color: look.panel2
                 Row { anchors.fill: parent; anchors.leftMargin: 14; spacing: 8
                     Icon { anchors.verticalCenter: parent.verticalCenter; name: "search"; size: 17; color: look.muted }
                     TextField { id: findField; width: parent.width - 40; height: parent.height; placeholderText: "Search settings"; background: Item { } leftPadding: 0; color: look.text; placeholderTextColor: look.muted; onTextChanged: { dlg.find = text; dlg.page = 0 } } } }
@@ -104,18 +109,24 @@ Dialog {
                 SmoothWheel { view: nav }
                 delegate: Column {
                     readonly property bool firstOfGroup: index === 0 || dlg.visiblePages[index - 1][5] !== modelData[5]
+                    readonly property bool lastOfGroup: index === dlg.visiblePages.length - 1 || dlg.visiblePages[index + 1][5] !== modelData[5]
+                    readonly property real cardW: Math.min(nav.width - 32, 760)
                     width: nav.width
-                    Label { visible: firstOfGroup && modelData[5].length > 0 && dlg.find.length === 0; text: modelData[5]; color: look.accent; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Bold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.7; leftPadding: 18; topPadding: 12; bottomPadding: 4 }
-                    Item { visible: firstOfGroup && modelData[5].length === 0 && dlg.find.length === 0; width: 1; height: 8 }
+                    Label { visible: firstOfGroup && modelData[5].length > 0 && dlg.find.length === 0; x: (nav.width - cardW) / 2 + 16; topPadding: 22; bottomPadding: 7; text: modelData[5]; color: look.accent; font.pixelSize: Math.round(10.8 * look.textScale); font.weight: Font.Bold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.7 }
+                    Item { visible: firstOfGroup && modelData[5].length === 0 && dlg.find.length === 0; width: 1; height: 16 }
+                    Item { visible: firstOfGroup && dlg.find.length > 0; width: 1; height: 8 }
                     Rectangle {
-                        width: parent.width - 16; x: 8; height: 54; radius: 12; color: dlg.page === index && !dlg.narrow ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.16) : (hv.hovered ? look.panel2 : "transparent")
+                        width: cardW; x: (nav.width - cardW) / 2; height: 64
+                        color: hv.hovered ? look.panel2 : look.panel
+                        topLeftRadius: firstOfGroup ? 16 : 0; topRightRadius: firstOfGroup ? 16 : 0; bottomLeftRadius: lastOfGroup ? 16 : 0; bottomRightRadius: lastOfGroup ? 16 : 0
+                        Rectangle { visible: !firstOfGroup; width: parent.width; height: 1; color: look.line }
                         HoverHandler { id: hv; cursorShape: Qt.PointingHandCursor }
-                        Row { anchors.verticalCenter: parent.verticalCenter; x: 10; spacing: 12
+                        Row { anchors.verticalCenter: parent.verticalCenter; x: 16; spacing: 14
                             Rectangle { width: 34; height: 34; radius: 10; color: modelData[4]; anchors.verticalCenter: parent.verticalCenter; Icon { anchors.centerIn: parent; name: modelData[3]; size: 18; color: "white" } }
-                            Column { anchors.verticalCenter: parent.verticalCenter; spacing: 1; width: nav.width - 100
+                            Column { anchors.verticalCenter: parent.verticalCenter; spacing: 0; width: cardW - 16 - 34 - 14 - 50
                                 Label { text: modelData[1]; color: look.text; font.pixelSize: Math.round(15 * look.textScale); font.weight: Font.DemiBold; elide: Text.ElideRight; width: parent.width }
-                                Label { visible: modelData[2].length > 0; text: modelData[2]; color: look.muted; font.pixelSize: Math.round(11 * look.textScale); elide: Text.ElideRight; width: parent.width } } }
-                        Icon { anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter; visible: dlg.narrow; name: "chevron-right"; size: 16; color: look.muted }
+                                Label { visible: modelData[2].length > 0; text: modelData[2]; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); elide: Text.ElideRight; width: parent.width } } }
+                        Icon { anchors.right: parent.right; anchors.rightMargin: 16; anchors.verticalCenter: parent.verticalCenter; name: "chevron-right"; size: 18; color: look.muted }
                         TapHandler { onTapped: { dlg.page = index; dlg.showingList = false } }
                     }
                 }

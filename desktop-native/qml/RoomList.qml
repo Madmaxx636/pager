@@ -16,7 +16,7 @@ Rectangle {
 
     Component.onCompleted: {
         if (settings.defaultTab !== "inbox") core.filter(settings.defaultTab, "")
-        if (startupDialog.indexOf("settings") === 0) Qt.callLater(() => settingsPage.openPage(startupDialog.split(":")[1] || "appearance")); else if (startupDialog === "newchat") Qt.callLater(pane.newChat); else if (startupDialog === "accounts") Qt.callLater(accounts.open); else if (startupDialog === "admin") Qt.callLater(admin.open)
+        if (startupDialog.indexOf("settings") === 0) Qt.callLater(() => { const sp = startupDialog.split(":")[1]; sp ? settingsPage.openPage(sp) : settingsPage.openHome() }); else if (startupDialog === "newchat") Qt.callLater(pane.newChat); else if (startupDialog === "accounts") Qt.callLater(accounts.open); else if (startupDialog === "admin") Qt.callLater(admin.open)
     }
     Accounts { id: accounts }
     Admin { id: admin }
@@ -44,7 +44,7 @@ Rectangle {
         }
     }
     WhenDialog { id: snoozeDialog; heading: "Snooze until"; property string room; onPicked: (ms) => core.snooze(room, ms) }
-    function openSettings() { settingsPage.open() }
+    function openSettings() { settingsPage.openHome() }
     function openSettingsPage(id) { settingsPage.openPage(id) }
     function showMenu(id) { menuRoom = id; menuInfo = core.roomInfo(id); chatMenu.popup() }
 
@@ -71,7 +71,7 @@ Rectangle {
                     MenuSeparator { }
                     MenuItem { icon.name: "user-round"; text: "Accounts"; onTriggered: accounts.open() }
                     MenuItem { icon.name: "shield-check"; text: "Server admin"; visible: core.isAdmin; height: visible ? implicitHeight : 0; onTriggered: admin.open() }
-                    MenuItem { icon.name: "settings"; text: "Settings"; onTriggered: settingsPage.open() }
+                    MenuItem { icon.name: "settings"; text: "Settings"; onTriggered: settingsPage.openHome() }
                     MenuItem { icon.name: "download"; text: "Restore old messages…"; onTriggered: pane.restoreRequested() }
                     MenuSeparator { }
                     MenuItem { icon.name: "log-out"; text: "Sign out"; onTriggered: core.logout() }

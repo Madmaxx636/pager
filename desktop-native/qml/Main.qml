@@ -51,7 +51,7 @@ ApplicationWindow {
         model: SC.ALL
         delegate: Shortcut { sequence: SC.keysFor(modelData.id, settings.shortcuts); enabled: core.signedIn; onActivated: win.runShortcut(modelData.id) }
     }
-    NewChat { id: newChatDialog }
+    NewChat { id: newChatDialog; sideW: win.wide && sidebarRef ? sidebarRef.width : 0 }
     Greeting { id: greeting; parent: Overlay.overlay }
     Tour { id: tour; onGo: (page) => { if (sidebarRef) sidebarRef.openSettingsPage(page) } }
     // the tour runs once per account: ask the account if another computer already did it
