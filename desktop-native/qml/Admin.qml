@@ -10,7 +10,7 @@ Dialog {
     width: Math.min(620, Overlay.overlay ? Overlay.overlay.width - 24 : 620)
     height: Math.min(700, Overlay.overlay ? Overlay.overlay.height - 24 : 700)
     padding: 0
-    background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
 
     property int tab: 0
     property string error: ""
@@ -226,7 +226,7 @@ Dialog {
         property var then_; property string text_
         function ask(text, fn) { text_ = text; then_ = fn; open() }
         modal: true; anchors.centerIn: Overlay.overlay; title: "Are you sure?"; standardButtons: Dialog.Cancel | Dialog.Ok
-        background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+
         Label { text: confirm.text_; color: look.text; wrapMode: Text.Wrap; width: 340 }
         onAccepted: if (then_) then_()
     }
@@ -235,7 +235,7 @@ Dialog {
         property var then_; property string label_; property bool secret_; property int min_: 1
         function ask(label, initial, secret, min, fn) { label_ = label; secret_ = secret; min_ = min; then_ = fn; field.text = initial; open() }
         modal: true; anchors.centerIn: Overlay.overlay; title: label_; standardButtons: Dialog.Cancel | Dialog.Ok
-        background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+
         TextField { id: field; width: 340; echoMode: prompt.secret_ ? TextInput.Password : TextInput.Normal; color: look.text; background: Rectangle { color: look.bg; radius: 8; border.color: look.line } }
         onOpened: field.forceActiveFocus()
         onAccepted: if (field.text.length >= min_ && then_) then_(field.text)
@@ -244,7 +244,7 @@ Dialog {
         id: logView
         property var bridge; property string text_: "Loading…"
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(640, dlg.width - 24); height: Math.min(520, dlg.height - 40); title: (bridge ? bridge.name : "") + " log"
-        background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+
         function refresh() { text_ = "Loading…"; core.api("GET", "/api/admin/bridges/" + encodeURIComponent(bridge.id) + "/logs?tail=300", null, function (s, b) { text_ = s === 200 ? (b.log || "(empty)") : ((b && b.error) || "Couldn't load") }) }
         onAboutToShow: refresh()
         contentItem: ScrollView { SmoothWheel { view: parent.contentItem as Flickable } clip: true; TextArea { readOnly: true; text: logView.text_; wrapMode: TextArea.NoWrap; font.family: "monospace"; font.pixelSize: Math.round(11 * look.textScale); color: look.text; background: Rectangle { color: look.bg } } }
@@ -254,7 +254,7 @@ Dialog {
         id: bridgeSettings
         property var bridge; property var rows: null; property var vals: ({})
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(480, dlg.width - 24); title: (bridge ? bridge.name : "") + " settings"
-        background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+
         onAboutToShow: { rows = null; vals = ({}); core.api("GET", "/api/admin/bridges/" + encodeURIComponent(bridge.id) + "/settings", null, function (s, b) { if (s === 200) { rows = b.settings; const v = {}; for (const r of rows) v[r.key] = r.value; vals = v } else dlg.fail(s, b) }) }
         readonly property bool dirty: !!rows && rows.some(function (r) { return vals[r.key] !== r.value })
         contentItem: ColumnLayout { spacing: 8
@@ -282,7 +282,7 @@ Dialog {
         id: schedule
         property var bridge; property string every: "off"; property string at: "04:00"
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(440, dlg.width - 24); title: (bridge ? bridge.name : "") + ": restart on a timer"
-        background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+
         onAboutToShow: { const c = dlg.schedules[bridge.id]; every = c ? c.every : "off"; at = dlg.utcToLocal(c ? c.at : "04:00") }
         contentItem: ColumnLayout { spacing: 8
             Repeater {

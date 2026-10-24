@@ -10,7 +10,7 @@ Dialog {
     signal picked(double whenMs)
     modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(380, Overlay.overlay ? Overlay.overlay.width - 32 : 380)
     title: heading; standardButtons: Dialog.Cancel
-    background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
     function at(h, m, addDays) { const d = new Date(); d.setDate(d.getDate() + addDays); d.setHours(h, m, 0, 0); return d.getTime() }
     function choose(ms) { dlg.picked(ms); dlg.close() }
     readonly property var presets: {

@@ -10,8 +10,7 @@ Dialog {
     title: changed ? "Your recovery key was changed" : "Restore old messages"
     standardButtons: Dialog.NoButton
     onOpened: { core.resetRecovery(); keyField.text = ""; keyField.forceActiveFocus() }
-    background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
-    header: Label { text: dlg.title; color: look.text; font.pixelSize: Math.round(18 * look.textScale); font.weight: Font.Bold; padding: 18; bottomPadding: 4 }
+
     contentItem: ColumnLayout {
         spacing: 10
         Label {

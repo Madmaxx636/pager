@@ -17,6 +17,17 @@ Dialog {
     property string note: ""
     property bool styleOpen: false
     property string clipNote: ""
+    // your connected accounts, one row each, for Bridges & accounts
+    property var bridgeRows: []; property bool bridgesLoaded: false; property var pendingLogout: null
+    function loadBridges() {
+        core.api("GET", "/api/bridges", null, function (status, body) {
+            bridgesLoaded = true
+            if (status !== 200) return
+            const rows = []
+            for (const n of (body.networks || [])) for (const l of (n.logins || [])) rows.push({ net: n, login: l })
+            bridgeRows = rows
+        })
+    }
     // a page that fills the right-hand side next to the list of chats, like the web app's settings
     modal: false; dim: false; closePolicy: Popup.CloseOnEscape
     readonly property real sideW: parent && Overlay.overlay && parent.width < Overlay.overlay.width - 100 ? parent.width : 0
@@ -451,15 +462,39 @@ Dialog {
     }
     Component { id: bridges
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "Accounts"
-                SAction { title: "Connect and disconnect your chat apps"; hint: "WhatsApp, Signal, Google Messages and the others"; button: "Open"; onClicked: { dlg.close(); dlg.accountsRequested() } }
-            }
-            SGroup { title: "Hide networks"; footer: "Hidden networks' chats stay out of the list and the counts."
-                Repeater { model: ["whatsapp", "signal", "gmessages", "discord", "telegram", "instagram", "messenger", "irc", "msteams", "gvoice"]
-                    delegate: RowLayout { Layout.fillWidth: true
-                        Label { text: N.meta(modelData).label; color: look.text; Layout.fillWidth: true }
-                        PSwitch { checked: (settings.hiddenNetworks || []).indexOf(modelData) >= 0; onToggled: { const l = (settings.hiddenNetworks || []).filter(x => x !== modelData); if (checked) l.push(modelData); settings.set("hiddenNetworks", l) } } } }
-            }
+            Component.onCompleted: dlg.loadBridges()
+            Connections { target: dlg; function onVisibleChanged() { if (dlg.visible) dlg.loadBridges() } }
+            RowLayout { Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 14; spacing: 12
+                Label { Layout.fillWidth: true; text: "Apps connected through your own server."; color: look.muted; wrapMode: Text.Wrap }
+                Button { text: "Add account"; highlighted: true; onClicked: { dlg.close(); dlg.accountsRequested() } } }
+            Label { visible: dlg.bridgesLoaded && dlg.bridgeRows.length === 0; Layout.leftMargin: 16; Layout.topMargin: 6; text: "Nothing connected yet."; color: look.muted }
+            Label { visible: !dlg.bridgesLoaded && dlg.bridgeRows.length === 0; Layout.leftMargin: 16; Layout.topMargin: 6; text: "Loading…"; color: look.muted }
+            Rectangle { visible: dlg.bridgeRows.length > 0; Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 8; implicitHeight: brCol.implicitHeight + 2; radius: 14; color: look.panel; border.width: 1; border.color: look.line; clip: true
+                Column { id: brCol; x: 1; y: 1; width: parent.width - 2
+                    Repeater { model: dlg.bridgeRows
+                        delegate: Item { id: br; width: brCol.width; height: Math.max(44, 12 + 38)
+                            readonly property var st: N.stateLabel(modelData.login.state_event)
+                            readonly property bool hidden: (settings.hiddenNetworks || []).indexOf(modelData.net.id) >= 0
+                            opacity: hidden ? 0.6 : 1
+                            Rectangle { visible: index > 0; width: parent.width; height: 1; color: look.line }
+                            RowLayout { anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10; spacing: 10
+                                Rectangle { Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 8; color: N.meta(modelData.net.id).color
+                                    Label { anchors.centerIn: parent; text: N.meta(modelData.net.id).glyph; color: "white"; font.weight: Font.Bold; font.pixelSize: Math.round(12 * look.textScale) } }
+                                ColumnLayout { Layout.fillWidth: true; spacing: 0
+                                    Label { Layout.fillWidth: true; text: modelData.login.name || (modelData.login.profile && modelData.login.profile.name) || modelData.login.id; color: look.text; font.pixelSize: Math.round(13.8 * look.textScale); font.weight: Font.DemiBold; elide: Text.ElideRight }
+                                    Label { Layout.fillWidth: true; text: modelData.net.name + (modelData.net.error ? " · not responding" : ""); color: look.muted; font.pixelSize: Math.round(11.1 * look.textScale); elide: Text.ElideRight } }
+                                Row { spacing: 6; Layout.alignment: Qt.AlignVCenter
+                                    Rectangle { width: 8; height: 8; radius: 4; color: br.st[1]; anchors.verticalCenter: parent.verticalCenter }
+                                    Label { text: br.st[0]; color: br.st[1]; font.pixelSize: Math.round(11.7 * look.textScale) } }
+                                Button { visible: ["BAD_CREDENTIALS", "LOGGED_OUT", "UNKNOWN_ERROR"].indexOf(modelData.login.state_event) >= 0; text: "Sign in"; onClicked: { dlg.close(); dlg.accountsRequested() } }
+                                IconButton { ico: br.hidden ? "eye-off" : "eye"; onClicked: { const l = (settings.hiddenNetworks || []).filter(x => x !== modelData.net.id); if (!br.hidden) l.push(modelData.net.id); settings.set("hiddenNetworks", l) }
+                                    ToolTip.text: br.hidden ? "Show " + N.meta(modelData.net.id).label + " pages in the inbox" : "Hide " + N.meta(modelData.net.id).label + " pages from the inbox"; ToolTip.visible: hovered }
+                                IconButton { id: more; ico: "ellipsis-vertical"; onClicked: moreMenu.popup(more, 0, more.height)
+                                    Menu { id: moreMenu
+                                        MenuItem { text: "Add another " + N.meta(modelData.net.id).label + " account"; onTriggered: { dlg.close(); dlg.accountsRequested() } }
+                                        MenuItem { visible: modelData.net.id !== "gmessages"; height: visible ? implicitHeight : 0; text: "Start chats with contacts"; onTriggered: { dlg.close(); dlg.accountsRequested() } }
+                                        MenuItem { text: "Disconnect"; onTriggered: { dlg.pendingLogout = { net: modelData.net.id, login: modelData.login.id }; disconnectConfirm.open() } } } } } } } } }
+            Item { Layout.preferredHeight: 8 }
         }
     }
     Component { id: labels
@@ -663,7 +698,7 @@ Dialog {
     }
 
     // =============================================================== small dialogs
-    Dialog { id: renameLabel; property string old; modal: true; anchors.centerIn: Overlay.overlay; title: "Rename label"; standardButtons: Dialog.Cancel | Dialog.Ok; background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+    Dialog { id: renameLabel; property string old; modal: true; anchors.centerIn: Overlay.overlay; title: "Rename label"; standardButtons: Dialog.Cancel | Dialog.Ok;
         TextField { id: renameField; width: 300; color: look.text; background: Rectangle { color: look.bg; radius: 8; border.color: look.line } }
         onAccepted: core.renameLabel(old, renameField.text) }
     Dialog {
@@ -674,7 +709,7 @@ Dialog {
             function onSyncFetched(info) { syncDlg.saved = info; syncDlg.ready = true }
             function onSyncSaved(err) { syncDlg.msg = err.length ? err : "Saved."; if (!err.length) { syncDlg.saveIds = []; core.fetchSyncedSettings() } } }
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(480, Overlay.overlay ? Overlay.overlay.width - 32 : 480); height: Math.min(640, Overlay.overlay ? Overlay.overlay.height - 40 : 640); title: "Sync settings"; standardButtons: Dialog.Close
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         component Pick: Repeater { id: rep; property var picked; signal flip(string id); property var only: null
             delegate: CheckBox { visible: !rep.only || rep.only.indexOf(modelData.id) >= 0; height: visible ? implicitHeight : 0; text: modelData.label + "  ·  " + modelData.hint; checked: rep.picked.indexOf(modelData.id) >= 0; onToggled: rep.flip(modelData.id) } }
         contentItem: ScrollView { id: syncScroll; clip: true; contentWidth: availableWidth
@@ -693,11 +728,15 @@ Dialog {
                 Label { visible: syncDlg.msg.length > 0; text: syncDlg.msg; color: look.accent }
             } }
     }
-    Dialog { id: resetConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Reset all settings?"; standardButtons: Dialog.Cancel | Dialog.Ok; background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+    Dialog { id: resetConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Reset all settings?"; standardButtons: Dialog.Cancel | Dialog.Ok;
         Label { text: "Everything goes back to how Pager starts."; color: look.text } onAccepted: { settings.reset(); dlg.note = "Settings reset." } }
+    Dialog { id: disconnectConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Disconnect this account?"; standardButtons: Dialog.Cancel | Dialog.Ok; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440)
+        Component.onCompleted: standardButton(Dialog.Ok).text = "Disconnect"
+        Label { width: parent.width; wrapMode: Text.Wrap; color: look.muted; text: "Pager stops bringing in its chats until you connect it again." }
+        onAccepted: if (dlg.pendingLogout) core.api("POST", "/api/bridges/" + dlg.pendingLogout.net + "/logout/" + encodeURIComponent(dlg.pendingLogout.login), {}, function () { dlg.loadBridges(); core.refreshBridges ? core.refreshBridges() : 0 }) }
     Dialog { id: deleteProfile; property string pw: ""; property string err: ""; property bool busy: false
         modal: true; anchors.centerIn: Overlay.overlay; title: "Delete your profile?"; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440)
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         contentItem: ColumnLayout { spacing: 10
             Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; text: "This deletes your account on this server, disconnects all your apps and removes your messages here. Your pages on WhatsApp, Signal and the others are not touched. This can't be undone." }
             Label { text: "Your password"; color: look.text }
@@ -712,14 +751,14 @@ Dialog {
                             deleteProfile.busy = false
                             if (status === 200) { deleteProfile.close(); dlg.close(); core.logout() } else deleteProfile.err = (body && body.error) || "Wrong password" }) } } } }
     }
-    Dialog { id: encryptAllConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Encrypt all my pages?"; standardButtons: Dialog.Cancel | Dialog.Ok; width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420); background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+    Dialog { id: encryptAllConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Encrypt all my pages?"; standardButtons: Dialog.Cancel | Dialog.Ok; width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420);
         Label { width: parent.width; wrapMode: Text.Wrap; color: look.text; text: "Every page that can take encryption gets it turned on. It cannot be turned off again. Messages sent before stay readable on your server. Make sure you have your recovery key." } onAccepted: { dlg.encNote = "Starting…"; core.encryptAll() } }
     Connections { target: core; function onEncryptAllProgress(done, total, failed) { dlg.encNote = total === 0 ? "Everything is already encrypted." : (done >= total ? "Done: " + (total - failed) + " turned on" + (failed ? ", " + failed + " could not be" : "") : "Turning on… " + done + " of " + total) } }
     FileDialog { id: exportDialog; fileMode: FileDialog.SaveFile; currentFile: "file://" + files.downloadsDir() + "/pager-settings.json"; nameFilters: ["Settings (*.json)"]
         onAccepted: dlg.note = files.writeText(files.path(selectedFile), settings.exportJson()) ? "Saved." : "Couldn't save the file." }
     FileDialog { id: importDialog; nameFilters: ["Settings (*.json)", "All files (*)"]
         onAccepted: dlg.note = settings.importJson(files.readText(files.path(selectedFile))) ? "Settings imported." : "That isn't a Pager settings file." }
-    Dialog { id: capture; property string id; property string label; modal: true; anchors.centerIn: Overlay.overlay; title: "Press the new keys"; standardButtons: Dialog.Cancel; background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+    Dialog { id: capture; property string id; property string label; modal: true; anchors.centerIn: Overlay.overlay; title: "Press the new keys"; standardButtons: Dialog.Cancel;
         onOpened: grab.forceActiveFocus()
         Item { id: grab; width: 320; height: 80; focus: true
             Label { anchors.centerIn: parent; text: capture.label + "\\n(Esc to cancel)"; horizontalAlignment: Text.AlignHCenter; color: look.text }

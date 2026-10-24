@@ -158,7 +158,7 @@ Dialog {
         visible: dlg.choose !== null
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(380, Overlay.overlay ? Overlay.overlay.width - 32 : 380); title: dlg.choose ? dlg.choose.title : ""
         standardButtons: Dialog.Cancel
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         onRejected: dlg.choose = null
         contentItem: ColumnLayout { spacing: 4
             Label { text: "How do you want to message them?"; color: look.muted; Layout.fillWidth: true; wrapMode: Text.Wrap }

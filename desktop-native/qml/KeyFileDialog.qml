@@ -11,7 +11,7 @@ Dialog {
     function openFor(save) { saving = save; note = ""; bad = false; busy = false; pass.text = ""; open() }
     modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440)
     title: saving ? "Save keys to a file" : "Restore keys from a file"; standardButtons: Dialog.Close
-    background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
     Connections { target: core
         function onKeysExported(ok, e) { dlg.busy = false; dlg.bad = !ok; dlg.note = ok ? "Saved. Keep the file and its passphrase safe." : e }
         function onKeysImported(ok, imported, total, e) { dlg.busy = false; dlg.bad = !ok; dlg.note = ok ? (imported + " of " + total + " keys were new to this device.") : "Couldn't read that file. Check the passphrase. " + e } }
