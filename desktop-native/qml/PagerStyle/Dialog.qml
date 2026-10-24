@@ -8,7 +8,11 @@ B.Dialog {
     padding: 24; topPadding: 0
     enter: Transition { ParallelAnimation { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 110 } NumberAnimation { property: "scale"; from: 0.97; to: 1; duration: 110; easing.type: Easing.OutQuad } } }
     exit: Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 80 } }
-    header: Label { visible: control.title.length > 0; text: control.title; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.Bold; font.letterSpacing: -0.4; padding: 24; bottomPadding: 10 }
+    header: Item { visible: control.title.length > 0; implicitHeight: visible ? titleLabel.implicitHeight + 24 + 10 : 0
+        Label { id: titleLabel; x: 24; y: 24; width: parent.width - 24 - 56; text: control.title; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.Bold; font.letterSpacing: -0.4; elide: Text.ElideRight }
+        Rectangle { visible: control.closePolicy !== Popup.NoAutoClose; x: parent.width - width - 12; y: 12; width: 38; height: 38; radius: 19; color: cl.hovered ? look.panel2 : "transparent"
+            Image { anchors.centerIn: parent; width: 18; height: 18; sourceSize.width: 36; sourceSize.height: 36; smooth: true; source: "image://icon/x/" + String(cl.hovered ? look.text : look.muted).substring(1, 7) }
+            HoverHandler { id: cl; cursorShape: Qt.PointingHandCursor } TapHandler { onTapped: control.reject() } } }
     footer: DialogButtonBox { visible: count > 0 }
     background: Rectangle { radius: 24; color: look.panel; border.width: 1; border.color: look.line
         layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software

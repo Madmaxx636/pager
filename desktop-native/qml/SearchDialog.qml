@@ -11,11 +11,16 @@ Dialog {
     property var hits: []
     property var remoteHits: []
     property bool busy: false
-    modal: true; anchors.centerIn: Overlay.overlay
-    width: Math.min(520, Overlay.overlay ? Overlay.overlay.width - 24 : 520); height: Math.min(680, Overlay.overlay ? Overlay.overlay.height - 24 : 680)
+    // a page beside the list of chats, like the web app's search
+    property real sideW: 0
+    modal: false; dim: false; closePolicy: Popup.CloseOnEscape
+    x: sideW; y: 0
+    width: (Overlay.overlay ? Overlay.overlay.width : 520) - sideW; height: Overlay.overlay ? Overlay.overlay.height : 680
     padding: 0
-    background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+    background: Rectangle { color: look.bg }
     signal chosen(string roomId, string eventId)
+    readonly property string openRoom: core.currentRoom
+    onOpenRoomChanged: if (visible) close()   // opening a chat leaves the search, as on the web
 
     function openFor(roomId, name, text) { room = roomId || ""; roomName = name || ""; kind = "all"; hits = []; remoteHits = []; field.text = text || ""; open(); field.forceActiveFocus(); run() }
     function run() {
@@ -36,23 +41,26 @@ Dialog {
     }
 
     header: Rectangle {
-        color: "transparent"; implicitHeight: 64
-        RowLayout { anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 8; spacing: 8
-            TextField { id: field; Layout.fillWidth: true; placeholderText: dlg.room.length ? "Search “" + dlg.roomName + "”" : "Search every chat"; placeholderTextColor: look.muted; color: look.text; selectByMouse: true
-                font.pixelSize: Math.round(14 * look.textScale); leftPadding: 14; background: Rectangle { radius: 18; color: look.panel2 }
-                onTextChanged: dlg.run() }
-            IconButton { symbol: "✕"; glyphSize: 16; onClicked: dlg.close() } }
+        color: look.panel; implicitHeight: 64
+        RowLayout { anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 8
+            IconButton { ico: "chevron-left"; onClicked: dlg.close(); ToolTip.text: "Back"; ToolTip.visible: hovered }
+            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 44; radius: 22; color: look.panel2
+                Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: "search"; size: 18; color: look.muted }
+                TextField { id: field; anchors.fill: parent; anchors.leftMargin: 44; anchors.rightMargin: 12; background: null; placeholderText: dlg.room.length ? "Search this page" : "Search all messages"; placeholderTextColor: look.muted; color: look.text; selectByMouse: true
+                    font.pixelSize: Math.round(15 * look.textScale); onTextChanged: dlg.run() } } }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: look.line }
     }
     contentItem: ColumnLayout {
         spacing: 0
         Row {
-            Layout.margins: 12; spacing: 6
+            Layout.topMargin: 8; Layout.leftMargin: 14; Layout.bottomMargin: 8; spacing: 6
             Repeater {
-                model: [["all", "All"], ["images", "Photos"], ["videos", "Videos"], ["links", "Links"], ["files", "Files"]]
-                delegate: Rectangle { height: 30; width: tl.implicitWidth + 22; radius: 15; color: dlg.kind === modelData[0] ? look.accent : look.panel2
-                    Label { id: tl; anchors.centerIn: parent; text: modelData[1]; color: dlg.kind === modelData[0] ? look.accentInk : look.text; font.pixelSize: Math.round(13 * look.textScale) }
-                    TapHandler { onTapped: { dlg.kind = modelData[0]; dlg.run() } } }
+                model: [["all", "All", "search"], ["images", "Photos", "image"], ["videos", "Videos", "video"], ["links", "Links", "link"], ["files", "Files", "file"]]
+                delegate: Rectangle { height: 33; width: tr.implicitWidth + 26; radius: 17; color: dlg.kind === modelData[0] ? look.accent : look.panel2
+                    Row { id: tr; anchors.centerIn: parent; spacing: 6
+                        Icon { anchors.verticalCenter: parent.verticalCenter; name: modelData[2]; size: 15; color: dlg.kind === modelData[0] ? look.accentInk : look.muted }
+                        Label { anchors.verticalCenter: parent.verticalCenter; text: modelData[1]; color: dlg.kind === modelData[0] ? look.accentInk : look.muted; font.pixelSize: Math.round(13.05 * look.textScale); font.weight: Font.Medium } }
+                    TapHandler { onTapped: { dlg.kind = modelData[0]; dlg.run() } } HoverHandler { cursorShape: Qt.PointingHandCursor } }
             }
         }
         ListView {
@@ -71,8 +79,9 @@ Dialog {
                         Label { text: modelData.time; color: look.muted; font.pixelSize: Math.round(11 * look.textScale) } } }
                 TapHandler { onTapped: { dlg.chosen(modelData.roomId, modelData.eventId); dlg.close() } }
             }
-            Label { anchors.centerIn: parent; visible: results.count === 0; width: parent.width - 40; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; color: look.muted
-                text: field.text.trim().length < 2 && dlg.kind === "all" ? "Find messages, photos, links and files across every chat." : (dlg.busy ? "Searching…" : "No matches") }
+            EmptyState { anchors.horizontalCenter: parent.horizontalCenter; y: -30; width: parent.width - 56; visible: results.count === 0; icon: "search"
+                title: field.text.trim().length < 2 && dlg.kind === "all" ? "Search your pages" : (dlg.busy ? "Searching…" : "No matches")
+                body: field.text.trim().length < 2 && dlg.kind === "all" ? "Find messages, photos, links and files across every network." : "" }
         }
     }
 }
