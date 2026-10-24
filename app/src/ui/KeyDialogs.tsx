@@ -34,22 +34,23 @@ export function RecoveryKeyDialog({ onClose, first }: { onClose: () => void; fir
   );
 }
 
-export function RestoreDialog({ onClose, onLost, first }: { onClose: () => void; onLost: () => void; first?: boolean }) {
+export function RestoreDialog({ onClose, onLost, first, changed }: { onClose: () => void; onLost: () => void; first?: boolean; changed?: boolean }) {
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<number>();
   return (
-    <Modal title={first ? "Welcome back. Enter your recovery key" : "Enter your recovery key"} onClose={onClose}>
+    <Modal title={changed ? "Your recovery key was changed" : first ? "Welcome back. Enter your recovery key" : "Enter your recovery key"} onClose={onClose}>
       {done != null ? <p>Restored {done} message keys. Older messages in your encrypted pages can be read now.</p> : (
         <>
+          {changed && <p>A new recovery key was made on another device. Enter the new key so this device can read the new backup and keep saving to it.</p>}
           <textarea rows={3} autoFocus placeholder="EsTc 4xYz …" value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
           {err && <p className="error">{err}</p>}
         </>
       )}
-      {done == null && <p className="muted small">Lost it? A key file (Settings → Encryption → Restore keys from a file) or another signed-in device can still get your history back. If you have neither, <button className="link inline" onClick={onLost}>start fresh with a new key</button>: you can read and send new messages, but older encrypted ones stay unreadable.</p>}
+      {done == null && !changed && <p className="muted small">Lost it? A key file (Settings → Encryption → Restore keys from a file) or another signed-in device can still get your history back. If you have neither, <button className="link inline" onClick={onLost}>start fresh with a new key</button>: you can read and send new messages, but older encrypted ones stay unreadable.</p>}
       <div className="row-end">
-        <button className="link" onClick={onClose}>{done != null ? "Close" : "Cancel"}</button>
+        <button className="link" onClick={onClose}>{done != null ? "Close" : changed ? "Later" : "Cancel"}</button>
         {done == null && <button className="primary" disabled={busy || !text.trim()} onClick={() => { setBusy(true); setErr(""); restoreWithRecoveryKey(text).then(setDone).catch((e) => setErr(e.message)).finally(() => setBusy(false)); }}>{busy ? "Restoring…" : "Restore"}</button>}
       </div>
     </Modal>
