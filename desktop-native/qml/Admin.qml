@@ -86,7 +86,7 @@ Dialog {
             Layout.fillWidth: true; Layout.fillHeight: true; currentIndex: dlg.tab
 
             // ---------------- accounts
-            ScrollView {
+            ScrollView { SmoothWheel { view: parent.contentItem as Flickable }
                 clip: true; contentWidth: availableWidth
                 ColumnLayout {
                     width: parent.width - 32; x: 16; spacing: 8
@@ -151,7 +151,7 @@ Dialog {
             }
 
             // ---------------- bridges
-            ScrollView {
+            ScrollView { SmoothWheel { view: parent.contentItem as Flickable }
                 clip: true; contentWidth: availableWidth
                 ColumnLayout {
                     width: parent.width - 32; x: 16; spacing: 8
@@ -191,7 +191,7 @@ Dialog {
             }
 
             // ---------------- server
-            ScrollView {
+            ScrollView { SmoothWheel { view: parent.contentItem as Flickable }
                 clip: true; contentWidth: availableWidth
                 ColumnLayout {
                     width: parent.width - 32; x: 16; spacing: 10
@@ -247,7 +247,7 @@ Dialog {
         background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
         function refresh() { text_ = "Loading…"; core.api("GET", "/api/admin/bridges/" + encodeURIComponent(bridge.id) + "/logs?tail=300", null, function (s, b) { text_ = s === 200 ? (b.log || "(empty)") : ((b && b.error) || "Couldn't load") }) }
         onAboutToShow: refresh()
-        contentItem: ScrollView { clip: true; TextArea { readOnly: true; text: logView.text_; wrapMode: TextArea.NoWrap; font.family: "monospace"; font.pixelSize: Math.round(11 * look.textScale); color: look.text; background: Rectangle { color: look.bg } } }
+        contentItem: ScrollView { SmoothWheel { view: parent.contentItem as Flickable } clip: true; TextArea { readOnly: true; text: logView.text_; wrapMode: TextArea.NoWrap; font.family: "monospace"; font.pixelSize: Math.round(11 * look.textScale); color: look.text; background: Rectangle { color: look.bg } } }
         footer: DialogButtonBox { Button { text: "Refresh"; DialogButtonBox.buttonRole: DialogButtonBox.ActionRole; onClicked: logView.refresh() } Button { text: "Close"; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole } }
     }
     Dialog {

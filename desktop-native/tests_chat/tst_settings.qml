@@ -64,6 +64,20 @@ Item {
             page.close()
         }
         function sw_(t) { const l = findAll(t, c => c.hasOwnProperty("checked") && c.hasOwnProperty("toggle"), []); return l.length ? l[0] : null }
+        function test_a_settings_page_scrolls_smoothly_and_carries_on_like_a_touchpad() {
+            page.open(); tryVerify(function () { return page.opened })
+            page.page = page.visiblePages.findIndex(p => p[0] === "notifications"); page.showingList = false; wait(200)
+            const fl = findAll(page.contentItem, c => c.hasOwnProperty("contentY") && c.hasOwnProperty("flick") && c.contentHeight > c.height && c.mapToItem(page.contentItem, 0, 0).x > 250, [])[0]
+            verify(fl !== undefined, "a scrollable page")
+            const y0 = fl.contentY
+            mouseWheel(page.contentItem, 600, 400, 0, -120); wait(450)
+            verify(fl.contentY - y0 > 60, "a wheel click moves the page: " + (fl.contentY - y0))
+            const y1 = fl.contentY
+            for (let i = 0; i < 8; ++i) { mouseWheel(page.contentItem, 600, 400, 0, -40); wait(12) }
+            const during = fl.contentY - y1; wait(700)
+            verify(fl.contentY - y1 > during + 30, "it keeps gliding after the fingers lift: " + during + " then " + (fl.contentY - y1))
+            page.close()
+        }
         function test_the_pages_open_and_list_what_the_other_apps_have() {
             page.open(); tryVerify(function () { return page.opened })
             const names = page.visiblePages.map(p => p[0])
