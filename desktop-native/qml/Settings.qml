@@ -395,6 +395,7 @@ Dialog {
             SGroup { title: "Motion"
                 SToggle { key: "fancyMotion"; title: "Small animations"; hint: "Things slide, glide, glow, pop, breathe and fade a little. Off for none" }
                 SToggle { key: "reduceMotion"; title: "Reduce motion"; hint: "Fewer animations" }
+                SSlider { key: "scrollSpeed"; title: "Scroll speed"; hint: "How far the mouse wheel and touchpad move the lists"; from: 0.5; to: 4; step: 0.1; suffix: "×"; decimals: 1 }
             }
             SGroup { title: "Extras"
                 SToggle { key: "hideStories"; title: "Hide Stories"; hint: "Removes the Stories row (WhatsApp status updates) from the list" }
