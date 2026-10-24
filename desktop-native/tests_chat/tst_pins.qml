@@ -35,5 +35,11 @@ Item {
             compare(names()[2], "Maya")
         }
         function findPins(item) { for (let i = 0; i < item.children.length; i++) { const c = item.children[i]; if (c.hasOwnProperty("columns") && c.hasOwnProperty("dragFrom")) return c; const r = findPins(c); if (r) return r } return null }
+        function test_pages_can_be_ticked_and_acted_on_together() {
+            verify(!pane.selecting)
+            pane.togglePick("!a:x"); pane.togglePick("!b:x"); verify(pane.selecting); compare(pane.picked.length, 2)
+            pane.togglePick("!a:x"); compare(pane.picked.length, 1)
+            const seen = []; pane.eachPicked(id => seen.push(id)); compare(seen, ["!b:x"]); verify(!pane.selecting)
+        }
     }
 }
