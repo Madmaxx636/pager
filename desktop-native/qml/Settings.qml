@@ -499,14 +499,13 @@ Dialog {
     }
     Component { id: labels
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "Your labels"; footer: "Add a label to a chat from its menu. Labels appear as tabs above the list."
+            EmptyState { visible: core.labels.length === 0; Layout.fillWidth: true; icon: "tag"; title: "No labels yet"; body: "Right-click a page, choose Labels, and create one. Then filter your inbox by it." }
+            Label { visible: core.labels.length > 0; Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; wrapMode: Text.Wrap; color: look.muted; text: "Labels work like folders. Add one from a page's menu, then filter your inbox by it." }
+            SGroup { visible: core.labels.length > 0
                 Repeater { model: core.labels
-                    delegate: RowLayout { Layout.fillWidth: true; spacing: 8
-                        Label { text: modelData; color: look.text; Layout.fillWidth: true }
-                        Label { text: core.labelCount(modelData) + (core.labelCount(modelData) === 1 ? " chat" : " chats"); color: look.muted; font.pixelSize: 12 }
-                        Button { text: "Rename"; onClicked: { renameLabel.old = modelData; renameField.text = modelData; renameLabel.open() } }
-                        Button { text: "Delete"; onClicked: core.deleteLabel(modelData) } } }
-                Label { visible: core.labels.length === 0; text: "No labels yet."; color: look.muted }
+                    delegate: SAction { title: modelData; hint: core.labelCount(modelData) + " pages"; button: "Rename"; flatButton: true
+                        onClicked: { renameLabel.old = modelData; renameField.text = modelData; renameLabel.open() }
+                        IconButton { ico: "trash-2"; onClicked: { labelDelete.label = modelData; labelDelete.open() } ToolTip.text: "Delete label"; ToolTip.visible: hovered } } }
             }
         }
     }
@@ -641,35 +640,27 @@ Dialog {
     }
     Component { id: starred
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "Starred messages"
-                Repeater { model: core.starred()
-                    delegate: Rectangle { Layout.fillWidth: true; height: 64; radius: 10; color: sh.hovered ? look.panel2 : "transparent"; HoverHandler { id: sh }
-                        Column { anchors.verticalCenter: parent.verticalCenter; x: 8; width: parent.width - 16; spacing: 1
-                            Label { text: modelData.sender + " · " + modelData.chat; color: look.accent; font.pixelSize: 12; elide: Text.ElideRight; width: parent.width }
-                            Label { text: modelData.text; color: look.text; elide: Text.ElideRight; width: parent.width }
-                            Label { text: new Date(modelData.ts).toLocaleString(Qt.locale(), "MMM d, h:mm AP"); color: look.muted; font.pixelSize: 11 } }
-                        TapHandler { onTapped: { dlg.close(); dlg.openMessage(modelData.roomId, modelData.eventId) } } } }
-                Label { visible: core.starred().length === 0; text: "Star a message from its menu to keep it here."; color: look.muted }
-            }
+            EmptyState { visible: core.starred().length === 0; Layout.fillWidth: true; icon: "star"; title: "Nothing starred yet"; body: "Right-click a message and choose Star to save it here." }
+            Repeater { model: core.starred()
+                delegate: Rectangle { Layout.fillWidth: true; implicitHeight: stc.implicitHeight + 20; color: sh.hovered ? look.panel : "transparent"; HoverHandler { id: sh; cursorShape: Qt.PointingHandCursor }
+                    Column { id: stc; x: 20; y: 10; width: parent.width - 40; spacing: 2
+                        Label { text: modelData.sender + " · " + modelData.chat; color: look.accent; font.pixelSize: Math.round(12 * look.textScale); elide: Text.ElideRight; width: parent.width }
+                        Label { text: modelData.text; color: look.text; font.pixelSize: Math.round(15 * look.textScale); wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; width: parent.width }
+                        Label { text: new Date(modelData.ts).toLocaleString(); color: look.muted; font.pixelSize: Math.round(12 * look.textScale) } }
+                    TapHandler { onTapped: { dlg.close(); dlg.openMessage(modelData.roomId, modelData.eventId) } } } }
         }
     }
     Component { id: scheduledPage
         SGroup { plain: true; Layout.fillWidth: true
-            SGroup { title: "Scheduled messages"
+            SGroup { title: "Scheduled messages"; footer: core.scheduled().length ? "" : "Use the ▾ next to Send to schedule one."
                 Repeater { model: core.scheduled()
-                    delegate: RowLayout { Layout.fillWidth: true
-                        Column { Layout.fillWidth: true; Label { text: "To " + modelData.chat; color: look.accent; font.pixelSize: 12 } Label { text: modelData.text; color: look.text; elide: Text.ElideRight; width: parent.width }
-                            Label { text: new Date(modelData.whenMs).toLocaleString(Qt.locale(), "ddd MMM d, h:mm AP"); color: look.muted; font.pixelSize: 11 } }
-                        Button { text: "Cancel"; onClicked: core.cancelScheduled(modelData.delayId) } } }
-                Label { visible: core.scheduled().length === 0; text: "Nothing scheduled. Right-click the send button to schedule a message."; color: look.muted; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                    delegate: SAction { title: modelData.text; hint: "To " + modelData.chat + " · " + new Date(modelData.whenMs).toLocaleString(); button: "Cancel"; flatButton: true; buttonWarn: true; onClicked: core.cancelScheduled(modelData.delayId) } }
+                SAction { visible: core.scheduled().length === 0; title: "No scheduled messages"; button: "" }
             }
-            SGroup { title: "Reminders and snoozed chats"
+            SGroup { title: "Reminders & snoozed pages"; footer: core.reminders().length ? "" : "Right-click a page and choose Remind me or Snooze."
                 Repeater { model: core.reminders()
-                    delegate: RowLayout { Layout.fillWidth: true
-                        Column { Layout.fillWidth: true; Label { text: (modelData.snooze ? "Snoozed: " : "Reminder: ") + modelData.chat; color: look.text; elide: Text.ElideRight; width: parent.width }
-                            Label { text: new Date(modelData.whenMs).toLocaleString(Qt.locale(), "ddd MMM d, h:mm AP"); color: look.muted; font.pixelSize: 11 } }
-                        Button { text: "Cancel"; onClicked: core.cancelReminder(modelData.id) } } }
-                Label { visible: core.reminders().length === 0; text: "No reminders."; color: look.muted }
+                    delegate: SAction { title: modelData.chat; hint: (modelData.snooze ? "Snoozed until " : "") + new Date(modelData.whenMs).toLocaleString(); button: "Cancel"; flatButton: true; buttonWarn: true; onClicked: core.cancelReminder(modelData.id) } }
+                SAction { visible: core.reminders().length === 0; title: "No reminders"; button: "" }
             }
         }
     }
@@ -734,6 +725,10 @@ Dialog {
         Component.onCompleted: standardButton(Dialog.Ok).text = "Disconnect"
         Label { width: parent.width; wrapMode: Text.Wrap; color: look.muted; text: "Pager stops bringing in its chats until you connect it again." }
         onAccepted: if (dlg.pendingLogout) core.api("POST", "/api/bridges/" + dlg.pendingLogout.net + "/logout/" + encodeURIComponent(dlg.pendingLogout.login), {}, function () { dlg.loadBridges(); core.refreshBridges ? core.refreshBridges() : 0 }) }
+    Dialog { id: labelDelete; property string label: ""; modal: true; anchors.centerIn: Overlay.overlay; title: "Delete label?"; standardButtons: Dialog.Cancel | Dialog.Ok; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440)
+        Component.onCompleted: standardButton(Dialog.Ok).text = "Delete"
+        Label { width: parent.width; wrapMode: Text.Wrap; color: look.muted; text: "Delete “" + labelDelete.label + "”? The pages themselves aren't touched." }
+        onAccepted: core.deleteLabel(label) }
     Dialog { id: deleteProfile; property string pw: ""; property string err: ""; property bool busy: false
         modal: true; anchors.centerIn: Overlay.overlay; title: "Delete your profile?"; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440)
 
