@@ -58,6 +58,8 @@ Item {
 
     readonly property real maxW: Math.min(width * (settings.bubbleWidth >= 40 ? Math.min(95, settings.bubbleWidth) / 100 : 0.76), settings.bubbleWidth >= 40 ? 1200 : 560)
     readonly property bool bare: sticker || bigEmoji
+    readonly property color under: outlined || bubbleColor.a < 0.5 ? look.bg : bubbleColor
+    readonly property bool darkUnder: 0.299 * under.r + 0.587 * under.g + 0.114 * under.b < 0.55
     readonly property bool framed: !bare && (kind === "image" || kind === "video")   // a picture sits in its bubble with a thin edge, like the web
     width: ListView.view ? ListView.view.width : 400
     height: col.implicitHeight + (first ? 7 : 1.5)
@@ -177,7 +179,7 @@ Item {
                         ToolTip.visible: tipHover.hovered; ToolTip.text: row.fullTime; ToolTip.delay: 500; HoverHandler { id: tipHover } }
                     Icon { visible: row.mine && row.tick > 0 && settings.showReadTicks; anchors.verticalCenter: parent.verticalCenter; size: 14
                         name: row.tick === 1 ? "clock" : row.tick === 2 ? "circle-alert" : row.tick >= 4 ? "check-check" : "check"
-                        color: row.tick === 5 ? (row.outlined ? look.accent : "#bff3ff") : (row.tick === 2 ? look.danger : row.softInk) }
+                        color: row.tick === 5 ? (row.darkUnder ? "#7dd3fc" : "#0284c7") : (row.tick === 2 ? look.danger : (row.darkUnder ? Qt.rgba(1, 1, 1, 0.72) : Qt.rgba(0, 0, 0, 0.55))) }   // the same marks in every conversation: grey-ish on the way, sky blue once read; only the lightness follows the bubble
                 }
                 TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = bubble.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
                 TapHandler { acceptedButtons: Qt.LeftButton; enabled: row.status === 2; onTapped: core.retry(row.eventId) }

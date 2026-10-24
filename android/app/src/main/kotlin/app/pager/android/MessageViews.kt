@@ -364,12 +364,17 @@ fun MessageRow(
                             if (s.showMessageTimes) Text(remember(msg.ts, s.timeFormat) { formatClock(msg.ts, s.timeFormat) }, fontSize = 10.sp, color = fg.dim(0.6f))
                             if (mine && s.showReadTicks) {
                                 Spacer(Modifier.width(3.dp))
+                                // The marks look the same in every conversation: grey-ish on the way, sky blue once read. Only the lightness follows the bubble.
+                                val under = (if (fill.alpha < 0.5f) scheme.background else fill.compositeOver(scheme.background))
+                                val darkUnder = 0.299f * under.red + 0.587f * under.green + 0.114f * under.blue < 0.55f
+                                val waiting = if (darkUnder) Color.White.copy(alpha = 0.72f) else Color.Black.copy(alpha = 0.55f)
+                                val readTint = if (darkUnder) Color(0xFF7DD3FC) else Color(0xFF0284C7)
                                 val (icon, tint) = when {
-                                    msg.status == STATUS_SENDING -> Icons.Rounded.AccessTime to fg.dim(0.6f)
+                                    msg.status == STATUS_SENDING -> Icons.Rounded.AccessTime to waiting
                                     msg.status == STATUS_FAILED -> Icons.Rounded.Error to scheme.error
-                                    read -> Icons.Rounded.DoneAll to fg
-                                    delivered -> Icons.Rounded.DoneAll to fg.dim(0.6f)
-                                    else -> Icons.Rounded.Done to fg.dim(0.6f)
+                                    read -> Icons.Rounded.DoneAll to readTint
+                                    delivered -> Icons.Rounded.DoneAll to waiting
+                                    else -> Icons.Rounded.Done to waiting
                                 }
                                 Icon(icon, null, tint = tint, modifier = Modifier.size(14.dp))
                             }
