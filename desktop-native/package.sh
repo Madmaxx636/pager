@@ -11,6 +11,7 @@ install -m 755 "$HERE/build/pager-native" "$D/pager-native"
 install -m 755 "$HERE/build-core/libpager_core.so" "$D/libpager_core.so"
 strip --strip-unneeded "$D/pager-native" "$D/libpager_core.so" 2>/dev/null || true
 install -m 644 "$HERE/pager.svg" "$D/pager.svg"
+echo "$V" > "$D/VERSION"
 cat > "$D/install.sh" <<'S'
 #!/usr/bin/env bash
 # Installs Pager for your user (no sudo): ~/.local/opt/pager-native, a command in ~/.local/bin and an entry in the applications menu.

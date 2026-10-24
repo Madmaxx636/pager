@@ -10,7 +10,18 @@ install -d "$S/DEBIAN" "$S/usr/lib/pager-native" "$S/usr/bin" "$S/usr/share/appl
 install -m 755 "$HERE/build/pager-native" "$S/usr/lib/pager-native/pager-native"
 install -m 755 "$HERE/build-core/libpager_core.so" "$S/usr/lib/pager-native/libpager_core.so"
 strip --strip-unneeded "$S/usr/lib/pager-native/"* 2>/dev/null || true
-ln -s ../lib/pager-native/pager-native "$S/usr/bin/pager-native"
+echo "$V" > "$S/usr/lib/pager-native/VERSION"
+# The launcher: an update the app downloaded for you (it can't change /usr, so it goes in ~/.local/opt/pager-native) is used while it is newer than this copy.
+cat > "$S/usr/bin/pager-native" <<'L'
+#!/bin/sh
+SYS=/usr/lib/pager-native; USR="$HOME/.local/opt/pager-native"
+if [ -x "$USR/pager-native" ] && [ -f "$USR/VERSION" ] && [ -f "$SYS/VERSION" ]; then
+  newest="$(printf '%s\n%s\n' "$(cat "$SYS/VERSION")" "$(cat "$USR/VERSION")" | sort -V | tail -n 1)"
+  if [ "$newest" = "$(cat "$USR/VERSION")" ] && [ "$newest" != "$(cat "$SYS/VERSION")" ]; then exec "$USR/pager-native" "$@"; fi
+fi
+exec "$SYS/pager-native" "$@"
+L
+chmod 755 "$S/usr/bin/pager-native"
 install -m 644 "$HERE/pager.svg" "$S/usr/share/icons/hicolor/scalable/apps/pager-native.svg"
 cat > "$S/usr/share/applications/pager-native.desktop" <<D
 [Desktop Entry]
