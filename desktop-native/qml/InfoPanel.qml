@@ -31,7 +31,7 @@ Rectangle {
         RowLayout { anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8; spacing: 12
             Icon { name: si.ico; size: 20; color: si.danger ? look.danger : look.muted }
             ColumnLayout { Layout.fillWidth: true; spacing: 0
-                Label { text: si.label; color: si.danger ? look.danger : look.text; font.pixelSize: Math.round(14 * look.textScale); Layout.fillWidth: true; elide: Text.ElideRight }
+                Label { text: si.label; color: si.danger ? look.danger : look.text; font.pixelSize: Math.round(15 * look.textScale); Layout.fillWidth: true; elide: Text.ElideRight }
                 Label { visible: si.hint.length > 0; text: si.hint; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); Layout.fillWidth: true; elide: Text.ElideRight } } }
         TapHandler { onTapped: si.clicked() }
     }
@@ -39,10 +39,10 @@ Rectangle {
         id: tr
         property string label; property string hint: ""; property alias checked: sw.checked; signal toggled(bool on)
         Layout.fillWidth: true; implicitHeight: Math.max(texts.implicitHeight, 28) + 22
-        Column { id: texts; x: 14; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 28 - 60; spacing: 0
-            Label { text: tr.label; color: look.text; font.pixelSize: Math.round(14 * look.textScale); width: parent.width; wrapMode: Text.Wrap }
-            Label { visible: tr.hint.length > 0; text: tr.hint; color: look.muted; font.pixelSize: Math.round(11 * look.textScale); wrapMode: Text.Wrap; width: parent.width } }
-        PSwitch { id: sw; anchors.right: parent.right; anchors.rightMargin: 14; anchors.verticalCenter: parent.verticalCenter; onToggled: tr.toggled(checked) }
+        Column { id: texts; x: 16; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 28 - 60; spacing: 0
+            Label { text: tr.label; color: look.text; font.pixelSize: Math.round(15 * look.textScale); width: parent.width; wrapMode: Text.Wrap }
+            Label { visible: tr.hint.length > 0; text: tr.hint; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); wrapMode: Text.Wrap; width: parent.width } }
+        PSwitch { id: sw; anchors.right: parent.right; anchors.rightMargin: 16; anchors.verticalCenter: parent.verticalCenter; onToggled: tr.toggled(checked) }
     }
 
     Flickable {
@@ -53,13 +53,13 @@ Rectangle {
         ColumnLayout {
             id: col; width: scroller.width - 28; x: 14; y: 12; spacing: 6
             RowLayout { Layout.fillWidth: true
-                Label { text: "Page info"; color: look.text; font.pixelSize: Math.round(17 * look.textScale); font.weight: Font.Bold; Layout.fillWidth: true }
+                Label { text: "Page info"; color: look.text; font.pixelSize: Math.round(15 * look.textScale); font.weight: Font.Bold; Layout.fillWidth: true }
                 IconButton { ico: "x"; onClicked: panel.closeRequested() } }
             // who it is
             Item { Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 6; width: 88; height: 88
                 Loader { id: faceLoader; anchors.fill: parent; readonly property var f: core.faces(core.currentRoom); active: f.length > 1; sourceComponent: GroupAvatar { size: 88; faces: faceLoader.f } }
                 Avatar { visible: !faceLoader.active; size: 88; source: core.currentAvatar; letter: core.currentName.length ? core.currentName[0].toUpperCase() : "?"; seed: core.currentName; network: core.currentNetwork } }
-            Label { Layout.alignment: Qt.AlignHCenter; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; text: core.currentName; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.DemiBold; wrapMode: Text.Wrap }
+            Label { Layout.alignment: Qt.AlignHCenter; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; text: core.currentName; color: look.text; font.pixelSize: Math.round(18 * look.textScale); font.weight: Font.Bold; wrapMode: Text.Wrap }
             RowLayout { Layout.alignment: Qt.AlignHCenter; spacing: 6
                 Rectangle { width: 9; height: 9; radius: 5; color: N.meta(core.currentNetwork).color }
                 Label { text: core.merged ? core.linkedChats.length + " networks together" : N.meta(core.currentNetwork).label; color: look.muted; font.pixelSize: Math.round(13 * look.textScale) } }
@@ -73,19 +73,19 @@ Rectangle {
             RowLayout { Layout.fillWidth: true; Layout.topMargin: 6; spacing: 8
                 Repeater {
                     model: [["search", "Search", false], [panel.info.pinned ? "pin-off" : "pin", panel.info.pinned ? "Unpin" : "Pin", !!panel.info.pinned], ["bell-off", panel.info.muted ? "Unmute" : "Mute", !!panel.info.muted], ["alarm-clock", "Remind", false]]
-                    delegate: Rectangle { Layout.fillWidth: true; implicitHeight: 70; radius: 14; color: qh.hovered ? look.panel2 : look.bg
+                    delegate: Rectangle { Layout.fillWidth: true; implicitHeight: 80; radius: 12; color: qh.hovered ? Qt.rgba(look.panel2.r, look.panel2.g, look.panel2.b, 0.5) : "transparent"
                         HoverHandler { id: qh; cursorShape: Qt.PointingHandCursor }
                         Column { anchors.centerIn: parent; spacing: 6
-                            Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: 38; height: 38; radius: 19; color: modelData[2] ? look.accent : look.panel2
-                                Icon { anchors.centerIn: parent; name: modelData[0]; size: 20; color: modelData[2] ? look.accentInk : look.text } }
-                            Label { anchors.horizontalCenter: parent.horizontalCenter; text: modelData[1]; color: look.text; font.pixelSize: Math.round(12 * look.textScale) } }
+                            Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: 46; height: 46; radius: 23; color: modelData[2] ? look.accent : look.panel2
+                                Icon { anchors.centerIn: parent; name: modelData[0]; size: 20; color: modelData[2] ? look.accentInk : look.accent } }
+                            Label { anchors.horizontalCenter: parent.horizontalCenter; text: modelData[1]; color: look.text; font.pixelSize: Math.round(11.25 * look.textScale) } }
                         TapHandler { onTapped: {
                             if (index === 0) panel.searchInChat()
                             else if (index === 1) core.pin(core.currentRoom, !panel.info.pinned)
                             else if (index === 2) { if (panel.info.muted) core.setMuted(core.currentRoom, false); else muteDlg.open() }
                             else remindDlg.open() } } } } }
             // switches
-            Rectangle { Layout.fillWidth: true; Layout.topMargin: 6; implicitHeight: sw.implicitHeight; radius: 14; color: look.bg
+            Rectangle { Layout.fillWidth: true; Layout.topMargin: 6; implicitHeight: sw.implicitHeight; radius: 14; color: look.panel2
                 ColumnLayout { id: sw; width: parent.width; spacing: 0
                     ToggleRow { label: "Low priority"; hint: "Quiet, except @mentions and replies"; checked: !!panel.info.lowPriority; onToggled: (on) => core.setLowPriority(core.currentRoom, on) }
                     Rectangle { Layout.fillWidth: true; height: 1; color: look.line }
