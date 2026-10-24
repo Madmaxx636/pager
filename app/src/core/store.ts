@@ -913,18 +913,24 @@ const escLocalpart = (s: string) => [...s].map((c) => (/[a-z0-9\-./=]/.test(c) ?
 const savedIdentity = lsGet<{ key: string; names: string[]; ids: string[] } | null>("pager.identity2", null);
 let identityKey = savedIdentity?.key ?? "";
 if (savedIdentity) setOwnIdentity(savedIdentity.names, savedIdentity.ids);
+/**
+ * Who you are on each connected network. It only ever grows: a login that drops out for a while (a network disconnecting, a bridge restarting and
+ * answering with an empty list) must not count as a change, because every change starts the whole app over. Only a genuinely new account does.
+ */
+const knownNames = new Set<string>(savedIdentity?.names ?? []), knownIds = new Set<string>(savedIdentity?.ids ?? []);
 function applyIdentity(nets: Network[]) {
   const domain = state.session?.userId.split(":").slice(1).join(":") ?? "";
-  const names: string[] = [], ids: string[] = [];
   for (const n of nets) for (const l of n.logins) {
-    ids.push(`@${n.id}_${escLocalpart(l.id)}:${domain}`);
-    for (const nm of [l.name, l.profile?.name]) if (nm) names.push(nm);
+    knownIds.add(`@${n.id}_${escLocalpart(l.id)}:${domain}`);
+    for (const nm of [l.name, l.profile?.name]) if (nm) knownNames.add(nm);
   }
-  const key = JSON.stringify([names.sort(), ids.sort()]);
+  const names = [...knownNames].sort(), ids = [...knownIds].sort();
+  if (!names.length && !ids.length) return;   // nothing known about you yet: nothing to learn from
+  const key = JSON.stringify([names, ids]);
   if (key === identityKey) return;
   identityKey = key; lsSet("pager.identity2", { key, names, ids });
   setOwnIdentity(names, ids);
-  // Messages already loaded were attributed before we knew who you are on each network: start over once.
+  // Messages already loaded were attributed before we knew who you are on that network: start over once.
   if (state.session) { since = undefined; set({ chats: {}, synced: false }); syncAbort?.abort(); syncAbort = new AbortController(); void syncLoop(state.session, syncAbort.signal); }
 }
 /** Throws away what this device saved and loads everything from the server again: the fix for a chat list that is missing something or out of step. */

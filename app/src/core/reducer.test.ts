@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+afterEach(() => { vi.useRealTimers(); });
 import { STUCK_TEXT, WAITING_TEXT, applyHistory, applySync, parseMuted, relabelUnreadable, stripReplyFallback } from "./reducer";
 import { encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { ChatState, STATUS_SENDING, displayName, emptyChat, isBotRoom, previewOf } from "./types";
@@ -100,6 +101,7 @@ describe("applySync", () => {
     expect(m.sealed).toEqual(raw);
   });
   it("notifies only for others' new messages and dedupes", () => {
+    vi.useFakeTimers(); vi.setSystemTime(10_000);
     const r = applySync(base(), join([text("$2", me, 2000, "Yes!"), text("$3", mom, 3000, "Great")]), me, false);
     expect(r.chats["!a:x"].messages).toHaveLength(3);
     expect(r.incoming.map((i) => i.text)).toEqual(["Great"]);
@@ -167,6 +169,7 @@ describe("applySync", () => {
     expect(msgs[2]).toMatchObject({ voice: true, durationMs: 9000 }); expect(previewOf(msgs[2])).toBe("Voice message");
   });
   it("flags mentions and group chats for notifications", () => {
+    vi.useFakeTimers(); vi.setSystemTime(10_000);
     const g = applySync({}, { rooms: { join: { "!g:x": { state: { events: [{ type: "m.room.name", state_key: "", content: { name: "Trip" } }] }, summary: { "m.joined_member_count": 4 }, timeline: { events: [] } } } } }, me, true).chats;
     const r = applySync(g, { rooms: { join: { "!g:x": { timeline: { events: [
       { type: "m.room.message", event_id: "$1", sender: "@a:x", origin_server_ts: 1, content: { msgtype: "m.text", body: "hey", "m.mentions": { user_ids: [me] } } },
@@ -220,5 +223,35 @@ describe("chats with the Discord and IRC bridge bots", () => {
     expect(isBotRoom(room("@signalbot:x"), "@me:x")).toBe(true);
     expect(isBotRoom(room("@discordbot:x"), "@me:x")).toBe(false);
     expect(isBotRoom(room("@heisenbridge:x"), "@me:x")).toBe(false);
+  });
+  describe("old messages a bridge sends again do not alert", () => {
+    afterEach(() => { vi.useRealTimers(); });
+    const t0 = 1_000_000_000_000;
+    const known = () => applySync({}, join([text("$k", mom, t0, "Earlier")]), me, true).chats;
+    it("a message older than the newest one already in the chat is history, not news", () => {
+      vi.useFakeTimers(); vi.setSystemTime(t0 + 60_000);
+      const r = applySync(known(), join([text("$old", mom, t0 - 3_600_000, "From last hour"), text("$new", mom, t0 + 30_000, "Just now")]), me, false);
+      expect(r.incoming.map((i) => i.text)).toEqual(["Just now"]);
+      expect(r.chats["!a:x"].messages).toHaveLength(3);
+    });
+    it("a chat with nothing in it yet alerts only for what is arriving now", () => {
+      vi.useFakeTimers(); vi.setSystemTime(t0);
+      const fresh = applySync({}, join([text("$h1", mom, t0 - 86_400_000, "Yesterday"), text("$h2", mom, t0 - 5_000, "Seconds ago")]), me, false);
+      expect(fresh.incoming.map((i) => i.text)).toEqual(["Seconds ago"]);
+    });
+    it("messages that waited a few hours while the phone was away still alert, days-old ones do not", () => {
+      vi.useFakeTimers(); vi.setSystemTime(t0 + 4 * 3_600_000);
+      const r = applySync(known(), join([text("$a", mom, t0 + 1_000, "Waiting 4h")]), me, false);
+      expect(r.incoming.map((i) => i.text)).toEqual(["Waiting 4h"]);
+      vi.setSystemTime(t0 + 3 * 86_400_000);
+      expect(applySync(known(), join([text("$b", mom, t0 + 1_000, "Waiting 3 days")]), me, false).incoming).toEqual([]);
+    });
+    it("a reaction sent again long after it was made does not alert", () => {
+      vi.useFakeTimers(); vi.setSystemTime(t0);
+      const base0 = applySync({}, join([text("$m", me, t0 - 86_400_000, "mine")]), me, true).chats;
+      const react = (id: string, ts: number) => ({ type: "m.reaction", event_id: id, sender: mom, origin_server_ts: ts, content: { "m.relates_to": { rel_type: "m.annotation", event_id: "$m", key: "👍" } } });
+      expect(applySync(base0, join([react("$r1", t0 - 86_400_000)]), me, false).incoming).toEqual([]);
+      expect(applySync(base0, join([react("$r2", t0 - 2_000)]), me, false).incoming.map((i) => i.reaction)).toEqual([true]);
+    });
   });
 });

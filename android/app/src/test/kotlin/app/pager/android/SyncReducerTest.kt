@@ -5,9 +5,13 @@ import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 
 class SyncReducerTest {
+    @Before fun clockForTinyTimes() { SyncReducer.clock = { 10_000L } }   // these messages carry times like 3000: pretend it is just after them
+    @After fun realClock() { SyncReducer.clock = { System.currentTimeMillis() } }
     private val me = "@me:pager.test"
     private fun parse(s: String): JsonObject = json.parseToJsonElement(s).jsonObject
 
@@ -188,5 +192,27 @@ class SyncReducerTest {
             """{"type":"m.room.message","event_id":"${'$'}img","sender":"$mom","origin_server_ts":8000,"content":{"msgtype":"m.image","body":"p.jpg","url":"mxc://pager.test/abc","info":{"mimetype":"image/jpeg","size":1234,"w":800,"h":600}}}"""),
             me, false).chats.getValue("!a:x").messages.last()
         assertEquals("mxc://pager.test/abc", r.mxc); assertEquals(800, r.w); assertEquals(600, r.h); assertEquals("Photo", previewOf(r))
+    }
+
+    private val t0a = 1_000_000_000_000L
+    private fun alertRoom(vararg events: String) = parse("""{"rooms":{"join":{"!a:x":{"timeline":{"events":[${events.joinToString(",")}]}}}}}""")
+    private fun alertMsg(id: String, who: String, ts: Long, body: String) = """{"type":"m.room.message","event_id":"${'$'}$id","sender":"$who","origin_server_ts":$ts,"content":{"msgtype":"m.text","body":"$body"}}"""
+    private fun alertKnown() = SyncReducer.apply(emptyMap(), alertRoom(alertMsg("k", "@wa_mom:pager.test", t0a, "Earlier")), me, initial = true).chats
+
+    @Test fun aMessageOlderThanWhatTheChatHoldsIsHistoryNotNews() {
+        SyncReducer.clock = { t0a + 60_000 }
+        val r = SyncReducer.apply(alertKnown(), alertRoom(alertMsg("old", "@wa_mom:pager.test", t0a - 3_600_000, "From last hour"), alertMsg("new", "@wa_mom:pager.test", t0a + 30_000, "Just now")), me, initial = false)
+        assertEquals(listOf("Just now"), r.incoming.map { it.text })
+    }
+    @Test fun aChatWithNothingYetAlertsOnlyForWhatIsArrivingNow() {
+        SyncReducer.clock = { t0a }
+        val r = SyncReducer.apply(emptyMap(), alertRoom(alertMsg("h1", "@wa_mom:pager.test", t0a - 86_400_000, "Yesterday"), alertMsg("h2", "@wa_mom:pager.test", t0a - 5_000, "Seconds ago")), me, initial = false)
+        assertEquals(listOf("Seconds ago"), r.incoming.map { it.text })
+    }
+    @Test fun hoursOldStillAlertsDaysOldDoesNot() {
+        SyncReducer.clock = { t0a + 4 * 3_600_000 }
+        assertEquals(listOf("Waiting 4h"), SyncReducer.apply(alertKnown(), alertRoom(alertMsg("a", "@wa_mom:pager.test", t0a + 1_000, "Waiting 4h")), me, initial = false).incoming.map { it.text })
+        SyncReducer.clock = { t0a + 3 * 86_400_000 }
+        assertTrue(SyncReducer.apply(alertKnown(), alertRoom(alertMsg("b", "@wa_mom:pager.test", t0a + 1_000, "Waiting 3 days")), me, initial = false).incoming.isEmpty())
     }
 }

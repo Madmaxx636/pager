@@ -1432,19 +1432,25 @@ class Store(private val context: Context) {
         SyncReducer.setOwnIdentity(names, prefs.getStringSet("identity.ids", emptySet()).orEmpty())
     }
 
+    /**
+     * Who you are on each connected network. It only ever grows: a login that drops out for a while (a network disconnecting, a bridge restarting and
+     * answering with an empty list) must not count as a change, because every change starts the whole app over. Only a genuinely new account does.
+     */
     private fun applyIdentity(nets: List<Network>) {
         val domain = _session.value?.userId?.substringAfter(':', "") ?: ""
-        val names = sortedSetOf<String>(); val ids = sortedSetOf<String>()
+        val names = sortedSetOf<String>().apply { addAll(prefs.getStringSet("identity.names", null).orEmpty()) }
+        val ids = sortedSetOf<String>().apply { addAll(prefs.getStringSet("identity.ids", null).orEmpty()) }
         for (n in nets) for (l in n.logins) {
             ids.add("@${n.id}_${escLocalpart(l.id)}:$domain")
             if (l.name.isNotBlank()) names.add(l.name)
             if (l.profileName.isNotBlank()) names.add(l.profileName)
         }
+        if (names.isEmpty() && ids.isEmpty()) return   // nothing known about you yet: nothing to learn from
         val key = names.joinToString("|") + "##" + ids.joinToString("|")
         if (key == prefs.getString("identity.key", "")) return
         prefs.edit().putString("identity.key", key).putStringSet("identity.names", names).putStringSet("identity.ids", ids).apply()
         SyncReducer.setOwnIdentity(names, ids)
-        // Messages already loaded were attributed before we knew who you are on each network: start over once.
+        // Messages already loaded were attributed before we knew who you are on that network: start over once.
         val s = _session.value ?: return
         syncJob?.cancel()
         since = null; _chats.value = emptyMap(); _synced.value = false; cacheFile.delete()
