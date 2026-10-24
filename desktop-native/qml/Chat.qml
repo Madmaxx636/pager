@@ -320,7 +320,19 @@ Rectangle {
     AttentionDialog { id: attentionDialog }
     EmojiPicker { id: picker; onPicked: (e) => core.react(pane.target, e) }
     EmojiPicker { id: inputEmoji; onPicked: (e) => { input.insert(input.cursorPosition, e); input.forceActiveFocus() } }
-    Component.onCompleted: if (startupDialog === "emoji") Qt.callLater(inputEmoji.open)
+    Component.onCompleted: Qt.callLater(() => {   // for screenshots: --open emoji | gif | stickers | poll | contact | location | attention | schedule | attach
+        switch (startupDialog) {
+        case "emoji": inputEmoji.open(); break
+        case "gif": gifDialog.open(); break
+        case "stickers": stickerDialog.open(); break
+        case "poll": pollDialog.open(); break
+        case "contact": contactDialog.open(); break
+        case "location": locationDialog.open(); break
+        case "attention": attentionDialog.open(); break
+        case "schedule": scheduleDialog.openFor(pane.roomId, "Hello"); break
+        case "attach": attachMenu.open(); break
+        }
+    })
     // the viewer (pictures and video, with the multimedia libraries) is loaded the first time something is opened
     Loader { id: viewerLoader; property string pendingId; active: false; source: "ImageViewer.qml"; onLoaded: item.show(viewerLoader.pendingId) }
     QtObject { id: viewer; function show(id) { viewerLoader.pendingId = id; if (viewerLoader.active) viewerLoader.item.show(id); else viewerLoader.active = true } }

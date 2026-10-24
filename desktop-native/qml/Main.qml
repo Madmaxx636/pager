@@ -20,7 +20,7 @@ ApplicationWindow {
     // Coming back to the window counts as reading what arrived while it was behind.
     Connections { target: Qt.application; function onStateChanged() { core.setActive(Qt.application.state === Qt.ApplicationActive) } }
 
-    Component.onCompleted: { if (startupDialog === "info") infoOpen = true; if (core.signedIn && !quietRun) { greeting.hello(); tourCheck.restart() } }
+    Component.onCompleted: { if (startupDialog === "info") infoOpen = true; if (startupDialog === "search") Qt.callLater(() => searchDlg.openFor("", "", "")); if (core.signedIn && !quietRun) { greeting.hello(); tourCheck.restart() } }
     Recovery { id: recovery
         onClosed: { if (changed) settings.set("keyChangedSeen", String(core.encryption.server_version || "")); changed = false } }
     // Another device made a new recovery key: ask for the new one, once per new key (Settings → Privacy & encryption stays open).
@@ -80,7 +80,7 @@ ApplicationWindow {
     CommandBar { id: palette; onNewChat: newChatDialog.open(); onSearchAll: searchDlg.openFor("", "", ""); onOpenSettingsPage: (id) => { if (sidebarRef) sidebarRef.openSettingsPage(id) }; onSnoozeCurrent: snoozeDialog.open() }
     AttentionOverlay { id: attention; onOpenChat: (roomId) => { core.openRoom(roomId); win.showingChat = true } }
     Connections { target: core; function onAttention(roomId, chat, sender, kind, eventId) { attention.raise(roomId, chat, sender, kind, eventId) } }
-    SearchDialog { id: searchDlg; onChosen: (roomId, eventId) => core.openAt(roomId, eventId) }
+    SearchDialog { id: searchDlg; sideW: win.wide && sidebarRef ? sidebarRef.width : 0; onChosen: (roomId, eventId) => core.openAt(roomId, eventId) }
     Connections { target: core; function onJumpRequested(id) { win.pendingJump = id } }
     property string pendingJump: ""
     Connections { target: core; function onRoomOpened(id) { win.showingChat = true } }
