@@ -851,6 +851,8 @@ private fun EncryptionGroup() {
             "Recovery key", if (e.backupHere) "On: your message keys are backed up" else if (e.backupOnServer) "A backup exists. Enter the recovery key to read your history here" else "Not set up yet",
             Icons.Rounded.VpnKey, Color(0xFF14B8A6),
         ) { if (e.ready) dialog = if (e.backupOnServer && !e.backupHere) "restore" else "create" }
+        if (e.keyChanged) { GroupDivider(); NavRow("Your recovery key was changed", "Another device made a new one. Enter it here so this phone can read the new backup and keep saving to it", Icons.Rounded.VpnKey, Color(0xFFF59E0B)) { dialog = "restore" } }
+        if (e.ready && e.backupOnServer && e.backupHere) { GroupDivider(); NavRow("Enter recovery key", "Use the recovery key you saved, for example after it was changed on another device", Icons.Rounded.VpnKey) { dialog = "restore" } }
         if (e.backupOnServer && !e.backupHere) { GroupDivider(); NavRow("Make a new recovery key instead", null, Icons.Rounded.Refresh) { dialog = "create" } }
         if (e.ready) {
             GroupDivider()
@@ -1006,7 +1008,7 @@ fun RecoveryKeyDialog(first: Boolean, onDone: () -> Unit) {
 
 /** Enters the recovery key to read older messages on this device. [first] is the welcome-back screen of a new device. */
 @Composable
-fun RestoreKeyDialog(first: Boolean, onDone: () -> Unit, onFresh: () -> Unit) {
+fun RestoreKeyDialog(first: Boolean, onDone: () -> Unit, onFresh: () -> Unit, changed: Boolean = false) {
     val store = LocalStore.current
     val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf("") }
@@ -1014,14 +1016,15 @@ fun RestoreKeyDialog(first: Boolean, onDone: () -> Unit, onFresh: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var done by remember { mutableStateOf<Int?>(null) }
     AlertDialog(
-        onDismissRequest = onDone, title = { Text(if (first) "Welcome back. Enter your recovery key" else "Enter your recovery key") },
+        onDismissRequest = onDone, title = { Text(if (changed) "Your recovery key was changed" else if (first) "Welcome back. Enter your recovery key" else "Enter your recovery key") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (done != null) Text("Restored $done message keys. Older messages in your encrypted pages can be read now.")
                 else {
+                    if (changed) Text("A new recovery key was made on another device. Enter the new key so this phone can read the new backup and keep saving to it.", modifier = Modifier.padding(bottom = 8.dp))
                     androidx.compose.material3.OutlinedTextField(text, { text = it }, placeholder = { Text("EsTc 4xYz …") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-                    Text("Lost it? A key file (Restore keys from a file) or another signed-in device can still get your history back. If you have neither, you can start fresh with a new key: new messages work, but older encrypted ones stay unreadable.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-                    TextButton(onClick = onFresh) { Text("Start fresh with a new key") }
+                    if (!changed) Text("Lost it? A key file (Restore keys from a file) or another signed-in device can still get your history back. If you have neither, you can start fresh with a new key: new messages work, but older encrypted ones stay unreadable.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                    if (!changed) TextButton(onClick = onFresh) { Text("Start fresh with a new key") }
                     if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
                 }
             }
@@ -1033,7 +1036,7 @@ fun RestoreKeyDialog(first: Boolean, onDone: () -> Unit, onFresh: () -> Unit) {
                 scope.launch { runCatching { store.restoreWithRecoveryKey(text) }.onSuccess { done = it }.onFailure { err = it.message ?: "That didn't work" }; busy = false }
             }) { Text(if (busy) "Restoring…" else "Restore") }
         },
-        dismissButton = { if (done == null) TextButton(onClick = onDone) { Text(if (first) "Not now" else "Cancel") } },
+        dismissButton = { if (done == null) TextButton(onClick = onDone) { Text(if (changed) "Later" else if (first) "Not now" else "Cancel") } },
     )
 }
 
@@ -1050,6 +1053,14 @@ fun KeySetupGate() {
     var dismissed by remember(e.deviceId) { mutableStateOf(prefs.getBoolean(flag, false)) }
     var fresh by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { store.refreshEncryptionStatus() }
+    // Another device made a new recovery key: ask for the new one, once per new key (Settings → Encryption stays open).
+    val changedFlag = "changed." + e.deviceId + "." + (e.serverVersion ?: "")
+    var changedDismissed by remember(changedFlag) { mutableStateOf(prefs.getBoolean(changedFlag, false)) }
+    if (e.ready && e.keyChanged && !changedDismissed) {
+        val later = { prefs.edit().putBoolean(changedFlag, true).apply(); changedDismissed = true; Unit }
+        RestoreKeyDialog(first = false, changed = true, onDone = later, onFresh = later)
+        return
+    }
     if (!e.ready || e.backupHere || dismissed) return
     val finish = { prefs.edit().putBoolean(flag, true).apply(); dismissed = true; KeySetupState.finished++; Unit }
     if (e.backupOnServer && !fresh) RestoreKeyDialog(first = true, onDone = finish, onFresh = { fresh = true })

@@ -16,6 +16,9 @@ export function KeySetup() {
   const [, bump] = useState(0);
   const [fresh, setFresh] = useState(false);
   const key = flag(user, e.deviceId);
+  // Another device made a new recovery key: this one still saves to the old one. Ask for the new key (once per new key; Settings → Encryption stays open).
+  const changedKey = `pager.keychanged.${user}.${e.deviceId}.${e.serverVersion ?? ""}`;
+  if (e.ready && e.keyChanged && !seen(changedKey)) return <RestoreDialog changed onClose={() => { mark(changedKey); bump((n) => n + 1); }} onLost={() => { mark(changedKey); bump((n) => n + 1); }} />;
   if (!e.ready || e.backupHere || seen(key)) return null;
   const done = () => { mark(key); bump((n) => n + 1); };
   // Nobody has made a key yet: this is a new account. Otherwise this device is new and needs the key.

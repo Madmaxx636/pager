@@ -538,10 +538,12 @@ function EncryptionGroup() {
       <Row title="Encryption on this device" hint={e.ready ? `Ready · device ${e.deviceId}` : e.error ? `Couldn't start: ${e.error}` : "Starting…"} onClick={!e.ready && e.error ? () => void retryEncryptionStart() : undefined}>{!e.ready && e.error && <span className="accent">Try again</span>}</Row>
       {e.mismatch && <Row title="This device's keys don't match your account" hint="New messages can't be read here. Sign out, sign in again and enter your recovery key." onClick={() => signOut()}><span className="danger">Sign out</span></Row>}
       {e.ready && <Row title="Device fingerprint" hint={e.fingerprint.match(/.{1,4}/g)?.join(" ")} />}
+      {e.keyChanged && <Row title="Your recovery key was changed" hint="Another device made a new one. Enter it here so this device can read the new backup and keep saving to it" onClick={() => setDlg("restore")}><span className="accent">Enter new key</span></Row>}
       <Row title="Recovery key" hint={e.backupHere ? "On: your message keys are backed up" : e.backupOnServer ? "A backup exists. Enter the recovery key to read your history here" : "Not set up yet"}
         onClick={e.ready ? () => setDlg(e.backupOnServer && !e.backupHere ? "restore" : "create") : undefined}>
         <span className="accent">{e.backupHere ? "Replace" : e.backupOnServer ? "Enter key" : "Set up"}</span>
       </Row>
+      {e.ready && e.backupOnServer && e.backupHere && <Row title="Enter recovery key" hint="Use the recovery key you saved, for example after it was changed on another device" onClick={() => setDlg("restore")}><span className="accent">Enter key</span></Row>}
       {e.backupOnServer && e.backupHere === false && <Row title="Make a new recovery key instead" onClick={() => setDlg("create")}><span className="accent">New key</span></Row>}
       {e.ready && <Row title="Encrypt all my pages" hint="Turns on encryption for every page that can take it. Older messages stay readable on your server" onClick={() => setDlg("all")}><span className="accent">Encrypt</span></Row>}
       {e.ready && <Row title="Lost your recovery key?" hint={e.backupHere ? "This device still has your keys: choose Replace above and it makes a new one" : "Use a key file below, or make a new key. Without either, older encrypted messages can't be read on this device"} />}

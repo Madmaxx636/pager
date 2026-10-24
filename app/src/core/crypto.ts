@@ -128,6 +128,11 @@ export class Crypto {
     } catch { return undefined; }
   }
 
+  /** The backup version this device is saving to (undefined when none). It differs from the server's when another device made a new recovery key. */
+  async localBackupVersion(): Promise<string | undefined> {
+    try { const k = await this.machine.getBackupKeys(); return k?.backupVersion ? String(k.backupVersion) : undefined; } catch { return undefined; }
+  }
+
   /** True when this device is saving its keys to the backup. */
   async backupOn(): Promise<boolean> { return this.machine.isBackupEnabled(); }
 

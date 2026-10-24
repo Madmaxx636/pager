@@ -151,6 +151,9 @@ class E2ee private constructor(
 
     suspend fun backupOn(): Boolean = withContext(Dispatchers.IO) { machine.backupEnabled() }
 
+    /** The backup version this phone is saving to (null when unknown). It differs from the server's when another device made a new recovery key. */
+    suspend fun localBackupVersion(): String? = try { withContext(Dispatchers.IO) { machine.getBackupKeys()?.backupVersion() } } catch (_: Exception) { null }
+
     /**
      * Does the server hold the same device key we do? If not (the app's key store was reset while the sign-in survived), the bridges
      * encrypt to a key this phone no longer has and every new message says "waiting for the key". Null when we could not ask.
