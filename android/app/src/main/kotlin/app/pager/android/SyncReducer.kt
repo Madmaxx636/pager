@@ -51,6 +51,21 @@ object SyncReducer {
         return events.map { e -> if (e["state_key"] == null && e["sender"].str() in ghosts) JsonObject(e + ("sender" to JsonPrimitive(me))) else e }
     }
 
+    /**
+     * Whether a message that just arrived should alert. A bridge that reconnects or builds a chat sends old messages again, with their old times,
+     * as if they were new: those must not ring. A message in a chat you already hold counts when it is not older than what you have there
+     * (and not days old); in a chat with nothing yet, only a message that really is arriving now.
+     */
+    const val ALERT_MAX_AGE = 12 * 3_600_000L
+    const val ALERT_NEW_CHAT_AGE = 10 * 60_000L
+    const val ALERT_REACTION_AGE = 30 * 60_000L
+    /** The clock the alert rules read; tests set it. */
+    internal var clock: () -> Long = { System.currentTimeMillis() }
+    fun worthAlert(ts: Long, newestKnown: Long, now: Long = clock()): Boolean {
+        val age = now - ts
+        return if (newestKnown > 0) age < ALERT_MAX_AGE && ts > newestKnown - 120_000 else age < ALERT_NEW_CHAT_AGE
+    }
+
     /** Folds one /sync response into the chat map. Pure, so it can be unit-tested. */
     fun apply(old: Map<String, ChatState>, sync: JsonObject, me: String, initial: Boolean): SyncResult {
         val chats = old.toMutableMap()
@@ -63,6 +78,7 @@ object SyncReducer {
           try {
             val room = roomEl.obj()
             var chat = chats[roomId] ?: ChatState(roomId)
+            val newestKnown = chat.messages.maxOfOrNull { it.ts } ?: 0L
             for (e in room["state"].obj()["events"].arr()) chat = applyState(chat, e.obj())
 
             val tl = room["timeline"].obj()
@@ -73,12 +89,12 @@ object SyncReducer {
             else if (chat.prevBatch == null && chat.messages.isEmpty() && prev != null) chat = chat.copy(prevBatch = prev)
 
             val pre = chat
-            chat = process(chat, claimOwn(tl["events"].arr().map { it.obj() }, ownGhosts(chat, me), me), applyStates = true, onReaction = { sender, key, target ->
+            chat = process(chat, claimOwn(tl["events"].arr().map { it.obj() }, ownGhosts(chat, me), me), applyStates = true, onReaction = { sender, key, target, rts ->
                 // Someone reacted to something you wrote: that is about you, so it alerts like a reply.
-                if (!initial && sender != me && (target?.sender == me || target == null || !pre.isGroup))
-                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(sender), (if (target != null) "reacted $key to “${previewOf(target).take(60)}”" else "reacted $key"), pre.network, pre.isGroup, false, System.currentTimeMillis(), replyToMe = true, reaction = true))
+                if (!initial && sender != me && clock() - rts < ALERT_REACTION_AGE && (target?.sender == me || target == null || !pre.isGroup))
+                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(sender), (if (target != null) "reacted $key to “${previewOf(target).take(60)}”" else "reacted $key"), pre.network, pre.isGroup, false, rts, replyToMe = true, reaction = true))
             }, onNew = { m, parentSender ->
-                if (!initial && m.sender != me) {
+                if (!initial && m.sender != me && worthAlert(m.ts, newestKnown)) {
                     val mine = pre.members[me] ?: me.removePrefix("@").substringBefore(':')
                     val mentioned = me in m.mentions || m.body.contains("@$mine", ignoreCase = true)
                     incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.isGroup, mentioned, m.ts, replyToMe = parentSender == me, attention = m.attention, msgId = m.id, mxc = m.mxc))
@@ -119,7 +135,7 @@ object SyncReducer {
     }
 
     /** The core event loop shared by sync and history. */
-    internal fun process(start: ChatState, events: List<JsonObject>, applyStates: Boolean, onNew: ((Msg, String?) -> Unit)?, onReaction: ((String, String, Msg?) -> Unit)? = null): ChatState {
+    internal fun process(start: ChatState, events: List<JsonObject>, applyStates: Boolean, onNew: ((Msg, String?) -> Unit)?, onReaction: ((String, String, Msg?, Long) -> Unit)? = null): ChatState {
         if (events.isEmpty()) return start
         var chat = start
         val msgs = start.messages.toMutableList()
@@ -185,7 +201,7 @@ object SyncReducer {
                     if (rel["rel_type"].str() == "m.annotation" && id != null && target != null && key != null && sender != null && id !in refs) {
                         refs[id] = ReactionRef(target, key, sender)
                         val list = reactions.getOrPut(target) { HashMap() }.getOrPut(key) { mutableListOf() }
-                        if (sender !in list) { list.add(sender); onReaction?.invoke(sender, key, msgs.firstOrNull { it.id == target }) }
+                        if (sender !in list) { list.add(sender); onReaction?.invoke(sender, key, msgs.firstOrNull { it.id == target }, (e["origin_server_ts"] as? JsonPrimitive)?.longOrNull ?: System.currentTimeMillis()) }
                     }
                 }
                 "com.beeper.message_send_status" -> {

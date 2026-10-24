@@ -43,6 +43,17 @@ function claimOwn(events: J[], ghosts: Set<string>, me: string): J[] {
   return events.map((e) => (e.state_key == null && typeof e.sender === "string" && ghosts.has(e.sender) ? { ...e, sender: me } : e));
 }
 
+/**
+ * Whether a message that just arrived should alert. A bridge that reconnects or builds a chat sends old messages again, with their old times,
+ * as if they were new: those must not ring. A message in a chat you already hold counts when it is not older than what you have there
+ * (and not days old); in a chat with nothing yet, only a message that really is arriving now.
+ */
+export const ALERT_MAX_AGE = 12 * 3600_000, ALERT_NEW_CHAT_AGE = 10 * 60_000, ALERT_REACTION_AGE = 30 * 60_000;
+export function worthAlert(ts: number, newestKnown: number, now = Date.now()): boolean {
+  const age = now - ts;
+  return newestKnown > 0 ? age < ALERT_MAX_AGE && ts > newestKnown - 120_000 : age < ALERT_NEW_CHAT_AGE;
+}
+
 export function applySync(old: Record<string, ChatState>, sync: J, me: string, initial: boolean): SyncResult {
   const chats = { ...old };
   const incoming: Incoming[] = [];
@@ -54,6 +65,7 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
     try {
       const room = obj(roomEl);
       let chat = chats[roomId] ?? emptyChat(roomId);
+      const newestKnown = chat.messages.reduce((t, m) => Math.max(t, m.ts), 0);
       for (const e of arr(obj(room.state).events)) chat = applyState(chat, obj(e));
 
       const tl = obj(room.timeline);
@@ -64,16 +76,17 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
 
       const pre = chat;
       chat = process(chat, claimOwn(arr(tl.events).map(obj), ownGhosts(chat, me), me), true, (m, parentSender) => {
-        if (!initial && m.sender !== me) {
+        if (!initial && m.sender !== me && worthAlert(m.ts, newestKnown)) {
           const mine = pre.members[me] ?? me.replace(/^@/, "").split(":")[0];
           const mentioned = m.mentions.includes(me) || m.body.toLowerCase().includes(`@${mine}`.toLowerCase());
           incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: isGroup(pre), mentioned, ts: m.ts, replyToMe: parentSender === me, attention: m.attention, mxc: m.mxc, id: m.id });
         }
-      }, (sender, key, target) => {
+      }, (sender, key, target, rts0) => {
+        const rts = rts0 ?? Date.now();
         // Someone reacted to something you wrote: that is about you, so it alerts like a reply. In a one-to-one chat, or when the message is not loaded
         // to check, it counts too: bridged messages do not always say clearly that they are yours.
-        if (!initial && sender !== me && (target?.sender === me || !target || !isGroup(pre)))
-          incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, sender), text: target ? `reacted ${key} to “${previewOf(target).slice(0, 60)}”` : `reacted ${key}`, network: pre.network, isGroup: isGroup(pre), mentioned: false, ts: Date.now(), replyToMe: true, reaction: true });
+        if (!initial && sender !== me && Date.now() - rts < ALERT_REACTION_AGE && (target?.sender === me || !target || !isGroup(pre)))
+          incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, sender), text: target ? `reacted ${key} to “${previewOf(target).slice(0, 60)}”` : `reacted ${key}`, network: pre.network, isGroup: isGroup(pre), mentioned: false, ts: rts, replyToMe: true, reaction: true });
       });
 
       for (const e of arr(obj(room.ephemeral).events)) chat = applyEphemeral(chat, obj(e), me);
@@ -109,7 +122,7 @@ export function applyHistory(chat: ChatState, chunk: J[], end: string | undefine
   return { ...next, prevBatch: end ?? null, reachedStart: end == null };
 }
 
-function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m: Msg, parentSender?: string) => void, onReaction?: (sender: string, key: string, target?: Msg) => void): ChatState {
+function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m: Msg, parentSender?: string) => void, onReaction?: (sender: string, key: string, target?: Msg, ts?: number) => void): ChatState {
   if (!events.length) return start;
   let chat = start;
   let msgs = [...start.messages];
@@ -178,7 +191,7 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
         if (rel.rel_type === "m.annotation" && id && target && key && sender && !(id in refs)) {
           refs[id] = { target, key, sender };
           const list = ((reactions[target] ??= {})[key] ??= []);
-          if (!list.includes(sender)) { list.push(sender); onReaction?.(sender, key, msgs.find((m) => m.id === target)); }
+          if (!list.includes(sender)) { list.push(sender); onReaction?.(sender, key, msgs.find((m) => m.id === target), num(e.origin_server_ts) ?? Date.now()); }
         }
         break;
       }

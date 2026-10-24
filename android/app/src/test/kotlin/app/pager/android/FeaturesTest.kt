@@ -5,9 +5,13 @@ import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 
 class FeaturesTest {
+    @Before fun clockForTinyTimes() { SyncReducer.clock = { 10_000L } }   // these messages carry times like 3000: pretend it is just after them
+    @After fun realClock() { SyncReducer.clock = { System.currentTimeMillis() } }
     private val me = "@me:pager.test"
     private fun parse(s: String): JsonObject = json.parseToJsonElement(s).jsonObject
     private fun sync(events: String, extra: String = "") = parse(

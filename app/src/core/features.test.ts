@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+afterEach(() => { vi.useRealTimers(); });
 import { applySync } from "./reducer";
 import { isEmojiOnly, markdownToHtml } from "./format";
 import { isLowPriority, labelsOf, previewOf } from "./types";
@@ -48,6 +49,7 @@ describe("tags, stickers and replies", () => {
     expect(r.chats["!r:x"].stickerPacks[0].stickers.map((s) => s.shortcode)).toEqual(["wave"]); expect(r.userStickers!.stickers.map((s) => s.shortcode)).toEqual(["mine"]);
   });
   it("flags replies to my messages and keeps formatted_body", () => {
+    vi.useFakeTimers(); vi.setSystemTime(10_000);
     const base = applySync({}, room([{ type: "m.room.message", event_id: "$mine", sender: me, origin_server_ts: 1, content: { msgtype: "m.text", body: "hi" } }]), me, true).chats;
     const r = applySync(base, room([
       { type: "m.room.message", event_id: "$r1", sender: alex, origin_server_ts: 2, content: { msgtype: "m.text", body: "yes", format: "org.matrix.html", formatted_body: "<b>yes</b>", "m.relates_to": { "m.in_reply_to": { event_id: "$mine" } } } },
