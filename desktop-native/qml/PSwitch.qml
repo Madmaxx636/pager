@@ -4,7 +4,7 @@ import QtQuick.Controls
 // An on/off switch in Pager's colours.
 Switch {
     id: sw
-    implicitWidth: 46; implicitHeight: 28
+    implicitWidth: 44; implicitHeight: 26
     indicator: Rectangle {
         x: sw.leftPadding; y: (sw.height - height) / 2; width: 44; height: 26; radius: 13
         color: sw.checked ? look.accent : look.line

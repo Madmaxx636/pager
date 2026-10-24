@@ -56,7 +56,7 @@ Rectangle {
             Layout.fillWidth: true; Layout.leftMargin: 18; Layout.rightMargin: 10; Layout.topMargin: 12; Layout.bottomMargin: 4; spacing: 8
             Image { source: "qrc:/pager.svg"; sourceSize.width: 64; sourceSize.height: 64; Layout.preferredWidth: 32; Layout.preferredHeight: 32; smooth: true }
             ColumnLayout { spacing: 0
-                Label { text: "Pages"; font.pixelSize: Math.round(26 * look.textScale); font.weight: Font.Bold; font.letterSpacing: -0.7; color: look.text }
+                Label { text: "Pages"; font.pixelSize: Math.round(25.5 * look.textScale); font.weight: Font.Bold; font.letterSpacing: -0.7; color: look.text }
                 Label { visible: core.totalUnreadChats > 0; text: core.totalUnreadChats + " unread"; color: look.accent; font.pixelSize: Math.round(12 * look.textScale); Layout.topMargin: -2 } }
             Item { Layout.fillWidth: true }
             IconButton { ico: "square-pen"; onClicked: pane.newChat(); ToolTip.text: "Page someone (Ctrl+N)"; ToolTip.visible: hovered }
