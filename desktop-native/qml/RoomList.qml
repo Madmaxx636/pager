@@ -13,6 +13,11 @@ Rectangle {
     signal searchRequested(string text)
     property string menuRoom: ""
     property var menuInfo: ({})
+    // choosing several pages at once (the web's "Select"): the ones ticked so far
+    property var picked: []
+    readonly property bool selecting: picked.length > 0
+    function togglePick(id) { picked = picked.indexOf(id) >= 0 ? picked.filter(x => x !== id) : picked.concat([id]) }
+    function eachPicked(f) { const ids = picked.slice(); picked = []; ids.forEach(f) }
 
     Component.onCompleted: {
         if (settings.defaultTab !== "inbox") core.filter(settings.defaultTab, "")
@@ -51,9 +56,22 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        // ---- selection bar (replaces the title while pages are ticked)
+        RowLayout {
+            visible: pane.selecting; Layout.fillWidth: true; Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.topMargin: 12; Layout.bottomMargin: 4; spacing: 2
+            IconButton { ico: "x"; onClicked: pane.picked = []; ToolTip.text: "Cancel selection"; ToolTip.visible: hovered }
+            Label { Layout.fillWidth: true; Layout.leftMargin: 6; text: pane.picked.length + " selected"; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.Bold; elide: Text.ElideRight }
+            IconButton { ico: "check-check"; onClicked: pane.eachPicked(id => core.markRead(id)); ToolTip.text: "Mark read"; ToolTip.visible: hovered }
+            IconButton { ico: "mail-open"; onClicked: pane.eachPicked(id => core.markUnread(id, true)); ToolTip.text: "Mark unread"; ToolTip.visible: hovered }
+            IconButton { ico: "pin"; onClicked: pane.eachPicked(id => core.pin(id, true)); ToolTip.text: "Pin"; ToolTip.visible: hovered }
+            IconButton { ico: "archive"; onClicked: pane.eachPicked(id => core.archive(id, true)); ToolTip.text: "Archive"; ToolTip.visible: hovered }
+            IconButton { ico: "bell-off"; onClicked: pane.eachPicked(id => core.setMuted(id, true)); ToolTip.text: "Mute"; ToolTip.visible: hovered }
+            IconButton { ico: "tag"; onClicked: labelsDialog.openForMany(pane.picked); ToolTip.text: "Labels"; ToolTip.visible: hovered }
+            IconButton { ico: "trash-2"; onClicked: deleteDialog.openForMany(pane.picked); ToolTip.text: "Delete"; ToolTip.visible: hovered }
+        }
         // ---- title
         RowLayout {
-            Layout.fillWidth: true; Layout.leftMargin: 18; Layout.rightMargin: 10; Layout.topMargin: 12; Layout.bottomMargin: 4; spacing: 8
+            visible: !pane.selecting; Layout.fillWidth: true; Layout.leftMargin: 18; Layout.rightMargin: 10; Layout.topMargin: 12; Layout.bottomMargin: 4; spacing: 8
             Image { source: "qrc:/pager.svg"; sourceSize.width: 64; sourceSize.height: 64; Layout.preferredWidth: 32; Layout.preferredHeight: 32; smooth: true }
             ColumnLayout { spacing: 0
                 Label { text: "Pages"; font.pixelSize: Math.round(25.5 * look.textScale); font.weight: Font.Bold; font.letterSpacing: -0.7; color: look.text }
@@ -229,13 +247,16 @@ Rectangle {
                 width: list.width - 16; x: 8; height: settings.density === "compact" ? 58 : 70; radius: 14
                 readonly property bool current: core.currentRoom === roomId || linked.some(l => l.id === core.currentRoom)
                 readonly property bool isUnread: unread > 0 || markedUnread
-                color: current ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.15) : (hover.hovered ? look.panel2 : "transparent")
+                color: current || pane.picked.indexOf(roomId) >= 0 ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.15) : (hover.hovered ? look.panel2 : "transparent")
                 HoverHandler { id: hover }
-                TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { core.openRoom(roomId); pane.opened() } }
+                TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { if (pane.selecting) pane.togglePick(roomId); else { core.openRoom(roomId); pane.opened() } } }
                 TapHandler { acceptedButtons: Qt.RightButton; onTapped: pane.showMenu(roomId) }
                 TapHandler { acceptedDevices: PointerDevice.TouchScreen; longPressThreshold: 0.5; onLongPressed: pane.showMenu(roomId) }
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10; spacing: 13
+                    Item { visible: pane.selecting; Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                        Rectangle { anchors.fill: parent; radius: 11; color: "transparent"; border.width: 2; border.color: look.muted; visible: pane.picked.indexOf(roomId) < 0 }
+                        Icon { anchors.fill: parent; name: "circle-check"; size: 22; color: look.accent; visible: pane.picked.indexOf(roomId) >= 0 } }
                     Item { visible: settings.showAvatars; Layout.preferredWidth: 48; Layout.preferredHeight: 48
                         Loader { id: gface; anchors.centerIn: parent; readonly property var f: isGroup && model.avatar.length === 0 ? core.faces(roomId) : []
                             active: f.length > 1; sourceComponent: GroupAvatar { size: settings.density === "compact" ? 40 : 46; faces: gface.f } }
@@ -257,7 +278,7 @@ Rectangle {
                         RowLayout {
                             visible: settings.inboxStyle !== "minimal"
                             Layout.fillWidth: true; spacing: 6
-                            Icon { visible: model.tick >= 3; name: model.tick >= 4 ? "check-check" : "check"; size: 14; color: model.tick === 5 ? look.accent : look.muted; opacity: model.tick === 4 ? 0.6 : 1 }
+                            Icon { visible: model.tick >= 3; name: model.tick >= 4 ? "check-check" : "check"; size: 14; color: model.tick === 5 ? (look.dark ? "#7dd3fc" : "#0284c7") : look.muted }
                             Label {
                                 readonly property string dr: model.typing.length || row.current ? "" : core.draft(roomId)
                                 textFormat: dr.length ? Text.StyledText : Text.PlainText
@@ -319,29 +340,53 @@ Rectangle {
 
     Menu {
         id: chatMenu
-        MenuItem { icon.name: pane.menuInfo.unread > 0 || pane.menuInfo.markedUnread ? "mail-open" : "message-square-dot"; text: pane.menuInfo.unread > 0 || pane.menuInfo.markedUnread ? "Mark read" : "Mark unread"; onTriggered: (pane.menuInfo.unread > 0 || pane.menuInfo.markedUnread) ? core.markRead(pane.menuRoom) : core.markUnread(pane.menuRoom, true) }
-        MenuItem { icon.name: pane.menuInfo.pinned ? "pin-off" : "pin"; text: pane.menuInfo.pinned ? "Unpin" : "Pin"; onTriggered: core.pin(pane.menuRoom, !pane.menuInfo.pinned) }
-        MenuItem { icon.name: "bell-off"; text: pane.menuInfo.muted ? "Unmute" : "Mute"; onTriggered: core.setMuted(pane.menuRoom, !pane.menuInfo.muted) }
+        readonly property bool unread: pane.menuInfo.unread > 0 || pane.menuInfo.markedUnread
+        readonly property var pinIds: core.pins.map(p => p.id)
+        readonly property int at: pinIds.indexOf(pane.menuRoom)
+        MenuItem { text: pane.menuInfo.name || ""; enabled: false }
+        MenuItem { icon.name: pane.menuInfo.pinned ? "pin-off" : "pin"; text: pane.menuInfo.pinned ? "Unpin" : "Pin to top"; onTriggered: core.pin(pane.menuRoom, !pane.menuInfo.pinned) }
+        MenuItem { visible: !!pane.menuInfo.pinned && chatMenu.at > 0; height: visible ? implicitHeight : 0; icon.name: "chevron-left"; text: "Move earlier in pins"; onTriggered: core.movePin(pane.menuRoom, chatMenu.at - 1) }
+        MenuItem { visible: !!pane.menuInfo.pinned && chatMenu.at >= 0 && chatMenu.at < chatMenu.pinIds.length - 1; height: visible ? implicitHeight : 0; icon.name: "chevron-right"; text: "Move later in pins"; onTriggered: core.movePin(pane.menuRoom, chatMenu.at + 1) }
+        MenuItem { icon.name: chatMenu.unread ? "check-check" : "mail-open"; text: chatMenu.unread ? "Mark as read" : "Mark as unread"; onTriggered: chatMenu.unread ? core.markRead(pane.menuRoom) : core.markUnread(pane.menuRoom, true) }
+        MenuItem { icon.name: "bell-off"; text: pane.menuInfo.muted ? "Unmute" : "Mute…"; onTriggered: pane.menuInfo.muted ? core.setMuted(pane.menuRoom, false) : muteChoice.openFor([pane.menuRoom]) }
         MenuItem { icon.name: pane.menuInfo.archived ? "archive-restore" : "archive"; text: pane.menuInfo.archived ? "Move to inbox" : "Archive"; onTriggered: core.archive(pane.menuRoom, !pane.menuInfo.archived) }
-        MenuItem { icon.name: "arrow-down-to-line"; text: pane.menuInfo.lowPriority ? "Move to inbox" : "Low priority"; onTriggered: core.setLowPriority(pane.menuRoom, !pane.menuInfo.lowPriority) }
-        MenuItem { icon.name: "hourglass"; text: "Snooze 3 hours"; onTriggered: core.snooze(pane.menuRoom, Date.now() + 3 * 3600000) }
-        MenuItem { icon.name: "alarm-clock"; text: "Snooze until…"; onTriggered: { snoozeDialog.room = pane.menuRoom; snoozeDialog.open() } }
+        MenuItem { icon.name: "arrow-down-to-line"; text: pane.menuInfo.lowPriority ? "Remove from low priority" : "Low priority"; onTriggered: core.setLowPriority(pane.menuRoom, !pane.menuInfo.lowPriority) }
+        MenuItem { icon.name: "hourglass"; text: "Snooze…"; onTriggered: { snoozeDialog.room = pane.menuRoom; snoozeDialog.open() } }
+        MenuItem { icon.name: "alarm-clock"; text: "Remind me…"; onTriggered: { remindDialog.room = pane.menuRoom; remindDialog.open() } }
         MenuItem { icon.name: "tag"; text: "Labels…"; onTriggered: labelsDialog.openFor(pane.menuRoom) }
-        MenuItem { icon.name: "pencil"; text: "Rename…"; visible: !!pane.menuInfo.isGroup; height: visible ? implicitHeight : 0; onTriggered: renameDialog.openFor(pane.menuRoom, pane.menuInfo.name) }
-        MenuSeparator { }
+        MenuItem { icon.name: "circle-check"; text: "Select"; onTriggered: pane.picked = [pane.menuRoom] }
         MenuItem { icon.name: "trash-2"; text: "Delete page…"; onTriggered: deleteDialog.openFor(pane.menuRoom, pane.menuInfo.name, pane.menuInfo.network) }
     }
     Dialog {
         id: deleteDialog
-        property string room; property string label; property string net
-        function openFor(r, n, network) { room = r; label = n; net = network; sourceToo.checked = false; open() }
-        modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(400, Overlay.overlay ? Overlay.overlay.width - 32 : 400); title: "Delete this page?"; standardButtons: Dialog.Cancel | Dialog.Ok
+        property var rooms: []
+        readonly property var sourceNets: ["signal", "whatsapp", "gmessages"]
+        function openFor(r, n, network) { openForMany([r]) }
+        function openForMany(ids) { rooms = ids.slice(); open() }
+        modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440)
+        title: rooms.length === 1 ? "Delete this page?" : "Delete " + rooms.length + " pages?"
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        Component.onCompleted: standardButton(Dialog.Ok).text = "Delete"
         contentItem: ColumnLayout { spacing: 10
-            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "“" + deleteDialog.label + "” leaves Pager. Messages stay on the other app unless you also delete it there." }
-            CheckBox { id: sourceToo; visible: deleteDialog.net !== "matrix" && deleteDialog.net !== ""; text: "Also delete it on " + N.meta(deleteDialog.net).label }
+            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; text: settings.deleteAtSource ? "They will be removed from Pager and deleted on Signal, WhatsApp or Google Messages too (other networks keep theirs). This can't be undone." : "They will be removed from Pager. The conversations on the other apps aren't deleted, and a page comes back if someone writes again." }
+            FCheck { text: "Also delete on Signal, WhatsApp and Google Messages"; checked: !!settings.deleteAtSource; onCheckedChanged: if (checked !== !!settings.deleteAtSource) settings.set("deleteAtSource", checked) }
         }
-        onAccepted: core.leaveRoom(room, sourceToo.checked)
+        onAccepted: { const ids = rooms.slice(); pane.picked = []; ids.forEach(id => core.leaveRoom(id, !!settings.deleteAtSource && sourceNets.indexOf(core.roomInfo(id).network) >= 0)) }
     }
+    Dialog {
+        id: muteChoice
+        property var rooms: []
+        function openFor(ids) { rooms = ids.slice(); open() }
+        modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440)
+        title: rooms.length === 1 ? "Mute page" : "Mute " + rooms.length + " pages"
+        ColumnLayout { width: parent.width; spacing: 10
+            Repeater { model: [["For 1 hour", 3.6e6], ["For 8 hours", 8 * 3.6e6], ["For 1 week", 7 * 864e5], ["Until I turn it back on", 0]]
+                delegate: Rectangle { Layout.fillWidth: true; implicitHeight: 44; radius: 12; color: mh.hovered ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.14) : look.panel2
+                    HoverHandler { id: mh; cursorShape: Qt.PointingHandCursor }
+                    Label { x: 16; anchors.verticalCenter: parent.verticalCenter; text: modelData[0]; color: look.text; font.weight: Font.Bold; font.pixelSize: Math.round(15 * look.textScale) }
+                    TapHandler { onTapped: { const ids = muteChoice.rooms.slice(); pane.picked = []; ids.forEach(id => core.muteFor(id, modelData[1])); muteChoice.close() } } } } }
+    }
+    WhenDialog { id: remindDialog; heading: "Remind me about this page"; property string room; onPicked: (ms) => core.remind(room, ms) }
     Dialog {
         id: renameDialog
         property string room
@@ -352,18 +397,23 @@ Rectangle {
     }
     Dialog {
         id: labelsDialog
-        property string room; property var have: []
-        function openFor(r) { room = r; have = core.roomInfo(r).labels; newLabel.text = ""; open() }
-        modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(380, Overlay.overlay ? Overlay.overlay.width - 32 : 380); title: "Labels"; standardButtons: Dialog.Close
+        property var rooms: []
+        property var have: []          // the labels every one of the chosen pages has
+        function refresh() { const sets = rooms.map(r => core.roomInfo(r).labels || []); have = sets.length ? sets[0].filter(l => sets.every(x => x.indexOf(l) >= 0)) : [] }
+        function openFor(r) { openForMany([r]) }
+        function openForMany(ids) { rooms = ids.slice(); refresh(); newLabel.text = ""; open() }
+        modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440); title: "Labels"
+        onClosed: pane.picked = []
         contentItem: ColumnLayout { spacing: 6
             Repeater {
                 model: core.labels.concat(labelsDialog.have.filter(l => core.labels.indexOf(l) < 0))
-                delegate: CheckBox { text: modelData; checked: labelsDialog.have.indexOf(modelData) >= 0
-                    onClicked: { if (checked) core.addLabel(labelsDialog.room, modelData); else core.removeLabel(labelsDialog.room, modelData); labelsDialog.have = core.roomInfo(labelsDialog.room).labels } }
+                delegate: FCheck { text: modelData; checked: labelsDialog.have.indexOf(modelData) >= 0
+                    onCheckedChanged: { if (checked === (labelsDialog.have.indexOf(modelData) >= 0)) return
+                        labelsDialog.rooms.forEach(r => checked ? core.addLabel(r, modelData) : core.removeLabel(r, modelData)); labelsDialog.refresh() } }
             }
-            RowLayout { Layout.fillWidth: true
-                TextField { id: newLabel; Layout.fillWidth: true; placeholderText: "New label"; onAccepted: addBtn.clicked() }
-                Button { id: addBtn; text: "Add"; highlighted: true; enabled: newLabel.text.trim().length > 0; onClicked: { core.addLabel(labelsDialog.room, newLabel.text.trim()); newLabel.text = ""; labelsDialog.have = core.roomInfo(labelsDialog.room).labels } }
+            RowLayout { Layout.fillWidth: true; Layout.topMargin: 6; spacing: 8
+                FField { id: newLabel; Layout.fillWidth: true; placeholder: "New label"; onAccepted: addBtn.clicked() }
+                Button { id: addBtn; text: "Add"; highlighted: true; enabled: newLabel.text.trim().length > 0; Layout.alignment: Qt.AlignBottom; onClicked: { labelsDialog.rooms.forEach(r => core.addLabel(r, newLabel.text.trim())); newLabel.text = ""; labelsDialog.refresh() } }
             }
         }
     }
