@@ -5,7 +5,7 @@ import QtQuick.Layouts
 B.MenuItem {
     id: control
     implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset, implicitContentWidth + leftPadding + rightPadding)
-    implicitHeight: visible ? 37 : 0
+    implicitHeight: visible ? (control.menu && control.menu.rowHeight ? control.menu.rowHeight : 37) : 0
     leftPadding: 12; rightPadding: 12; topPadding: 0; bottomPadding: 0
     readonly property color ink: !control.enabled ? look.muted : (control.text.indexOf("Delete") === 0 || control.text.indexOf("Sign out") === 0 ? look.danger : look.text)
     contentItem: Row {
@@ -20,5 +20,5 @@ B.MenuItem {
             text: control.text; font.pixelSize: Math.round(15 * look.textScale); elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter; color: control.ink
         }
     }
-    background: Rectangle { implicitHeight: 37; radius: 10; color: control.highlighted && control.enabled ? look.panel2 : "transparent" }
+    background: Rectangle { implicitHeight: control.implicitHeight; radius: 10; color: control.highlighted && control.enabled ? look.panel2 : "transparent" }
 }
