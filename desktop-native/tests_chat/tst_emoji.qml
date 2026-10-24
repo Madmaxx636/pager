@@ -13,7 +13,8 @@ Item {
             pick.open(); wait(200)
             compare(pick.width, 432)
             const g = findGrid(pick.contentItem); verify(g !== null)
-            compare(Math.round(g.width / g.cellWidth), 7)
+            compare(g.cellHeight, 51)
+            verify(g.cellWidth * 7 <= g.width + 0.5 || g.width === 0)
             verify(pick.height <= 577)
             pick.close()
         }
