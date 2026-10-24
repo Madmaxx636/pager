@@ -337,12 +337,12 @@ Rectangle {
     Loader { id: viewerLoader; property string pendingId; active: false; source: "ImageViewer.qml"; onLoaded: item.show(viewerLoader.pendingId) }
     QtObject { id: viewer; function show(id) { viewerLoader.pendingId = id; if (viewerLoader.active) viewerLoader.item.show(id); else viewerLoader.active = true } }
     FileDialog { id: saveDialog; property string event; fileMode: FileDialog.SaveFile; onAccepted: { if (!core.saveCopy(event, files.path(selectedFile))) saveError.open() } }
-    Dialog { id: saveError; modal: true; anchors.centerIn: Overlay.overlay; title: "Couldn't save"; standardButtons: Dialog.Ok; background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+    Dialog { id: saveError; modal: true; anchors.centerIn: Overlay.overlay; title: "Couldn't save"; standardButtons: Dialog.Ok;
         Label { text: "The file couldn't be saved there."; color: look.text } }
     Dialog {
         id: details; property var rows: []
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(460, Overlay.overlay ? Overlay.overlay.width - 32 : 460); title: "Message details"; standardButtons: Dialog.Close
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         ColumnLayout { width: parent.width; spacing: 0
             Repeater { model: details.rows
                 delegate: Rectangle { Layout.fillWidth: true; implicitHeight: dRow.implicitHeight + 16; color: "transparent"
@@ -356,9 +356,10 @@ Rectangle {
     ForwardDialog { id: forward }
     Dialog {
         id: confirmDelete
-        modal: true; anchors.centerIn: Overlay.overlay; title: "Delete this message?"; standardButtons: Dialog.Cancel | Dialog.Ok
-        background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
-        Label { text: "It is removed for everyone in the chat."; color: look.text }
+        modal: true; anchors.centerIn: Overlay.overlay; title: "Delete message?"; standardButtons: Dialog.Cancel | Dialog.Ok
+        width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440)
+        Component.onCompleted: standardButton(Dialog.Ok).text = "Delete"
+        Label { width: parent.width; wrapMode: Text.Wrap; text: "It will be removed for everyone in the page where the network allows it."; color: look.muted }
         onAccepted: core.deleteMessage(pane.target)
     }
 

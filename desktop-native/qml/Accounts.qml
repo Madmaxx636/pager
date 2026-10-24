@@ -10,7 +10,7 @@ Dialog {
     width: Math.min(520, Overlay.overlay ? Overlay.overlay.width - 24 : 520)
     height: Math.min(640, Overlay.overlay ? Overlay.overlay.height - 24 : 640)
     padding: 0
-    background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
 
     property var networks: []
     property bool loading: false
@@ -160,7 +160,7 @@ Dialog {
         id: confirm
         property string netId; property string loginId
         modal: true; anchors.centerIn: Overlay.overlay; title: "Sign out of this account?"; standardButtons: Dialog.Cancel | Dialog.Ok
-        background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
+
         Label { text: "Pager stops bringing in its chats until you connect it again."; color: look.text; wrapMode: Text.Wrap; width: 320 }
         onAccepted: core.api("POST", "/api/bridges/" + netId + "/logout/" + encodeURIComponent(loginId), {}, function () { dlg.load() })
     }

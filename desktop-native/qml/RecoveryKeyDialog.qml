@@ -10,7 +10,7 @@ Dialog {
     modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(460, Overlay.overlay ? Overlay.overlay.width - 32 : 460)
     title: key.length ? (reset ? "Your new recovery key" : "Your recovery key") : (reset ? "Reset your recovery key everywhere?" : "Make a new recovery key?")
     standardButtons: key.length ? Dialog.NoButton : Dialog.Cancel
-    background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
     closePolicy: key.length ? Popup.NoAutoClose : (Popup.CloseOnEscape | Popup.CloseOnPressOutside)
     onAboutToShow: { key = ""; err = ""; busy = false }
     Connections { target: core; function onRecoveryKeyCreated(ok, k, e) { dlg.busy = false; if (ok) dlg.key = k; else dlg.err = e } }

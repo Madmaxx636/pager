@@ -146,7 +146,7 @@ Rectangle {
     Dialog {
         id: muteDlg
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(360, Overlay.overlay ? Overlay.overlay.width - 32 : 360); title: "Mute " + core.currentName; standardButtons: Dialog.Cancel
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         ColumnLayout { width: parent.width; spacing: 6
             Repeater { model: [["For 1 hour", 3.6e6], ["For 8 hours", 8 * 3.6e6], ["For 1 week", 7 * 864e5], ["Until I turn it back on", 0]]
                 delegate: Rectangle { Layout.fillWidth: true; height: 46; radius: 12; color: mh.hovered ? look.panel2 : look.bg
@@ -158,7 +158,7 @@ Rectangle {
         id: encDlg
         property string err: ""; property bool busy: false
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420); title: "Turn on encryption for this page?"; standardButtons: Dialog.Cancel
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         onAboutToShow: { err = ""; busy = false }
         Connections { target: core; function onEncryptionResult(e) { encDlg.busy = false; if (e.length) encDlg.err = e; else encDlg.close() } }
         ColumnLayout { width: parent.width; spacing: 8
@@ -171,7 +171,7 @@ Rectangle {
         id: leaveDlg
         property bool atSource: false
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420); title: "Delete this page?"; standardButtons: Dialog.Cancel | Dialog.Ok
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         onAboutToShow: atSource = settings.deleteAtSource === true
         ColumnLayout { width: parent.width; spacing: 8
             Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted
@@ -182,7 +182,7 @@ Rectangle {
     Dialog {
         id: aliasDlg
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(380, Overlay.overlay ? Overlay.overlay.width - 32 : 380); title: "Rename for me"; standardButtons: Dialog.Cancel | Dialog.Ok
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         onAboutToShow: { aliasField.text = core.aliasOf(core.currentRoom); aliasField.forceActiveFocus() }
         ColumnLayout { width: parent.width; spacing: 6
             TextField { id: aliasField; Layout.fillWidth: true; placeholderText: core.currentName; onAccepted: aliasDlg.accept() }
@@ -192,7 +192,7 @@ Rectangle {
     Dialog {
         id: renameDlg
         modal: true; anchors.centerIn: Overlay.overlay; title: "Rename group"; standardButtons: Dialog.Cancel | Dialog.Ok; width: Math.min(380, Overlay.overlay ? Overlay.overlay.width - 32 : 380)
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         onAboutToShow: nameField.text = core.currentName
         TextField { id: nameField; width: parent.width; onAccepted: renameDlg.accept() }
         onAccepted: core.renameRoom(core.currentRoom, nameField.text)
@@ -200,7 +200,7 @@ Rectangle {
     Dialog {
         id: notifDlg
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440); title: "Notifications for " + core.currentName; standardButtons: Dialog.Close
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         property int rev: 0
         function prefs() { rev; return (settings.notifChat || {})[core.currentRoom] || {} }
         function setPref(k, v) { const all = Object.assign({}, settings.notifChat || {}); const p = Object.assign({}, all[core.currentRoom] || {}); p[k] = v; all[core.currentRoom] = p; settings.set("notifChat", all); rev++ }
@@ -233,7 +233,7 @@ Rectangle {
         id: labelsDlg
         function openNow() { open() }
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(380, Overlay.overlay ? Overlay.overlay.width - 32 : 380); title: "Labels"; standardButtons: Dialog.Close
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         property var have: panel.info.labels || []
         onAboutToShow: { have = core.roomInfo(core.currentRoom).labels; newLabel.text = "" }
         ColumnLayout { width: parent.width; spacing: 6
@@ -248,7 +248,7 @@ Rectangle {
         property var options: []
         function openNow() { options = core.linkOptions(core.currentRoom); open() }
         modal: true; anchors.centerIn: Overlay.overlay; title: "Same person, another network"; standardButtons: Dialog.Close; width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420); height: Math.min(560, Overlay.overlay ? Overlay.overlay.height - 60 : 560)
-        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
         contentItem: ColumnLayout { spacing: 8
             Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; text: "Pick their chat on another network. Both show as one in your list, and the name at the top of the chat switches between them." }
             ListView { Layout.fillWidth: true; Layout.fillHeight: true; clip: true; boundsBehavior: Flickable.StopAtBounds; model: linkDlg.options; ScrollBar.vertical: ScrollBar { }

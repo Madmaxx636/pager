@@ -10,7 +10,7 @@ Dialog {
     modal: true; anchors.centerIn: Overlay.overlay
     width: Math.min(400, Overlay.overlay ? Overlay.overlay.width - 32 : 400); height: Math.min(520, Overlay.overlay ? Overlay.overlay.height - 40 : 520)
     title: "Forward to…"; standardButtons: Dialog.Cancel
-    background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+
     contentItem: ColumnLayout {
         spacing: 8
         TextField { id: search; Layout.fillWidth: true; placeholderText: "Search chats"; color: look.text; placeholderTextColor: look.muted; background: Rectangle { radius: 18; color: look.panel2 }
