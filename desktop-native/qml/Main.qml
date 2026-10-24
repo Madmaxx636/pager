@@ -21,7 +21,14 @@ ApplicationWindow {
     Connections { target: Qt.application; function onStateChanged() { core.setActive(Qt.application.state === Qt.ApplicationActive) } }
 
     Component.onCompleted: { if (startupDialog === "info") infoOpen = true; if (core.signedIn && !quietRun) { greeting.hello(); tourCheck.restart() } }
-    Recovery { id: recovery }
+    Recovery { id: recovery
+        onClosed: { if (changed) settings.set("keyChangedSeen", String(core.encryption.server_version || "")); changed = false } }
+    // Another device made a new recovery key: ask for the new one, once per new key (Settings → Privacy & encryption stays open).
+    Connections { target: core
+        function onEncryptionChanged() {
+            const e = core.encryption
+            if (e.key_changed && String(settings.keyChangedSeen || "") !== String(e.server_version || "") && !recovery.visible) { recovery.changed = true; recovery.open() }
+        } }
     WhenDialog { id: snoozeDialog; heading: "Snooze until"; onPicked: (ms) => core.snooze(core.currentRoom, ms) }
     function runShortcut(id) {
         const info = core.roomInfo(core.currentRoom), has = core.currentRoom.length > 0

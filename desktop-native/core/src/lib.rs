@@ -454,7 +454,15 @@ pub extern "C" fn pager_encryption_status(h: *mut Arc<Engine>) {
         let fp = enc.ed25519_key().await.unwrap_or_default();
         let here = enc.backups().are_enabled().await;
         let on_server = enc.backups().fetch_exists_on_server().await.unwrap_or(false);
-        e2.tell.say("encryption", &json!({ "device_id": client.device_id().map(|d| d.to_string()).unwrap_or_default(), "fingerprint": fp, "backup_here": here, "backup_on_server": on_server }));
+        // Another device may have made a new recovery key: the server's newest backup is then not the one this device saves to.
+        use matrix_sdk::ruma::api::client::backup::get_latest_backup_info;
+        let server_version = if on_server { client.send(get_latest_backup_info::v3::Request::new()).await.ok().map(|i| i.version) } else { None };
+        let local_version = {
+            let guard = client.olm_machine_for_testing().await;
+            match guard.as_ref() { Some(m) => m.backup_machine().get_backup_keys().await.ok().and_then(|k| k.backup_version), None => None }
+        };
+        let key_changed = here && matches!((&server_version, &local_version), (Some(sv), Some(lv)) if sv != lv);
+        e2.tell.say("encryption", &json!({ "device_id": client.device_id().map(|d| d.to_string()).unwrap_or_default(), "fingerprint": fp, "backup_here": here, "backup_on_server": on_server, "server_version": server_version, "key_changed": key_changed }));
     });
 }
 

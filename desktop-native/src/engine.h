@@ -351,7 +351,7 @@ private:
     QVariantMap m_filters;
     void applyListOptions();
     QHash<QString, qint64> m_leftAt;     // when each chat was last on screen, so old history pulled in by scrolling can be let go
-    QTimer m_trimTimer;
+    QTimer m_trimTimer, m_encTimer;
     AppSettings *m_settings = nullptr;
     QHash<QString, QVariant> m_previews; QSet<QString> m_previewing;
     QHash<QString, QString> m_drafts; QString m_dataDir;
@@ -378,6 +378,8 @@ private:
     TimelineModel m_timeline{&m_store};
     bool m_signedIn = false, m_starting = true, m_working = false;
     bool m_firstRooms = true;
+    QHash<QString, qint64> m_newestTs;      // the newest message time seen per chat: older ones arriving later are history a bridge sent again, not news
+    QSet<QString> m_idNames, m_idIds;       // who you are on each network; only ever grows, so a login dropping out for a while changes nothing
     QSet<QString> m_fetching;
     QHash<QString, QJSValue> m_calls;
     int m_callCounter = 0;
