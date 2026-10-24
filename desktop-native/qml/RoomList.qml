@@ -16,7 +16,7 @@ Rectangle {
 
     Component.onCompleted: {
         if (settings.defaultTab !== "inbox") core.filter(settings.defaultTab, "")
-        if (startupDialog.indexOf("settings") === 0) Qt.callLater(() => settingsPage.openPage(startupDialog.split(":")[1] || "appearance")); else if (startupDialog === "accounts") Qt.callLater(accounts.open); else if (startupDialog === "admin") Qt.callLater(admin.open)
+        if (startupDialog.indexOf("settings") === 0) Qt.callLater(() => settingsPage.openPage(startupDialog.split(":")[1] || "appearance")); else if (startupDialog === "newchat") Qt.callLater(pane.newChat); else if (startupDialog === "accounts") Qt.callLater(accounts.open); else if (startupDialog === "admin") Qt.callLater(admin.open)
     }
     Accounts { id: accounts }
     Admin { id: admin }

@@ -78,6 +78,14 @@ Item {
             verify(fl.contentY - y1 > during + 30, "it keeps gliding after the fingers lift: " + during + " then " + (fl.contentY - y1))
             page.close()
         }
+        function test_a_look_changes_many_things_and_none_gives_yours_back() {
+            settings.set("bubbleRadius", 7); settings.set("fontFamily", "serif")
+            page.applyLook("imessage")
+            compare(settings.look, "imessage"); compare(settings.bubbleRadius, 18); compare(settings.fontFamily, "sf"); compare(settings.bubbleStyle, "tail")
+            page.applyLook("gmessages"); compare(settings.bubbleRadius, 20)
+            page.applyLook("none")
+            compare(settings.look, "none"); compare(settings.bubbleRadius, 7); compare(settings.fontFamily, "serif")
+        }
         function test_the_pages_open_and_list_what_the_other_apps_have() {
             page.open(); tryVerify(function () { return page.opened })
             const names = page.visiblePages.map(p => p[0])

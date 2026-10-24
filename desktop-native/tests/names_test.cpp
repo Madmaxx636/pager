@@ -5,6 +5,14 @@
 class NamesTest : public QObject {
     Q_OBJECT
 private slots:
+    void yourOwnContactsAreRememberedForSyncing() {
+        Names::clear();
+        QVERIFY(Names::add({{"+1 555 010 4242", "Maya Lopez"}}, true, true));
+        QCOMPARE(Names::ownRows().size(), 1); QCOMPARE(Names::pretty("+15550104242"), QString("Maya Lopez"));
+        QVERIFY(!Names::add({{"+1 555 010 4242", "Maya Lopez"}}, true, true));                // nothing new
+        Names::add({{"+1 555 010 9999", "From A Bridge"}});                                    // not yours: not synced
+        QCOMPARE(Names::ownRows().size(), 1);
+    }
     void init() { Names::clear(); }
     void dropsNetworkTagsButKeepsRealParentheses() {
         QCOMPARE(Names::stripTag("Sam Rivera (WA)"), QString("Sam Rivera")); QCOMPARE(Names::stripTag("Sam (Signal)"), QString("Sam")); QCOMPARE(Names::stripTag("Sam (work)"), QString("Sam (work)"));

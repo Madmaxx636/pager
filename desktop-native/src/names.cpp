@@ -1,4 +1,6 @@
 #include "names.h"
+#include <QJsonArray>
+#include <algorithm>
 #include <QFile>
 #include <QHash>
 #include <QJsonDocument>
@@ -30,16 +32,20 @@ QString pretty(const QString &raw) {
     if (isPhone(n)) { const QString found = lookup(n); return found.isEmpty() ? n : found; }
     return n.isEmpty() ? raw : n;
 }
-bool add(const QList<QPair<QString, QString>> &entries, bool override) {
-    bool changed = false;
+static QHash<QString, QPair<QString, QString>> own;     // phone key -> {number, name}: yours, to sync
+QList<QPair<QString, QString>> ownRows() { QList<QPair<QString, QString>> out; for (const auto &p : own) out.append(p); std::sort(out.begin(), out.end()); return out; }
+bool add(const QList<QPair<QString, QString>> &entries, bool override, bool mine) {
+    bool changed = false, ownChanged = false;
     for (const auto &e : entries) {
         const QString k = phoneKey(e.first), nm = stripTag(e.second).trimmed();
         if (k.isEmpty() || nm.isEmpty() || isPhone(nm)) continue;
+        if (mine && own.value(k).second != nm) { own.insert(k, {e.first, nm}); ownChanged = true; }
         if (book.value(k) == nm || (book.contains(k) && !override)) continue;
         book.insert(k, nm); changed = true;
     }
-    if (changed) { save(); if (onChange) onChange(); }
-    return changed;
+    if (changed || ownChanged) { save(); }
+    if (changed && onChange) onChange();
+    return mine ? ownChanged : changed;
 }
 QList<QPair<QString, QString>> parseVcf(const QString &text) {
     QList<QPair<QString, QString>> out;
@@ -62,13 +68,16 @@ void load(const QString &file) {
     QFile f(file);
     if (!f.open(QIODevice::ReadOnly)) return;
     const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
-    for (auto it = o.begin(); it != o.end(); ++it) book.insert(it.key(), it.value().toString());
+    own.clear();
+    for (auto it = o.begin(); it != o.end(); ++it) { if (it.key() == QLatin1String("\x01own")) { for (const QJsonValue &v : it.value().toArray()) { const QJsonArray a = v.toArray(); own.insert(phoneKey(a.at(0).toString()), {a.at(0).toString(), a.at(1).toString()}); } } else book.insert(it.key(), it.value().toString()); }
 }
 void save() {
     if (bookFile.isEmpty()) return;
     QJsonObject o; for (auto it = book.cbegin(); it != book.cend(); ++it) o.insert(it.key(), it.value());
+    QJsonArray mineRows; for (const auto &p : own) mineRows.append(QJsonArray{p.first, p.second});
+    if (!mineRows.isEmpty()) o.insert(QStringLiteral("\x01own"), mineRows);
     QFile f(bookFile);
     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(QJsonDocument(o).toJson(QJsonDocument::Compact));
 }
-void clear() { book.clear(); bookFile.clear(); onChange = nullptr; }
+void clear() { book.clear(); own.clear(); bookFile.clear(); onChange = nullptr; }
 }

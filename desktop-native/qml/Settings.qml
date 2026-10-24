@@ -44,6 +44,36 @@ Dialog {
     FileDialog { id: photoPick; title: "Choose a wallpaper photo"; nameFilters: ["Pictures (*.png *.jpg *.jpeg *.webp *.bmp)"]
         onAccepted: { const f = files.importWallpaper(String(selectedFile), core.dataDir()); if (f.length) { settings.set("wallpaperPhoto", f); settings.set("wallpaper", "custom") } } }
     FileDialog { id: stickerAdder; title: "Add stickers"; fileMode: FileDialog.OpenFiles; nameFilters: ["Pictures (*.png *.jpg *.jpeg *.gif *.webp)"]; onAccepted: core.addStickers(selectedFiles.map(u => String(u))) }
+    // whole app looks (same three as the web app): they set colours, bubbles, type and motion together; "None" gives your own settings back
+    readonly property var looks: [
+        { id: "imessage", name: "Messages (iPhone)", blurb: "Blue and gray bubbles with tails, springy sends and “Delivered / Read” under your last message.", swatch: ["#0a84ff", "#e9e9eb", "#ffffff"],
+          patch: { accent: "custom", accentCustom: "#0a84ff", palette: "none", fontFamily: "sf", reactionStyle: "filled", bubbleStyle: "tail", outStyle: "tail", bubbleFill: "solid", bubbleBorder: "none", outBorder: "", bubbleRadius: 18, outRadius: -1, bubbleWidth: 74, bubbleDepth: "flat", bubbleNative: false,
+            bubbleMine: "#0a84ff", bubbleMineDark: "#0a84ff", bubbleMineText: "#ffffff", bubbleMineTextDark: "#ffffff", bubbleTheirs: "#e9e9eb", bubbleTheirsDark: "#26262a", bubbleTheirsText: "#000000", bubbleTheirsTextDark: "#ffffff",
+            messageAnimation: "pop", wallpaper: "none", colorSenderNames: false, avatarShape: "circle", showMessageTimes: false, showReadTicks: true, density: "comfortable" } },
+        { id: "hangouts", name: "Hangouts (classic)", blurb: "Green accents, flat cards with soft shadows and a circle photo beside each message.", swatch: ["#0f9d58", "#ffffff", "#e0e0e0"],
+          patch: { accent: "custom", accentCustom: "#0f9d58", palette: "none", fontFamily: "roboto", reactionStyle: "filled", bubbleStyle: "round", outStyle: "round", bubbleFill: "solid", bubbleBorder: "none", outBorder: "", bubbleRadius: 4, outRadius: -1, bubbleWidth: 70, bubbleDepth: "soft", bubbleNative: false,
+            bubbleMine: "#0f9d58", bubbleMineDark: "#0b8043", bubbleMineText: "#ffffff", bubbleMineTextDark: "#ffffff", bubbleTheirs: "#ffffff", bubbleTheirsDark: "#37474f", bubbleTheirsText: "#212121", bubbleTheirsTextDark: "#eceff1",
+            messageAnimation: "fade", wallpaper: "none", colorSenderNames: true, avatarShape: "circle", showAvatars: true, showMessageTimes: true, showReadTicks: true, density: "comfortable" } },
+        { id: "gmessages", name: "Google Messages", blurb: "Big rounded bubbles that join neatly, Google type and a blue accent.", swatch: ["#0b57d0", "#e9eef6", "#c2e7ff"],
+          patch: { accent: "custom", accentCustom: "#0b57d0", palette: "none", fontFamily: "googlesans", reactionStyle: "filled", bubbleStyle: "round", outStyle: "round", bubbleFill: "solid", bubbleBorder: "none", outBorder: "", bubbleRadius: 20, outRadius: -1, bubbleWidth: 78, bubbleDepth: "flat", bubbleNative: false,
+            bubbleMine: "#0b57d0", bubbleMineDark: "#a8c7fa", bubbleMineText: "#ffffff", bubbleMineTextDark: "#062e6f", bubbleTheirs: "#e9eef6", bubbleTheirsDark: "#2b2f33", bubbleTheirsText: "#1f1f1f", bubbleTheirsTextDark: "#e3e3e3",
+            messageAnimation: "slide", wallpaper: "none", colorSenderNames: false, avatarShape: "circle", showMessageTimes: true, showReadTicks: true, density: "comfortable" } }
+    ]
+    function applyLook(id) {
+        const current = settings.look || "none"
+        const target = looks.find(l => l.id === id)
+        if (current === "none" && target) {          // remember what is yours before the look overwrites it
+            const keep = {}; for (const k in target.patch) keep[k] = settings[k]
+            settings.set("lookBackup", keep)
+        }
+        if (id === "none" || !target) {
+            const keep = settings.lookBackup || {}
+            for (const k in keep) settings.set(k, keep[k])
+            settings.set("look", "none"); return
+        }
+        for (const k in target.patch) settings.set(k, target.patch[k])
+        settings.set("look", id)
+    }
     readonly property var visiblePages: pages.filter(p => (p[0] !== "admin" || core.isAdmin) && (find.length === 0 || (p[1] + " " + p[2]).toLowerCase().indexOf(find.toLowerCase()) >= 0))
 
     function openPage(id) { find = ""; findField.text = ""; for (let i = 0; i < visiblePages.length; i++) if (visiblePages[i][0] === id) { page = i; showingList = false; break } open() }
@@ -112,7 +142,18 @@ Dialog {
 
     // =============================================================== pages
     Component { id: appearance
-        SGroup { plain: true; Layout.fillWidth: true
+        SGroup { id: col0; plain: true; Layout.fillWidth: true
+            SGroup { title: "App look"; footer: settings.look !== "none" ? "This look sets colours, bubbles, type and motion for the whole app. Pick “Pager” to get your own choices back exactly as you left them." : ""
+                SBlock { Flow { Layout.fillWidth: true; spacing: 10
+                    Repeater { model: [{ id: "none", name: "Pager", blurb: "Your own choices below.", swatch: [String(look.accent), String(look.theirs), String(look.panel2)] }].concat(dlg.looks)
+                        delegate: Rectangle { width: Math.max(150, (col0.width - 20) / 2); implicitHeight: lc.implicitHeight + 24; height: implicitHeight; radius: 14; color: look.bg
+                            border.width: (settings.look || "none") === modelData.id ? 3 : 1; border.color: (settings.look || "none") === modelData.id ? look.accent : look.line
+                            Column { id: lc; x: 12; y: 12; width: parent.width - 24; spacing: 6
+                                Row { spacing: 4; Repeater { model: modelData.swatch; delegate: Rectangle { width: 24; height: 24; radius: 12; color: modelData; border.width: 1; border.color: look.line } } }
+                                Label { text: modelData.name; color: look.text; font.weight: Font.DemiBold }
+                                Label { text: modelData.blurb; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); wrapMode: Text.Wrap; width: parent.width } }
+                            TapHandler { onTapped: dlg.applyLook(modelData.id) } HoverHandler { cursorShape: Qt.PointingHandCursor } } } } }
+            }
             SGroup { title: "Theme"
                 SBlock {
                     Label { text: "Mode"; color: look.text }
@@ -195,6 +236,17 @@ Dialog {
                         Label { text: modelData.glyph + " " + modelData.name; color: look.text; font.weight: Font.DemiBold }
                         Label { text: modelData.says; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); wrapMode: Text.Wrap; Layout.fillWidth: true }
                         Label { text: modelData.examples; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); wrapMode: Text.Wrap; Layout.fillWidth: true } } } }
+            }
+            SGroup { title: "App icon"; footer: "Shows on the window and in the tray. Some desktops keep showing the installed icon in the task bar and menus."
+                SBlock { Flow { Layout.fillWidth: true; spacing: 10
+                    Repeater { model: [["classic", "Classic", "#6ff0dc", "#0f9d90"], ["sunset", "Sunset", "#ffb36b", "#e8408c"], ["midnight", "Midnight", "#4b5bd6", "#0b1030"], ["candy", "Candy", "#ff9ad5", "#8b5cf6"], ["mint", "Mint", "#c5f7d2", "#2fa36b"],
+                        ["retro", "Retro beige", "#e4dec9", "#8c8670"], ["graphite", "Graphite", "#58626f", "#0b0f14"], ["sky", "Sky", "#8fd8ff", "#2563eb"], ["lemon", "Lemon", "#fff0a6", "#f59e0b"], ["rose", "Rose", "#fda4af", "#be123c"]]
+                        delegate: Column { spacing: 4; width: 64
+                            Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: 46; height: 46; radius: 12; border.width: settings.appIcon === modelData[0] ? 3 : 0; border.color: look.text
+                                gradient: Gradient { orientation: Gradient.Vertical; GradientStop { position: 0; color: modelData[2] } GradientStop { position: 1; color: modelData[3] } }
+                                Icon { visible: settings.appIcon === modelData[0]; anchors.centerIn: parent; name: "check"; size: 20; color: "white" }
+                                TapHandler { onTapped: settings.set("appIcon", modelData[0]) } HoverHandler { cursorShape: Qt.PointingHandCursor } }
+                            Label { anchors.horizontalCenter: parent.horizontalCenter; text: modelData[1]; color: look.muted; font.pixelSize: 11 } } } } }
             }
             SGroup { title: "Size & font"
                 SChoice { key: "uiScale"; title: "App size"; hint: "Makes everything bigger or smaller, not only the text"; options: [["small", "Small"], ["medium", "Medium"], ["large", "Large"]] }
@@ -344,6 +396,9 @@ Dialog {
             SGroup { title: "GIF search"; footer: "Add a free key from either (or both) and each gets its own tab in the GIF picker. Pager doesn't ship a shared key. Keys stay on this device."
                 SText { table: "gifKeys"; key: "giphy"; title: "GIPHY"; hint: "developers.giphy.com"; secret: true }
                 SText { table: "gifKeys"; key: "klipy"; title: "KLIPY"; hint: "partner.klipy.com"; secret: true }
+            }
+            SGroup { title: "Voice messages"; footer: "Needs transcription switched on at your server. The words are made on your own server and kept on this computer."
+                SToggle { key: "autoTranscribe"; title: "Write out voice messages automatically"; hint: "Otherwise use “Write it out” under a message"; enabled: core.canTranscribe }
             }
             SGroup { title: "My stickers"; footer: "Stickers are saved to your Matrix account, so they follow you to other devices."
                 SAction { title: "Add stickers from images…"; button: "Add"; onClicked: stickerAdder.open() }
@@ -509,6 +564,7 @@ Dialog {
                     Button { visible: core.updateState === "available"; text: "Update now"; onClicked: core.installUpdate() }
                     Button { visible: core.updateState === "idle" || core.updateState === "error"; text: "Check for updates"; onClicked: core.checkForUpdates(false) } } }
             SGroup { title: "Account"
+                SAction { title: "Show the welcome tour again"; button: "Show"; onClicked: { dlg.close(); core.replayTour() } }
                 Button { text: "Sign out"; onClicked: { dlg.close(); core.logout() } } }
         }
     }

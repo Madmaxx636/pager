@@ -7,6 +7,10 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSvgRenderer>
+#include <QPainter>
+#include <QPixmap>
+#include <tuple>
 #include <QFontDatabase>
 #include <QFile>
 #include <QJsonDocument>
@@ -112,6 +116,18 @@ int main(int argc, char *argv[]) {
     const bool testing = cli.isSet(shot);
     QSystemTrayIcon tray(QIcon(QStringLiteral(":/pager.svg")));
     QMenu trayMenu;
+    // the app icon: the same pager drawing in the colours you pick (Settings > Appearance > App icon)
+    static const QVector<std::tuple<QString, QString, QString>> kIcons{{"classic", "#6ff0dc", "#0f9d90"}, {"sunset", "#ffb36b", "#e8408c"}, {"midnight", "#4b5bd6", "#0b1030"}, {"candy", "#ff9ad5", "#8b5cf6"},
+        {"mint", "#c5f7d2", "#2fa36b"}, {"retro", "#e4dec9", "#8c8670"}, {"graphite", "#58626f", "#0b0f14"}, {"sky", "#8fd8ff", "#2563eb"}, {"lemon", "#fff0a6", "#f59e0b"}, {"rose", "#fda4af", "#be123c"}};
+    auto applyIcon = [&settings, &tray, win] {
+        QFile f(QStringLiteral(":/pager.svg")); if (!f.open(QIODevice::ReadOnly)) return;
+        QString svg = QString::fromUtf8(f.readAll()); const QString id = settings.value(QStringLiteral("appIcon")).toString();
+        for (const auto &i : kIcons) if (std::get<0>(i) == id) { svg.replace(QStringLiteral("#6ff0dc"), std::get<1>(i), Qt::CaseInsensitive).replace(QStringLiteral("#0f9d90"), std::get<2>(i), Qt::CaseInsensitive); }
+        QSvgRenderer r(svg.toUtf8()); QIcon icon;
+        for (int sz : {16, 24, 32, 48, 64, 128, 256}) { QPixmap pm(sz, sz); pm.fill(Qt::transparent); QPainter p(&pm); r.render(&p); icon.addPixmap(pm); }
+        QGuiApplication::setWindowIcon(icon); win->setIcon(icon); tray.setIcon(icon);
+    };
+    applyIcon(); QObject::connect(&settings, &AppSettings::valueChanged, [applyIcon](const QString &k) { if (k == QLatin1String("appIcon")) applyIcon(); });
     auto showWindow = [win] { win->show(); win->raise(); win->requestActivate(); };
     if (!testing && QSystemTrayIcon::isSystemTrayAvailable()) {
         trayMenu.addAction(QStringLiteral("Open Pager"), showWindow);

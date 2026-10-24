@@ -82,3 +82,5 @@ QString FileInfo::importFile(const QString &from, const QString &dir, const QStr
     for (const QString &old : QDir(dir).entryList({baseName + QStringLiteral(".*")}, QDir::Files)) QFile::remove(dir + QLatin1Char('/') + old);
     return QFile::copy(src, dest) ? dest : QString();
 }
+
+QString FileInfo::tempPath(const QString &base) const { return QStandardPaths::writableLocation(QStandardPaths::TempLocation) + QLatin1Char('/') + base + QLatin1Char('-') + QString::number(QDateTime::currentMSecsSinceEpoch()) + QStringLiteral(".jpg"); }

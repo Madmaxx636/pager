@@ -104,7 +104,7 @@ Dialog {
         }
         Label { visible: dlg.error.length > 0; Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; wrapMode: Text.Wrap; text: dlg.error; color: look.danger; font.pixelSize: Math.round(13 * look.textScale) }
         Label { visible: dlg.networks !== null && dlg.networks.length === 0 && !dlg.loading; Layout.fillWidth: true; Layout.margins: 16; wrapMode: Text.Wrap; color: look.muted
-            text: "Connect an account first: ⋮ → Chat accounts." }
+            text: "Connect an account first: ⋮ → Accounts." }
         ListView {
             id: peopleList
             Layout.fillWidth: true; Layout.fillHeight: true; clip: true; boundsBehavior: Flickable.StopAtBounds

@@ -604,6 +604,31 @@ pub extern "C" fn pager_http(h: *mut Arc<Engine>, key: *const c_char, method: *c
     });
 }
 
+/// Sends a file from this computer to the Pager server (POST, raw bytes) and answers "http" {key, status, body} like pager_http. For voice transcription.
+#[no_mangle]
+pub extern "C" fn pager_http_file(h: *mut Arc<Engine>, key: *const c_char, path: *const c_char, file: *const c_char, content_type: *const c_char) {
+    let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
+    let (key, path, file, ctype) = (s(key), s(path), s(file), s(content_type));
+    let e2 = e.clone();
+    e.rt.spawn(async move {
+        let fail = |why: String| e2.tell.say("http", &json!({ "key": key, "status": 0, "body": { "error": why } }));
+        let Some(client) = e2.client() else { return fail("Not signed in".into()) };
+        let Some(token) = client.access_token() else { return fail("Not signed in".into()) };
+        let data = match std::fs::read(&file) { Ok(d) => d, Err(err) => return fail(format!("Couldn't read the file: {err}")) };
+        let url = format!("{}/{}", client.homeserver().as_str().trim_end_matches('/'), path.trim_start_matches('/'));
+        let req = client.http_client().post(url).bearer_auth(token).timeout(Duration::from_secs(300)).header("content-type", if ctype.is_empty() { "application/octet-stream".to_string() } else { ctype }).body(data);
+        match req.send().await {
+            Ok(r) => {
+                let status = r.status().as_u16();
+                let text = r.text().await.unwrap_or_default();
+                let parsed: Value = serde_json::from_str(&text).unwrap_or_else(|_| json!({ "text": text }));
+                e2.tell.say("http", &json!({ "key": key, "status": status, "body": parsed }));
+            }
+            Err(err) => fail(err.to_string()),
+        }
+    });
+}
+
 /// Draws [text] as a QR code: {"size": N, "rows": ["0110…", …]} (1 = dark). Free the answer with pager_free_string.
 #[no_mangle]
 pub extern "C" fn pager_qr(text: *const c_char) -> *mut c_char {
