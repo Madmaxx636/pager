@@ -15,7 +15,7 @@ ColumnLayout {
     property int decimals: 0
     Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 12; Layout.bottomMargin: 12; spacing: 2
     RowLayout { Layout.fillWidth: true
-        Label { text: col.title; color: look.text; font.pixelSize: Math.round(14 * look.textScale); Layout.fillWidth: true }
+        Label { text: col.title; color: look.text; font.pixelSize: Math.round(15 * look.textScale); Layout.fillWidth: true }
         Label { text: Number(settings[col.key]).toFixed(col.decimals) + col.suffix; color: look.muted; font.pixelSize: Math.round(13 * look.textScale) } }
     Label { visible: col.hint.length > 0; Layout.fillWidth: true; text: col.hint; wrapMode: Text.Wrap; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) }
     Slider {

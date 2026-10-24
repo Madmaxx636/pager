@@ -113,7 +113,7 @@ Dialog {
                         Row { anchors.verticalCenter: parent.verticalCenter; x: 10; spacing: 12
                             Rectangle { width: 34; height: 34; radius: 10; color: modelData[4]; anchors.verticalCenter: parent.verticalCenter; Icon { anchors.centerIn: parent; name: modelData[3]; size: 18; color: "white" } }
                             Column { anchors.verticalCenter: parent.verticalCenter; spacing: 1; width: nav.width - 100
-                                Label { text: modelData[1]; color: look.text; font.pixelSize: Math.round(14 * look.textScale); font.weight: Font.DemiBold; elide: Text.ElideRight; width: parent.width }
+                                Label { text: modelData[1]; color: look.text; font.pixelSize: Math.round(15 * look.textScale); font.weight: Font.DemiBold; elide: Text.ElideRight; width: parent.width }
                                 Label { visible: modelData[2].length > 0; text: modelData[2]; color: look.muted; font.pixelSize: Math.round(11 * look.textScale); elide: Text.ElideRight; width: parent.width } } }
                         Icon { anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter; visible: dlg.narrow; name: "chevron-right"; size: 16; color: look.muted }
                         TapHandler { onTapped: { dlg.page = index; dlg.showingList = false } }

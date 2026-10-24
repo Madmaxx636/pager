@@ -11,7 +11,7 @@ ColumnLayout {
     property var options: []
     signal picked(var value)
     Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 12; Layout.bottomMargin: 12; spacing: 6
-    Label { text: col.title; color: look.text; font.pixelSize: Math.round(14 * look.textScale) }
+    Label { text: col.title; color: look.text; font.pixelSize: Math.round(15 * look.textScale) }
     Label { visible: col.hint.length > 0; Layout.fillWidth: true; text: col.hint; wrapMode: Text.Wrap; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) }
     Flow {
         Layout.fillWidth: true; spacing: 6

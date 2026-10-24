@@ -10,7 +10,7 @@ RowLayout {
     property string title
     readonly property string value: String(settings[key] || "")
     Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 12; Layout.bottomMargin: 12; spacing: 10
-    Label { Layout.fillWidth: true; text: row.title; color: look.text; font.pixelSize: Math.round(14 * look.textScale) }
+    Label { Layout.fillWidth: true; text: row.title; color: look.text; font.pixelSize: Math.round(15 * look.textScale) }
     Button { visible: row.value.length > 0; text: "Default"; flat: true; onClicked: settings.set(row.key, "") }
     Rectangle { width: 34; height: 24; radius: 8; color: row.value.length ? row.value : look.panel2; border.width: 1; border.color: look.line
         TapHandler { onTapped: dlg.open() } HoverHandler { cursorShape: Qt.PointingHandCursor } }
