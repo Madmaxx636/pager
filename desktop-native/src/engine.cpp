@@ -126,7 +126,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
             QString title = r->isGroup() ? chatName + QStringLiteral(" · ") + who : chatName;
             if (d.preview == QLatin1String("hidden")) { title = QStringLiteral("New message"); what = QString(); }
             else if (d.preview == QLatin1String("sender")) what = QString();
-            if (!d.silent && m_settings && m_settings->value(QStringLiteral("notifSound")).toBool()) emit playSound(m_settings->value(QStringLiteral("notifSoundId")).toString(), m_settings->value(QStringLiteral("notifSoundVolume")).toDouble());
+            if (!d.silent && m_settings && m_settings->value(QStringLiteral("notifSound")).toBool()) emit playSound(d.sound.isEmpty() ? m_settings->value(QStringLiteral("notifSoundId")).toString() : d.sound, m_settings->value(QStringLiteral("notifSoundVolume")).toDouble());
             emit notify(id, title, what, d.silent);
         }
         m_firstRooms = false;
@@ -138,7 +138,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
         if (id == m_allHistory) {
             const Room *rr = m_store.room(id); const bool done = !rr || rr->reachedStart || rr->historyToken.isEmpty() || ++m_allPages > 600;
             emit historyProgress(rr ? rr->msgs.size() : 0, done);
-            if (done) m_allHistory.clear();
+            if (done) { m_allHistory.clear(); if (!m_everyQueue.isEmpty()) QTimer::singleShot(0, this, [this] { nextEveryHistory(); }); }
             else if (Room *mr = m_store.mutableRoom(id)) { const QByteArray t = mr->historyToken.toUtf8(); mr->historyToken.clear(); pager_load_history(m_core, id.toUtf8().constData(), t.constData()); }
         }
         if (id == m_current || m_store.linkGroup(m_current).contains(id)) { m_timeline.show(m_current); emit currentChanged(); }
@@ -1351,6 +1351,19 @@ void Engine::enableEncryption(const QString &roomId) {
             emit encryptionResult(st >= 200 && st < 300 ? QString() : st == 409 ? QStringLiteral("The server isn't set up to turn encryption on for you (the admin turns on server control)") : QStringLiteral("Could not turn on encryption"));
         });
     });
+}
+void Engine::loadEveryHistory() {
+    if (!m_everyQueue.isEmpty() || !m_allHistory.isEmpty()) return;
+    for (const QString &id : m_store.order()) m_everyQueue << id;
+    emit everyHistoryChanged(); nextEveryHistory();
+}
+void Engine::nextEveryHistory() {
+    while (!m_everyQueue.isEmpty()) {
+        const QString id = m_everyQueue.takeFirst(); emit everyHistoryChanged();
+        const Room *r = m_store.room(id); if (!r || r->reachedStart || r->historyToken.isEmpty()) continue;
+        loadAllHistory(id); return;
+    }
+    emit everyHistoryChanged();
 }
 void Engine::loadAllHistory(const QString &roomId) {
     Room *r = m_store.mutableRoom(roomId); if (!r || !m_core || !m_allHistory.isEmpty()) return;

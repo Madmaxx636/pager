@@ -42,9 +42,14 @@ static void chooseGraphics(int argc, char **argv) {
         dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     }
     QFile f(dir + QStringLiteral("/settings.json"));
-    bool low = qEnvironmentVariableIsSet("PAGER_LOW_END");
-    if (!low && f.open(QIODevice::ReadOnly)) low = QJsonDocument::fromJson(f.readAll()).object().value(QStringLiteral("lowEnd")).toBool();
+    const QJsonObject saved = f.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(f.readAll()).object() : QJsonObject();
+    const bool low = qEnvironmentVariableIsSet("PAGER_LOW_END") || saved.value(QStringLiteral("lowEnd")).toBool();
     if (low && !qEnvironmentVariableIsSet("QSG_RHI_BACKEND")) QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
+    // "App size" (Settings > Appearance) scales the whole window like the web app does (it zooms the page: 88% or 115%). That has to be set before the window system starts too.
+    if (!qEnvironmentVariableIsSet("QT_SCALE_FACTOR")) {
+        const QString ui = saved.value(QStringLiteral("uiScale")).toString();
+        if (ui == QLatin1String("small")) qputenv("QT_SCALE_FACTOR", "0.88"); else if (ui == QLatin1String("large")) qputenv("QT_SCALE_FACTOR", "1.15");
+    }
 }
 
 int main(int argc, char *argv[]) {
