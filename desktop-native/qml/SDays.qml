@@ -9,7 +9,7 @@ ColumnLayout {
     property string title
     readonly property var days: settings[key] || []
     Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 12; Layout.bottomMargin: 12; spacing: 6
-    Label { text: col.title; color: look.text; font.pixelSize: Math.round(14 * look.textScale) }
+    Label { text: col.title; color: look.text; font.pixelSize: Math.round(15 * look.textScale) }
     Flow { Layout.fillWidth: true; spacing: 6
         Repeater { model: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
             delegate: Rectangle { readonly property bool on: col.days.indexOf(index) >= 0
