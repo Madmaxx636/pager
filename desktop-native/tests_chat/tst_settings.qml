@@ -15,7 +15,7 @@ Item {
 
     TestCase {
         name: "Settings"; when: windowShown
-        function init() { settings.reset() }
+        function init() { settings.reset(); page.close() }
         function sw(item) { for (let i = 0; i < item.children.length; i++) { const c = item.children[i]; if (c.hasOwnProperty("checked")) return c; const r = sw(c); if (r) return r } return null }
 
         function test_a_toggle_follows_the_setting_and_changes_it() {
@@ -67,7 +67,7 @@ Item {
         function test_a_settings_page_scrolls_smoothly_and_carries_on_like_a_touchpad() {
             page.open(); tryVerify(function () { return page.opened })
             page.page = page.visiblePages.findIndex(p => p[0] === "notifications"); page.showingList = false; wait(200)
-            const fl = findAll(page.contentItem, c => c.hasOwnProperty("contentY") && c.hasOwnProperty("flick") && c.contentHeight > c.height && c.mapToItem(page.contentItem, 0, 0).x > 250, [])[0]
+            const fl = findAll(page.contentItem, c => c.hasOwnProperty("contentY") && c.hasOwnProperty("flick") && c.contentHeight > c.height && c.visible, [])[0]
             verify(fl !== undefined, "a scrollable page")
             const y0 = fl.contentY
             mouseWheel(page.contentItem, 600, 400, 0, -120); wait(450)
@@ -93,6 +93,13 @@ Item {
             verify(names.indexOf("admin") < 0)                                      // only for admins
             for (let i = 0; i < page.visiblePages.length; i++) { page.page = i; wait(60) }      // every page builds without errors
             page.close()
+        }
+        function test_settings_is_a_page_beside_the_chat_list_and_closes_when_a_chat_opens() {
+            page.openHome(); tryVerify(function () { return page.opened })
+            compare(page.showingList, true)
+            verify(page.modal === false)
+            const other = core.pins.map(p => p.id).find(id => id !== core.currentRoom); verify(other !== undefined)
+            core.openRoom(other); tryVerify(function () { return !page.visible })
         }
     }
 }

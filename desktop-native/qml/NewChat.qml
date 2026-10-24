@@ -7,10 +7,13 @@ import "Networks.js" as N
 // Start a chat: everyone from every connected app in one list, then pick how to reach them.
 Dialog {
     id: dlg
-    modal: true; anchors.centerIn: Overlay.overlay
-    width: Math.min(460, Overlay.overlay ? Overlay.overlay.width - 24 : 460); height: Math.min(640, Overlay.overlay ? Overlay.overlay.height - 24 : 640)
+    // a page beside the list of chats, like the web app's
+    property real sideW: 0
+    modal: false; dim: false; closePolicy: Popup.CloseOnEscape
+    x: sideW; y: 0
+    width: (Overlay.overlay ? Overlay.overlay.width : 460) - sideW; height: Overlay.overlay ? Overlay.overlay.height : 640
     padding: 0
-    background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+    background: Rectangle { color: look.bg }
 
     property var networks: null
     property var people: []
@@ -90,9 +93,9 @@ Dialog {
     }
 
     header: Rectangle {
-        color: "transparent"; implicitHeight: 56
-        Label { x: 20; anchors.verticalCenter: parent.verticalCenter; text: "Page someone"; color: look.text; font.pixelSize: Math.round(18.75 * look.textScale); font.weight: Font.Bold }
-        IconButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; ico: "x"; onClicked: dlg.close() }
+        color: look.panel; implicitHeight: 64
+        IconButton { x: 16; anchors.verticalCenter: parent.verticalCenter; ico: "chevron-left"; onClicked: dlg.close(); ToolTip.text: "Back"; ToolTip.visible: hovered }
+        Label { x: 62; anchors.verticalCenter: parent.verticalCenter; text: "Page someone"; color: look.text; font.pixelSize: Math.round(18.75 * look.textScale); font.weight: Font.Bold }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: look.line }
     }
     contentItem: ColumnLayout {
