@@ -220,8 +220,8 @@ Rectangle {
                     onClicked: attachMenu.opened ? attachMenu.close() : attachMenu.open(); ToolTip.text: "Attach"; ToolTip.visible: hovered && !attachMenu.opened; ToolTip.delay: 600
                     Popup {   // a grid of everything you can add to a message, like the web's + menu
                         id: attachMenu
-                        x: 0; y: -height - 8; padding: 8; width: 3 * 112 + 16
-                        background: Rectangle { color: look.panel; radius: 16; border.color: look.line }
+                        x: 0; y: -height - 8; padding: 14; width: 3 * 92 + 2 * 6 + 28
+                        background: Rectangle { color: look.panel; radius: 22; border.color: look.line }
                         readonly property var items: [["photos", "Photos", "image", "#3b82f6"], ["camera", "Camera", "camera", "#6b7280"], ["gif", "GIF", "", "#ec4899"], ["stickers", "Stickers", "sticker", "#f59e0b"], ["emoji", "Emoji", "smile", "#eab308"],
                             ["file", "File", "file", "#14b8a6"], ["viewonce", "View once", "eye-off", "#475569"], ["poll", "Poll", "chart-column", "#8b5cf6"], ["contact", "Contact", "contact-round", "#0ea5e9"],
                             ["location", "Location", "map-pin", "#ef4444"], ["attention", "Get attention", "bell", "#f43f5e"]]
@@ -241,13 +241,13 @@ Rectangle {
                             case "attention": attentionDialog.open(); break
                             }
                         }
-                        contentItem: Grid { columns: 3; spacing: 0
+                        contentItem: Grid { columns: 3; spacing: 6
                             Repeater { model: attachMenu.items
-                                delegate: Rectangle { visible: modelData[0] !== "viewonce" || core.sendNetwork === "signal"; width: visible ? 112 : 0; height: visible ? 92 : 0; radius: 12; color: ah.hovered ? look.panel2 : "transparent"
+                                delegate: Rectangle { visible: modelData[0] !== "viewonce" || core.sendNetwork === "signal"; width: visible ? 92 : 0; height: visible ? 91 : 0; radius: 14; color: ah.hovered ? look.panel2 : "transparent"
                                     HoverHandler { id: ah; cursorShape: Qt.PointingHandCursor }
-                                    Column { anchors.centerIn: parent; spacing: 8
-                                        Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: 48; height: 48; radius: 24; color: modelData[3]
-                                            Icon { visible: modelData[2].length > 0; anchors.centerIn: parent; name: modelData[2]; size: 22; color: "white" }
+                                    Column { anchors.centerIn: parent; spacing: 6
+                                        Rectangle { anchors.horizontalCenter: parent.horizontalCenter; width: 52; height: 52; radius: 26; color: modelData[3]
+                                            Icon { visible: modelData[2].length > 0; anchors.centerIn: parent; name: modelData[2]; size: 24; color: "white" }
                                             Label { visible: modelData[2].length === 0; anchors.centerIn: parent; text: "GIF"; color: "white"; font.bold: true; font.pixelSize: 14 } }
                                         Label { anchors.horizontalCenter: parent.horizontalCenter; text: modelData[1]; color: look.text; font.pixelSize: Math.round(12 * look.textScale) } }
                                     TapHandler { onTapped: attachMenu.pick(modelData[0]) } } }
@@ -350,19 +350,19 @@ Rectangle {
 
     Menu {
         id: actions
-        width: 280
+        width: 280; property int rowHeight: 40
         Row {
-            padding: 6; spacing: 2
+            padding: 6; spacing: 0
             Repeater {
                 model: settings.quickReactions
-                delegate: Rectangle { width: 36; height: 36; radius: 8; color: h.hovered ? look.panel2 : "transparent"
+                delegate: Rectangle { width: 36; height: 44; radius: 18; color: h.hovered ? look.panel2 : "transparent"
                     HoverHandler { id: h }
-                    Label { anchors.centerIn: parent; text: modelData; font.pixelSize: 22 }
+                    Label { anchors.centerIn: parent; text: modelData; font.pixelSize: 26 }
                     TapHandler { onTapped: { core.react(pane.target, modelData); actions.close() } } }
             }
-            Rectangle { width: 36; height: 36; radius: 8; color: hm.hovered ? look.panel2 : "transparent"
+            Rectangle { width: 36; height: 44; radius: 18; color: hm.hovered ? look.panel2 : look.panel2
                 HoverHandler { id: hm }
-                Label { anchors.centerIn: parent; text: "＋"; font.pixelSize: 20; color: look.muted }
+                Label { anchors.centerIn: parent; text: "＋"; font.pixelSize: 20; color: look.text }
                 TapHandler { onTapped: { actions.close(); picker.open() } } }
         }
         MenuItem { icon.name: "reply"; text: "Reply"; onTriggered: { pane.editing = ""; pane.replyingTo = pane.target; input.forceActiveFocus() } }

@@ -214,11 +214,11 @@ Item {
             Repeater {
                 model: row.reactions
                 delegate: Rectangle {
-                    height: 26; width: chipRow.implicitWidth + 16; radius: 13
-                    color: settings.reactionStyle === "outline" ? "transparent" : (modelData.mine ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.20) : look.panel)
+                    height: 30; width: chipRow.implicitWidth + 22; radius: 15
+                    color: settings.reactionStyle === "outline" ? "transparent" : (modelData.mine ? Qt.rgba(look.accent.r, look.accent.g, look.accent.b, 0.20) : look.panel2)
                     border.width: settings.reactionStyle === "outline" ? (modelData.mine ? 3 : 1.5) : 1; border.color: settings.reactionStyle === "outline" ? look.text : (modelData.mine ? look.accent : look.line)
                     Row { id: chipRow; anchors.centerIn: parent; spacing: 4
-                        Label { text: modelData.key; font.pixelSize: Math.round(15 * look.textScale); color: look.text }
+                        Label { text: modelData.key; font.pixelSize: Math.round(17.25 * look.textScale); color: look.text }
                         Label { visible: modelData.count > 1; text: modelData.count; font.pixelSize: Math.round(12 * look.textScale); color: look.muted; anchors.verticalCenter: parent.verticalCenter } }
                     TapHandler { onTapped: row.reactionTapped(row.eventId, modelData.key) }
                     HoverHandler { id: chipHover }
