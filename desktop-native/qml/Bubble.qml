@@ -182,7 +182,8 @@ Item {
                 TapHandler { acceptedButtons: Qt.RightButton; onTapped: (pt) => { const g = bubble.mapToItem(null, pt.position.x, pt.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
                 TapHandler { acceptedButtons: Qt.LeftButton; enabled: row.status === 2; onTapped: core.retry(row.eventId) }
                 TapHandler { acceptedDevices: PointerDevice.TouchScreen; longPressThreshold: 0.45; onLongPressed: { const g = bubble.mapToItem(null, point.position.x, point.position.y); row.menuRequested(row.eventId, row.mine, g.x, g.y) } }
-                TapHandler { acceptedButtons: Qt.LeftButton; onDoubleTapped: if (settings.doubleTapReact) row.reactionTapped(row.eventId, settings.doubleTapEmoji) }
+                TapHandler { acceptedButtons: Qt.LeftButton; onDoubleTapped: { if (settings.doubleTapReact) row.reactionTapped(row.eventId, settings.doubleTapEmoji) }
+                    onTapped: { if (tapCount === 3 && settings.tripleTapReact) row.reactionTapped(row.eventId, settings.tripleTapEmoji) } }
             }
 
             DragHandler {   // swipe a message to the right to reply (touch screens)

@@ -71,7 +71,7 @@ Dialog {
 
     contentItem: Item {
         // ---- the list
-        ScrollView {
+        ScrollView { SmoothWheel { view: parent.contentItem as Flickable }
             anchors.fill: parent; visible: dlg.net.length === 0; clip: true; contentWidth: availableWidth
             ColumnLayout {
                 width: parent.width - 40; x: 20; spacing: 10
@@ -106,7 +106,7 @@ Dialog {
             }
         }
         // ---- a sign-in in progress
-        ScrollView {
+        ScrollView { SmoothWheel { view: parent.contentItem as Flickable }
             anchors.fill: parent; visible: dlg.net.length > 0; clip: true; contentWidth: availableWidth
             ColumnLayout {
                 width: parent.width - 40; x: 20; spacing: 12

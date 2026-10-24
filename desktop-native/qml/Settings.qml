@@ -95,6 +95,7 @@ Dialog {
         // ---- the page
         ScrollView {
             id: scroll
+            SmoothWheel { view: scroll.contentItem as Flickable }
             background: Rectangle { color: look.bg }
             visible: !dlg.narrow || !dlg.showingList
             Layout.fillWidth: true; Layout.fillHeight: true; clip: true; contentWidth: availableWidth
@@ -210,6 +211,9 @@ Dialog {
             SGroup { title: "Reactions"; footer: "Quick reactions are the emoji shown when you react to a message."
                 SList { key: "quickReactions"; title: "Quick reactions"; hint: "The row of emoji that appears when you react to a message"; emojiPicker: true }
                 SToggle { key: "doubleTapReact"; title: "Double-click to react"; hint: "Double-click a message to add " + (settings.doubleTapEmoji || "👍") }
+                SEmoji { key: "doubleTapEmoji"; title: "Double-click reaction"; hint: "Which reaction a double-click adds"; enabled: settings.doubleTapReact }
+                SToggle { key: "tripleTapReact"; title: "Triple-click to react"; hint: "Triple-click a message to add " + (settings.tripleTapEmoji || "😂") }
+                SEmoji { key: "tripleTapEmoji"; title: "Triple-click reaction"; hint: "Which reaction a triple-click adds"; enabled: settings.tripleTapReact }
                 SToggle { key: "swipeToReply"; title: "Swipe to reply"; hint: "Swipe a message to the right (touch screens, or two fingers on a trackpad)" }
             }
         }
@@ -524,7 +528,8 @@ Dialog {
         background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
         component Pick: Repeater { id: rep; property var picked; signal flip(string id); property var only: null
             delegate: CheckBox { visible: !rep.only || rep.only.indexOf(modelData.id) >= 0; height: visible ? implicitHeight : 0; text: modelData.label + "  ·  " + modelData.hint; checked: rep.picked.indexOf(modelData.id) >= 0; onToggled: rep.flip(modelData.id) } }
-        contentItem: ScrollView { clip: true; contentWidth: availableWidth
+        contentItem: ScrollView { id: syncScroll; clip: true; contentWidth: availableWidth
+            SmoothWheel { view: syncScroll.contentItem as Flickable }
             ColumnLayout { width: parent.width; spacing: 6
                 Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; text: "Settings stay on each device. Here you choose what to copy between your computers and browsers. Phones and tablets have their own." }
                 Label { text: "Save from this device"; color: look.accent; font.weight: Font.Bold; Layout.topMargin: 6 }
