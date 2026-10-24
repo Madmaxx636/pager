@@ -87,8 +87,8 @@ Item {
         spacing: 2
         Item {   // the day heading sits above the first message of that day
             visible: row.day.length > 0; width: parent.width; height: visible ? 44 : 0
-            Rectangle { anchors.centerIn: parent; width: dayLabel.implicitWidth + 26; height: 24; radius: 12; color: look.panel
-                Label { id: dayLabel; anchors.centerIn: parent; text: row.day; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Medium } }
+            Rectangle { anchors.centerIn: parent; width: dayLabel.implicitWidth + 26; height: 22; radius: 11; color: look.panel
+                Label { id: dayLabel; anchors.centerIn: parent; text: row.day; color: look.muted; font.pixelSize: Math.round(11.25 * look.textScale); font.weight: Font.Medium } }
         }
         Item {   // where the unread messages begin
             visible: row.unreadDivider; width: parent.width; height: visible ? 30 : 0
@@ -130,7 +130,7 @@ Item {
                 id: bubble
                 x: row.mine ? row.width - width - 14 : 14 + (row.showName && !row.mine && settings.showAvatars ? 40 : 0)
                 width: Math.max(contentLoader.implicitWidth + (row.bare ? 0 : row.framed ? 8 : 26), metaRow.visible && !row.bare ? metaRow.implicitWidth + 26 : 0, quote.visible ? 180 : 0)
-                height: contentLoader.implicitHeight + (row.bare ? 0 : (row.framed ? 8 : 14) + (quote.visible ? quote.height + 6 : 0))
+                height: contentLoader.implicitHeight + (row.bare ? 0 : (row.framed ? 8 : 16) + (quote.visible ? quote.height + 6 : 0))
                 radius: row.bare ? 14 : row.baseRadius
                 readonly property bool tailed: row.shape === "curved" || row.shape === "tail"
                 topLeftRadius: row.bare ? 14 : (!row.mine && !row.first ? row.tight : row.baseRadius)
@@ -157,23 +157,23 @@ Item {
                     x: row.framed ? 8 : 13; y: row.framed ? 8 : 8; width: bubble.width - (row.framed ? 16 : 26); height: visible ? qcol.implicitHeight : 0
                     Rectangle { x: 0; width: 3; height: parent.height; radius: 1.5; color: Qt.rgba(row.ink.r, row.ink.g, row.ink.b, 0.5) }
                     Column { id: qcol; x: 12; width: parent.width - 12
-                        Label { text: row.replyName; width: parent.width; elide: Text.ElideRight; color: row.ink; opacity: 0.85; font.pixelSize: Math.round(13 * look.textScale); font.weight: Font.Bold; visible: text.length > 0 }
+                        Label { text: row.replyName; width: parent.width; elide: Text.ElideRight; color: row.ink; opacity: 0.85; font.pixelSize: Math.round(13.05 * look.textScale); font.weight: Font.Bold; visible: text.length > 0 }
                         Label { text: row.replyText || "Message"; width: parent.width; elide: Text.ElideRight; maximumLineCount: 2; wrapMode: Text.Wrap; color: row.ink; opacity: 0.85; font.pixelSize: Math.round(13 * look.textScale) } }
                     TapHandler { onTapped: row.jumpTo(row.replyTo) }
                 }
 
                 Loader {
                     id: contentLoader
-                    x: row.bare ? 0 : row.framed ? 4 : 13; y: row.bare ? 0 : (row.framed ? 4 : 7) + (quote.visible ? quote.height + 14 - (row.framed ? 6 : 6) : 0)
+                    x: row.bare ? 0 : row.framed ? 4 : 13; y: row.bare ? 0 : (row.framed ? 4 : 8) + (quote.visible ? quote.height + 6 : 0)
                     sourceComponent: row.locked ? lockedC : row.kind === "poll" ? pollC : row.kind === "image" ? (row.sticker ? stickerC : imageC) : row.kind === "video" ? videoC
                         : row.kind === "audio" ? audioC : row.kind === "file" ? (row.mime.indexOf("vcard") >= 0 || /\.vcf$/i.test(row.fileName || row.body) ? contactC : fileC) : row.kind === "location" ? locationC : row.bigEmoji ? bigC : textC
                 }
                 Row {   // time, edited, delivery marks
                     id: metaRow
                     visible: row.last && !row.bare && row.kind !== "poll"
-                    anchors.right: parent.right; anchors.rightMargin: row.framed ? 10 : 12; anchors.bottom: parent.bottom; anchors.bottomMargin: row.framed ? 4 : 5; spacing: 4
-                    Label { visible: row.edited; text: "edited"; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale); font.italic: true }
-                    Label { visible: settings.showMessageTimes; text: row.time; color: row.softInk; font.pixelSize: Math.round(11 * look.textScale)
+                    anchors.right: parent.right; anchors.rightMargin: row.framed ? 10 : 13; anchors.bottom: parent.bottom; anchors.bottomMargin: row.framed ? 4 : 8; spacing: 4
+                    Label { visible: row.edited; text: "edited"; color: row.softInk; font.pixelSize: Math.round(10.2 * look.textScale); font.italic: true }
+                    Label { visible: settings.showMessageTimes; text: row.time; color: row.softInk; font.pixelSize: Math.round(10.2 * look.textScale)
                         ToolTip.visible: tipHover.hovered; ToolTip.text: row.fullTime; ToolTip.delay: 500; HoverHandler { id: tipHover } }
                     Icon { visible: row.mine && row.tick > 0 && settings.showReadTicks; anchors.verticalCenter: parent.verticalCenter; size: 14
                         name: row.tick === 1 ? "clock" : row.tick === 2 ? "circle-alert" : row.tick >= 4 ? "check-check" : "check"
@@ -238,7 +238,7 @@ Item {
                 id: msgText
                 width: Math.min(implicitWidth, row.maxW - 28)
                 text: "<style>a { color: " + (row.mine ? row.ink : look.accent) + "; }</style>" + rich.render(row.body, row.html); textFormat: Text.RichText; wrapMode: Text.Wrap; color: row.ink; linkColor: row.mine ? row.ink : look.accent
-                font.pixelSize: Math.round(15 * look.textScale); font.italic: row.kind === "emote" || row.kind === "notice"
+                font.pixelSize: Math.round(15 * look.textScale); lineHeightMode: Text.FixedHeight; lineHeight: 21.75 * look.textScale; font.italic: row.kind === "emote" || row.kind === "notice"
                 onLinkActivated: (link) => files.openUrl(link)
                 HoverHandler { cursorShape: msgText.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor }
             }
@@ -247,7 +247,7 @@ Item {
                 active: link.length > 0; width: Math.min(300, row.maxW - 28); height: item ? item.height : 0
                 sourceComponent: LinkCard { url: parent.link; ink: row.ink; softInk: row.softInk; width: parent.width }
             }
-            Item { width: 1; height: metaRow.visible ? 13 : 0 }
+            Item { width: 1; height: metaRow.visible ? 17 : 0 }
         }
     }
     Component {
@@ -257,7 +257,7 @@ Item {
     Component {
         id: lockedC
         Column { Text { text: "🔒 " + row.body; color: row.softInk; font.italic: true; font.pixelSize: Math.round(14 * look.textScale); width: Math.min(implicitWidth, row.maxW - 28); wrapMode: Text.Wrap }
-                 Item { width: 1; height: metaRow.visible ? 13 : 0 } }
+                 Item { width: 1; height: metaRow.visible ? 17 : 0 } }
     }
     Component {
         id: imageC
@@ -329,7 +329,7 @@ Item {
                 text: core.transcriptState(row.eventId) === "busy" ? "Writing it out…" : (core.transcriptState(row.eventId) === "failed" ? "Couldn't write it out. Try again" : "Write it out")
                 color: core.transcriptState(row.eventId) === "busy" ? row.softInk : (row.mine ? row.ink : look.accent); font.pixelSize: Math.round(13 * look.textScale); font.underline: core.transcriptState(row.eventId) !== "busy"
                 TapHandler { onTapped: core.transcribe(row.eventId) } HoverHandler { cursorShape: Qt.PointingHandCursor } }
-            Item { width: 1; height: metaRow.visible ? 13 : 0 }
+            Item { width: 1; height: metaRow.visible ? 17 : 0 }
         }
     }
     Component {
@@ -342,7 +342,7 @@ Item {
                     Label { text: row.fileName || row.body; color: row.ink; font.pixelSize: Math.round(14 * look.textScale); elide: Text.ElideMiddle; width: Math.min(implicitWidth, row.maxW - 100) }
                     Label { text: row.size > 0 ? files.humanSize(row.size) : ""; visible: text.length > 0; color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) } }
             }
-            Item { width: 1; height: metaRow.visible ? 13 : 0 }
+            Item { width: 1; height: metaRow.visible ? 17 : 0 }
             TapHandler { onTapped: row.openMedia(row.eventId) }
             HoverHandler { cursorShape: Qt.PointingHandCursor }
         }
@@ -368,7 +368,7 @@ Item {
                     Label { visible: card.tel.length > 0; text: card.tel; color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) }
                     Label { text: "Click to save contact"; color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) } }
             }
-            Item { width: 1; height: metaRow.visible ? 13 : 0 }
+            Item { width: 1; height: metaRow.visible ? 17 : 0 }
             TapHandler { onTapped: row.openMedia(row.eventId) }
             HoverHandler { cursorShape: Qt.PointingHandCursor }
         }
@@ -383,7 +383,7 @@ Item {
                     Label { text: row.geo.replace("geo:", "").split(";")[0] + " · open map"; color: row.softInk; font.pixelSize: Math.round(12 * look.textScale) } }
                 TapHandler { onTapped: { const c = row.geo.replace("geo:", "").split(";")[0].split(","); files.openUrl("https://www.openstreetmap.org/?mlat=" + c[0] + "&mlon=" + c[1] + "#map=16/" + c[0] + "/" + c[1]) } }
                 HoverHandler { cursorShape: Qt.PointingHandCursor } }
-            Item { width: 1; height: metaRow.visible ? 13 : 0 }
+            Item { width: 1; height: metaRow.visible ? 17 : 0 }
         }
     }
     Component {

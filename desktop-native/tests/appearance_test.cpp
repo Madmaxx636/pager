@@ -14,7 +14,7 @@ private slots:
         QVERIFY(!a.dark());
         a.setSystemDark(true); QVERIFY(a.dark());
         a.setMode("light"); QVERIFY(!a.dark());
-        a.setMode("black"); QVERIFY(a.dark()); QCOMPARE(a.bg(), QColor("#000000"));
+        a.setMode("black"); QVERIFY(a.dark()); QCOMPARE(a.bg(), QColor("#030f0d"));          // black, with 7% of the accent mixed in like the web app
         a.setMode("nonsense"); QCOMPARE(a.mode(), QString("black"));
     }
     void accentsAndReadableText() {

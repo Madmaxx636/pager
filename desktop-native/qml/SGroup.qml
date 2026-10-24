@@ -11,7 +11,7 @@ ColumnLayout {
     property string title: ""
     property string footer: ""
     property bool plain: false
-    Label { visible: root.title.length > 0; text: root.title; color: look.accent; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.Bold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.7; Layout.topMargin: 18; Layout.bottomMargin: 6; Layout.leftMargin: 4 }
+    Label { visible: root.title.length > 0; text: root.title; color: look.accent; font.pixelSize: Math.round(10.8 * look.textScale); font.weight: Font.Bold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.7; Layout.topMargin: 18; Layout.bottomMargin: 6; Layout.leftMargin: 4 }
     Rectangle {
         Layout.fillWidth: true; implicitHeight: inner.implicitHeight; radius: 16; color: root.plain ? "transparent" : look.panel; clip: true
         ColumnLayout {
