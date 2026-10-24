@@ -167,6 +167,15 @@ class E2ee private constructor(
 
     fun fingerprint(): String = machine.identityKeys()["ed25519"].orEmpty()
 
+    /**
+     * Starts over: deletes the backup on the server (the saved copy of every old key goes with it) and makes a new one with a new recovery key.
+     * This phone keeps the keys it holds and saves them to the new backup; every other device is asked for the new key the next time it looks.
+     */
+    suspend fun resetBackup(): String {
+        backupVersion()?.let { (version, _) -> tx("DELETE", "/_matrix/client/v3/room_keys/version/${enc(version)}", null) }
+        return createBackup()
+    }
+
     /** Starts a new backup and returns the recovery key to show the person once. */
     suspend fun createBackup(): String {
         val key = withContext(Dispatchers.IO) { BackupRecoveryKey() }

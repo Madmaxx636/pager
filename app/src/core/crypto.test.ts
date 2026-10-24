@@ -40,11 +40,12 @@ class FakeServer {
       return {};
     };
   }
-  versions = 0;
+  versions = 0; deleted = 0;
   backup: { version?: string; auth?: any; keys: Record<string, any> } = { keys: {} };
   backupTx(base: Transport): Transport {
     return async (method, path, body: any) => {
       if (path.includes("/room_keys/version")) {
+        if (method === "DELETE") { this.deleted += 1; this.backup = { keys: {} }; return {}; }
         if (method === "POST") { this.versions += 1; this.backup = { version: String(this.versions), auth: body.auth_data, keys: {} }; return { version: String(this.versions) }; }
         return this.backup.version ? { version: this.backup.version, auth_data: this.backup.auth, algorithm: "m.megolm_backup.v1.curve25519-aes-sha2" } : (() => { throw new Error("none"); })();
       }
@@ -130,6 +131,31 @@ describe("end-to-end encryption", () => {
     await expect(bob2.restoreBackup(lost)).rejects.toThrow(/doesn't match/);
     expect(await bob2.restoreBackup(fresh)).toBe(1);
     expect((await bob2.decrypt("!room:x", ev))?.content.body).toBe("keep me");
+    alice.close(); bob1.close(); bob2.close();
+  }, 30000);
+
+  it("reset: the old backup is wiped, a new key is made, and another device sees that its key is out of date", async () => {
+    const server = new FakeServer();
+    const alice = await Crypto.create(server.tx("@alice:x", "A"), "@alice:x", "A");
+    const bob1 = await Crypto.create(server.backupTx(server.tx("@bob:x", "B1")), "@bob:x", "B1");
+    await alice.receiveSync({}); await bob1.receiveSync({});
+    const sent = await alice.encrypt("!room:x", "m.room.message", { msgtype: "m.text", body: "keep me" }, ["@alice:x", "@bob:x"]);
+    await bob1.receiveSync({ to_device: { events: server.takeInbox("@bob:x", "B1") } });
+    const ev = { type: "m.room.encrypted", event_id: "$1", sender: "@alice:x", origin_server_ts: 1, content: sent };
+    expect((await bob1.decrypt("!room:x", ev))?.content.body).toBe("keep me");
+    const first = await bob1.createBackup(); await bob1.pump(); await bob1.pump();
+    const bob2 = await Crypto.create(server.backupTx(server.tx("@bob:x", "B2")), "@bob:x", "B2");
+    await bob2.restoreBackup(first);
+    expect(await bob2.localBackupVersion()).toBe("1");
+    const fresh = await bob1.resetBackup(); await bob1.pump(); await bob1.pump();
+    expect(server.deleted).toBe(1);                                  // the old backup (and every key saved in it) was deleted
+    expect(fresh).not.toBe(first);
+    expect((await bob1.backupVersion())?.version).toBe("2");
+    expect(await bob1.localBackupVersion()).toBe("2");               // the device that reset is in step
+    expect(await bob2.localBackupVersion()).toBe("1");               // the other one is not: it will ask for the new key
+    await expect(bob2.restoreBackup(first)).rejects.toThrow(/doesn't match/);
+    expect(await bob2.restoreBackup(fresh)).toBe(1);                 // this device's keys were saved again under the new key
+    expect(await bob2.localBackupVersion()).toBe("2");
     alice.close(); bob1.close(); bob2.close();
   }, 30000);
 

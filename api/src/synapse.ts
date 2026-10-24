@@ -29,13 +29,28 @@ export async function registerUser(cfg: Config, username: string, password: stri
   return body;
 }
 
-/** Resolve a Matrix access token to a user ID. */
+/**
+ * Resolve a Matrix access token to a user ID. Every request starts here, so when the machine is busy and Synapse is slow to answer, this is
+ * where the apps would feel it ("Homeserver unavailable", an accounts page that never opens). A token that was good a moment ago is trusted
+ * for a minute, and if Synapse cannot be reached at all, for ten, so a slow moment does not lock you out of your own accounts.
+ */
+const seenTokens = new Map<string, { user: string; at: number }>();
+const FRESH_MS = 60_000, STALE_MS = 10 * 60_000;
 export async function whoami(cfg: Config, accessToken: string): Promise<string> {
-  const res = await fetch(`${cfg.synapseUrl}/_matrix/client/v3/account/whoami`, {
-    headers: { authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok) throw new HttpError(401, "Not signed in");
-  return ((await res.json()) as { user_id: string }).user_id;
+  const hit = seenTokens.get(accessToken);
+  if (hit && Date.now() - hit.at < FRESH_MS) return hit.user;
+  let res: Response;
+  try {
+    res = await fetch(`${cfg.synapseUrl}/_matrix/client/v3/account/whoami`, { headers: { authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(8000) });
+  } catch {
+    if (hit && Date.now() - hit.at < STALE_MS) return hit.user;
+    throw new HttpError(503, "The server is busy right now. Try again in a moment");
+  }
+  if (!res.ok) { seenTokens.delete(accessToken); throw new HttpError(401, "Not signed in"); }
+  const user = ((await res.json()) as { user_id: string }).user_id;
+  seenTokens.set(accessToken, { user, at: Date.now() });
+  if (seenTokens.size > 500) for (const [k, v] of seenTokens) if (Date.now() - v.at > STALE_MS) seenTokens.delete(k);
+  return user;
 }
 
 /**

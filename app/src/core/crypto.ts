@@ -5,7 +5,7 @@ import * as sdk from "@matrix-org/matrix-sdk-crypto-wasm";
 
 type J = Record<string, any>;
 /** How to talk to the homeserver. The app passes its HTTP client; tests pass a fake server. */
-export type Transport = (method: "GET" | "POST" | "PUT", path: string, body?: unknown) => Promise<any>;
+export type Transport = (method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown) => Promise<any>;
 
 const enc = encodeURIComponent;
 let wasmReady: Promise<void> | undefined;
@@ -150,6 +150,16 @@ export class Crypto {
     await this.machine.enableBackupV1(publicKey, version);
     void this.pump().catch(() => {});
     return formatRecoveryKey(base64ToBytes(key.toBase64()));
+  }
+
+  /**
+   * Starts over: deletes the backup on the server (the saved copy of every old key goes with it) and makes a new one with a new recovery key.
+   * This device keeps the keys it holds and saves them to the new backup; every other device is asked for the new key the next time it looks.
+   */
+  async resetBackup(): Promise<string> {
+    const old = await this.backupVersion();
+    if (old) await this.tx("DELETE", `/_matrix/client/v3/room_keys/version/${enc(old.version)}`);
+    return this.createBackup();
   }
 
   /** Reads the backup with a recovery key, imports every key into this device, and keeps saving to that backup. */

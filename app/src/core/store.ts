@@ -331,6 +331,11 @@ export async function createRecoveryKey(): Promise<string> {
   if (!e2ee) throw new Error("Encryption is not ready yet");
   const key = await e2ee.createBackup(); await refreshEncryptionStatus(); return key;
 }
+/** Deletes the old recovery backup and starts a new one: every other device is then asked for the new key. Returns the new recovery key to show once. */
+export async function resetRecoveryKey(): Promise<string> {
+  if (!e2ee) throw new Error("Encryption is not ready yet");
+  const key = await e2ee.resetBackup(); await refreshEncryptionStatus(); return key;
+}
 /** Reads the backup with a recovery key; returns how many message keys were restored. */
 export async function restoreWithRecoveryKey(key: string): Promise<number> {
   if (!e2ee) throw new Error("Encryption is not ready yet");
