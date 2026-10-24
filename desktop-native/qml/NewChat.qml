@@ -91,20 +91,25 @@ Dialog {
 
     header: Rectangle {
         color: "transparent"; implicitHeight: 56
-        Label { x: 20; anchors.verticalCenter: parent.verticalCenter; text: "New chat"; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.Bold }
-        IconButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; symbol: "✕"; glyphSize: 16; onClicked: dlg.close() }
+        Label { x: 20; anchors.verticalCenter: parent.verticalCenter; text: "Page someone"; color: look.text; font.pixelSize: Math.round(18.75 * look.textScale); font.weight: Font.Bold }
+        IconButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; ico: "x"; onClicked: dlg.close() }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: look.line }
     }
     contentItem: ColumnLayout {
         spacing: 0
+        Item {   // the pager, like the web's page hero
+            visible: dlg.networks !== null; Layout.fillWidth: true; Layout.preferredHeight: visible ? (dlg.networks.length ? 150 : 210) : 0
+            Column { anchors.centerIn: parent; spacing: 8
+                Image { anchors.horizontalCenter: parent.horizontalCenter; source: "qrc:/pager.svg"; sourceSize.width: 240; sourceSize.height: 240; width: dlg.networks && dlg.networks.length ? 88 : 110; height: width; smooth: true }
+                Label { anchors.horizontalCenter: parent.horizontalCenter; text: dlg.networks && dlg.networks.length ? "Wanna Page someone?" : "Connect an account first"; color: look.text; font.pixelSize: Math.round(18 * look.textScale); font.weight: Font.Bold }
+                Label { visible: dlg.networks !== null && dlg.networks.length === 0; anchors.horizontalCenter: parent.horizontalCenter; text: "Settings → Bridges & accounts"; color: look.muted } }
+        }
         TextField {
-            id: search; Layout.fillWidth: true; Layout.margins: 14; placeholderText: "Name, phone number or username"; placeholderTextColor: look.muted; color: look.text; selectByMouse: true
-            font.pixelSize: Math.round(14 * look.textScale); leftPadding: 14; background: Rectangle { radius: 18; color: look.panel2 }
+            id: search; visible: dlg.networks === null || dlg.networks.length > 0; Layout.fillWidth: true; Layout.leftMargin: 14; Layout.rightMargin: 14; Layout.topMargin: 6; Layout.bottomMargin: 8; Layout.preferredHeight: 44; placeholderText: "Name, phone number or username"; placeholderTextColor: look.muted; color: look.text; selectByMouse: true
+            font.pixelSize: Math.round(15 * look.textScale); leftPadding: 44; background: Rectangle { radius: 22; color: look.panel2; Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: "search"; size: 18; color: look.muted } }
             onTextChanged: { dlg.remote = []; remoteTimer.restart() }
         }
         Label { visible: dlg.error.length > 0; Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; wrapMode: Text.Wrap; text: dlg.error; color: look.danger; font.pixelSize: Math.round(13 * look.textScale) }
-        Label { visible: dlg.networks !== null && dlg.networks.length === 0 && !dlg.loading; Layout.fillWidth: true; Layout.margins: 16; wrapMode: Text.Wrap; color: look.muted
-            text: "Connect an account first: ⋮ → Accounts." }
         ListView {
             id: peopleList
             Layout.fillWidth: true; Layout.fillHeight: true; clip: true; boundsBehavior: Flickable.StopAtBounds
