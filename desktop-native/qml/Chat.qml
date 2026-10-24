@@ -76,7 +76,7 @@ Rectangle {
                         ColumnLayout {
                             spacing: 0
                             RowLayout { spacing: 4
-                                Label { text: core.currentName; color: look.text; font.pixelSize: Math.round(16 * look.textScale); font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.maximumWidth: pane.width - 330 }
+                                Label { text: core.currentName; color: look.text; font.pixelSize: Math.round(15 * look.textScale); font.weight: Font.DemiBold; elide: Text.ElideRight; Layout.maximumWidth: pane.width - 330 }
                                 Icon { name: "chevron-down"; size: 15; color: look.muted } }
                             Label { visible: text.length > 0; text: core.currentTyping.length ? core.currentTyping : core.currentSub; color: core.currentTyping.length ? look.accent : look.muted; font.pixelSize: Math.round(12 * look.textScale); font.italic: core.currentTyping.length > 0 }
                         }
@@ -211,12 +211,12 @@ Rectangle {
         // ---- the box you write in
         Rectangle {
             visible: core.currentRoom.length > 0
-            Layout.fillWidth: true; color: look.panel; implicitHeight: Math.min(Math.max(input.implicitHeight, 44), 170) + 20
+            Layout.fillWidth: true; color: look.panel; implicitHeight: Math.min(Math.max(input.implicitHeight, 50), 170) + 20
             Rectangle { width: parent.width; height: 1; color: look.line }
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; anchors.topMargin: 10; anchors.bottomMargin: 10; spacing: 8
                 IconButton {
-                    id: plus; Layout.alignment: Qt.AlignBottom; ico: "plus"; iconSize: 22; implicitWidth: 44; implicitHeight: 44; tint: look.accent
+                    id: plus; Layout.alignment: Qt.AlignBottom; ico: "plus"; iconSize: 22; implicitWidth: 42; implicitHeight: 42; tint: look.accent
                     onClicked: attachMenu.opened ? attachMenu.close() : attachMenu.open(); ToolTip.text: "Attach"; ToolTip.visible: hovered && !attachMenu.opened; ToolTip.delay: 600
                     Popup {   // a grid of everything you can add to a message, like the web's + menu
                         id: attachMenu
@@ -261,7 +261,7 @@ Rectangle {
                         TextArea {
                             id: input
                             placeholderText: "Message " + core.currentName.split(" ")[0] + (core.currentNetworkLabel.length ? " · " + core.currentNetworkLabel : "")
-                            leftPadding: 12; rightPadding: 4; topPadding: 12; bottomPadding: 12
+                            leftPadding: 12; rightPadding: 4; topPadding: 11; bottomPadding: 11
                             background: Item { }
                             onTextChanged: { core.setTyping(text.length > 0 && settings.sendTyping); draftTimer.restart() }
                             Keys.onPressed: (e) => {

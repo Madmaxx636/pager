@@ -82,7 +82,7 @@ Dialog {
     header: Rectangle {
         color: "transparent"; implicitHeight: 56
         IconButton { visible: dlg.narrow && !dlg.showingList; x: 6; anchors.verticalCenter: parent.verticalCenter; ico: "chevron-left"; onClicked: dlg.showingList = true }
-        Label { x: dlg.narrow && !dlg.showingList ? 52 : 20; anchors.verticalCenter: parent.verticalCenter; text: dlg.narrow && !dlg.showingList ? dlg.visiblePages[dlg.page][1] : "Settings"; color: look.text; font.pixelSize: Math.round(20 * look.textScale); font.weight: Font.Bold }
+        Label { x: dlg.narrow && !dlg.showingList ? 52 : 20; anchors.verticalCenter: parent.verticalCenter; text: dlg.narrow && !dlg.showingList ? dlg.visiblePages[dlg.page][1] : "Settings"; color: look.text; font.pixelSize: Math.round(18.75 * look.textScale); font.weight: Font.Bold }
         IconButton { anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; ico: "x"; onClicked: dlg.close() }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: look.line }
     }

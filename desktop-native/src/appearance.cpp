@@ -52,6 +52,11 @@ void Appearance::recompute() {
         if (!known) { a = QColor(m_accent); if (a.isValid()) ink = inkFor(a); }
         if (!a.isValid()) { a = QColor(m_dark ? "#2dd4bf" : "#0d9488"); ink = QColor(m_dark ? "#04201c" : "#ffffff"); }
         m_c.accent = a; m_c.ink = ink;
+        // like the web app: the accent is mixed into the surfaces, so it colours the whole app, not just the buttons
+        auto mix = [&a](const QColor &base, int pct) { const double t = pct / 100.0; return QColor(qRound((base.redF() * (1 - t) + a.redF() * t) * 255), qRound((base.greenF() * (1 - t) + a.greenF() * t) * 255), qRound((base.blueF() * (1 - t) + a.blueF() * t) * 255)); };
+        if (m_mode == QLatin1String("black")) { m_c.bg = mix(QColor("#000000"), 7); m_c.panel = mix(QColor("#0a0a0a"), 4); m_c.panel2 = mix(QColor("#161616"), 15); m_c.line = mix(QColor("#1d1d1d"), 14); m_c.theirs = mix(QColor("#121212"), 6); }
+        else if (m_dark) { m_c.bg = mix(QColor("#0b0e13"), 7); m_c.panel = mix(QColor("#12161d"), 4); m_c.panel2 = mix(QColor("#1c222c"), 15); m_c.line = mix(QColor("#232a35"), 14); m_c.theirs = mix(QColor("#171c24"), 6); }
+        else { m_c.bg = mix(QColor("#f2f4f7"), 7); m_c.panel = mix(QColor("#ffffff"), 4); m_c.panel2 = mix(QColor("#e9ecf1"), 15); m_c.line = mix(QColor("#e1e5ec"), 14); m_c.theirs = mix(QColor("#ffffff"), 6); }
     }
     emit changed();
 }
