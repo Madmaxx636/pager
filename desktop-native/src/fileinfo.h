@@ -21,6 +21,8 @@ public:
     Q_INVOKABLE QString saveClipboardImage() const;
     Q_INVOKABLE QString downloadsDir() const;
     Q_INVOKABLE QString clipboardText() const;
+    /// Starts Pager again and quits this one (for settings that only apply at start, like the app size). Does nothing in tests.
+    Q_INVOKABLE void restartApp() const;
     /// Starts Pager when you log in (a launcher in the autostart folder).
     Q_INVOKABLE void setAutostart(bool on) const;
     Q_INVOKABLE bool autostart() const;

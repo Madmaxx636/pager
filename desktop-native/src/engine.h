@@ -139,6 +139,9 @@ public:
     Q_INVOKABLE double muteLeftMs(const QString &roomId) const { const double t = m_muteUntil.value(roomId); return t > 0 ? t - QDateTime::currentMSecsSinceEpoch() : 0; }
     Q_INVOKABLE void enableEncryption(const QString &roomId);                    // end-to-end encrypt this chat from now on (cannot be undone); encryptionResult("") when done
     Q_INVOKABLE void encryptAll();                                               // encrypt every chat that can take it, one after another; encryptAllProgress(done, total, failed)
+    Q_PROPERTY(int everyHistoryLeft READ everyHistoryLeft NOTIFY everyHistoryChanged)   // chats still to fetch after "Load every page's full history"
+    Q_INVOKABLE void loadEveryHistory();
+    int everyHistoryLeft() const { return m_everyQueue.size() + (m_allHistory.isEmpty() ? 0 : 1); }
     Q_INVOKABLE void loadAllHistory(const QString &roomId);                      // fetch every older page of this chat; historyProgress(count, done)
     Q_INVOKABLE QVariantList faces(const QString &roomId) const;   // up to four people of a group without a picture of its own, for its round collage
     QVariantMap filters() const { return m_filters; }
@@ -327,6 +330,7 @@ signals:
     void savedChanged();
     void jumpRequested(const QString &eventId);
     void recoveryChanged();
+    void everyHistoryChanged();
     void updateChanged();
     /// The update has been downloaded and checked: the screen puts it in place and restarts.
     void updateReady(const QString &path);
@@ -378,6 +382,8 @@ private:
     TimelineModel m_timeline{&m_store};
     bool m_signedIn = false, m_starting = true, m_working = false;
     bool m_firstRooms = true;
+    QStringList m_everyQueue;
+    void nextEveryHistory();
     QHash<QString, qint64> m_newestTs;      // the newest message time seen per chat: older ones arriving later are history a bridge sent again, not news
     QSet<QString> m_idNames, m_idIds;       // who you are on each network; only ever grows, so a login dropping out for a while changes nothing
     QSet<QString> m_fetching;

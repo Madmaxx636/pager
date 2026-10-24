@@ -16,6 +16,7 @@ Dialog {
     property int page: 0
     property string note: ""
     property bool styleOpen: false
+    property string clipNote: ""
     // a page that fills the right-hand side next to the list of chats, like the web app's settings
     modal: false; dim: false; closePolicy: Popup.CloseOnEscape
     readonly property real sideW: parent && Overlay.overlay && parent.width < Overlay.overlay.width - 100 ? parent.width : 0
@@ -233,11 +234,28 @@ Dialog {
                         Flow { Layout.preferredWidth: 280; Layout.alignment: Qt.AlignRight; spacing: 8
                             Repeater { model: look.accents()
                                 delegate: Item { width: 28; height: 28
-                                    Rectangle { anchors.fill: parent; radius: 14; color: modelData.color }
-                                    Rectangle { anchors.centerIn: parent; width: 36; height: 36; radius: 18; color: "transparent"; border.width: 2; border.color: look.text; visible: look.palette === "" && look.accentName === modelData.name }
-                                    ToolTip.visible: ah.hovered; ToolTip.text: modelData.name; HoverHandler { id: ah; cursorShape: Qt.PointingHandCursor } TapHandler { onTapped: look.setAccent(modelData.name) } } } } }
-                    TextField { Layout.preferredWidth: 130; Layout.preferredHeight: 36; placeholderText: "#rrggbb"; maximumLength: 7; color: look.text; placeholderTextColor: look.muted; background: Rectangle { radius: 18; color: look.panel2 }
-                        onTextEdited: if (/^#[0-9a-fA-F]{6}$/.test(text)) look.setAccent(text) }
+                                    readonly property bool on: look.palette === "" && look.accentName === modelData.name
+                                    Rectangle { anchors.fill: parent; radius: 14; color: modelData.colorDark }
+                                    Icon { visible: parent.on; anchors.centerIn: parent; name: "check"; size: 16; color: "#111418" }
+                                    Rectangle { anchors.centerIn: parent; width: 36; height: 36; radius: 18; color: "transparent"; border.width: 2; border.color: look.text; visible: parent.on }
+                                    ToolTip.visible: ah.hovered; ToolTip.text: modelData.name; HoverHandler { id: ah; cursorShape: Qt.PointingHandCursor } TapHandler { onTapped: look.setAccent(modelData.name) } } }
+                            Item { width: 28; height: 28   // your computer's own accent colour
+                                readonly property bool on: look.palette === "" && look.accentName === "system"
+                                Rectangle { anchors.fill: parent; radius: 14; gradient: Gradient { orientation: Gradient.Horizontal; GradientStop { position: 0; color: "#5a6472" } GradientStop { position: 1; color: "#2d333b" } } }
+                                Icon { anchors.centerIn: parent; name: parent.on ? "check" : "monitor"; size: parent.on ? 16 : 14; color: "white" }
+                                Rectangle { anchors.centerIn: parent; width: 36; height: 36; radius: 18; color: "transparent"; border.width: 2; border.color: look.text; visible: parent.on }
+                                ToolTip.visible: sysH.hovered; ToolTip.text: "Match my system accent"; HoverHandler { id: sysH; cursorShape: Qt.PointingHandCursor } TapHandler { onTapped: look.setAccent("system") } }
+                            Item { width: 28; height: 28   // make your own
+                                readonly property bool on: look.palette === "" && look.accentName === "custom"
+                                Canvas { anchors.fill: parent; visible: !parent.on
+                                    onPaint: { const c = getContext("2d"); c.reset(); const g = c.createConicalGradient(14, 14, 0)
+                                        g.addColorStop(0, "red"); g.addColorStop(0.17, "yellow"); g.addColorStop(0.33, "lime"); g.addColorStop(0.5, "cyan"); g.addColorStop(0.67, "blue"); g.addColorStop(0.83, "magenta"); g.addColorStop(1, "red")
+                                        c.fillStyle = g; c.beginPath(); c.arc(14, 14, 14, 0, 2 * Math.PI); c.fill() } }
+                                Rectangle { anchors.fill: parent; radius: 14; color: settings.accentCustom; visible: parent.on }
+                                Icon { anchors.centerIn: parent; name: parent.on ? "check" : "palette"; size: parent.on ? 16 : 15; color: "white" }
+                                Rectangle { anchors.centerIn: parent; width: 36; height: 36; radius: 18; color: "transparent"; border.width: 2; border.color: look.text; visible: parent.on }
+                                ToolTip.visible: ownH.hovered; ToolTip.text: "Make your own"; HoverHandler { id: ownH; cursorShape: Qt.PointingHandCursor } TapHandler { onTapped: accentDialog.open() } } } }
+                    ColorDialog { id: accentDialog; selectedColor: settings.accentCustom; onAccepted: look.setAccent(String(selectedColor).substring(0, 7)) }
                 }
             }
             SGroup { title: "Message bubbles"
@@ -309,7 +327,7 @@ Dialog {
                             Label { anchors.horizontalCenter: parent.horizontalCenter; text: modelData[1]; color: look.muted; font.pixelSize: 11 } } } } }
             }
             SGroup { title: "Size & font"
-                SChoice { key: "uiScale"; title: "App size"; hint: "Makes everything bigger or smaller, not only the text"; options: [["small", "Small"], ["medium", "Medium"], ["large", "Large"]] }
+                SChoice { key: "uiScale"; title: "App size"; hint: "Makes everything bigger or smaller, not only the text. Pager restarts to apply it"; options: [["small", "Small"], ["medium", "Medium"], ["large", "Large"]]; onPicked: Qt.callLater(files.restartApp) }
                 SChoice { key: "fontFamily"; title: "Font"; options: [["system", "System"], ["serif", "Serif"], ["rounded", "Rounded"], ["humanist", "Humanist"], ["mono", "Monospace"], ["sf", "iPhone style"], ["googlesans", "Google style"], ["roboto", "Roboto"], ["readable", "Easy to read"]] }
             }
             SGroup { title: "Text & messages"
@@ -412,6 +430,12 @@ Dialog {
                 SChoice { key: "receiveSound"; title: "Receive sound"; options: files.sounds(); onPicked: (v) => core.previewSound(v, settings.convoSoundVolume) }
                 SSlider { key: "convoSoundVolume"; title: "Page sound volume"; from: 0; to: 1; step: 0.05; decimals: 2 }
                 SChoice { key: "notifSoundId"; title: "Alert sound"; options: files.sounds(); onPicked: (v) => core.previewSound(v, settings.notifSoundVolume) }
+                Repeater { model: Object.keys(settings.notifNetworkSound || {})
+                    delegate: SChoice { readonly property string net: modelData; title: N.meta(net).label + " sound"; valueNow: String((settings.notifNetworkSound || {})[net]); options: [["", "Same as the app (remove)"]].concat(files.sounds())
+                        onPicked: (v) => { const m = Object.assign({}, settings.notifNetworkSound || {}); if (v === "") delete m[net]; else m[net] = v; settings.set("notifNetworkSound", m); if (v !== "") core.previewSound(v, settings.notifSoundVolume) } } }
+                SAction { readonly property var free: core.networks.filter(n => !((settings.notifNetworkSound || {})[n] !== undefined)); title: "Sound for one app"; hint: free.length ? "Give a connected app its own alert sound" : "No more connected apps"; button: "Add"; enabled: free.length > 0
+                    onClicked: netSoundMenu.popup()
+                    Menu { id: netSoundMenu; Repeater { model: parent.free; delegate: MenuItem { text: N.meta(modelData).label; onTriggered: { const m = Object.assign({}, settings.notifNetworkSound || {}); m[modelData] = settings.notifSoundId; settings.set("notifNetworkSound", m) } } } } }
                 SAction { title: "Your own sound"; hint: settings.customSoundPath.length ? "Using " + settings.customSoundPath.split("/").pop() + ". Choose “Your own sound” in a list above to use it." : "Pick an audio file (wav, mp3, ogg…), then choose “Your own sound” in a list above"; button: settings.customSoundPath.length ? "Change…" : "Choose…"; onClicked: soundPick.open() }
                 SAction { visible: settings.customSoundPath.length > 0; title: "Remove your sound"; button: "Remove"; danger: true; onClicked: settings.set("customSoundPath", "") }
                 SSlider { key: "notifSoundVolume"; title: "Volume"; from: 0; to: 1; step: 0.05; decimals: 2 }
@@ -457,6 +481,8 @@ Dialog {
                 SText { table: "gifKeys"; key: "giphy"; title: "GIPHY"; hint: "developers.giphy.com"; secret: true }
                 SText { table: "gifKeys"; key: "klipy"; title: "KLIPY"; hint: "partner.klipy.com"; secret: true }
             }
+            SGroup { title: "History"; footer: "Pager loads older messages as you scroll. This fetches all of them now, so they are on this device. It can take a while and uses data."
+                SAction { title: "Load every page's full history"; hint: core.everyHistoryLeft > 0 ? "Loading… " + core.everyHistoryLeft + " pages to go" : ""; button: core.everyHistoryLeft > 0 ? "Working…" : "Load"; busy: core.everyHistoryLeft > 0; onClicked: core.loadEveryHistory() } }
             SGroup { title: "Voice messages"; footer: "Needs transcription switched on at your server. The words are made on your own server and kept on this computer."
                 SToggle { key: "autoTranscribe"; title: "Write out voice messages automatically"; hint: "Otherwise use “Write it out” under a message"; enabled: core.canTranscribe }
             }
@@ -549,6 +575,9 @@ Dialog {
         SGroup { plain: true; Layout.fillWidth: true
             SGroup { title: "Sync settings"; footer: "Choose which settings to copy between your computers and browsers. Nothing is copied unless you press the button."
                 SAction { title: "Sync settings…"; hint: "Save from this device or load onto it"; button: "Open"; onClicked: syncDlg.openNow() }
+                SAction { title: "Copy settings to clipboard"; hint: dlg.clipNote; button: "Copy"; onClicked: { files.copy(JSON.stringify(settings.snapshot())); dlg.clipNote = "Settings copied." } }
+                SAction { title: "Restore settings from clipboard"; button: "Restore"
+                    onClicked: { try { const o = JSON.parse(files.clipboardText()); if (!o || typeof o !== "object" || Array.isArray(o)) throw 1; for (const k in o) settings.set(k, o[k]); dlg.clipNote = "Settings restored." } catch (e) { dlg.clipNote = "The clipboard doesn't contain Pager settings." } } }
             }
             SGroup { title: "Back up settings"; footer: "Saves every setting as a file, so you can load it on another device."
                 SAction { title: "Export settings"; hint: "Save your settings to a file"; button: "Export…"; onClicked: exportDialog.open() }
@@ -627,8 +656,9 @@ Dialog {
                     Button { visible: core.updateState === "available"; text: "Update now"; onClicked: core.installUpdate() }
                     Button { visible: core.updateState === "idle" || core.updateState === "error"; text: "Check for updates"; onClicked: core.checkForUpdates(false) } } }
             SGroup { title: "Account"
+                SAction { title: core.user; hint: core.server; button: "Sign out"; onClicked: { dlg.close(); core.logout() } }
                 SAction { title: "Show the welcome tour again"; button: "Show"; onClicked: { dlg.close(); core.replayTour() } }
-                Button { text: "Sign out"; onClicked: { dlg.close(); core.logout() } } }
+                SAction { title: "Delete my profile"; hint: "Removes your account and everything in it from this server. Your chats on WhatsApp, Signal and the others are not touched."; button: "Delete…"; danger: true; onClicked: { deleteProfile.pw = ""; deleteProfile.err = ""; deleteProfile.open() } } }
         }
     }
 
@@ -665,6 +695,23 @@ Dialog {
     }
     Dialog { id: resetConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Reset all settings?"; standardButtons: Dialog.Cancel | Dialog.Ok; background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
         Label { text: "Everything goes back to how Pager starts."; color: look.text } onAccepted: { settings.reset(); dlg.note = "Settings reset." } }
+    Dialog { id: deleteProfile; property string pw: ""; property string err: ""; property bool busy: false
+        modal: true; anchors.centerIn: Overlay.overlay; title: "Delete your profile?"; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440)
+        background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
+        contentItem: ColumnLayout { spacing: 10
+            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; text: "This deletes your account on this server, disconnects all your apps and removes your messages here. Your pages on WhatsApp, Signal and the others are not touched. This can't be undone." }
+            Label { text: "Your password"; color: look.text }
+            TextField { Layout.fillWidth: true; echoMode: TextInput.Password; text: deleteProfile.pw; onTextChanged: deleteProfile.pw = text; color: look.text; background: Rectangle { radius: 10; color: look.panel2 } }
+            Label { visible: deleteProfile.err.length > 0; Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.danger; text: deleteProfile.err }
+            RowLayout { Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                Button { text: "Cancel"; flat: true; onClicked: deleteProfile.close() }
+                Button { text: deleteProfile.busy ? "Deleting…" : "Delete my profile"; enabled: !deleteProfile.busy && deleteProfile.pw.length > 0; palette.buttonText: look.danger
+                    onClicked: { deleteProfile.busy = true; deleteProfile.err = ""
+                        core.api("POST", "/_matrix/client/v3/account/deactivate", { auth: { type: "m.login.password", identifier: { type: "m.id.user", user: core.user }, password: deleteProfile.pw }, erase: true }, function (status, body) {
+                            deleteProfile.busy = false
+                            if (status === 200) { deleteProfile.close(); dlg.close(); core.logout() } else deleteProfile.err = (body && body.error) || "Wrong password" }) } } } }
+    }
     Dialog { id: encryptAllConfirm; modal: true; anchors.centerIn: Overlay.overlay; title: "Encrypt all my pages?"; standardButtons: Dialog.Cancel | Dialog.Ok; width: Math.min(420, Overlay.overlay ? Overlay.overlay.width - 32 : 420); background: Rectangle { color: look.panel; radius: 12; border.color: look.line }
         Label { width: parent.width; wrapMode: Text.Wrap; color: look.text; text: "Every page that can take encryption gets it turned on. It cannot be turned off again. Messages sent before stay readable on your server. Make sure you have your recovery key." } onAccepted: { dlg.encNote = "Starting…"; core.encryptAll() } }
     Connections { target: core; function onEncryptAllProgress(done, total, failed) { dlg.encNote = total === 0 ? "Everything is already encrypted." : (done >= total ? "Done: " + (total - failed) + " turned on" + (failed ? ", " + failed + " could not be" : "") : "Turning on… " + done + " of " + total) } }

@@ -12,6 +12,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QCoreApplication>
+#include <QProcess>
 #include <QMimeDatabase>
 
 QString FileInfo::mime(const QString &path) const { return QMimeDatabase().mimeTypeForFile(path).name(); }
@@ -29,6 +30,11 @@ QString FileInfo::saveClipboardImage() const {
 }
 QString FileInfo::downloadsDir() const { const QString d = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation); return d.isEmpty() ? QDir::homePath() : d; }
 QString FileInfo::clipboardText() const { return QGuiApplication::clipboard()->text(); }
+void FileInfo::restartApp() const {
+    if (QGuiApplication::platformName() == QLatin1String("offscreen") || qEnvironmentVariableIsSet("PAGER_NO_RESTART")) return;
+    QProcess::startDetached(QCoreApplication::applicationFilePath(), QCoreApplication::arguments().mid(1));
+    QCoreApplication::quit();
+}
 static QString autostartFile() { return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/autostart/pager-native.desktop"); }
 bool FileInfo::autostart() const { return QFile::exists(autostartFile()); }
 void FileInfo::setAutostart(bool on) const {

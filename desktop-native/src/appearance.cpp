@@ -1,6 +1,7 @@
 #include "appearance.h"
 #include <QFile>
 #include <QGuiApplication>
+#include <QPalette>
 #include <QStyleHints>
 
 namespace {
@@ -42,7 +43,8 @@ void Appearance::recompute() {
     m_palette = m_settings->value(QStringLiteral("palette")).toString(); if (m_palette == QLatin1String("none")) m_palette.clear();
     m_motion = m_settings->value(QStringLiteral("fancyMotion")).toBool() && !m_settings->value(QStringLiteral("reduceMotion")).toBool();
     const QString ui = m_settings->value(QStringLiteral("uiScale")).toString();
-    m_scale = qBound(0.8, m_settings->value(QStringLiteral("fontScale")).toDouble(), 1.6) * (ui == QLatin1String("small") ? 0.92 : ui == QLatin1String("large") ? 1.12 : 1.0);
+    Q_UNUSED(ui)      // the app size scales the whole window (see main.cpp), so the text scale is only the text size setting
+    m_scale = qBound(0.8, m_settings->value(QStringLiteral("fontScale")).toDouble(), 1.6);
     for (const Pal &p : m_pals) if (p.id == m_palette) pal = &p;
     m_skin = m_settings->value(QStringLiteral("skin")).toString(); m_skinAccent = m_settings->value(QStringLiteral("skinAccent")).toString();
     const Skin *skin = nullptr;
@@ -66,6 +68,7 @@ void Appearance::recompute() {
         else m_c = {QColor("#f2f4f7"), QColor("#ffffff"), QColor("#e9ecf1"), QColor("#e1e5ec"), QColor("#111418"), QColor("#5f6b7a"), {}, {}, QColor("#ffffff")};
         QColor a, ink; bool known = false;
         for (const Accent &x : kAccents) if (m_accent == QLatin1String(x.name)) { a = QColor(m_dark ? x.dark : x.light); ink = QColor(m_dark ? x.onDark : x.onLight); known = true; }
+        if (!known && m_accent == QLatin1String("system")) { if (QGuiApplication::instance()) a = QGuiApplication::palette().color(QPalette::Accent); if (a.isValid()) { ink = inkFor(a); known = true; } else a = QColor(); }   // the accent colour of the desktop
         if (!known) { a = QColor(m_accent); if (a.isValid()) ink = inkFor(a); }
         if (!a.isValid()) { a = QColor(m_dark ? "#2dd4bf" : "#0d9488"); ink = QColor(m_dark ? "#04201c" : "#ffffff"); }
         m_c.accent = a; m_c.ink = ink;
@@ -85,7 +88,7 @@ void Appearance::setMode(const QString &mode) {
     recompute();
 }
 void Appearance::setAccent(const QString &nameOrHex) {
-    bool known = QColor(nameOrHex).isValid() && nameOrHex.startsWith(QLatin1Char('#'));
+    bool known = (QColor(nameOrHex).isValid() && nameOrHex.startsWith(QLatin1Char('#'))) || nameOrHex == QLatin1String("system");
     for (const Accent &x : kAccents) if (nameOrHex == QLatin1String(x.name)) known = true;
     if (!known) return;
     m_settings->set(QStringLiteral("palette"), QStringLiteral("none"));
@@ -131,6 +134,6 @@ QVariantList Appearance::palettes() const {
 }
 QVariantList Appearance::accents() const {
     QVariantList out;
-    for (const Accent &x : kAccents) out << QVariantMap{{"name", QString::fromLatin1(x.name)}, {"color", QColor(m_dark ? x.dark : x.light)}};
+    for (const Accent &x : kAccents) out << QVariantMap{{"name", QString::fromLatin1(x.name)}, {"color", QColor(m_dark ? x.dark : x.light)}, {"colorDark", QColor(x.dark)}};
     return out;
 }
