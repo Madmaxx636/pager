@@ -367,7 +367,7 @@ class Store(private val context: Context) {
     /** Deletes the old recovery backup and starts a new one: every other device is then asked for the new key. Returns the new key to show once. */
     suspend fun resetRecoveryKey(): String {
         val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
-        return e.resetBackup().also { refreshEncryptionStatus() }
+        return e.resetBackup().also { refreshEncryptionStatus(); resyncFromServer() }   // read everything again under the new key
     }
 
     /** Starts the recovery backup and returns the recovery key to show once. */
@@ -379,7 +379,11 @@ class Store(private val context: Context) {
     /** Reads the backup with a recovery key; returns how many message keys were restored. */
     suspend fun restoreWithRecoveryKey(key: String): Int {
         val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
-        return e.restoreBackup(key).also { refreshEncryptionStatus(); retryWaiting() }
+        return e.restoreBackup(key).also {
+            refreshEncryptionStatus()
+            // With the key changed, read everything from the server again so no message is left behind from before the keys matched.
+            resyncFromServer(); scope.launch { delay(5_000); retryWaiting() }
+        }
     }
 
     /**
