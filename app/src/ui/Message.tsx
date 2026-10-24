@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { VideoPlayer } from "./Video";
 import { AlertCircle, Check, CheckCheck, Clock, FileText, MapPin, Music, Pause, Play, Star, UserRound, Mic } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, nameOf, previewOf } from "../core/types";
@@ -52,6 +52,25 @@ function useSwipeToReply(enabled: boolean, onReply: () => void) {
   };
 }
 
+/**
+ * The sent, delivered and read marks. They look the same in every conversation: grey-ish while it is on its way, sky blue once it is read.
+ * Only the lightness follows the bubble (light marks on a dark bubble, dark on a light one) so they can always be seen.
+ */
+function Ticks({ read, failed, children }: { read: boolean; failed: boolean; children: React.ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [tone, setTone] = useState<"dark" | "light">("dark");
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    const bubble = el.closest(".bubble") as HTMLElement | null;
+    let bg = bubble ? getComputedStyle(bubble).backgroundColor : "";
+    if (!bg || /rgba\(.*,\s*0\)$/.test(bg) || bg === "transparent") bg = getComputedStyle(document.body).backgroundColor;
+    const m = bg.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0];
+    const lum = (0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2]) / 255;
+    setTone(lum < 0.55 ? "dark" : "light");
+  });
+  return <span ref={ref} data-tone={tone} className={"ticks" + (read ? " read" : "") + (failed ? " failed" : "")}>{children}</span>;
+}
+
 export function MessageRow({ chat, msg, first, last, group, mine, read, delivered, latestMine, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply, onVote, onEndPoll, onJump }: {
   chat: ChatState; msg: Msg; first: boolean; last: boolean; group: boolean; mine: boolean; read: boolean; delivered?: boolean; latestMine?: boolean; reply?: Msg; st: AppSettings; starred: boolean;
   onMenu: (x: number, y: number) => void; onOpen: () => void; onWho: (key: string) => void; onReact: (key: string) => void; onReply: () => void; onVote: (ids: string[]) => void; onEndPoll: () => void; onJump?: (id: string) => void;
@@ -60,7 +79,7 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
   const author = nameOf(chat, msg.sender);
   const big = st.largeEmoji && msg.type === "m.text" && !msg.html && isEmojiOnly(msg.body);
   const bare = !!msg.sticker || big;
-  const tick = msg.status === STATUS_SENDING ? <Clock size={13} /> : msg.status === STATUS_FAILED ? <AlertCircle size={13} /> : read ? <CheckCheck size={14} /> : delivered ? <CheckCheck size={14} style={{ opacity: 0.55 }} /> : <Check size={14} style={{ opacity: 0.55 }} />;
+  const tick = msg.status === STATUS_SENDING ? <Clock size={13} /> : msg.status === STATUS_FAILED ? <AlertCircle size={13} /> : read ? <CheckCheck size={14} /> : delivered ? <CheckCheck size={14} /> : <Check size={14} />;
   const swipe = useSwipeToReply(st.swipeToReply && msg.status === STATUS_SENT, onReply);
   // Each side has its own shape, roundness, border and colours (set in Settings > Appearance > Message bubbles). A desktop style keeps its own look.
   const look = bubbleLook(st, mine);
@@ -91,7 +110,7 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
           {last && !bare && (st.showMessageTimes || (mine && st.showReadTicks) || msg.edited) && (
             <div className="meta">
               {starred && <Star size={11} />}{msg.edited && <i>edited</i>}{st.showMessageTimes && <span>{clock(msg.ts, st.timeFormat)}</span>}
-              {mine && st.showReadTicks && <span className={"ticks" + (read ? " read" : "")}>{tick}</span>}
+              {mine && st.showReadTicks && <Ticks read={read} failed={msg.status === STATUS_FAILED}>{tick}</Ticks>}
             </div>
           )}
         </div>
