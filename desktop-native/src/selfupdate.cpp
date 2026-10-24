@@ -20,7 +20,8 @@ static QString moveInto(const QString &from, const QString &to) {
 }
 
 QString SelfUpdate::installArchive(const QString &archive, const QString &appDir) {
-    if (!canWrite(appDir)) return QStringLiteral("This copy of Pager is installed where you can't change it. Download the new version and install it again.");
+    QDir().mkpath(appDir);
+    if (!canWrite(appDir)) return QStringLiteral("Pager can't write to %1 to install the update.").arg(appDir);
     QTemporaryDir stage(appDir + QStringLiteral("/.update-XXXXXX"));
     if (!stage.isValid()) return QStringLiteral("Couldn't make room for the update.");
     QProcess tar;

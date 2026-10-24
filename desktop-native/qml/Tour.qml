@@ -46,7 +46,7 @@ Popup {
                 Text { visible: false; id: ghost; width: words.width; text: tour.step.text; wrapMode: Text.Wrap; font.pixelSize: 17 }
                 Rectangle { width: 18; height: 18; rotation: 45; color: look.panel; border.width: 2; border.color: look.line; x: parent.width / 2 - 9; y: parent.height - 10; z: -1 }
             }
-            Image { anchors.horizontalCenter: parent.horizontalCenter; source: "qrc:/pager.svg"; sourceSize.width: 340; sourceSize.height: 340; width: 160; height: 160; smooth: true }
+            Mascot { anchors.horizontalCenter: parent.horizontalCenter; size: 160 }
             Row { anchors.horizontalCenter: parent.horizontalCenter; spacing: 8
                 Button { visible: tour.step.label !== undefined; text: tour.step.label || ""; highlighted: true; onClicked: tour.finish(tour.step.page) }
                 Button { visible: tour.i > 0; text: "Back"; flat: true; onClicked: tour.i-- }

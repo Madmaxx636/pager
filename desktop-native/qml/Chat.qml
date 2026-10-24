@@ -63,7 +63,7 @@ Rectangle {
         spacing: 0
         // ---- header
         Rectangle {
-            Layout.fillWidth: true; height: 64; color: look.panel
+            Layout.fillWidth: true; height: 64; color: look.panel; visible: core.currentRoom.length > 0      // no header over the "pick a page" screen, like the web
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: look.line }
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 10; spacing: 6
@@ -151,7 +151,9 @@ Rectangle {
                 onAtYEndChanged: core.setAtBottom(atYEnd)
                 // reaching the oldest message asks for older ones
                 onContentYChanged: if (count > 0 && !dragging && contentY - originY < 900) core.loadOlder()
-                Label { anchors.centerIn: parent; visible: core.currentRoom.length === 0; text: "Pick a chat"; color: look.muted; font.pixelSize: Math.round(16 * look.textScale) }
+                Column { anchors.centerIn: parent; visible: core.currentRoom.length === 0; spacing: 10
+                    Mascot { anchors.horizontalCenter: parent.horizontalCenter; size: 170; mood: core.loading ? "ring" : "idle" }
+                    Label { anchors.horizontalCenter: parent.horizontalCenter; text: core.loading ? "Syncing…" : "Pick a page to start."; color: look.text; font.pixelSize: Math.round(15 * look.textScale) } }
                 Label { anchors.centerIn: parent; visible: core.currentRoom.length > 0 && msgs.count === 0; text: core.loading ? "Loading…" : "No messages yet. Say hello!"; color: look.muted; font.pixelSize: Math.round(14 * look.textScale) }
             }
             ScreenEffects { id: fx; anchors.fill: parent; z: 5; enabled: false }
@@ -331,6 +333,7 @@ Rectangle {
         case "attention": attentionDialog.open(); break
         case "schedule": scheduleDialog.openFor(pane.roomId, "Hello"); break
         case "attach": attachMenu.open(); break
+        case "blank": core.openRoom(""); break
         }
     })
     // the viewer (pictures and video, with the multimedia libraries) is loaded the first time something is opened

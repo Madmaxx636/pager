@@ -103,7 +103,7 @@ Dialog {
         Item {   // the pager, like the web's page hero
             visible: dlg.networks !== null; Layout.fillWidth: true; Layout.preferredHeight: visible ? (dlg.networks.length ? 150 : 210) : 0
             Column { anchors.centerIn: parent; spacing: 8
-                Image { anchors.horizontalCenter: parent.horizontalCenter; source: "qrc:/pager.svg"; sourceSize.width: 240; sourceSize.height: 240; width: dlg.networks && dlg.networks.length ? 88 : 110; height: width; smooth: true }
+                Mascot { anchors.horizontalCenter: parent.horizontalCenter; size: dlg.networks && dlg.networks.length ? 104 : 120 }
                 Label { anchors.horizontalCenter: parent.horizontalCenter; text: dlg.networks && dlg.networks.length ? "Wanna Page someone?" : "Connect an account first"; color: look.text; font.pixelSize: Math.round(18 * look.textScale); font.weight: Font.Bold }
                 Label { visible: dlg.networks !== null && dlg.networks.length === 0; anchors.horizontalCenter: parent.horizontalCenter; text: "Settings → Bridges & accounts"; color: look.muted } }
         }

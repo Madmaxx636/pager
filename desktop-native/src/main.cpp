@@ -144,18 +144,25 @@ int main(int argc, char *argv[]) {
         if (settings.value(QStringLiteral("startMinimized")).toBool()) win->hide();      // "Start minimized to tray"
     } else QApplication::setQuitOnLastWindowClosed(true);   // no tray on this desktop: closing the window quits
     QObject::connect(&app, &QGuiApplication::lastWindowClosed, [&] { if (!settings.value(QStringLiteral("closeToTray")).toBool() || !tray.isVisible()) app.quit(); });
+    static QString restartExe = QCoreApplication::applicationFilePath();      // what to start again after an update (a new copy in your own folder, or this one)
     QObject::connect(&engine, &Engine::updateReady, [&](const QString &path) {
 #ifdef Q_OS_WIN
         // The installer (per user, no administrator rights) closes this Pager, replaces the files and starts the new one.
         if (QProcess::startDetached(path, {QStringLiteral("/S")})) { engine.updateInstalled(QString()); }
         else engine.updateInstalled(QStringLiteral("Windows wouldn't start the installer. Open it yourself: ") + QDir::toNativeSeparators(path));
 #else
-        engine.updateInstalled(SelfUpdate::installArchive(path, QCoreApplication::applicationDirPath()));
+        // A copy installed for everyone (the .deb) cannot be changed by you: the update goes into your own folder instead, and the launcher
+        // (/usr/bin/pager-native) starts whichever copy is newer.
+        const QString here = QCoreApplication::applicationDirPath();
+        const QString target = SelfUpdate::canWrite(here) ? here : QDir::homePath() + QStringLiteral("/.local/opt/pager-native");
+        const QString err = SelfUpdate::installArchive(path, target);
+        if (err.isEmpty() && target != here) restartExe = target + QStringLiteral("/pager-native");
+        engine.updateInstalled(err);
 #endif
     });
     QObject::connect(&engine, &Engine::restartRequested, [&] {
 #ifndef Q_OS_WIN
-        QProcess::startDetached(QCoreApplication::applicationFilePath(), QCoreApplication::arguments().mid(1));
+        QProcess::startDetached(restartExe, QCoreApplication::arguments().mid(1));
 #endif
         app.quit();
     });
