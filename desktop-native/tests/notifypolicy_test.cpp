@@ -61,6 +61,15 @@ private slots:
         Input g = msg(); g.isGroup = true; QVERIFY(!decide(g, S({{"notifGroupMode", "mentions"}})).show); g.mentioned = true; QVERIFY(decide(g, S({{"notifGroupMode", "mentions"}})).show);
         Input g2 = msg(); g2.isGroup = true; QVERIFY(!decide(g2, S({{"notifGroupMode", "none"}})).show); QVERIFY(decide(msg(), S({{"notifGroupMode", "none"}})).show); QVERIFY(!decide(msg(), S({{"notifDirectMode", "none"}})).show);
     }
+    void oldMessagesSentAgainDoNotAlert() {
+        const qint64 t = 1000000000000LL;
+        QVERIFY(worthAlert(t + 30000, t, t + 60000));                     // newer than what the chat holds
+        QVERIFY(!worthAlert(t - 3600000, t, t + 60000));                  // an hour older than the newest: history
+        QVERIFY(worthAlert(t + 1000, t, t + 4 * 3600000));                // waited four hours while the phone was away: still news
+        QVERIFY(!worthAlert(t + 1000, t, t + 3 * 86400000LL));            // three days old: never
+        QVERIFY(worthAlert(t - 5000, 0, t));                              // an empty chat: only what arrives now
+        QVERIFY(!worthAlert(t - 86400000LL, 0, t));
+    }
     void picksTheSoundChatThenNetworkThenApp() {
         QCOMPARE(decide(msg(), S()).sound, QString("chime"));
         QCOMPARE(decide(msg(), S({{"notifNetworkSound", QVariantMap{{"signal", "pop"}}}})).sound, QString("pop"));

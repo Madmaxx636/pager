@@ -23,4 +23,11 @@ struct Decision {
 bool keywordHit(const QString &text, const QStringList &keywords);
 bool inQuietHours(const QVariantMap &settings, int minuteOfDay);
 Decision decide(const Input &in, const QVariantMap &settings);
+
+/// Should a message that just arrived alert? A bridge that reconnects or builds a chat sends old messages again with their old times: those must
+/// not ring. [priorNewest] is the newest message time the chat held before (0 if none). In a chat that held something, a message counts when it
+/// is not older than that (two minutes of slack) and not days old; in an empty one only a message that is arriving now.
+inline bool worthAlert(qint64 ts, qint64 priorNewest, qint64 nowMs) {
+    return priorNewest > 0 ? (nowMs - ts < 12 * 3600 * 1000LL && ts > priorNewest - 120000) : (nowMs - ts < 10 * 60 * 1000LL);
+}
 }

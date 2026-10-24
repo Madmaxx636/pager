@@ -33,6 +33,7 @@ Engine::Engine(const QString &dataDir, bool demo, QObject *parent) : QObject(par
     };
     m_dataDir = dataDir;
     m_trimTimer.setInterval(60000); connect(&m_trimTimer, &QTimer::timeout, this, [this] { trimHistory(); }); m_trimTimer.start();
+    m_encTimer.setInterval(45000); connect(&m_encTimer, &QTimer::timeout, this, [this] { if (m_core && m_signedIn) refreshEncryption(); }); m_encTimer.start();   // notices a recovery key changed on another device
     if (!dataDir.isEmpty() && !demo) { Names::load(dataDir + QStringLiteral("/phonebook.json")); }
     Names::onChange = [this] { m_timeline.show(m_current); refreshLists(); };
     if (!dataDir.isEmpty()) { QFile f(dataDir + QStringLiteral("/drafts.json")); if (f.open(QIODevice::ReadOnly)) { const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object(); for (auto it = o.begin(); it != o.end(); ++it) m_drafts.insert(it.key(), it.value().toString()); } }
@@ -91,6 +92,11 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
             const Msg &last = r->msgs.last();
             if (m_seen.value(id) == last.id) continue;
             m_seen.insert(id, last.id);
+            // A bridge that reconnects or builds a chat sends old messages again as if new: alert only for a message newer than what the chat held
+            // (not days old); in a chat with nothing before it, only one that is arriving now.
+            const qint64 nowMs = QDateTime::currentMSecsSinceEpoch(), prior = m_newestTs.value(id, 0);
+            m_newestTs.insert(id, qMax(prior, last.ts));
+            const bool worthAlert = NotifyPolicy::worthAlert(last.ts, prior, nowMs);
             if (!m_firstRooms && !last.attention.isEmpty() && !last.local && !m_store.mine(last)) {      // a nudge or a ring (only fresh ones: an old one in a backlog must not wake the screen)
                 const qint64 age = QDateTime::currentMSecsSinceEpoch() - last.ts;
                 if (age < 90000 && age > -60000) {
@@ -101,7 +107,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
                     emit attention(id, RoomListModel::displayName(*r), r->nameOf(last.sender), last.attention, last.id);
                 }
             }
-            if (m_firstRooms || last.local || m_store.mine(last) || last.locked || (m_active && id == m_current)) continue;
+            if (m_firstRooms || !worthAlert || last.local || m_store.mine(last) || last.locked || (m_active && id == m_current)) continue;
             if (m_store.isBotRoom(*r)) continue;
             // what the rules say: about you? muted? quiet hours? do not disturb? per chat and per network overrides?
             NotifyPolicy::Input in; in.roomId = id; in.network = r->network; in.isGroup = r->isGroup(); in.text = last.body;
@@ -150,6 +156,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
         refreshEncryption();
         m_recovering = false;
         m_recoveryDone = b.value(QLatin1String("ok")).toBool();
+        if (m_recoveryDone) reloadEverything();      // with the key changed, read everything from the server again so nothing is left behind
         m_recoveryMessage = m_recoveryDone ? QStringLiteral("Done. Your old messages are readable again.") : b.value(QLatin1String("error")).toString();
         emit recoveryChanged();
         if (m_recoveryDone) {                       // look at every chat again: what was locked may be readable now
@@ -160,6 +167,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
         m_encryption = b.toVariantMap(); emit encryptionChanged();
     } else if (kind == QLatin1String("recovery_created")) {
         emit recoveryKeyCreated(b.value(QLatin1String("ok")).toBool(), b.value(QLatin1String("key")).toString(), b.value(QLatin1String("error")).toString()); refreshEncryption();
+        if (b.value(QLatin1String("ok")).toBool()) reloadEverything();      // a new key: read everything again under it
     } else if (kind == QLatin1String("keys_exported")) {
         emit keysExported(b.value(QLatin1String("ok")).toBool(), b.value(QLatin1String("error")).toString());
     } else if (kind == QLatin1String("keys_imported")) {
@@ -659,7 +667,10 @@ void Engine::loadIdentity() {
                 for (const QString &nm : {l.value(QLatin1String("name")).toString(), l.value(QLatin1String("profile")).toObject().value(QLatin1String("name")).toString()}) if (!nm.isEmpty()) names << nm;
             }
         }
-        m_store.setOwnIdentity(names, ids); m_timeline.show(m_current); refreshLists();
+        for (const QString &n : names) m_idNames.insert(n);
+        for (const QString &i : ids) m_idIds.insert(i);
+        if (m_idNames.isEmpty() && m_idIds.isEmpty()) return;
+        m_store.setOwnIdentity(m_idNames.values(), m_idIds.values()); m_timeline.show(m_current); refreshLists();
         checkAccountAlerts(v.toObject().value(QLatin1String("networks")).toArray());
         // names for the phone numbers bridges show: each of your accounts' contact lists
         for (const QJsonValue &nv : v.toObject().value(QLatin1String("networks")).toArray()) {
