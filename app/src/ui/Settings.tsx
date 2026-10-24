@@ -532,7 +532,7 @@ function ColorDialog({ value, onClose, onPick }: { value: string; onClose: () =>
 /** End-to-end encryption on this device: the recovery key that brings your history back on a new device. */
 function EncryptionGroup() {
   const e = useEncryption();
-  const [dlg, setDlg] = useState<"create" | "restore" | "export" | "import" | "all">();
+  const [dlg, setDlg] = useState<"create" | "reset" | "restore" | "export" | "import" | "all">();
   return (
     <Group title="Encryption" footer="Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.">
       <Row title="Encryption on this device" hint={e.ready ? `Ready · device ${e.deviceId}` : e.error ? `Couldn't start: ${e.error}` : "Starting…"} onClick={!e.ready && e.error ? () => void retryEncryptionStart() : undefined}>{!e.ready && e.error && <span className="accent">Try again</span>}</Row>
@@ -544,12 +544,14 @@ function EncryptionGroup() {
         <span className="accent">{e.backupHere ? "Replace" : e.backupOnServer ? "Enter key" : "Set up"}</span>
       </Row>
       {e.ready && e.backupOnServer && e.backupHere && <Row title="Enter recovery key" hint="Use the recovery key you saved, for example after it was changed on another device" onClick={() => setDlg("restore")}><span className="accent">Enter key</span></Row>}
+      {e.ready && e.backupOnServer && e.backupHere && <Row title="Reset recovery key everywhere" hint="Wipes the old saved keys and makes a new key. Your other devices will ask for it" onClick={() => setDlg("reset")}><span className="danger">Reset</span></Row>}
       {e.backupOnServer && e.backupHere === false && <Row title="Make a new recovery key instead" onClick={() => setDlg("create")}><span className="accent">New key</span></Row>}
       {e.ready && <Row title="Encrypt all my pages" hint="Turns on encryption for every page that can take it. Older messages stay readable on your server" onClick={() => setDlg("all")}><span className="accent">Encrypt</span></Row>}
       {e.ready && <Row title="Lost your recovery key?" hint={e.backupHere ? "This device still has your keys: choose Replace above and it makes a new one" : "Use a key file below, or make a new key. Without either, older encrypted messages can't be read on this device"} />}
       {e.ready && <Row title="Advanced: save keys to a file" hint="Not your recovery key. A separate file you protect with a passphrase you choose" onClick={() => setDlg("export")}><span className="accent">Save</span></Row>}
       {e.ready && <Row title="Advanced: restore keys from a file" hint="Only for a file made with the row above. Asks for that file's passphrase" onClick={() => setDlg("import")}><span className="accent">Open</span></Row>}
       {dlg === "create" && <RecoveryKeyDialog onClose={() => setDlg(undefined)} />}
+      {dlg === "reset" && <RecoveryKeyDialog reset onClose={() => setDlg(undefined)} />}
       {dlg === "restore" && <RestoreDialog onClose={() => setDlg(undefined)} onLost={() => setDlg("create")} />}
       {dlg === "all" && <EncryptAllDialog onClose={() => setDlg(undefined)} hasKey={e.backupHere} />}
       {dlg === "export" && <ExportKeysDialog onClose={() => setDlg(undefined)} />}

@@ -364,6 +364,12 @@ class Store(private val context: Context) {
             serverVersion = server?.first, keyChanged = server != null && here && mine != null && mine != server.first)
     }
 
+    /** Deletes the old recovery backup and starts a new one: every other device is then asked for the new key. Returns the new key to show once. */
+    suspend fun resetRecoveryKey(): String {
+        val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
+        return e.resetBackup().also { refreshEncryptionStatus() }
+    }
+
     /** Starts the recovery backup and returns the recovery key to show once. */
     suspend fun createRecoveryKey(): String {
         val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")

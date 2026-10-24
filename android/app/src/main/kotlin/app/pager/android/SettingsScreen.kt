@@ -853,6 +853,7 @@ private fun EncryptionGroup() {
         ) { if (e.ready) dialog = if (e.backupOnServer && !e.backupHere) "restore" else "create" }
         if (e.keyChanged) { GroupDivider(); NavRow("Your recovery key was changed", "Another device made a new one. Enter it here so this phone can read the new backup and keep saving to it", Icons.Rounded.VpnKey, Color(0xFFF59E0B)) { dialog = "restore" } }
         if (e.ready && e.backupOnServer && e.backupHere) { GroupDivider(); NavRow("Enter recovery key", "Use the recovery key you saved, for example after it was changed on another device", Icons.Rounded.VpnKey) { dialog = "restore" } }
+        if (e.ready && e.backupOnServer && e.backupHere) { GroupDivider(); NavRow("Reset recovery key everywhere", "Wipes the old saved keys and makes a new key. Your other devices will ask for it", Icons.Rounded.Refresh, Color(0xFFEF4444)) { dialog = "reset" } }
         if (e.backupOnServer && !e.backupHere) { GroupDivider(); NavRow("Make a new recovery key instead", null, Icons.Rounded.Refresh) { dialog = "create" } }
         if (e.ready) {
             GroupDivider()
@@ -960,12 +961,13 @@ private fun EncryptionGroup() {
         )
     }
     if (dialog == "create") RecoveryKeyDialog(first = false, onDone = { dialog = null })
+    if (dialog == "reset") RecoveryKeyDialog(first = false, reset = true, onDone = { dialog = null })
     if (dialog == "restore") RestoreKeyDialog(first = false, onDone = { dialog = null }, onFresh = { dialog = "create" })
 }
 
 /** Makes the recovery key and shows it once. [first] is the screen a brand-new account sees right after signing up. */
 @Composable
-fun RecoveryKeyDialog(first: Boolean, onDone: () -> Unit) {
+fun RecoveryKeyDialog(first: Boolean, onDone: () -> Unit, reset: Boolean = false) {
     val store = LocalStore.current
     var key by remember { mutableStateOf<String?>(null) }
     var err by remember { mutableStateOf("") }
@@ -974,7 +976,16 @@ fun RecoveryKeyDialog(first: Boolean, onDone: () -> Unit) {
     // A key already exists for this account: making another one replaces it, and the old one stops working. Ask first.
     val hasOne = store.encryption.collectAsState().value.backupOnServer
     var sure by remember { mutableStateOf(!hasOne) }
-    LaunchedEffect(sure) { if (sure) runCatching { store.createRecoveryKey() }.onSuccess { key = it }.onFailure { err = it.message ?: "Couldn't make a key" } }
+    LaunchedEffect(sure) { if (sure) runCatching { if (reset) store.resetRecoveryKey() else store.createRecoveryKey() }.onSuccess { key = it }.onFailure { err = it.message ?: "Couldn't make a key" } }
+    if (!sure && reset) {
+        AlertDialog(
+            onDismissRequest = onDone, title = { Text("Reset your recovery key everywhere?") },
+            text = { Text("This wipes the saved copy of all your old message keys from your server and makes one new recovery key for this Pager account.\n\n• The old recovery key stops working, on every device.\n• This phone keeps the keys it has and saves them under the new key.\n• Your other devices will ask you for the new key. Until you enter it there, they can't read the new backup or save keys to it.\n• A device you sign in later with the new key can read only what this phone holds.") },
+            confirmButton = { TextButton(onClick = { sure = true }) { Text("Wipe and make a new key", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = onDone) { Text("Go back") } },
+        )
+        return
+    }
     if (!sure) {
         AlertDialog(
             onDismissRequest = onDone, title = { Text("Replace your recovery key?") },
@@ -985,7 +996,7 @@ fun RecoveryKeyDialog(first: Boolean, onDone: () -> Unit) {
         return
     }
     AlertDialog(
-        onDismissRequest = { if (key == null || saved) onDone() }, title = { Text(if (first) "Save your recovery key" else "Your recovery key") },
+        onDismissRequest = { if (key == null || saved) onDone() }, title = { Text(if (first) "Save your recovery key" else if (reset) "Your new recovery key" else "Your recovery key") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 when {

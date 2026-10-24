@@ -1,15 +1,27 @@
 import { useEffect, useState } from "react";
-import { createRecoveryKey, restoreWithRecoveryKey, useEncryption } from "../core/store";
+import { createRecoveryKey, resetRecoveryKey, restoreWithRecoveryKey, useEncryption } from "../core/store";
 import { Modal } from "./common";
 
-export function RecoveryKeyDialog({ onClose, first }: { onClose: () => void; first?: boolean }) {
+export function RecoveryKeyDialog({ onClose, first, reset }: { onClose: () => void; first?: boolean; reset?: boolean }) {
   const [key, setKey] = useState<string>();
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(false);
   // A key already exists for this account: making another one replaces it, and the old one stops working. Ask first.
   const hasOne = useEncryption().backupOnServer;
   const [sure, setSure] = useState(!hasOne);
-  useEffect(() => { if (sure) createRecoveryKey().then(setKey).catch((e) => setErr(e.message)); }, [sure]);
+  useEffect(() => { if (sure) (reset ? resetRecoveryKey() : createRecoveryKey()).then(setKey).catch((e) => setErr(e.message)); }, [sure]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!sure && reset) return (
+    <Modal title="Reset your recovery key everywhere?" onClose={onClose}>
+      <p>This <b>wipes the saved copy of all your old message keys</b> from your server and makes one new recovery key for this Pager account.</p>
+      <ul className="muted">
+        <li>The old recovery key stops working, on every device.</li>
+        <li>This device keeps the keys it has and saves them under the new key.</li>
+        <li>Your other devices will ask you for the new key. Until you enter it there, they can't read new encrypted messages' history or save keys.</li>
+        <li>A device you sign in later with the new key can read only what this device holds.</li>
+      </ul>
+      <div className="row-end"><button className="link" onClick={onClose}>Go back</button><button className="primary danger" onClick={() => setSure(true)}>Wipe and make a new key</button></div>
+    </Modal>
+  );
   if (!sure) return (
     <Modal title="Replace your recovery key?" onClose={onClose}>
       <p>This account already has a recovery key. A new one <b>replaces it</b>: the old key stops working, including on your other devices' backups.</p>
@@ -18,7 +30,7 @@ export function RecoveryKeyDialog({ onClose, first }: { onClose: () => void; fir
     </Modal>
   );
   return (
-    <Modal title={first ? "Save your recovery key" : "Your recovery key"} onClose={() => { if (!key || saved) onClose(); }}>
+    <Modal title={first ? "Save your recovery key" : reset ? "Your new recovery key" : "Your recovery key"} onClose={() => { if (!key || saved) onClose(); }}>
       {err ? <p className="error">{err}</p> : !key ? <p className="muted">Making your key…</p> : (
         <>
           {first && <p>This is the one thing to keep. It opens your private messages on any new phone or computer.</p>}
