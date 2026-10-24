@@ -10,6 +10,7 @@ export async function bridgeRequest(
   path: string,
   body?: unknown,
   query?: URLSearchParams,
+  timeoutMs?: number,
 ) {
   const url = new URL(`${bridge.url}/_matrix/provision/v3${path}`);
   // Only forward the query params the bridge understands.
@@ -20,6 +21,7 @@ export async function bridgeRequest(
     method,
     headers: { authorization: `Bearer ${cfg.provisioningSecret}`, "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
   }).catch(() => {
     throw new HttpError(502, `${bridge.name} bridge is unreachable`);
   });

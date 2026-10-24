@@ -12,6 +12,9 @@ import { bridgeRequest } from "./bridges.ts";
 import { control, dockerAvailable, findContainer, logs } from "./docker.ts";
 import { readRegistration, readSettings, writeSettings } from "./bridgeconfig.ts";
 
+/** Bridges that did not answer lately and until when to leave them alone (see GET /api/bridges). */
+const bridgeDownUntil = new Map<string, number>();
+
 const USERNAME_RE = /^[a-z0-9._-]{3,32}$/;
 
 /** The raw bytes of a request body (a voice message), up to [max]. */
@@ -372,12 +375,18 @@ export function createApp(cfg: Config) {
 
       // GET /api/bridges -> connected accounts across all networks
       if (parts.length === 1 && method === "GET") {
+        // A bridge that is configured but not running used to make this wait ten seconds for its connection to time out, every time, and the
+        // accounts page waited with it. Each one gets three seconds, and one that did not answer is not asked again for a minute.
         const results = await Promise.all(
           cfg.bridges.map(async (b) => {
+            const down = bridgeDownUntil.get(b.id);
+            if (down && down > Date.now()) return { id: b.id, name: b.name, logins: [], error: `${b.name} bridge is unreachable` };
             try {
-              const who = await bridgeRequest(cfg, b, userId, "GET", "/whoami");
+              const who = await bridgeRequest(cfg, b, userId, "GET", "/whoami", undefined, undefined, 3000);
+              bridgeDownUntil.delete(b.id);
               return { id: b.id, name: b.name, logins: who.logins ?? [] };
             } catch (e) {
+              if ((e as { status?: number }).status === 502) bridgeDownUntil.set(b.id, Date.now() + 60_000);
               return { id: b.id, name: b.name, logins: [], error: (e as Error).message };
             }
           }),
