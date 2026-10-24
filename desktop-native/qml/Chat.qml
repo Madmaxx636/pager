@@ -135,7 +135,7 @@ Rectangle {
                 verticalLayoutDirection: ListView.BottomToTop
                 model: core.timeline
                 spacing: 0; cacheBuffer: 2400; reuseItems: true
-                boundsBehavior: Flickable.StopAtBounds
+                boundsBehavior: Flickable.StopAtBounds; maximumFlickVelocity: 7000; flickDeceleration: 2200
                 ScrollBar.vertical: ScrollBar { }
                 SmoothWheel { view: msgs }
                 delegate: Bubble {

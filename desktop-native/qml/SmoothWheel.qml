@@ -6,7 +6,8 @@ import QtQuick
 WheelHandler {
     id: h
     required property Flickable view
-    property real notch: 0.9            // pixels per wheel unit: one click of a normal wheel (120 units) moves about 108 px
+    readonly property real gain: Math.max(0.3, Number(settings.scrollSpeed) || 1.5)      // Settings > System > Scroll speed
+    property real notch: 0.9 * gain            // pixels per wheel unit: one click of a normal wheel (120 units) moves about 108 px
     property real settle: 0.075         // seconds the wheel glide takes to cover most of the distance to where it is heading
     property real goal: 0
     property var samples: []            // recent finger movements of a touchpad: [time, pixels]
@@ -18,7 +19,7 @@ WheelHandler {
         if (hi <= lo) return
         // a touchpad reports pixels, or small steps that are not whole wheel clicks
         const touchpad = e.pixelDelta.y !== 0 || (e.angleDelta.y % 120 !== 0)
-        const dy = e.pixelDelta.y !== 0 ? e.pixelDelta.y : e.angleDelta.y * (touchpad ? 1.0 : notch) * (e.inverted ? -1 : 1)
+        const dy = (e.pixelDelta.y !== 0 ? e.pixelDelta.y * gain : e.angleDelta.y * (touchpad ? gain : notch)) * (e.inverted ? -1 : 1)
         if (touchpad) {
             frames.running = false; view.cancelFlick(); lift.stop()
             view.contentY = Math.max(lo, Math.min(hi, view.contentY - dy)); goal = view.contentY

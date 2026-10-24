@@ -160,7 +160,7 @@ Rectangle {
             onHeightChanged: stickToTop()
             onContentHeightChanged: stickToTop()
             Component.onCompleted: positionViewAtBeginning()
-            clip: true; model: core.rooms; boundsBehavior: Flickable.StopAtBounds; cacheBuffer: 400; reuseItems: true
+            clip: true; model: core.rooms; boundsBehavior: Flickable.StopAtBounds; maximumFlickVelocity: 7000; flickDeceleration: 2200; cacheBuffer: 400; reuseItems: true
             ScrollBar.vertical: ScrollBar { }
             SmoothWheel { view: list }
             header: Item {   // pinned chats: a grid of big pictures, three across, like the web app
