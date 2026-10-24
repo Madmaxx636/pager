@@ -2,28 +2,35 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// A choice among a few options: [[value, label], ...].
-ColumnLayout {
-    id: col
+// A choice among a few options: [[value, label], ...]. Drawn like the web app's: the name on the left, a drop-down on the right.
+RowLayout {
+    id: row
     property string key
     property string title
     property string hint: ""
     property var options: []
     signal picked(var value)
-    Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 12; Layout.bottomMargin: 12; spacing: 6
-    Label { text: col.title; color: look.text; font.pixelSize: Math.round(15 * look.textScale) }
-    Label { visible: col.hint.length > 0; Layout.fillWidth: true; text: col.hint; wrapMode: Text.Wrap; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) }
-    Flow {
-        Layout.fillWidth: true; spacing: 6
-        Repeater {
-            model: col.options
-            delegate: Rectangle {
-                readonly property bool on: String(settings[col.key]) === String(modelData[0])
-                height: 32; width: lbl.implicitWidth + 24; radius: 16; color: on ? look.accent : look.panel2
-                Label { id: lbl; anchors.centerIn: parent; text: modelData[1]; color: parent.on ? look.accentInk : look.text; font.pixelSize: Math.round(13 * look.textScale) }
-                TapHandler { onTapped: { settings.set(col.key, modelData[0]); col.picked(modelData[0]) } }
-                HoverHandler { cursorShape: Qt.PointingHandCursor }
-            }
+    readonly property string current: { for (const o of options) if (String(settings[key]) === String(o[0])) return o[1]; return options.length ? options[0][1] : "" }
+    Layout.fillWidth: true; Layout.leftMargin: 16; Layout.rightMargin: 16; Layout.topMargin: 12; Layout.bottomMargin: 12; spacing: 14
+    ColumnLayout { Layout.fillWidth: true; spacing: 1
+        Label { text: row.title; color: look.text; font.pixelSize: Math.round(15 * look.textScale); Layout.fillWidth: true; wrapMode: Text.Wrap }
+        Label { visible: row.hint.length > 0; Layout.fillWidth: true; text: row.hint; wrapMode: Text.Wrap; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) } }
+    Rectangle {
+        id: box
+        Layout.alignment: Qt.AlignVCenter
+        implicitHeight: 42; implicitWidth: Math.min(260, cur.implicitWidth + 12 + 8 + 18 + 12 + 4); radius: 12; color: look.panel2
+        border.width: 1; border.color: menu.opened ? look.accent : "transparent"
+        Row { anchors.verticalCenter: parent.verticalCenter; x: 12; spacing: 8
+            Label { id: cur; text: row.current; color: look.text; font.pixelSize: Math.round(15 * look.textScale); elide: Text.ElideRight; width: Math.min(implicitWidth, 260 - 12 - 8 - 18 - 16) }
+            Icon { anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: 18; color: look.muted } }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+        TapHandler { onTapped: menu.popup(box, 0, box.height + 4) }
+        Menu {
+            id: menu
+            implicitWidth: Math.max(box.width, 160)
+            Repeater { model: row.options
+                delegate: MenuItem { text: modelData[1]; checkable: true; checked: String(settings[row.key]) === String(modelData[0])
+                    onTriggered: { settings.set(row.key, modelData[0]); row.picked(modelData[0]) } } }
         }
     }
 }

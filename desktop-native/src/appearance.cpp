@@ -19,12 +19,18 @@ Appearance::Appearance(AppSettings *settings, QObject *parent, const QByteArray 
         auto s = [&](int i) { return QString::fromUtf8(p[i]); };
         m_pals.append({s(0), s(1), s(2), p[3] == "1", QColor(s(4)), QColor(s(5)), QColor(s(6)), QColor(s(7)), QColor(s(8)), QColor(s(9)), QColor(s(10)), QColor(s(11))});
     }
+    { QFile f(QStringLiteral(":/skins.tsv")); if (f.open(QIODevice::ReadOnly)) for (const QByteArray &line : f.readAll().split('\n')) {
+        const QList<QByteArray> p = line.split('\t');
+        if (p.size() < 12) continue;
+        auto s = [&](int i) { return QString::fromUtf8(p[i]); };
+        m_skins.append({s(0), s(1), s(2), s(3), p[4] == "1", QColor(s(5)), QColor(s(6)), QColor(s(7)), QColor(s(8)), QColor(s(9)), QColor(s(10)), p.size() > 12 && !p[12].isEmpty() ? QColor(s(12)) : QColor(), s(11).toInt()});
+    } }
     if (!QGuiApplication::instance() || m_settings->file().isEmpty()) m_systemDark = false;
     else if (auto *hints = QGuiApplication::styleHints()) {
         m_systemDark = hints->colorScheme() == Qt::ColorScheme::Dark;
         connect(hints, &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme s) { setSystemDark(s == Qt::ColorScheme::Dark); });
     }
-    connect(m_settings, &AppSettings::valueChanged, this, [this](const QString &k) { if (k == QLatin1String("themeMode") || k == QLatin1String("accent") || k == QLatin1String("accentCustom") || k == QLatin1String("palette") || k == QLatin1String("fontScale") || k == QLatin1String("uiScale") || k == QLatin1String("fancyMotion") || k == QLatin1String("reduceMotion") || k == QLatin1String("themeFollowSystem")) recompute(); });
+    connect(m_settings, &AppSettings::valueChanged, this, [this](const QString &k) { if (k == QLatin1String("themeMode") || k == QLatin1String("accent") || k == QLatin1String("accentCustom") || k == QLatin1String("palette") || k == QLatin1String("skin") || k == QLatin1String("skinAccent") || k == QLatin1String("fontScale") || k == QLatin1String("uiScale") || k == QLatin1String("fancyMotion") || k == QLatin1String("reduceMotion") || k == QLatin1String("themeFollowSystem")) recompute(); });
     recompute();
 }
 
@@ -38,7 +44,18 @@ void Appearance::recompute() {
     const QString ui = m_settings->value(QStringLiteral("uiScale")).toString();
     m_scale = qBound(0.8, m_settings->value(QStringLiteral("fontScale")).toDouble(), 1.6) * (ui == QLatin1String("small") ? 0.92 : ui == QLatin1String("large") ? 1.12 : 1.0);
     for (const Pal &p : m_pals) if (p.id == m_palette) pal = &p;
-    if (pal) {
+    m_skin = m_settings->value(QStringLiteral("skin")).toString(); m_skinAccent = m_settings->value(QStringLiteral("skinAccent")).toString();
+    const Skin *skin = nullptr;
+    if (m_skin != QLatin1String("default")) for (const Skin &k : m_skins) if (k.id == m_skin) skin = &k;
+    if (!skin) m_skin.clear();
+    if (skin) {      // a desktop style: its own colours, like the web app (the shapes of its buttons are not drawn)
+        m_dark = skin->dark;
+        const QColor acc = m_skinAccent.startsWith(QLatin1Char('#')) && QColor(m_skinAccent).isValid() ? QColor(m_skinAccent) : skin->accent;
+        const QColor ink = (!m_skinAccent.isEmpty() || !skin->ink.isValid()) ? inkFor(acc) : skin->ink;
+        const double t = 0.07;
+        const QColor panel2(qRound((skin->bg.redF() * (1 - t) + skin->text.redF() * t) * 255), qRound((skin->bg.greenF() * (1 - t) + skin->text.greenF() * t) * 255), qRound((skin->bg.blueF() * (1 - t) + skin->text.blueF() * t) * 255));
+        m_c = {skin->bg, skin->panel, panel2, skin->line, skin->text, skin->muted, acc, ink, skin->panel};
+    } else if (pal) {
         m_dark = pal->dark;
         m_c = {pal->bg, pal->panel, pal->panel2, pal->line, pal->text, pal->muted, pal->accent, inkFor(pal->accent), pal->theirs};
     } else {
@@ -82,6 +99,30 @@ void Appearance::setPalette(const QString &id) {
     recompute();
 }
 void Appearance::setTextScale(qreal s) { m_settings->set(QStringLiteral("fontScale"), qBound(0.8, s, 1.6)); recompute(); }
+
+void Appearance::setSkin(const QString &id) {
+    if (!id.isEmpty() && id != QLatin1String("default")) { bool ok = false; for (const Skin &k : m_skins) ok |= k.id == id; if (!ok) return; }
+    m_settings->set(QStringLiteral("skinAccent"), QString());
+    m_settings->set(QStringLiteral("skin"), id.isEmpty() ? QStringLiteral("default") : id);
+    recompute();
+}
+void Appearance::setSkinAccent(const QString &hex) { if (hex.isEmpty() || (hex.startsWith(QLatin1Char('#')) && QColor(hex).isValid())) { m_settings->set(QStringLiteral("skinAccent"), hex); recompute(); } }
+QVariantList Appearance::skins() const {
+    QVariantList out;
+    for (const Skin &k : m_skins) out << QVariantMap{{"id", k.id}, {"name", k.name}, {"group", k.group}, {"family", k.family}, {"dark", k.dark}, {"bg", k.bg}, {"accent", k.accent}, {"line", k.line}};
+    return out;
+}
+QStringList Appearance::skinGroups() const { QStringList g; for (const Skin &k : m_skins) if (!g.contains(k.group)) g << k.group; return g; }
+QVariantList Appearance::skinAccents(const QString &id) const {
+    static const QList<QPair<QString, QString>> gnome = {{"Blue", "#3584e4"}, {"Teal", "#2190a4"}, {"Green", "#3a944a"}, {"Yellow", "#c88800"}, {"Orange", "#ed5b00"}, {"Red", "#e62d42"}, {"Pink", "#d56199"}, {"Purple", "#9141ac"}, {"Slate", "#6f8396"}};
+    static const QList<QPair<QString, QString>> plasma = {{"Breeze blue", "#3daee9"}, {"Red", "#da4453"}, {"Orange", "#f67400"}, {"Yellow", "#fdbc4b"}, {"Green", "#27ae60"}, {"Teal", "#1abc9c"}, {"Purple", "#9b59b6"}, {"Pink", "#e93a9a"}, {"Gray", "#7f8c8d"}};
+    QVariantList out;
+    for (const Skin &k : m_skins) if (k.id == id) {
+        const auto &list = k.family == QLatin1String("adwaita") ? gnome : k.family == QLatin1String("breeze") ? plasma : QList<QPair<QString, QString>>();
+        for (const auto &a : list) out << QVariantMap{{"name", a.first}, {"color", QColor(a.second)}};
+    }
+    return out;
+}
 
 QVariantList Appearance::palettes() const {
     QVariantList out;

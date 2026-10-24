@@ -22,6 +22,8 @@ class Appearance : public QObject {
     Q_PROPERTY(QString mode READ mode NOTIFY changed)           // system, light, dark or black
     Q_PROPERTY(QString accentName READ accentName NOTIFY changed) // a name from accents(), or a #rrggbb of your own
     Q_PROPERTY(QString palette READ palette NOTIFY changed)     // id of a ready-made look, or empty
+    Q_PROPERTY(QString skin READ skin NOTIFY changed)           // id of a desktop style, or empty for "Pager default"
+    Q_PROPERTY(QString skinAccent READ skinAccent NOTIFY changed) // a #rrggbb picked for that style, or empty
     Q_PROPERTY(qreal textScale READ textScale NOTIFY changed)
     Q_PROPERTY(bool motion READ motion NOTIFY changed)          // small animations on (and not "reduce motion")
 public:
@@ -41,12 +43,21 @@ public:
     QString mode() const { return m_mode; }
     QString accentName() const { return m_accent; }
     QString palette() const { return m_palette; }
+    QString skin() const { return m_skin; }
+    QString skinAccent() const { return m_skinAccent; }
     qreal textScale() const { return m_scale; }
     bool motion() const { return m_motion; }
     Q_INVOKABLE void setMode(const QString &mode);
     Q_INVOKABLE void setAccent(const QString &nameOrHex);
     Q_INVOKABLE void setPalette(const QString &id);
     Q_INVOKABLE void setTextScale(qreal s);
+    /// Picks a desktop style by id ("default" or empty goes back to Pager's own look); the style's own accent is used until you pick another.
+    Q_INVOKABLE void setSkin(const QString &id);
+    Q_INVOKABLE void setSkinAccent(const QString &hex);
+    /// [{id, name, group, family, dark, bg, accent}] for the style picker, and the accent colours that go with a style ([{name, color}], empty for most).
+    Q_INVOKABLE QVariantList skins() const;
+    Q_INVOKABLE QVariantList skinAccents(const QString &id) const;
+    Q_INVOKABLE QStringList skinGroups() const;
     /// [{id, name, group, dark, bg, accent, line, text}] for the picker.
     Q_INVOKABLE QVariantList palettes() const;
     /// [{name, color}] of the ready accents.
@@ -58,7 +69,10 @@ signals:
 private:
     struct Colors { QColor bg, panel, panel2, line, text, muted, accent, ink, theirs; };
     struct Pal { QString id, name, group; bool dark; QColor bg, panel, panel2, line, theirs, text, muted, accent; };
+    struct Skin { QString id, name, group, family; bool dark; QColor bg, panel, line, text, muted, accent, ink; int radius; };
     QVector<Pal> m_pals;
+    QVector<Skin> m_skins;
+    QString m_skin, m_skinAccent;
     AppSettings *m_settings;
     Colors m_c;
     QString m_mode = QStringLiteral("system"), m_accent = QStringLiteral("teal"), m_palette;

@@ -15,6 +15,7 @@ Dialog {
     signal openMessage(string roomId, string eventId)
     property int page: 0
     property string note: ""
+    property bool styleOpen: false
     // a page that fills the right-hand side next to the list of chats, like the web app's settings
     modal: false; dim: false; closePolicy: Popup.CloseOnEscape
     readonly property real sideW: parent && Overlay.overlay && parent.width < Overlay.overlay.width - 100 ? parent.width : 0
@@ -154,41 +155,89 @@ Dialog {
     // =============================================================== pages
     Component { id: appearance
         SGroup { id: col0; plain: true; Layout.fillWidth: true
-            SGroup { title: "App look"; footer: settings.look !== "none" ? "This look sets colours, bubbles, type and motion for the whole app. Pick “Pager” to get your own choices back exactly as you left them." : ""
-                SBlock { Flow { Layout.fillWidth: true; spacing: 10
-                    Repeater { model: [{ id: "none", name: "Pager", blurb: "Your own choices below.", swatch: [String(look.accent), String(look.theirs), String(look.panel2)] }].concat(dlg.looks)
-                        delegate: Rectangle { width: Math.max(150, (col0.width - 20) / 2); implicitHeight: lc.implicitHeight + 24; height: implicitHeight; radius: 14; color: look.bg
-                            border.width: (settings.look || "none") === modelData.id ? 3 : 1; border.color: (settings.look || "none") === modelData.id ? look.accent : look.line
-                            Column { id: lc; x: 12; y: 12; width: parent.width - 24; spacing: 6
-                                Row { spacing: 4; Repeater { model: modelData.swatch; delegate: Rectangle { width: 24; height: 24; radius: 12; color: modelData; border.width: 1; border.color: look.line } } }
-                                Label { text: modelData.name; color: look.text; font.weight: Font.DemiBold }
-                                Label { text: modelData.blurb; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); wrapMode: Text.Wrap; width: parent.width } }
-                            TapHandler { onTapped: dlg.applyLook(modelData.id) } HoverHandler { cursorShape: Qt.PointingHandCursor } } } } }
+            SGroup { title: "Style"; footer: dlg.styleOpen ? "A whole look for the desktop app: colours and fonts. Pager default keeps the look you know." : ""
+                SBlock {
+                    RowLayout { Layout.fillWidth: true; spacing: 14
+                        ColumnLayout { Layout.fillWidth: true; spacing: 1
+                            Label { text: "Desktop style"; color: look.text; font.pixelSize: Math.round(15 * look.textScale) }
+                            Label { text: look.skin.length ? (look.skins().find(k => k.id === look.skin) || { name: "" }).name : "Pager default"; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) } }
+                        Icon { name: dlg.styleOpen ? "chevron-up" : "chevron-down"; size: 18; color: look.muted }
+                        TapHandler { onTapped: dlg.styleOpen = !dlg.styleOpen } HoverHandler { cursorShape: Qt.PointingHandCursor } }
+                }
+                SBlock { visible: dlg.styleOpen
+                    Flow { Layout.fillWidth: true; spacing: 6
+                        Rectangle { height: 30; width: dl.implicitWidth + 24; radius: 15; color: look.panel2; border.width: 1; border.color: look.skin === "" ? look.accent : "transparent"
+                            Label { id: dl; anchors.centerIn: parent; text: "Pager default"; color: look.text; font.pixelSize: Math.round(13 * look.textScale); font.weight: look.skin === "" ? Font.DemiBold : Font.Normal }
+                            TapHandler { onTapped: look.setSkin("default") } HoverHandler { cursorShape: Qt.PointingHandCursor } } }
+                    Repeater { model: look.skinGroups()
+                        delegate: ColumnLayout { id: sg; readonly property string group: modelData; Layout.fillWidth: true; spacing: 4
+                            Label { text: sg.group; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.6; Layout.topMargin: 4 }
+                            Flow { Layout.fillWidth: true; spacing: 6
+                                Repeater { model: look.skins().filter(k => k.group === sg.group)
+                                    delegate: Rectangle { height: 30; width: sl.implicitWidth + 24 + 21; radius: 15; color: look.panel2; border.width: 1; border.color: look.skin === modelData.id ? look.accent : "transparent"
+                                        Row { anchors.centerIn: parent; spacing: 7
+                                            Split { anchors.verticalCenter: parent.verticalCenter; width: 14; height: 14; first: modelData.bg; second: modelData.accent; edge: look.line; edgeWidth: 1 }
+                                            Label { id: sl; text: modelData.name; color: look.text; font.pixelSize: Math.round(13 * look.textScale); font.weight: look.skin === modelData.id ? Font.DemiBold : Font.Normal } }
+                                        TapHandler { onTapped: look.setSkin(modelData.id) } HoverHandler { cursorShape: Qt.PointingHandCursor } } } } } }
+                }
+                SBlock { visible: dlg.styleOpen && look.skin.length > 0 && look.skinAccents(look.skin).length > 0
+                    RowLayout { Layout.fillWidth: true; spacing: 14
+                        ColumnLayout { Layout.fillWidth: true; spacing: 1
+                            Label { text: "Accent colour"; color: look.text; font.pixelSize: Math.round(15 * look.textScale) }
+                            Label { text: (look.skins().find(k => k.id === look.skin) || { family: "" }).family === "adwaita" ? "GNOME's accent colours" : "Plasma's accent colours"; color: look.muted; font.pixelSize: Math.round(12 * look.textScale) } }
+                        Flow { Layout.preferredWidth: 280; Layout.alignment: Qt.AlignRight; spacing: 8
+                            Repeater { model: look.skinAccents(look.skin)
+                                delegate: Rectangle { width: 28; height: 28; radius: 14; color: modelData.color
+                                    Rectangle { anchors.centerIn: parent; width: 36; height: 36; radius: 18; color: "transparent"; border.width: 2; border.color: look.text; visible: String(look.accent).toLowerCase() === String(modelData.color).toLowerCase() }
+                                    ToolTip.visible: sh.hovered; ToolTip.text: modelData.name; HoverHandler { id: sh; cursorShape: Qt.PointingHandCursor } TapHandler { onTapped: look.setSkinAccent(String(modelData.color)) } } } } }
+                }
+            }
+            SGroup { title: "App look"; footer: settings.look !== "none" ? "This look sets colours, bubbles, type and motion for the whole app. Your own choices below are kept and come back when you pick “Pager”." : ""
+                SBlock { id: lookBlock; Layout.topMargin: 6; Layout.bottomMargin: 10
+                    Flow { id: lookFlow; Layout.fillWidth: true; spacing: 8
+                        readonly property int cols: Math.max(1, Math.floor((width + 8) / (220 + 8)))
+                        readonly property real cardW: (width - 8 * (cols - 1)) / cols
+                        Repeater { model: [{ id: "none", name: "Pager", blurb: "Your own colours, bubbles and settings", swatch: [String(look.accent), String(look.theirs), String(look.panel2)] }].concat(dlg.looks)
+                            delegate: Rectangle { width: lookFlow.cardW; implicitHeight: lc.implicitHeight + 24; height: implicitHeight; radius: 14; color: look.panel2
+                                border.width: 2; border.color: (settings.look || "none") === modelData.id ? look.accent : "transparent"
+                                Column { id: lc; x: 12; y: 12; width: parent.width - 24; spacing: 4
+                                    Row { spacing: 4; bottomPadding: 4; Repeater { model: modelData.swatch; delegate: Rectangle { width: 22; height: 22; radius: 11; color: modelData; border.width: 1; border.color: Qt.rgba(0.5, 0.5, 0.5, 0.35) } } }
+                                    Label { text: modelData.name; color: look.text; font.pixelSize: Math.round(15 * look.textScale); font.weight: Font.Bold }
+                                    Label { text: modelData.blurb; color: look.muted; font.pixelSize: Math.round(12.5 * look.textScale); wrapMode: Text.Wrap; width: parent.width; lineHeight: 1.05 } }
+                                TapHandler { onTapped: dlg.applyLook(modelData.id) } HoverHandler { cursorShape: Qt.PointingHandCursor } } } } }
             }
             SGroup { title: "Theme"
                 SBlock {
-                    Label { text: "Mode"; color: look.text }
-                    Flow { Layout.fillWidth: true; spacing: 6
-                        Repeater { model: [["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black (AMOLED)"]]
-                            delegate: Rectangle { height: 32; width: ml.implicitWidth + 24; radius: 16; color: look.palette === "" && look.mode === modelData[0] ? look.accent : look.panel2
-                                Label { id: ml; anchors.centerIn: parent; text: modelData[1]; color: look.palette === "" && look.mode === modelData[0] ? look.accentInk : look.text; font.pixelSize: Math.round(13 * look.textScale) }
-                                TapHandler { onTapped: look.setMode(modelData[0]) } } } }
-                    Label { text: "Accent colour"; color: look.text }
-                    Flow { Layout.fillWidth: true; spacing: 8
-                        Repeater { model: look.accents()
-                            delegate: Rectangle { width: 34; height: 34; radius: 17; color: modelData.color; border.width: look.palette === "" && look.accentName === modelData.name ? 3 : 0; border.color: look.text; TapHandler { onTapped: look.setAccent(modelData.name) } } }
-                        TextField { width: 110; height: 34; placeholderText: "#rrggbb"; maximumLength: 7; color: look.text; placeholderTextColor: look.muted; background: Rectangle { radius: 17; color: look.panel2 }
-                            onTextEdited: if (/^#[0-9a-fA-F]{6}$/.test(text)) look.setAccent(text) } }
-                    RowLayout { Layout.fillWidth: true
-                        ColumnLayout { Layout.fillWidth: true; spacing: 0
-                            Label { text: "Ready-made looks"; color: look.text }
+                    RowLayout { Layout.fillWidth: true; spacing: 14
+                        ColumnLayout { Layout.fillWidth: true; spacing: 1
+                            Label { text: "Ready-made looks"; color: look.text; font.pixelSize: Math.round(15 * look.textScale) }
                             Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); text: "A whole colour set for the app, in every colour: on white, on black, or solid. Choose “Mode and accent” to go back to your own mix." } }
-                        Button { text: look.palette === "" ? "✓ Mode and accent" : "Mode and accent"; flat: true; onClicked: look.setPalette("none") } }
-                    Flow { Layout.fillWidth: true; spacing: 8
-                        Repeater { model: look.palettes()
-                            delegate: Rectangle { width: 38; height: 38; radius: 10; color: modelData.bg; border.width: look.palette === modelData.id ? 3 : 1; border.color: look.palette === modelData.id ? look.text : modelData.line
-                                Rectangle { anchors.right: parent.right; anchors.bottom: parent.bottom; width: 20; height: 20; radius: 10; color: modelData.accent; anchors.margins: 4 }
-                                ToolTip.visible: ph.hovered; ToolTip.text: modelData.name; HoverHandler { id: ph } TapHandler { onTapped: look.setPalette(modelData.id) } } } }
+                        Rectangle { Layout.alignment: Qt.AlignVCenter; implicitHeight: 32; implicitWidth: mal.implicitWidth + 24; radius: 16; color: look.panel2; border.width: 1; border.color: look.palette === "" ? look.accent : "transparent"
+                            Label { id: mal; anchors.centerIn: parent; text: (look.palette === "" ? "✓ " : "") + "Mode and accent"; color: look.text; font.pixelSize: Math.round(14 * look.textScale); font.weight: look.palette === "" ? Font.DemiBold : Font.Normal }
+                            TapHandler { onTapped: look.setPalette("none") } HoverHandler { cursorShape: Qt.PointingHandCursor } } }
+                }
+                SBlock { Layout.topMargin: 0
+                    Repeater { model: [["classic", "Classic"], ["white", "With white"], ["black", "With black"], ["solid", "Solid colours"]]
+                        delegate: ColumnLayout { id: pg; readonly property string gid: modelData[0]; Layout.fillWidth: true; spacing: 4
+                            Label { text: modelData[1]; color: look.muted; font.pixelSize: Math.round(12 * look.textScale); font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.6; Layout.topMargin: 8 }
+                            Flow { Layout.fillWidth: true; spacing: 8
+                                Repeater { model: look.palettes().filter(p => p.group === pg.gid)
+                                    delegate: Item { width: 28; height: 28
+                                        Rectangle { anchors.centerIn: parent; width: 36; height: 36; radius: 18; color: "transparent"; border.width: 2; border.color: look.text; visible: look.palette === modelData.id }
+                                        Split { anchors.fill: parent; first: modelData.bg; second: modelData.accent; edge: modelData.line; edgeWidth: 2 }
+                                        ToolTip.visible: ph.hovered; ToolTip.text: modelData.name; HoverHandler { id: ph; cursorShape: Qt.PointingHandCursor } TapHandler { onTapped: look.setPalette(modelData.id) } } } } } } }
+                SChoice { title: "Mode"; key: "themeMode"; options: [["system", "Follow system"], ["light", "Light"], ["dark", "Dark"], ["black", "Black (AMOLED)"]]; onPicked: (v) => look.setMode(v) }
+                SBlock {
+                    RowLayout { Layout.fillWidth: true; spacing: 14
+                        Label { text: "Accent color"; color: look.text; font.pixelSize: Math.round(15 * look.textScale); Layout.fillWidth: true; Layout.alignment: Qt.AlignTop }
+                        Flow { Layout.preferredWidth: 280; Layout.alignment: Qt.AlignRight; spacing: 8
+                            Repeater { model: look.accents()
+                                delegate: Item { width: 28; height: 28
+                                    Rectangle { anchors.fill: parent; radius: 14; color: modelData.color }
+                                    Rectangle { anchors.centerIn: parent; width: 36; height: 36; radius: 18; color: "transparent"; border.width: 2; border.color: look.text; visible: look.palette === "" && look.accentName === modelData.name }
+                                    ToolTip.visible: ah.hovered; ToolTip.text: modelData.name; HoverHandler { id: ah; cursorShape: Qt.PointingHandCursor } TapHandler { onTapped: look.setAccent(modelData.name) } } } } }
+                    TextField { Layout.preferredWidth: 130; Layout.preferredHeight: 36; placeholderText: "#rrggbb"; maximumLength: 7; color: look.text; placeholderTextColor: look.muted; background: Rectangle { radius: 18; color: look.panel2 }
+                        onTextEdited: if (/^#[0-9a-fA-F]{6}$/.test(text)) look.setAccent(text) }
                 }
             }
             SGroup { title: "Message bubbles"

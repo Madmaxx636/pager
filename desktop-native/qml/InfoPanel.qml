@@ -251,7 +251,7 @@ Rectangle {
         background: Rectangle { color: look.panel; radius: 14; border.color: look.line }
         contentItem: ColumnLayout { spacing: 8
             Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; text: "Pick their chat on another network. Both show as one in your list, and the name at the top of the chat switches between them." }
-            ListView { Layout.fillWidth: true; Layout.fillHeight: true; clip: true; model: linkDlg.options; ScrollBar.vertical: ScrollBar { }
+            ListView { Layout.fillWidth: true; Layout.fillHeight: true; clip: true; boundsBehavior: Flickable.StopAtBounds; model: linkDlg.options; ScrollBar.vertical: ScrollBar { }
                 delegate: Rectangle { width: ListView.view.width; height: 44; radius: 10; color: lh.hovered ? look.panel2 : "transparent"
                     HoverHandler { id: lh; cursorShape: Qt.PointingHandCursor }
                     Row { x: 10; anchors.verticalCenter: parent.verticalCenter; spacing: 10

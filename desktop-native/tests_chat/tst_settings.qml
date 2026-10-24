@@ -7,10 +7,10 @@ Item {
     id: root
     width: 900; height: 700
     SToggle { id: tog; key: "markdown"; title: "Formatting"; width: 400 }
-    SChoice { id: choice; key: "notifScope"; title: "Scope"; options: [["all", "All"], ["dm_mentions", "DMs"]]; width: 400 }
-    SSlider { id: slide; key: "groupGapMin"; title: "Gap"; from: 1; to: 30; step: 1; width: 400 }
-    SList { id: list; key: "notifKeywords"; title: "Keywords"; width: 400 }
-    SText { id: text; table: "gifKeys"; key: "giphy"; title: "Key"; width: 400 }
+    SChoice { id: choice; y: 100; key: "notifScope"; title: "Scope"; options: [["all", "All"], ["dm_mentions", "DMs"]]; width: 400 }
+    SSlider { id: slide; y: 200; key: "groupGapMin"; title: "Gap"; from: 1; to: 30; step: 1; width: 400 }
+    SList { id: list; y: 300; key: "notifKeywords"; title: "Keywords"; width: 400 }
+    SText { id: text; y: 400; table: "gifKeys"; key: "giphy"; title: "Key"; width: 400 }
     Settings { id: page; parent: Overlay.overlay }
 
     TestCase {
@@ -100,6 +100,17 @@ Item {
             verify(page.modal === false)
             const other = core.pins.map(p => p.id).find(id => id !== core.currentRoom); verify(other !== undefined)
             core.openRoom(other); tryVerify(function () { return !page.visible })
+        }
+        function test_nothing_stretches_or_bounces_past_the_ends_like_the_web() {
+            page.openHome(); tryVerify(function () { return page.opened })
+            for (let i = 0; i < page.visiblePages.length; i++) {
+                page.page = i; page.showingList = false; wait(60)
+                const views = findAll(page.contentItem, c => c.hasOwnProperty("contentY") && c.hasOwnProperty("boundsBehavior") && c.visible, [])
+                for (const v of views) compare(v.boundsBehavior, Flickable.StopAtBounds, "page " + page.visiblePages[i][0])
+            }
+            page.showingList = true; wait(60)
+            for (const v of findAll(page.contentItem, c => c.hasOwnProperty("contentY") && c.hasOwnProperty("boundsBehavior") && c.visible, [])) compare(v.boundsBehavior, Flickable.StopAtBounds, "the list of pages")
+            page.close()
         }
     }
 }
