@@ -11,7 +11,8 @@ Dialog {
     title: "Camera"
     property string shot: ""
     function openNow() { shot = ""; open() }
-    onOpened: { if (devices.videoInputs.length) camera.start() }
+    property bool allowStart: true   // tests turn this off so they never switch a real camera on
+    onOpened: { if (allowStart && devices.videoInputs.length) camera.start() }
     onClosed: camera.stop()
     background: Rectangle { color: "#101418"; radius: 14 }
     header: Item { height: 48
