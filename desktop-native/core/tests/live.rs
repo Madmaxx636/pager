@@ -210,7 +210,12 @@ fn reactions_files_and_pictures_work_in_an_encrypted_chat() {
     });
     let seen = wait_for(&rx, 60, |k, v| k == "rooms" && has_body(v, &room_id, "react to me")).expect("message");
     let room = seen["rooms"].as_array().unwrap().iter().find(|r| r["id"] == room_id.as_str()).unwrap().clone();
-    let file_ev = room["events"].as_array().unwrap().iter().find(|e| e["content"]["body"] == "pic.png").expect("the file message").clone();
+    // the picture can arrive in the same update as the text or in a later one
+    let file_ev = match room["events"].as_array().unwrap().iter().find(|e| e["content"]["body"] == "pic.png") {
+        Some(e) => e.clone(),
+        None => { let later = wait_for(&rx, 60, |k, v| k == "rooms" && has_body(v, &room_id, "pic.png")).expect("the file message");
+            later["rooms"].as_array().unwrap().iter().find(|r| r["id"] == room_id.as_str()).unwrap()["events"].as_array().unwrap().iter().find(|e| e["content"]["body"] == "pic.png").unwrap().clone() }
+    };
 
     // alice reacts and sends a file through the engine
     let rid = CString::new(room_id.clone()).unwrap();
@@ -424,4 +429,22 @@ fn recovery_keys_and_key_files_work() {
     let good = wait_for(&rx, 60, |k, _| k == "keys_imported").unwrap(); assert_eq!(good["ok"], true, "{good}");
     pager_stop(engine);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_recording_can_be_sent_to_the_servers_transcriber() {
+    let (Ok(server), Some((alice, apw)), Ok(_)) = (std::env::var("PAGER_TEST_SERVER"), creds("PAGER_TEST_ALICE"), std::env::var("PAGER_TEST_TRANSCRIBE")) else { eprintln!("no transcriber given: skipping"); return };
+    let dir = std::env::temp_dir().join(format!("pager-tx-{}", std::process::id())); let _ = std::fs::remove_dir_all(&dir); std::fs::create_dir_all(&dir).unwrap();
+    let (tx, rx) = channel::<(String, Value)>(); let tx = Box::leak(Box::new(tx));
+    let dirc = CString::new(dir.to_str().unwrap()).unwrap();
+    let engine = pager_start(dirc.as_ptr(), on_event, tx as *mut _ as *mut c_void);
+    assert!(wait_for(&rx, 20, |k, v| k == "state" && v["signedIn"] == false).is_some());
+    let (hs, u, p) = (CString::new(server).unwrap(), CString::new(alice).unwrap(), CString::new(apw).unwrap());
+    pager_login(engine, hs.as_ptr(), u.as_ptr(), p.as_ptr());
+    assert!(wait_for(&rx, 60, |k, v| k == "state" && v["signedIn"] == true).is_some());
+    let f = dir.join("note.ogg"); std::fs::write(&f, b"OggS-fake-audio").unwrap(); let fc = CString::new(f.to_str().unwrap()).unwrap();
+    pager_http_file(engine, c"tx1".as_ptr(), c"/api/transcribe".as_ptr(), fc.as_ptr(), c"audio/ogg".as_ptr());
+    let a = wait_for(&rx, 30, |k, v| k == "http" && v["key"] == "tx1").unwrap();
+    assert_eq!(a["status"], 200, "{a}"); assert!(a["body"]["text"].as_str().unwrap_or("").contains("15 bytes"), "{a}");
+    pager_stop(engine); let _ = std::fs::remove_dir_all(&dir);
 }

@@ -113,6 +113,12 @@ public:
     Q_INVOKABLE void createRecoveryKey();                                            // recoveryKeyCreated(ok, key, error)
     Q_INVOKABLE void exportKeys(const QString &path, const QString &passphrase);     // keysExported(ok, error)
     Q_INVOKABLE void importKeys(const QString &path, const QString &passphrase);     // keysImported(ok, imported, total, error)
+    // ---- voice messages as words, made on your own server when it has transcription switched on
+    Q_PROPERTY(bool canTranscribe READ canTranscribe NOTIFY transcriptsChanged)
+    bool canTranscribe() const { return m_canTranscribe; }
+    Q_INVOKABLE QString transcriptOf(const QString &eventId) const { return m_transcripts.value(eventId).toString(); }
+    Q_INVOKABLE QString transcriptState(const QString &eventId) const;     // text, busy, failed or idle
+    Q_INVOKABLE void transcribe(const QString &eventId);                    // fetches the recording if needed, sends it to the server, keeps the words
     Q_INVOKABLE QVariantMap storiesInfo() const;                      // {id, unread, preview} of the Stories chat (WhatsApp status updates), or empty
     Q_INVOKABLE QVariantMap sharedMedia() const;                       // {photos:[{id,w,h}], links:[{id,url,who,when}], files:[{id,name,size,who,kind}]} of what is loaded in the open chat
     Q_INVOKABLE QString photoPath(const QString &eventId);             // a picture's file when it is here (asks for it otherwise; mediaReady(eventId) when it arrives)
@@ -125,6 +131,7 @@ public:
     Q_INVOKABLE void testNotification() { emit notify(QString(), QStringLiteral("Pager test"), QStringLiteral("This is how a message will look."), !(m_settings && m_settings->value(QStringLiteral("notifSound")).toBool())); if (m_settings && m_settings->value(QStringLiteral("notifSound")).toBool()) emit playSound(m_settings->value(QStringLiteral("notifSoundId")).toString(), m_settings->value(QStringLiteral("notifSoundVolume")).toDouble()); }
     Q_INVOKABLE void previewSound(const QString &id, double volume) { emit playSound(id, volume); }
     int badgeCount() const;                         // the number on the app icon, by the "unread badge counts" setting
+    Q_INVOKABLE void replayTour() { emit tourRequested(); }
     Q_INVOKABLE QString dataDir() const { return m_dataDir; }
     Q_INVOKABLE QString aliasOf(const QString &roomId) const { return RoomListModel::s_aliases.value(roomId); }
     Q_INVOKABLE void setAlias(const QString &roomId, const QString &name);       // "rename for me": only on your side
@@ -218,6 +225,8 @@ public:
     Q_INVOKABLE void openWhenAvailable(const QString &roomId);
     Q_INVOKABLE void addToPhonebook(const QVariantList &entries, bool override = false);
     /// Reads a .vcf contacts file; returns how many numbers it had (names then replace numbers everywhere).
+    void syncContacts();             // your imported contacts go to your account (in chunks), so every device shows the same names
+    void loadContacts();
     Q_INVOKABLE int importContacts(const QString &path);
     Q_INVOKABLE QString prettyName(const QString &raw) const;
     /// Messages on this device that match: kind is all, images, videos, links or files. [roomId] narrows to one chat.
@@ -295,6 +304,8 @@ public:
     int totalUnread() const;
     void handle(const QString &kind, const QJsonObject &body);   // also used by tests and the demo
 signals:
+    void transcriptsChanged();
+    void tourRequested();
     void encryptionChanged();
     void recoveryKeyCreated(bool ok, const QString &key, const QString &error);
     void keysExported(bool ok, const QString &error);
@@ -306,7 +317,7 @@ signals:
     void playSound(const QString &id, double volume);   // a little sound to play (send, receive, reaction, alert)
     void encryptionResult(const QString &error);
     void historyProgress(int messages, bool done);
-    void attention(const QString &roomId, const QString &chat, const QString &sender, const QString &kind);   // someone is trying to get your attention
+    void attention(const QString &roomId, const QString &chat, const QString &sender, const QString &kind, const QString &eventId);   // someone is trying to get your attention
     void stateChanged();
     void problemChanged();
     void currentChanged();
@@ -346,6 +357,8 @@ private:
     QHash<QString, QString> m_drafts; QString m_dataDir;
     QStringList m_encQueue; int m_encTotal = 0, m_encFailed = 0;
     void encryptNext();
+    int m_contactChunks = 0;
+    bool m_canTranscribe = false; QJsonObject m_transcripts; QSet<QString> m_transBusy, m_transFailed, m_transWanted;
     QJsonObject m_savedSync; QVariantMap m_encryption;
     QSet<QString> m_solo, m_noLink; QString m_via, m_chimed;
     QHash<QString, QString> m_aliases; QHash<QString, double> m_muteUntil; QString m_allHistory; int m_allPages = 0;

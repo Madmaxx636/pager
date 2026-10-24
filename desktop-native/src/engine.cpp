@@ -1,4 +1,5 @@
 #include "engine.h"
+#include <memory>
 #include "rich.h"
 #include "names.h"
 #include "notifypolicy.h"
@@ -70,7 +71,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
         if (m_signedIn) {
             m_server = b.value(QLatin1String("homeserver")).toString(m_server);
             m_user = b.value(QLatin1String("user")).toString(m_user); m_store.setMe(m_user); m_error.clear();
-            if (m_core) { api(QStringLiteral("GET"), QStringLiteral("/api/me"), QVariant(), QJSValue()); loadPushRules(); loadIdentity(); loadLinks(); loadExtras(); refreshEncryption(); call(QStringLiteral("GET"), QStringLiteral("/_matrix/client/v3/user/%1/account_data/app.pager.aliases").arg(pct(m_user)), QVariant(), [this](int status, const QJsonValue &v) { if (status != 200 || !v.isObject()) return; QHash<QString, QString> a; const QJsonObject o = v.toObject().value(QLatin1String("names")).toObject(); for (auto it = o.begin(); it != o.end(); ++it) a.insert(it.key(), it.value().toString()); RoomListModel::s_aliases = a; refreshLists(); m_timeline.show(m_current); emit currentChanged(); }); }   // admin? muted chats? your own accounts on other networks?
+            if (m_core) { api(QStringLiteral("GET"), QStringLiteral("/api/me"), QVariant(), QJSValue()); loadPushRules(); loadIdentity(); loadLinks(); loadExtras(); refreshEncryption(); loadContacts(); call(QStringLiteral("GET"), QStringLiteral("/api/config"), QVariant(), [this](int st, const QJsonValue &v) { if (st == 200) { m_canTranscribe = v.toObject().value(QLatin1String("transcribe")).toBool(); emit transcriptsChanged(); } }); { QFile tf(m_dataDir + QStringLiteral("/transcripts.json")); if (tf.open(QIODevice::ReadOnly)) m_transcripts = QJsonDocument::fromJson(tf.readAll()).object(); } call(QStringLiteral("GET"), QStringLiteral("/_matrix/client/v3/user/%1/account_data/app.pager.aliases").arg(pct(m_user)), QVariant(), [this](int status, const QJsonValue &v) { if (status != 200 || !v.isObject()) return; QHash<QString, QString> a; const QJsonObject o = v.toObject().value(QLatin1String("names")).toObject(); for (auto it = o.begin(); it != o.end(); ++it) a.insert(it.key(), it.value().toString()); RoomListModel::s_aliases = a; refreshLists(); m_timeline.show(m_current); emit currentChanged(); }); }   // admin? muted chats? your own accounts on other networks?
         }
         else { m_user.clear(); m_synced = false; m_error = b.value(QLatin1String("error")).toString(); }
         m_working = false;
@@ -92,7 +93,13 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
             m_seen.insert(id, last.id);
             if (!m_firstRooms && !last.attention.isEmpty() && !last.local && !m_store.mine(last)) {      // a nudge or a ring (only fresh ones: an old one in a backlog must not wake the screen)
                 const qint64 age = QDateTime::currentMSecsSinceEpoch() - last.ts;
-                if (age < 90000 && age > -60000) emit attention(id, RoomListModel::displayName(*r), r->nameOf(last.sender), last.attention);
+                if (age < 90000 && age > -60000) {
+                    if (last.attention == QLatin1String("image") && !last.content.isEmpty() && m_core && m_store.mediaPath(QStringLiteral("full:") + last.id).isEmpty() && !m_fetching.contains(QStringLiteral("full:") + last.id)) {   // the picture it fills the screen with
+                        const QString key = QStringLiteral("full:") + last.id; m_fetching.insert(key);
+                        const QByteArray json = QJsonDocument(last.content).toJson(QJsonDocument::Compact); pager_fetch_media(m_core, key.toUtf8().constData(), json.constData(), false);
+                    }
+                    emit attention(id, RoomListModel::displayName(*r), r->nameOf(last.sender), last.attention, last.id);
+                }
             }
             if (m_firstRooms || last.local || m_store.mine(last) || last.locked || (m_active && id == m_current)) continue;
             if (m_store.isBotRoom(*r)) continue;
@@ -163,10 +170,10 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
     } else if (kind == QLatin1String("media")) {
         const QString key = b.value(QLatin1String("key")).toString();
         m_fetching.remove(key);
-        if (b.contains(QLatin1String("path")) && (key.startsWith(QLatin1String("full:")))) { m_store.setMediaPath(key, b.value(QLatin1String("path")).toString()); emit mediaReady(key); }
+        if (b.contains(QLatin1String("path")) && (key.startsWith(QLatin1String("full:")))) { m_store.setMediaPath(key, b.value(QLatin1String("path")).toString()); emit mediaReady(key); if (m_transWanted.contains(key.mid(5))) { const QString id = key.mid(5); m_transWanted.remove(id); QTimer::singleShot(0, this, [this, id] { transcribe(id); }); } }
         else if (b.contains(QLatin1String("path"))) {
             m_store.setMediaPath(key, b.value(QLatin1String("path")).toString());
-            if (key.startsWith(QLatin1String("av:"))) { m_rooms.refresh(); m_timeline.show(m_current); emit listChanged(); } else if (key.startsWith(QLatin1String("th"))) emit mediaReady(key); else { m_timeline.touch(key); emit mediaReady(key); }
+        if (key.startsWith(QLatin1String("av:"))) { m_rooms.refresh(); m_timeline.show(m_current); emit listChanged(); } else if (key.startsWith(QLatin1String("th"))) emit mediaReady(key); else { m_timeline.touch(key); emit mediaReady(key); }
         } else if (key.startsWith(QLatin1String("av:"))) m_store.forgetWantedAvatar(key.mid(3));
     } else if (kind == QLatin1String("http")) {
         const QString key = b.value(QLatin1String("key")).toString();
@@ -704,7 +711,7 @@ void Engine::addToPhonebook(const QVariantList &entries, bool override) {
 int Engine::importContacts(const QString &path) {
     QFile f(path); if (!f.open(QIODevice::ReadOnly)) return 0;
     const auto entries = Names::parseVcf(QString::fromUtf8(f.readAll()));
-    Names::add(entries, true);
+    Names::add(entries, true, true); syncContacts();
     QSet<QString> numbers; for (const auto &e : entries) numbers.insert(Names::phoneKey(e.first));
     numbers.remove(QString()); return numbers.size();
 }
@@ -1515,3 +1522,50 @@ void Engine::refreshEncryption() { if (m_core) pager_encryption_status(m_core); 
 void Engine::createRecoveryKey() { if (m_core) pager_recovery_create(m_core); else emit recoveryKeyCreated(false, QString(), QStringLiteral("Not signed in")); }
 void Engine::exportKeys(const QString &path, const QString &pass) { if (m_core) pager_keys_export(m_core, path.toUtf8().constData(), pass.toUtf8().constData()); }
 void Engine::importKeys(const QString &path, const QString &pass) { if (m_core) pager_keys_import(m_core, path.toUtf8().constData(), pass.toUtf8().constData()); }
+
+void Engine::syncContacts() {
+    if (!m_core || m_user.isEmpty()) return;
+    const auto rows = Names::ownRows(); const int size = 500, count = qMax(1, (rows.size() + size - 1) / size);
+    for (int i = 0; i < qMax(count, m_contactChunks); ++i) {
+        QJsonArray chunk; for (int k = i * size; k < qMin(rows.size(), (i + 1) * size); ++k) chunk.append(QJsonArray{rows[k].first, rows[k].second});
+        call(QStringLiteral("PUT"), QStringLiteral("/_matrix/client/v3/user/%1/account_data/app.pager.contacts.%2").arg(pct(m_user)).arg(i), QVariantMap{{"rows", chunk.toVariantList()}, {"chunks", count}}, nullptr);
+    }
+    m_contactChunks = count;
+}
+void Engine::loadContacts() {
+    auto step = std::make_shared<std::function<void(int, int)>>();
+    *step = [this, step](int i, int total) {
+        call(QStringLiteral("GET"), QStringLiteral("/_matrix/client/v3/user/%1/account_data/app.pager.contacts.%2").arg(pct(m_user)).arg(i), QVariant(), [this, step, i, total](int status, const QJsonValue &v) {
+            if (status != 200 || !v.isObject()) return;
+            const QJsonObject o = v.toObject(); QList<QPair<QString, QString>> rows;
+            for (const QJsonValue &r : o.value(QLatin1String("rows")).toArray()) { const QJsonArray a = r.toArray(); rows.append({a.at(0).toString(), a.at(1).toString()}); }
+            if (Names::add(rows, true, true)) { m_timeline.show(m_current); refreshLists(); }
+            const int chunks = o.value(QLatin1String("chunks")).toInt(1); m_contactChunks = qMax(m_contactChunks, chunks);
+            if (i + 1 < chunks) (*step)(i + 1, chunks);
+        });
+    };
+    (*step)(0, 1);
+}
+
+QString Engine::transcriptState(const QString &id) const {
+    return m_transcripts.contains(id) ? QStringLiteral("text") : m_transBusy.contains(id) ? QStringLiteral("busy") : m_transFailed.contains(id) ? QStringLiteral("failed") : QStringLiteral("idle");
+}
+void Engine::transcribe(const QString &id) {
+    if (!m_core || !m_canTranscribe || m_transBusy.contains(id) || m_transcripts.contains(id)) return;
+    const QString path = fullPath(id);
+    if (path.isEmpty()) { m_transWanted.insert(id); fetchFull(id); return; }          // the recording first; mediaReady brings us back
+    m_transBusy.insert(id); m_transFailed.remove(id); emit transcriptsChanged();
+    const QString key = QStringLiteral("tx-%1").arg(++m_callCounter);
+    m_internal.insert(key, [this, id](int status, const QJsonValue &v) {
+        m_transBusy.remove(id);
+        if (status >= 200 && status < 300) {
+            QString text = v.toObject().value(QLatin1String("text")).toString().trimmed(); if (text.isEmpty()) text = QStringLiteral("(no speech found)");
+            m_transcripts.insert(id, text);
+            if (m_transcripts.size() > 300) { const QStringList ks = m_transcripts.keys(); for (int i = 0; i < ks.size() - 300; ++i) m_transcripts.remove(ks[i]); }
+            if (!m_dataDir.isEmpty()) { QFile f(m_dataDir + QStringLiteral("/transcripts.json")); if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(QJsonDocument(m_transcripts).toJson(QJsonDocument::Compact)); }
+        } else m_transFailed.insert(id);
+        emit transcriptsChanged();
+    });
+    const QString mime = path.endsWith(QLatin1String(".ogg")) || path.endsWith(QLatin1String(".oga")) ? QStringLiteral("audio/ogg") : path.endsWith(QLatin1String(".mp3")) ? QStringLiteral("audio/mpeg") : path.endsWith(QLatin1String(".m4a")) ? QStringLiteral("audio/mp4") : QStringLiteral("application/octet-stream");
+    pager_http_file(m_core, key.toUtf8().constData(), "/api/transcribe", path.toUtf8().constData(), mime.toUtf8().constData());
+}

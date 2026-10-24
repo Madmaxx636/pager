@@ -20,7 +20,7 @@ ApplicationWindow {
     // Coming back to the window counts as reading what arrived while it was behind.
     Connections { target: Qt.application; function onStateChanged() { core.setActive(Qt.application.state === Qt.ApplicationActive) } }
 
-    Component.onCompleted: { if (startupDialog === "info") infoOpen = true; if (core.signedIn && !quietRun) greeting.hello() }
+    Component.onCompleted: { if (startupDialog === "info") infoOpen = true; if (core.signedIn && !quietRun) { greeting.hello(); tourCheck.restart() } }
     Recovery { id: recovery }
     WhenDialog { id: snoozeDialog; heading: "Snooze until"; onPicked: (ms) => core.snooze(core.currentRoom, ms) }
     function runShortcut(id) {
@@ -28,7 +28,7 @@ ApplicationWindow {
         switch (id) {
         case "palette": palette.open(); break
         case "help": if (sidebarRef) sidebarRef.openSettingsPage("shortcuts"); break
-        case "newChat": newChat.open(); break
+        case "newChat": newChatDialog.open(); break
         case "search": searchDlg.openFor("", "", ""); break
         case "inChatSearch": if (has) searchDlg.openFor(core.currentRoom, core.currentName, ""); break
         case "settings": rootSettings(); break
@@ -51,8 +51,16 @@ ApplicationWindow {
         model: SC.ALL
         delegate: Shortcut { sequence: SC.keysFor(modelData.id, settings.shortcuts); enabled: core.signedIn; onActivated: win.runShortcut(modelData.id) }
     }
-    NewChat { id: newChat }
+    NewChat { id: newChatDialog }
     Greeting { id: greeting; parent: Overlay.overlay }
+    Tour { id: tour; onGo: (page) => { if (sidebarRef) sidebarRef.openSettingsPage(page) } }
+    // the tour runs once per account: ask the account if another computer already did it
+    Timer { id: tourCheck; interval: 6000
+        onTriggered: {
+            if (!core.signedIn || core.loading || win.quietRun) return
+            core.api("GET", "/_matrix/client/v3/user/" + encodeURIComponent(core.user) + "/account_data/app.pager.tour", null, function (status) { if (status === 404) tour.start() })
+        } }
+    Connections { target: core; function onStateChanged() { if (core.signedIn && !win.quietRun) tourCheck.restart() } function onTourRequested() { tour.start() } }
     readonly property bool quietRun: Qt.application.arguments.indexOf("--demo") >= 0 || Qt.application.arguments.indexOf("--open") >= 0 || Qt.application.arguments.indexOf("--chat") >= 0
     Connections { target: core; function onStateChanged() { if (core.signedIn && !win.quietRun) greeting.hello() } }
     Loader { id: soundLoader; active: false; source: "SoundPlayer.qml"; property string pendingFile: ""; property real pendingVolume: 0.5
@@ -62,9 +70,9 @@ ApplicationWindow {
             const f = id === "custom" ? (settings.customSoundPath.length ? settings.customSoundPath : files.soundFile("ding")) : files.soundFile(id); if (!f.length || volume <= 0) return
             if (soundLoader.active && soundLoader.item) soundLoader.item.play(f, volume)
             else { soundLoader.pendingFile = f; soundLoader.pendingVolume = volume; soundLoader.active = true } } }
-    CommandBar { id: palette; onNewChat: newChat.open(); onSearchAll: searchDlg.openFor("", "", ""); onOpenSettingsPage: (id) => { if (sidebarRef) sidebarRef.openSettingsPage(id) }; onSnoozeCurrent: snoozeDialog.open() }
+    CommandBar { id: palette; onNewChat: newChatDialog.open(); onSearchAll: searchDlg.openFor("", "", ""); onOpenSettingsPage: (id) => { if (sidebarRef) sidebarRef.openSettingsPage(id) }; onSnoozeCurrent: snoozeDialog.open() }
     AttentionOverlay { id: attention; onOpenChat: (roomId) => { core.openRoom(roomId); win.showingChat = true } }
-    Connections { target: core; function onAttention(roomId, chat, sender, kind) { attention.raise(roomId, chat, sender, kind) } }
+    Connections { target: core; function onAttention(roomId, chat, sender, kind, eventId) { attention.raise(roomId, chat, sender, kind, eventId) } }
     SearchDialog { id: searchDlg; onChosen: (roomId, eventId) => core.openAt(roomId, eventId) }
     Connections { target: core; function onJumpRequested(id) { win.pendingJump = id } }
     property string pendingJump: ""
@@ -90,7 +98,7 @@ ApplicationWindow {
                 visible: win.wide || !win.showingChat
                 onOpened: win.showingChat = true
                 onRestoreRequested: recovery.open()
-                onNewChat: newChat.open()
+                onNewChat: newChatDialog.open()
                 onSearchRequested: (text) => searchDlg.openFor("", "", text)
             }
             Rectangle { Layout.fillHeight: true; width: 1; color: look.line; visible: win.wide }

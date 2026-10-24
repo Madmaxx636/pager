@@ -222,13 +222,14 @@ Rectangle {
                         id: attachMenu
                         x: 0; y: -height - 8; padding: 8; width: 3 * 112 + 16
                         background: Rectangle { color: look.panel; radius: 16; border.color: look.line }
-                        readonly property var items: [["photos", "Photos", "image", "#3b82f6"], ["gif", "GIF", "", "#ec4899"], ["stickers", "Stickers", "sticker", "#f59e0b"], ["emoji", "Emoji", "smile", "#eab308"],
+                        readonly property var items: [["photos", "Photos", "image", "#3b82f6"], ["camera", "Camera", "camera", "#6b7280"], ["gif", "GIF", "", "#ec4899"], ["stickers", "Stickers", "sticker", "#f59e0b"], ["emoji", "Emoji", "smile", "#eab308"],
                             ["file", "File", "file", "#14b8a6"], ["viewonce", "View once", "eye-off", "#475569"], ["poll", "Poll", "chart-column", "#8b5cf6"], ["contact", "Contact", "contact-round", "#0ea5e9"],
                             ["location", "Location", "map-pin", "#ef4444"], ["attention", "Get attention", "bell", "#f43f5e"]]
                         function pick(k) {
                             close()
                             switch (k) {
                             case "photos": photoPicker.open(); break
+                            case "camera": cameraLoader.active = true; if (cameraLoader.item) cameraLoader.item.openNow(); break
                             case "file": filePicker.open(); break
                             case "viewonce": viewOncePicker.open(); break
                             case "gif": gifDialog.open(); break
@@ -310,6 +311,7 @@ Rectangle {
     FileDialog { id: photoPicker; title: "Send photos or videos"; fileMode: FileDialog.OpenFiles; nameFilters: ["Photos and videos (*.png *.jpg *.jpeg *.gif *.webp *.bmp *.mp4 *.mov *.webm *.mkv)", "All files (*)"]; onAccepted: pane.attach(selectedFiles) }
     FileDialog { id: viewOncePicker; title: "Send a photo or video that disappears after viewing"; fileMode: FileDialog.OpenFile; nameFilters: ["Photos and videos (*.png *.jpg *.jpeg *.gif *.webp *.mp4 *.mov *.webm)"]
         onAccepted: { const p = files.path(selectedFile); if (p.length) { const sz = files.imageSize(p); core.sendMedia(p, files.mime(p), sz.width, sz.height, "", { "com.beeper.view_limited": { type: "count", count: 1 } }) } } }
+    Loader { id: cameraLoader; active: false; source: "CameraDialog.qml"; onLoaded: item.openNow() }
     GifDialog { id: gifDialog; onOpenSettings: pane.openStickerSettings() }
     StickerDialog { id: stickerDialog }
     ContactDialog { id: contactDialog }

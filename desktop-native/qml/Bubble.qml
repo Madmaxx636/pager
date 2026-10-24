@@ -319,6 +319,16 @@ Item {
                 source: "AudioBubble.qml"
                 onLoaded: { item.eventId = row.eventId; item.voice = row.voice; item.durationMs = row.durationMs; item.fileName = row.fileName; item.ink = row.ink; item.softInk = row.softInk; item.accentColor = row.mine ? row.ink : look.accent; item.width = width }
             }
+            // a voice message as words, when your server can make them
+            property int rev: 0
+            Connections { target: core; function onTranscriptsChanged() { parent.rev++ } }
+            Component.onCompleted: if (row.voice && settings.autoTranscribe && core.canTranscribe && !row.local) core.transcribe(row.eventId)
+            Text { visible: row.voice && (parent.rev >= 0) && core.transcriptState(row.eventId) === "text"; width: Math.min(280, row.maxW - 28); wrapMode: Text.Wrap; color: row.ink; font.pixelSize: Math.round(14 * look.textScale)
+                text: (parent.rev >= 0) ? core.transcriptOf(row.eventId) : ""; topPadding: 4 }
+            Label { visible: row.voice && core.canTranscribe && (parent.rev >= 0) && core.transcriptState(row.eventId) !== "text"; topPadding: 4
+                text: core.transcriptState(row.eventId) === "busy" ? "Writing it out…" : (core.transcriptState(row.eventId) === "failed" ? "Couldn't write it out. Try again" : "Write it out")
+                color: core.transcriptState(row.eventId) === "busy" ? row.softInk : (row.mine ? row.ink : look.accent); font.pixelSize: Math.round(13 * look.textScale); font.underline: core.transcriptState(row.eventId) !== "busy"
+                TapHandler { onTapped: core.transcribe(row.eventId) } HoverHandler { cursorShape: Qt.PointingHandCursor } }
             Item { width: 1; height: metaRow.visible ? 13 : 0 }
         }
     }

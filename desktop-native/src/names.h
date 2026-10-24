@@ -14,7 +14,9 @@ QString phoneKey(const QString &number);
 /// A name fit to show: no network tag, and a contact's name instead of a bare number when it is known.
 QString pretty(const QString &raw);
 /// Adds names to the phone book. A number that already has a name keeps it unless [override]. Returns whether anything changed.
-bool add(const QList<QPair<QString, QString>> &numberAndName, bool override = false);
+bool add(const QList<QPair<QString, QString>> &numberAndName, bool override = false, bool mine = false);
+/// The entries you added yourself (a contacts file, or another device of yours), as {number, name} pairs: what syncs to your account.
+QList<QPair<QString, QString>> ownRows();
 QString lookup(const QString &number);
 int size();
 /// Your own contacts file (a .vcf from Google Contacts, iPhone or Android): name and number pairs.

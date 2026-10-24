@@ -429,9 +429,25 @@ class Store(private val context: Context) {
         }
     }
 
+    /** How many times in a row an update with keys in it could not be handed to the encryption library; after a few tries we move on rather than stall. */
+    private var keyHandoverFailures = 0
+    private fun hasToDevice(res: JsonObject) = ((res["to_device"] as? JsonObject)?.get("events") as? JsonArray)?.isNotEmpty() == true
+
     private suspend fun decryptSync(res: JsonObject): JsonObject {
-        val e = e2ee
-        if (e != null) try { e.receiveSync(res) } catch (x: CancellationException) { throw x } catch (_: Throwable) { delay(500); e.receiveSync(res) } // keys in this update must not be dropped
+        var e = e2ee
+        // Keys come in the update's "to_device" part and the server will not send them again once we move on. So if encryption is not
+        // running yet, or hands them back with an error, we must not move on: try again with the same update (a few times, then give up).
+        if (e == null && hasToDevice(res)) {
+            kotlinx.coroutines.withTimeoutOrNull(20_000) { while (e2ee == null && scope.isActive) delay(300) }
+            e = e2ee
+            if (e == null && keyHandoverFailures++ < 6) throw java.io.IOException("encryption is not ready: holding this update so its keys are not lost")
+        }
+        if (e != null) try {
+            try { e.receiveSync(res) } catch (x: CancellationException) { throw x } catch (_: Throwable) { delay(500); e.receiveSync(res) }
+            keyHandoverFailures = 0
+        } catch (x: CancellationException) { throw x } catch (x: Throwable) {
+            if (hasToDevice(res) && keyHandoverFailures++ < 6) { delay(1_500); throw x }      // same update again: its keys must not be dropped
+        }
         val rooms = res["rooms"] as? JsonObject ?: return res
         val join = rooms["join"] as? JsonObject ?: return res
         val newJoin = JsonObject(join.mapValues { (roomId, room) ->
@@ -552,7 +568,7 @@ class Store(private val context: Context) {
             try {
                 val raw = matrix.sync(since)
                 // If reading the encrypted parts goes wrong, show the update with those messages still locked rather than never moving on.
-                val res = try { decryptSync(raw) } catch (e: CancellationException) { throw e } catch (e: Throwable) { noteSyncProblem("decrypting", e); raw }
+                val res = try { decryptSync(raw) } catch (e: CancellationException) { throw e } catch (e: Throwable) { noteSyncProblem("decrypting", e); if (hasToDevice(raw) && keyHandoverFailures in 1..6) continue; raw }
                 val initial = since == null
                 val r = try { SyncReducer.apply(_chats.value, res, s.userId, initial) } catch (e: CancellationException) { throw e } catch (e: Throwable) {
                     noteSyncProblem("reading messages", e)

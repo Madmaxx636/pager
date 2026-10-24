@@ -25,6 +25,7 @@ void pager_encryption_status(PagerEngine *e);
 void pager_recovery_create(PagerEngine *e);
 void pager_keys_export(PagerEngine *e, const char *path, const char *passphrase);
 void pager_keys_import(PagerEngine *e, const char *path, const char *passphrase);
+void pager_http_file(PagerEngine *e, const char *key, const char *path, const char *file, const char *content_type);
 void pager_http(PagerEngine *e, const char *key, const char *method, const char *path, const char *body_json);
 char *pager_qr(const char *text);
 void pager_free_string(char *s);

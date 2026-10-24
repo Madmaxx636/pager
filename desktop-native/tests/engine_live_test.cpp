@@ -250,6 +250,10 @@ private slots:
         QSignalSpy fetched(&e, &Engine::syncFetched); e.fetchSyncedSettings(); QTRY_VERIFY_WITH_TIMEOUT(fetched.count() >= 1, 20000);
         QVERIFY(fetched.first().first().toMap().value("groups").toStringList().contains("bubbles"));
         QVERIFY(e.loadSyncedSettings({"bubbles"}) >= 1); QCOMPARE(st.value("bubbleDepth").toString(), QString("raised"));
+        // contacts you import go to your account
+        { QFile v(dir.path() + "/c.vcf"); v.open(QIODevice::WriteOnly); v.write("BEGIN:VCARD\nVERSION:3.0\nFN:Zed Zebra\nTEL:+1 555 010 7777\nEND:VCARD\n"); }
+        QCOMPARE(e.importContacts(dir.path() + "/c.vcf"), 1);
+        QTRY_VERIFY_WITH_TIMEOUT(get(base + "app.pager.contacts.0").value("body").toMap().value("rows").toList().size() == 1, 20000);
         // encryption: this device, a new recovery key, a key file
         e.refreshEncryption(); QTRY_VERIFY_WITH_TIMEOUT(e.encryption().contains("device_id"), 20000);
         QVERIFY(e.encryption().value("fingerprint").toString().size() > 20);
