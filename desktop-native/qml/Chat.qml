@@ -185,7 +185,7 @@ Rectangle {
             visible: pane.mentionPeople.length > 0
             Layout.fillWidth: true; implicitHeight: Math.min(pane.mentionPeople.length, 5) * 44 + 8; color: look.panel
             Rectangle { width: parent.width; height: 1; color: look.line }
-            ListView { anchors.fill: parent; anchors.margins: 4; clip: true; model: pane.mentionPeople
+            ListView { anchors.fill: parent; anchors.margins: 4; clip: true; boundsBehavior: Flickable.StopAtBounds; model: pane.mentionPeople
                 delegate: Rectangle { width: ListView.view.width; height: 44; radius: 10; color: mh.hovered ? look.panel2 : "transparent"
                     HoverHandler { id: mh; cursorShape: Qt.PointingHandCursor }
                     Row { x: 10; anchors.verticalCenter: parent.verticalCenter; spacing: 10
@@ -258,6 +258,7 @@ Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true; radius: 24; color: look.panel2
                     ScrollView {
                         anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 44
+                        Component.onCompleted: (contentItem as Flickable).boundsBehavior = Flickable.StopAtBounds
                         TextArea {
                             id: input
                             placeholderText: "Message " + core.currentName.split(" ")[0] + (core.currentNetworkLabel.length ? " · " + core.currentNetworkLabel : "")

@@ -1,0 +1,37 @@
+plastic	Pager plastic	Pager	plastic	0	#efece4	#faf8f3	#d9d3c4	#2a2620	#7a7366	#d2692b	20	
+amber	Pager amber	Pager	plastic	1	#1b1608	#241d0b	#44381a	#ffcf5a	#b08e35	#ffb000	16	#1b1608
+win95	Windows 95	Windows	bevel	0	#c0c0c0	#c0c0c0	#808080	#000000	#404040	#000080	0	
+win98	Windows 98 / ME	Windows	bevel	0	#c0c0c0	#c0c0c0	#808080	#000000	#404040	#0a246a	0	
+winxp	Windows XP	Windows	luna	0	#ece9d8	#f6f4e8	#aca899	#000000	#58584e	#245edb	8	
+winvista	Windows Vista	Windows	glass	0	#dfe9f5	#eef3fa	#a9bdd6	#10233b	#51647c	#2a7fd4	8	
+win7	Windows 7	Windows	glass	0	#e8f0f9	#f4f8fd	#b3c8df	#10233b	#51647c	#2f9be0	8	
+win8	Windows 8	Windows	metro	0	#ffffff	#f2f2f2	#d0d0d0	#111111	#666666	#00a300	0	
+win11	Windows 10 / 11	Windows	fluent	0	#f3f3f3	#fbfbfb	#e5e5e5	#1a1a1a	#606060	#0067c0	10	
+win11d	Windows 10 / 11 dark	Windows	fluent	1	#202020	#2b2b2b	#3a3a3a	#ffffff	#a0a0a0	#60cdff	10	#000000
+aqua	OS X Aqua	Mac	aqua	0	#ececec	#f2f2f2	#a8a8a8	#1c1c1c	#666666	#3d87e8	8	
+yosemite	OS X Yosemite to Catalina	Mac	mac	0	#f6f6f6	#ffffff	#e0e0e3	#1d1d1f	#86868b	#0a84ff	10	
+macos	macOS Big Sur and later	Mac	mac	0	#f5f5f7	#ffffff	#e3e3e6	#1d1d1f	#86868b	#007aff	12	
+macosd	macOS dark	Mac	mac	1	#1e1e1e	#2a2a2c	#3a3a3d	#f5f5f7	#98989d	#0a84ff	12	
+breeze	Breeze	KDE Plasma	breeze	0	#eff0f1	#fcfcfc	#bcc0c3	#232627	#7f8c8d	#3daee9	5	
+breezed	Breeze Dark	KDE Plasma	breeze	1	#31363b	#232629	#4d5257	#eff0f1	#a1a9b1	#3daee9	5	#0b1c27
+breezet	Breeze Twilight	KDE Plasma	breeze	1	#2c3e50	#1d2a38	#455a6f	#eff0f1	#a1a9b1	#3daee9	5	#0b1c27
+breezec	Breeze Classic	KDE Plasma	breeze	0	#d6d2d0	#f1efee	#a6a09b	#31363b	#6f6a65	#3daee9	3	
+breezehc	Breeze High Contrast	KDE Plasma	breeze	1	#000000	#0c0c0c	#ffffff	#ffffff	#e0e0e0	#ffd000	3	#000000
+oxygen	Oxygen	KDE Plasma	breeze	0	#dedcda	#f4f2f0	#b0aaa4	#2d2b2a	#6f6a65	#5b9bd6	6	
+oxygenc	Oxygen Cold	KDE Plasma	breeze	0	#d9dce1	#f2f4f7	#a9b0ba	#272a2e	#69707a	#4f86c6	6	
+honeycomb	Honeycomb	KDE Plasma	breeze	1	#2d2d2d	#232323	#464646	#ededed	#a8a8a8	#f5b800	5	#1a1400
+obsidian	Obsidian Coast	KDE Plasma	breeze	1	#1f2a2e	#172023	#364549	#e6eef0	#93a6ab	#2eb398	5	#06201a
+zion	Zion	KDE Plasma	breeze	1	#1c1c1f	#141416	#38383d	#f0f0f0	#a0a0a8	#4aa3ff	4	#06182b
+zionr	Zion Reversed	KDE Plasma	breeze	0	#e8e8ec	#fafafc	#c2c2c9	#1c1c1f	#6a6a72	#1f7ae0	4	
+adwaita	Adwaita	GNOME	adwaita	0	#fafafa	#ffffff	#d5d0cc	#2e3436	#77767b	#3584e4	12	
+adwaitad	Adwaita dark	GNOME	adwaita	1	#242424	#303030	#454545	#ffffff	#9a9996	#78aeed	12	#0b1b30
+adwaitahc	Adwaita high contrast	GNOME	adwaita	0	#ffffff	#ffffff	#000000	#000000	#2a2a2a	#0050b0	8	
+yaru	Yaru (Ubuntu)	GNOME	adwaita	0	#f6f5f4	#ffffff	#d6d1cc	#2c2c2c	#7a7570	#e95420	6	
+yarud	Yaru dark	GNOME	adwaita	1	#2b2b2b	#333333	#4a4a4a	#f2f2f2	#a8a49f	#e95420	6	
+pop	Pop!_OS	GNOME	adwaita	1	#2b2b2f	#36363b	#4a4a50	#f2f2f2	#a8a8b0	#48b9c7	8	#06222a
+elementary	elementary OS	GNOME	adwaita	0	#f5f5f5	#ffffff	#d4d4d4	#333333	#7e8087	#3689e6	10	
+nord	Nord	Popular Linux palettes	flat	1	#2e3440	#3b4252	#4c566a	#eceff4	#a3adbf	#88c0d0	8	#1b2430
+dracula	Dracula	Popular Linux palettes	flat	1	#282a36	#343746	#44475a	#f8f8f2	#a2a6c4	#bd93f9	8	#1d1830
+gruvbox	Gruvbox dark	Popular Linux palettes	flat	1	#282828	#32302f	#504945	#ebdbb2	#a89984	#fabd2f	6	#2a2000
+catppuccin	Catppuccin Mocha	Popular Linux palettes	flat	1	#1e1e2e	#313244	#45475a	#cdd6f4	#a6adc8	#cba6f7	10	#1b1030
+latte	Catppuccin Latte	Popular Linux palettes	flat	0	#eff1f5	#ffffff	#ccd0da	#4c4f69	#6c6f85	#8839ef	10	

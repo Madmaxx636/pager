@@ -12,6 +12,7 @@ WheelHandler {
     property real goal: 0
     property var samples: []            // recent finger movements of a touchpad: [time, pixels]
     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+    Component.onCompleted: if (view) view.boundsBehavior = Flickable.StopAtBounds      // no stretching or bouncing past the ends, like the web app
     function bounds() { const lo = view.originY; return [lo, Math.max(lo, view.originY + view.contentHeight - view.height)] }
     onWheel: (e) => {
         if (!view) return
