@@ -412,7 +412,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
     const body = text.trim(); if (!body && !staged.length) return;
     if (!editing && staged.length) {
       // The words go with the first item; the rest follow on their own.
-      staged.forEach((x, i) => sendFile(target, x.file, x.name, { viewOnce: x.viewOnce, ...(i === 0 && body ? { caption: body } : {}), ...(x.w ? { w: x.w, h: x.h } : {}) }));
+      staged.forEach((x, i) => sendFile(target, x.file, x.name, { viewOnce: x.viewOnce, ...(i === 0 && body ? { caption: body } : {}), ...(i === 0 && replyTo ? { replyTo: replyTo.id } : {}), ...(x.w ? { w: x.w, h: x.h } : {}) }));
       onSent(); setText(""); setDraft(roomId, ""); mentionIds.current.clear(); onClearReply(); onClearEdit();
       return;
     }
@@ -433,12 +433,13 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
       mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
       const start = Date.now();
       const timer = window.setInterval(() => setRec({ ms: Date.now() - start }), 200);
+      const replyId = replyTo?.id;      // a voice message sent while replying answers that message
       mr.onstop = () => {
         window.clearInterval(timer); stream.getTracks().forEach((t) => t.stop());
         const ms = Date.now() - start, r = recorder.current; recorder.current = undefined; setRec(null);
         if (!r || r.cancel || ms < 700) return;
         const type = mr.mimeType.split(";")[0] || "audio/webm";
-        sendFile(target, new Blob(chunks, { type }), `voice-message.${type.includes("ogg") ? "ogg" : "webm"}`, { voice: true, durationMs: ms });
+        sendFile(target, new Blob(chunks, { type }), `voice-message.${type.includes("ogg") ? "ogg" : "webm"}`, { voice: true, durationMs: ms, ...(replyId ? { replyTo: replyId } : {}) }); onClearReply();
       };
       recorder.current = { mr, stream }; setRec({ ms: 0 }); mr.start();
     } catch { setError("Couldn't access the microphone."); }

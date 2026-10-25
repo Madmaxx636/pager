@@ -150,6 +150,8 @@ data class AppSettings(
     val notifSound: Boolean = true,
     /** Sounds for sending and receiving, only while you are inside that page. */
     val convoSounds: Boolean = true,
+    /** A message for another page while you are in the app slides in at the top (instead of only a sound). */
+    val inAppPopups: Boolean = true,
     val sendSound: String = "swoosh",
     val receiveSound: String = "pop",
     val convoSoundVolume: Float = 0.5f,
@@ -224,7 +226,7 @@ class SettingsStore(context: Context) {
             Group("reactions", "Reactions", "Double-tap and triple-tap reactions, swipe to reply", listOf("doubleTapReact", "doubleTapEmoji", "tripleTapReact", "tripleTapEmoji", "swipeToReply")),
             Group("list", "Chat list", "What each row shows, filters, swipes, hidden networks", listOf("showAvatars", "showFilterBar", "showLabelsInFilterBar", "showMessageTimes", "showNetworkBadges", "showNetworkNameInRows", "showPinsRow", "showPreviews", "showReadTicks", "sortUnreadFirst", "inboxStyle", "defaultTab", "hiddenNetworks", "hideStories", "swipeLeft", "swipeRight")),
             Group("notifications", "Notifications", "What alerts you, quiet hours, previews", listOf("notifEnabled", "accountAlerts", "updateAlerts", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin", "notifVibrate", "notifLockScreen", "notifAlertOnce", "notifActions")),
-            Group("sounds", "Sounds", "Send, receive and reaction sounds", listOf("convoSounds", "sendSound", "receiveSound", "reactionSound")),
+            Group("sounds", "Sounds", "Send, receive and reaction sounds", listOf("convoSounds", "inAppPopups", "sendSound", "receiveSound", "reactionSound")),
             Group("gifs", "GIF search keys", "Your GIPHY and KLIPY keys (kept on your own server)", listOf("gifKeys")),
             Group("behaviour", "Chat behaviour", "Read marks, typing, downloads, link previews, confirmations", listOf("lowData", "lowEnd", "markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider", "enterSends", "imageQuality")),
         )

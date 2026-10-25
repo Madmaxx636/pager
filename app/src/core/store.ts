@@ -692,6 +692,7 @@ export function sendFile(roomId: string, file: File | Blob, name = (file as File
         ...(extra.viewOnce && (type === "m.image" || type === "m.video") ? { "com.beeper.view_limited": { type: "count", count: 1 } } : {}),
         ...(extra.attention ? { [ATTENTION_FIELD]: { kind: extra.attention } } : {}),
         ...(extra.voice ? { "org.matrix.msc3245.voice": {}, "org.matrix.msc1767.audio": { duration: extra.durationMs ?? 0 } } : {}),
+        ...(extra.replyTo ? { "m.relates_to": { "m.in_reply_to": { event_id: extra.replyTo } } } : {}),
       });
       setStatus(roomId, localId, STATUS_SENT, id);
     } catch { setStatus(roomId, localId, STATUS_FAILED); }

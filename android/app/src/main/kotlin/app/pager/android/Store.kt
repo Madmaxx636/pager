@@ -114,6 +114,9 @@ class Store(private val context: Context) {
     val muted: StateFlow<Set<String>> = _muted.asStateFlow()
     private val _incoming = MutableSharedFlow<Incoming>(extraBufferCapacity = 64)
     val incoming: SharedFlow<Incoming> = _incoming
+    /** Messages for another page while the app is open: shown as a pop-up at the top of the screen (see InAppBanner). */
+    private val _inApp = MutableSharedFlow<Incoming>(extraBufferCapacity = 16)
+    val inApp: SharedFlow<Incoming> = _inApp
 
     // Small things kept on the device.
     private val _drafts = MutableStateFlow(readJson("drafts", MapSerializer(String.serializer(), String.serializer()), emptyMap()))
@@ -646,7 +649,12 @@ class Store(private val context: Context) {
                         val d = NotifyPolicy.decide(m, quiet = m.roomId in muted || c?.lowPriority == true, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st)
                         if (!d.show) continue
                         // In the app but on another page: no pop-up (you are in Pager), but the alert sound still plays.
-                        if (appInForeground) { if (!d.silent && st.convoSounds) ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume); continue }
+                        if (appInForeground) {
+                            if (!d.silent && st.convoSounds) ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume)
+                            val shown = m.copy(silent = d.silent, preview = d.preview)
+                            if (st.inAppPopups && firstTimeSeen(shown)) _inApp.tryEmit(shown)
+                            continue
+                        }
                         val out = m.copy(silent = d.silent, preview = d.preview)
                         // The same message can reach us more than once (a refetched page, two sync passes); alert for it only once.
                         if (firstTimeSeen(out)) _incoming.tryEmit(out)
@@ -872,19 +880,19 @@ class Store(private val context: Context) {
     }
 
     /** [viewOnce]: Signal shows the picture or video once and then it is gone (the bridge turns this into Signal's own view-once). */
-    fun sendFile(roomId: String, uri: Uri, viewOnce: Boolean = false, caption: String? = null, attention: String? = null) {
+    fun sendFile(roomId: String, uri: Uri, viewOnce: Boolean = false, caption: String? = null, attention: String? = null, replyTo: String? = null) {
         val me = _session.value?.userId ?: return
         val p = describe(uri)
         // "High" quality shrinks big photos (2048px, JPEG) before upload; GIFs, WebP and other files are never touched.
         if (settings.value.imageQuality == "high" && (p.mime == "image/jpeg" || p.mime == "image/png")) {
             scope.launch {
                 val shrunk = runCatching { shrink(uri) }.getOrNull()
-                if (shrunk != null) sendBytes(roomId, shrunk.first, p.name.substringBeforeLast('.') + ".jpg", "image/jpeg", "m.image", shrunk.second, shrunk.third, viewOnce, caption, attention)
-                else sendOriginal(roomId, uri, p, viewOnce, caption, attention)
+                if (shrunk != null) sendBytes(roomId, shrunk.first, p.name.substringBeforeLast('.') + ".jpg", "image/jpeg", "m.image", shrunk.second, shrunk.third, viewOnce, caption, attention, replyTo)
+                else sendOriginal(roomId, uri, p, viewOnce, caption, attention, replyTo)
             }
             return
         }
-        sendOriginal(roomId, uri, p, viewOnce, caption, attention)
+        sendOriginal(roomId, uri, p, viewOnce, caption, attention, replyTo)
     }
 
     private fun shrink(uri: Uri): Triple<ByteArray, Int, Int> {
@@ -898,17 +906,18 @@ class Store(private val context: Context) {
         return Triple(out.toByteArray(), bmp.width, bmp.height)
     }
 
-    private fun sendOriginal(roomId: String, uri: Uri, p: Picked, viewOnce: Boolean = false, caption: String? = null, attention: String? = null) {
+    private fun sendOriginal(roomId: String, uri: Uri, p: Picked, viewOnce: Boolean = false, caption: String? = null, attention: String? = null, replyTo: String? = null) {
         val me = _session.value?.userId ?: return
         val type = when { p.mime.startsWith("image/") -> "m.image"; p.mime.startsWith("video/") -> "m.video"; p.mime.startsWith("audio/") -> "m.audio"; else -> "m.file" }
         val txn = UUID.randomUUID().toString()
         val localId = "local-$txn"
-        addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), type, p.name, mxc = null, mime = p.mime, size = p.size, w = p.w, h = p.h, txn = txn, status = STATUS_SENDING, caption = caption?.trim()?.ifEmpty { null }))
+        addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), type, p.name, mxc = null, mime = p.mime, size = p.size, w = p.w, h = p.h, txn = txn, status = STATUS_SENDING, caption = caption?.trim()?.ifEmpty { null }, replyTo = replyTo))
         scope.launch {
             runCatching {
                 val (mxc, enc) = uploadFor(roomId, p.name, p.mime, p.size) { context.contentResolver.openInputStream(uri)!! }
                 matrix.send(roomId, "m.room.message", txn, buildJsonObject {
                     put("msgtype", type); put("body", caption?.trim()?.ifEmpty { null } ?: p.name); if (!caption.isNullOrBlank()) put("filename", p.name); putMedia(mxc, enc)
+                    if (replyTo != null) putJsonObject("m.relates_to") { putJsonObject("m.in_reply_to") { put("event_id", replyTo) } }
                     if (viewOnce && (type == "m.image" || type == "m.video")) putJsonObject("com.beeper.view_limited") { put("type", "count"); put("count", 1) }
                     if (attention != null) putJsonObject(Attention.FIELD) { put("kind", attention) }
                     putJsonObject("info") {
@@ -920,17 +929,18 @@ class Store(private val context: Context) {
         }
     }
 
-    fun sendVoice(roomId: String, file: File, durationMs: Long) {
+    fun sendVoice(roomId: String, file: File, durationMs: Long, replyTo: String? = null) {
         val me = _session.value?.userId ?: return
         val mime = if (file.extension == "ogg") "audio/ogg" else "audio/mp4"
         val txn = UUID.randomUUID().toString()
         val localId = "local-$txn"
-        addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), "m.audio", "Voice message", mime = mime, size = file.length(), durationMs = durationMs, voice = true, txn = txn, status = STATUS_SENDING))
+        addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), "m.audio", "Voice message", mime = mime, size = file.length(), durationMs = durationMs, voice = true, txn = txn, status = STATUS_SENDING, replyTo = replyTo))
         scope.launch {
             runCatching {
                 val (mxc, enc) = uploadFor(roomId, "voice-message.${file.extension}", mime, file.length()) { file.inputStream() }
                 matrix.send(roomId, "m.room.message", txn, buildJsonObject {
                     put("msgtype", "m.audio"); put("body", "Voice message"); putMedia(mxc, enc)
+                    if (replyTo != null) putJsonObject("m.relates_to") { putJsonObject("m.in_reply_to") { put("event_id", replyTo) } }
                     putJsonObject("info") { put("mimetype", mime); put("size", file.length()); put("duration", durationMs) }
                     putJsonObject("org.matrix.msc1767.audio") { put("duration", durationMs) }
                     putJsonObject("org.matrix.msc3245.voice") {}
@@ -1184,16 +1194,17 @@ class Store(private val context: Context) {
         }
     }
 
-    private fun sendBytes(roomId: String, bytes: ByteArray, name: String, mime: String, type: String, w: Int? = null, h: Int? = null, viewOnce: Boolean = false, caption: String? = null, attention: String? = null) {
+    private fun sendBytes(roomId: String, bytes: ByteArray, name: String, mime: String, type: String, w: Int? = null, h: Int? = null, viewOnce: Boolean = false, caption: String? = null, attention: String? = null, replyTo: String? = null) {
         val me = _session.value?.userId ?: return
         val txn = UUID.randomUUID().toString()
         val localId = "local-$txn"
-        addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), type, name, mime = mime, size = bytes.size.toLong(), w = w, h = h, txn = txn, status = STATUS_SENDING, caption = caption?.trim()?.ifEmpty { null }))
+        addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), type, name, mime = mime, size = bytes.size.toLong(), w = w, h = h, txn = txn, status = STATUS_SENDING, caption = caption?.trim()?.ifEmpty { null }, replyTo = replyTo))
         scope.launch {
             runCatching {
                 val (mxc, enc) = uploadFor(roomId, name, mime, bytes.size.toLong()) { java.io.ByteArrayInputStream(bytes) }
                 matrix.send(roomId, "m.room.message", txn, buildJsonObject {
                     put("msgtype", type); put("body", caption?.trim()?.ifEmpty { null } ?: name); if (!caption.isNullOrBlank()) put("filename", name); putMedia(mxc, enc)
+                    if (replyTo != null) putJsonObject("m.relates_to") { putJsonObject("m.in_reply_to") { put("event_id", replyTo) } }
                     if (viewOnce && (type == "m.image" || type == "m.video")) putJsonObject("com.beeper.view_limited") { put("type", "count"); put("count", 1) }
                     if (attention != null) putJsonObject(Attention.FIELD) { put("kind", attention) }
                     putJsonObject("info") { put("mimetype", mime); put("size", bytes.size.toLong()); w?.let { put("w", it) }; h?.let { put("h", it) } }
@@ -1202,9 +1213,9 @@ class Store(private val context: Context) {
         }
     }
 
-    fun sendGif(roomId: String, gif: Gif, caption: String? = null) {
+    fun sendGif(roomId: String, gif: Gif, caption: String? = null, replyTo: String? = null) {
         scope.launch {
-            runCatching { gifs.download(gif.url) }.onSuccess { sendBytes(roomId, it, "${gif.title.ifBlank { "gif" }.take(40)}.gif", "image/gif", "m.image", gif.w.takeIf { w -> w > 0 }, gif.h.takeIf { h -> h > 0 }, caption = caption) }
+            runCatching { gifs.download(gif.url) }.onSuccess { sendBytes(roomId, it, "${gif.title.ifBlank { "gif" }.take(40)}.gif", "image/gif", "m.image", gif.w.takeIf { w -> w > 0 }, gif.h.takeIf { h -> h > 0 }, caption = caption, replyTo = replyTo) }
         }
     }
 

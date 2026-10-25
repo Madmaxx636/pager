@@ -30,7 +30,9 @@ val json = Json { ignoreUnknownKeys = true }
 /** Shared HTTP plumbing. Long timeouts because /sync and bridge logins block server-side. */
 class Http(var baseUrl: String, var token: String? = null) {
     val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(180, TimeUnit.SECONDS)      // a big video over a slow uplink stalls a single write for longer than the 10 s default and the send failed
         .callTimeout(0, TimeUnit.SECONDS)
         .build()
 
