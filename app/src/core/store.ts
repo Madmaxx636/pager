@@ -393,6 +393,15 @@ export async function importKeyFile(text: string, passphrase: string): Promise<n
 // Messages to one page go through encryption one after another. The first message in a page is slow (it has to share keys), and a quick
 // second one used to overtake it, so they arrived in the wrong order.
 const sendQueues = new Map<string, Promise<unknown>>();
+const warmedAt = new Map<string, number>();
+/** Called when a page is opened: does the slow part of sending now (in the same line as sending, so nothing overtakes anything). */
+export function warmUp(roomId: string) {
+  if (!state.chats[roomId]?.encrypted || !e2ee || Date.now() - (warmedAt.get(roomId) ?? 0) < 120_000) return;
+  warmedAt.set(roomId, Date.now());
+  const run = async () => { try { await e2ee!.prepare(roomId, await roomMembers(roomId)); } catch { /* the first message will do it instead */ } };
+  const next = (sendQueues.get(roomId) ?? Promise.resolve()).then(run, run);
+  sendQueues.set(roomId, next.catch(() => {}));
+}
 sendHook.fn = (roomId, type, content) => {
   const run = async () => {
     const chat = state.chats[roomId];

@@ -101,6 +101,18 @@ export class Crypto {
   // ---- Writing ---------------------------------------------------------------------------------------------------------
 
   /** Encrypts an event for a room. `members` is everyone in the room, so their devices all get the key. */
+  /** Gets a page ready to send in before you type (devices, secure channels, room key), so the first message of a visit is not slow. */
+  async prepare(roomId: string, members: string[]): Promise<void> {
+    const users = () => members.map((u) => new sdk.UserId(u));
+    await this.machine.updateTrackedUsers(users());
+    await this.pump();
+    const claim = await this.machine.getMissingSessions(users());
+    if (claim) await this.send(claim);
+    const settings = new sdk.EncryptionSettings();
+    settings.sharingStrategy = sdk.CollectStrategy.allDevices();
+    for (const s of await this.machine.shareRoomKey(new sdk.RoomId(roomId), users(), settings)) await this.send(s);
+  }
+
   async encrypt(roomId: string, type: string, content: J, members: string[]): Promise<J> {
     // The library takes ownership of the id objects it is given, so each call gets fresh ones.
     const users = () => members.map((u) => new sdk.UserId(u));

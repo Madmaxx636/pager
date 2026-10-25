@@ -44,13 +44,16 @@ fun Modifier.einkFilter(on: Boolean): Modifier = if (!on) this else drawWithCont
 
 private val lineCache = HashMap<String, ImageBitmap>()
 /** How many pixels each line is widened by (the picture is 128 wide): thicker lines read better on an E-ink screen, and most at the Heavy level. */
-private fun inkGrow() = if (Ink.heavy) 2 else 1
+private fun inkGrow() = (if (Ink.heavy) 2 else 1) + (if (Ink.detail >= 2) 1 else 0)
+/** More detail picks out more of the inside of an emoji (and draws it on a finer grid): the lines a fast refresh mode would otherwise drop. */
+private fun inkGrid() = when (Ink.detail) { 2 -> 256; 1 -> 192; else -> 128 }
 
 /** An emoji redrawn as a black outline on nothing: its edge and the lines inside it, no colour and no fill. */
 private fun lineArt(emoji: String): ImageBitmap {
-    val key = "$emoji|${inkGrow()}"
+    val key = "$emoji|${inkGrow()}|${Ink.detail}"
     synchronized(lineCache) { lineCache[key]?.let { return it } }
-    val n = 128
+    val n = inkGrid()
+    val edgeA = when (Ink.detail) { 2 -> 150; 1 -> 220; else -> 300 }; val edgeL = when (Ink.detail) { 2 -> 55; 1 -> 90; else -> 130 }
     val bmp = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = n * 0.78f; textAlign = Paint.Align.CENTER }
     Canvas(bmp).drawText(emoji, n / 2f, n / 2f - (paint.descent() + paint.ascent()) / 2f, paint)
@@ -69,7 +72,7 @@ private fun lineArt(emoji: String): ImageBitmap {
         return abs(gx) + abs(gy)
     }
     val out = IntArray(n * n)
-    for (y in 1 until n - 1) for (x in 1 until n - 1) if (edge(alpha, x, y) > 300 || edge(lum, x, y) > 130) out[y * n + x] = 0xFF000000.toInt()
+    for (y in 1 until n - 1) for (x in 1 until n - 1) if (edge(alpha, x, y) > edgeA || edge(lum, x, y) > edgeL) out[y * n + x] = 0xFF000000.toInt()
     // Widen the lines: every dot next to a line dot joins it.
     var lines = out
     repeat(inkGrow()) {
@@ -86,8 +89,10 @@ private fun lineArt(emoji: String): ImageBitmap {
 @Composable
 fun EmojiGlyph(emoji: String, sizeSp: Float, modifier: Modifier = Modifier) {
     if (!LocalSettings.current.eink) { Text(emoji, fontSize = sizeSp.sp, modifier = modifier); return }
-    val art by produceState<ImageBitmap?>(lineCache[emoji], emoji) { value = withContext(Dispatchers.Default) { lineArt(emoji) } }
+    val detail = Ink.detail; val heavy = Ink.heavy
+    val art by produceState<ImageBitmap?>(null, emoji, detail, heavy) { value = withContext(Dispatchers.Default) { lineArt(emoji) } }
     val shown = art
-    if (shown == null) androidx.compose.foundation.layout.Spacer(modifier.size((sizeSp * 1.15f).dp))
-    else Image(shown, emoji, modifier.size((sizeSp * 1.15f).dp))
+    val box = (sizeSp * 1.15f * (1f + 0.08f * detail)).dp      // a little bigger with more detail
+    if (shown == null) androidx.compose.foundation.layout.Spacer(modifier.size(box))
+    else Image(shown, emoji, modifier.size(box))
 }

@@ -447,6 +447,8 @@ private fun AppearancePage() {
         SwitchRow("E-ink mode", "Black and white, no animation, thicker lines. Made for e-ink screens", s.eink) { v -> set { copy(eink = v) } }
         if (s.eink) {
             GroupDivider(); SliderRow("Darkness", s.einkDark.toFloat(), 1f..5f, listOf("", "Dark gray", "Darker", "Very dark", "Black", "Heavy black: bold text, thick lines")[s.einkDark.coerceIn(1, 5)]) { v -> set { copy(einkDark = Math.round(v).coerceIn(1, 5)) } }
+            GroupDivider(); SwitchRow("Darker", "On top of the darkness level: nothing is ever gray, lines and marks are heavier", s.einkDarker) { v -> set { copy(einkDarker = v) } }
+            GroupDivider(); SliderRow("Detail", s.einkDetail.toFloat(), 0f..2f, listOf("Normal: the standard (slow) refresh mode", "Higher detail: for the middle refresh modes", "ULTRA detail: for the fastest mode, where detail drops a lot")[s.einkDetail.coerceIn(0, 2)]) { v -> set { copy(einkDetail = Math.round(v).coerceIn(0, 2)) } }
             GroupDivider(); ChoiceRow("Screen clean", listOf("off" to "Off", "chats" to "When opening or leaving a chat", "timed" to "Every few seconds"), s.screenClean) { v -> set { copy(screenClean = v) } }
             if (s.screenClean == "timed") { GroupDivider(); SliderRow("Every", s.screenCleanSec.toFloat(), 5f..120f, "${s.screenCleanSec} seconds") { v -> set { copy(screenCleanSec = (Math.round(v / 5f) * 5).coerceIn(5, 120)) } } }
         }

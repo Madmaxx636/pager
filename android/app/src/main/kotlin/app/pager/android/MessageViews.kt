@@ -49,6 +49,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -275,6 +278,13 @@ fun MessageRow(
     var tapCount by remember { mutableIntStateOf(0) }
     var tapJob by remember { mutableStateOf<Job?>(null) }
     var burst by remember { mutableStateOf<String?>(null) }
+    // Where the bubble and the quoted message sit inside the row, so one gesture handler can tell them apart: a tap on the quote jumps to the
+    // message it answers only when it is a single tap; a double tap anywhere on or beside the bubble reacts to THIS message.
+    var rowPos by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var bubbleRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    var quoteRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    var lastTapOnBubble by remember { mutableStateOf(false) }
+    var lastTapOnQuote by remember { mutableStateOf(false) }
     val doubleEmoji = s.doubleTapEmoji.ifEmpty { s.quickReactions.firstOrNull().orEmpty() }
     LaunchedEffect(burst) { if (burst != null) { delay(700); burst = null } }
 
@@ -283,7 +293,29 @@ fun MessageRow(
             val n = chat?.nameOf(msg.sender) ?: msg.sender
             Text(n, style = MaterialTheme.typography.labelMedium, color = if (s.colorSenderNames) senderColor(n, dark) else scheme.onSurfaceVariant, modifier = Modifier.padding(start = 14.dp, bottom = 2.dp))
         }
-        Box(Modifier.swipeToReply(s.swipeToReply && msg.status == STATUS_SENT, onReply) { if (s.haptics) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }) {
+        Box(Modifier.fillMaxWidth().onGloballyPositioned { rowPos = it.positionInWindow() }.swipeToReply(s.swipeToReply && msg.status == STATUS_SENT, onReply) { if (s.haptics) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress) }
+            .pointerInput(msg.id, s.doubleTapReact, s.tripleTapReact, doubleEmoji, s.tripleTapEmoji) {
+                val click = { if (msg.status == STATUS_FAILED) chat?.id?.let { store.retry(it, msg) } else onOpen(msg) }
+                detectTapGestures(
+                    onLongPress = { at -> if (bubbleRect.contains(at)) onLong() },
+                    onTap = { at ->
+                        lastTapOnBubble = bubbleRect.contains(at); lastTapOnQuote = quoteRect.contains(at)
+                        tapCount++
+                        tapJob?.cancel()
+                        tapJob = tapScope.launch {
+                            delay(if (s.tripleTapReact) 320L else if (s.doubleTapReact) 300L else 0L)
+                            val n = tapCount; tapCount = 0
+                            when {
+                                n >= 3 && s.tripleTapReact && s.tripleTapEmoji.isNotEmpty() -> { burst = s.tripleTapEmoji; onTriple() }
+                                n == 2 && s.doubleTapReact && doubleEmoji.isNotEmpty() -> { burst = doubleEmoji; onDouble() }
+                                !lastTapOnBubble -> {}                                                   // one tap in the empty space beside the bubble does nothing
+                                lastTapOnQuote && msg.replyTo != null -> onJump(msg.replyTo!!)         // one tap on the quoted message jumps to it
+                                else -> click()
+                            }
+                        }
+                    },
+                )
+            }, contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
             Box(
                 Modifier.widthIn(max = if (s.bubbleWidth >= 40) (LocalConfiguration.current.screenWidthDp * s.bubbleWidth.coerceAtMost(95) / 100f).dp else 300.dp)
                     .graphicsLayer {
@@ -305,31 +337,13 @@ fun MessageRow(
                             else -> it
                         }
                     }
-                    .pointerInput(msg.id, s.doubleTapReact, s.tripleTapReact, doubleEmoji, s.tripleTapEmoji) {
-                        val click = { if (msg.status == STATUS_FAILED) chat?.id?.let { store.retry(it, msg) } else onOpen(msg) }
-                        detectTapGestures(
-                            onLongPress = { onLong() },
-                            onTap = {
-                                tapCount++
-                                tapJob?.cancel()
-                                tapJob = tapScope.launch {
-                                    delay(if (s.tripleTapReact) 300L else if (s.doubleTapReact) 260L else 0L)
-                                    val n = tapCount; tapCount = 0
-                                    when {
-                                        n >= 3 && s.tripleTapReact && s.tripleTapEmoji.isNotEmpty() -> { burst = s.tripleTapEmoji; onTriple() }
-                                        n == 2 && s.doubleTapReact && doubleEmoji.isNotEmpty() -> { burst = doubleEmoji; onDouble() }
-                                        else -> click()
-                                    }
-                                }
-                            },
-                        )
-                    }
+                    .onGloballyPositioned { bubbleRect = it.boundsInParent() }
                     .semantics { onClick(label = "Open") { if (msg.status == STATUS_FAILED) chat?.id?.let { store.retry(it, msg) } else onOpen(msg); true } },
             ) {
                 burst?.let { e -> Text(e, fontSize = 42.sp, modifier = Modifier.align(Alignment.Center).zIndex(2f).graphicsLayer { val t = 1f; scaleX = 1.2f * t; scaleY = 1.2f * t }) }
                 Column(Modifier.padding(horizontal = if (bare || msg.type == "m.image") (if (bare) 0.dp else 4.dp) else 12.dp, vertical = if (bare) 0.dp else if (msg.type == "m.image") 4.dp else 8.dp)) {
                     if (msg.replyTo != null) {
-                        Row(Modifier.padding(bottom = 6.dp, start = if (msg.type == "m.image") 8.dp else 0.dp, top = if (msg.type == "m.image") 4.dp else 0.dp).height(IntrinsicSize.Min).clip(RoundedCornerShape(6.dp)).clickable { msg.replyTo?.let(onJump) }) {
+                        Row(Modifier.padding(bottom = 6.dp, start = if (msg.type == "m.image") 8.dp else 0.dp, top = if (msg.type == "m.image") 4.dp else 0.dp).height(IntrinsicSize.Min).clip(RoundedCornerShape(6.dp)).onGloballyPositioned { c -> quoteRect = androidx.compose.ui.geometry.Rect(c.positionInWindow() - rowPos, androidx.compose.ui.geometry.Size(c.size.width.toFloat(), c.size.height.toFloat())) }) {
                             Box(Modifier.width(3.dp).fillMaxHeight().clip(CircleShape).background(fg.dim(0.45f)))
                             Column(Modifier.padding(start = 8.dp)) {
                                 Text(reply?.let { chat?.nameOf(it.sender) } ?: "Earlier message", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = fg.dim(0.85f))
@@ -360,8 +374,9 @@ fun MessageRow(
                     if (last && !bare && (s.showMessageTimes || (mine && s.showReadTicks) || msg.edited)) {
                         Row(Modifier.align(Alignment.End).padding(top = 2.dp, end = if (msg.type == "m.image") 6.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (starred) Icon(Icons.Rounded.Star, "Starred", tint = fg.dim(0.6f), modifier = Modifier.size(11.dp).padding(end = 2.dp))
-                            if (msg.edited) Text("edited  ", fontSize = 10.sp, fontStyle = FontStyle.Italic, color = fg.dim(0.6f))
-                            if (s.showMessageTimes) Text(remember(msg.ts, s.timeFormat) { formatClock(msg.ts, s.timeFormat) }, fontSize = 10.sp, color = fg.dim(0.6f))
+                            val small = (10f * Ink.boost).sp
+                            if (msg.edited) Text("edited  ", fontSize = small, fontStyle = FontStyle.Italic, color = fg.dim(0.6f))
+                            if (s.showMessageTimes) Text(remember(msg.ts, s.timeFormat) { formatClock(msg.ts, s.timeFormat) }, fontSize = small, fontWeight = if (Ink.on && Ink.detail > 0) FontWeight.Bold else null, color = fg.dim(0.6f))
                             if (mine && s.showReadTicks) {
                                 Spacer(Modifier.width(3.dp))
                                 // The marks look the same in every conversation: grey-ish on the way, sky blue once read. Only the lightness follows the bubble.
@@ -369,14 +384,14 @@ fun MessageRow(
                                 val darkUnder = 0.299f * under.red + 0.587f * under.green + 0.114f * under.blue < 0.55f
                                 val waiting = if (darkUnder) Color.White.copy(alpha = 0.72f) else Color.Black.copy(alpha = 0.55f)
                                 val readTint = if (darkUnder) Color(0xFF7DD3FC) else Color(0xFF0284C7)
-                                val (icon, tint) = when {
-                                    msg.status == STATUS_SENDING -> Icons.Rounded.AccessTime to waiting
-                                    msg.status == STATUS_FAILED -> Icons.Rounded.Error to scheme.error
-                                    read -> Icons.Rounded.DoneAll to readTint
-                                    delivered -> Icons.Rounded.DoneAll to waiting
-                                    else -> Icons.Rounded.Done to waiting
-                                }
-                                Icon(icon, null, tint = tint, modifier = Modifier.size(14.dp))
+                                val state = when { msg.status == STATUS_SENDING -> 0; msg.status == STATUS_FAILED -> 4; read -> 3; delivered -> 2; else -> 1 }
+                                val icon = when (state) { 0 -> Icons.Rounded.AccessTime; 4 -> Icons.Rounded.Error; 3, 2 -> Icons.Rounded.DoneAll; else -> Icons.Rounded.Done }
+                                val tint = when { Ink.on -> inkColor(); state == 4 -> scheme.error; state == 3 -> readTint; else -> waiting }
+                                val box = (14f * Ink.boost).dp
+                                // On an E-ink screen there is no colour to tell the marks apart: a read mark is a check on a filled black disc, and more detail adds the word.
+                                if (Ink.on && state == 3) Box(Modifier.size(box + 4.dp).background(inkColor(), CircleShape), contentAlignment = Alignment.Center) { Icon(icon, "Read", tint = scheme.background, modifier = Modifier.size(box - 1.dp)) }
+                                else Icon(icon, null, tint = tint, modifier = Modifier.size(box))
+                                if (Ink.on && Ink.detail > 0) Text(" " + listOf("Sending", "Sent", "Delivered", "Read", "Failed")[state], fontSize = small, fontWeight = FontWeight.Bold, color = inkColor())
                             }
                         }
                     }

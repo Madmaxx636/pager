@@ -162,6 +162,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     var via by remember(roomId) { mutableStateOf<String?>(null) }
     val sendRoom = if (merged) (via?.takeIf { it in groupIds } ?: chat?.messages?.lastOrNull()?.room ?: roomId) else roomId
     val me = store.session.collectAsState().value?.userId ?: ""
+    LaunchedEffect(sendRoom) { store.warmUp(sendRoom) }      // the slow part of sending (devices, secure channels, room key) happens now, not on your first message
     val stars by store.stars.collectAsState()
     val messages = chat?.messages ?: emptyList()
     val byId = remember(messages) { messages.associateBy { it.id } }

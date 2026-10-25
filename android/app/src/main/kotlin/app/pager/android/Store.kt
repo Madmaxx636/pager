@@ -500,6 +500,19 @@ class Store(private val context: Context) {
         }
     }
 
+    private var warmLocks: java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>? = null
+    private val warmedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    /** Called when a page is opened: does the slow part of sending (devices, secure channels, room key) now, so the first message goes out at once. */
+    fun warmUp(roomId: String) {
+        if (_chats.value[roomId]?.encrypted != true) return
+        if (System.currentTimeMillis() - (warmedAt[roomId] ?: 0L) < 2 * 60_000L) return
+        warmedAt[roomId] = System.currentTimeMillis()
+        scope.launch {
+            val e = e2ee ?: return@launch
+            runCatching { warmLocks?.getOrPut(roomId) { kotlinx.coroutines.sync.Mutex() }?.withLock { e.prepare(roomId, roomMembers(roomId)) } }
+        }
+    }
+
     private suspend fun roomMembers(roomId: String): List<String> {
         memberCache[roomId]?.takeIf { System.currentTimeMillis() - it.first < 5 * 60_000L }?.let { return it.second }
         val ids = matrix.joinedMembers(roomId).keys.toList()
@@ -513,6 +526,7 @@ class Store(private val context: Context) {
         // Messages to one page are encrypted one after another. The first message in a page is slow (it has to share keys), and a quick
         // second one used to overtake it, so they arrived in the wrong order.
         val sendLocks = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
+        warmLocks = sendLocks
         matrix.sendHook = { roomId, type, content ->
             if (_chats.value[roomId]?.encrypted != true) type to content
             else sendLocks.getOrPut(roomId) { kotlinx.coroutines.sync.Mutex() }.withLock {
