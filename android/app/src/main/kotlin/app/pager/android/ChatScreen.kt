@@ -170,10 +170,13 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
         r.filterKeys { it != me && !isBridgeBot(it) }.values.maxOfOrNull { id -> chat?.receiptIndex(id) ?: -1 } ?: -1
     }
     // Delivered = the bridge says it reached the other network (its bot sends that receipt).
-    val deliveredIndex = remember(messages, chat?.receipts, chat?.deliveredTo, chat?.statusSeen, chat?.eventTs) {
+    val deliveredIndex = remember(messages, chat?.receipts, chat?.deliveredTo, chat?.statusSeen, chat?.eventTs, me) {
         // Once the bridge reports deliveries in this chat, only those count (its own receipt then just means "sent"); until then its receipt is the best we have.
-        if (chat?.statusSeen == true) (chat?.deliveredTo?.keys.orEmpty()).maxOfOrNull { id -> chat?.receiptIndex(id) ?: -1 } ?: -1
+        val reported = if (chat?.statusSeen == true) (chat?.deliveredTo?.keys.orEmpty()).maxOfOrNull { id -> chat?.receiptIndex(id) ?: -1 } ?: -1
         else (chat?.receipts ?: emptyMap()).filterKeys { isBridgeBot(it) }.values.maxOfOrNull { id -> chat?.receiptIndex(id) ?: -1 } ?: -1
+        // Some deliveries are never reported (the bridge only sometimes says so): anything you sent before a message the other side wrote has plainly arrived.
+        val theirs = messages.indexOfLast { it.sender != me && !isBridgeBot(it.sender) }
+        maxOf(reported, theirs)
     }
     val group = remember(messages, chat?.memberCount, chat?.roomType) { (chat?.isGroup ?: false) || messages.map { it.sender }.toSet().size > 2 }
     val images = remember(messages) { messages.filter { it.type == "m.image" && it.mxc != null && !it.sticker } }
@@ -266,12 +269,18 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     val newestId = messages.lastOrNull()?.id
     val newestMine = messages.lastOrNull()?.sender == me
     var opened by remember(roomId) { mutableStateOf(false) }
+    var userDragged by remember(roomId) { mutableStateOf(false) }
+    LaunchedEffect(roomId) { list.interactionSource.interactions.collect { if (it is androidx.compose.foundation.interaction.DragInteraction.Start) userDragged = true } }
     LaunchedEffect(newestId, unreadBefore) {
         if (!opened) {
             if (chat == null) return@LaunchedEffect
             opened = true
             val divider = if (s.openAtUnread) items.indexOfFirst { it is Item.Unread } else -1
-            if (divider >= 0) list.scrollToItem(divider) else list.scrollToItem(0)
+            if (divider >= 0) list.scrollToItem(divider) else {
+                list.scrollToItem(0)
+                // Pictures and older messages that load right after opening can leave the page above the newest message: look again for a moment, until you scroll yourself.
+                scope.launch { var waited = 0; while (waited < 2500 && !userDragged) { delay(250); waited += 250; if (!userDragged && list.firstVisibleItemIndex > 0 && !list.isScrollInProgress) list.scrollToItem(0) } }
+            }
         // (a day label, a typing row or an unread line can sit above the old newest message, so a few items from the end still counts)
         } else if (newestId != null && (newestMine || list.firstVisibleItemIndex <= 4)) { if (s.reduceMotion) list.scrollToItem(0) else list.animateScrollToItem(0) }
         // Only while the app is on screen: a message that arrives while the phone is in your pocket with this page open is not read yet.
