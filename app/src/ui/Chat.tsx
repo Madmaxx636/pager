@@ -95,10 +95,13 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   }, [chat?.receipts, chat?.eventTs, messages, user]);
   const deliveredIndex = useMemo(() => {
     // Once the bridge reports deliveries in this chat, only those count (its own receipt then just means "sent"); until then its receipt is the best we have.
-    if (chat?.statusSeen) return Math.max(-1, ...Object.keys(chat.deliveredTo ?? {}).map((id) => receiptIndex(messages, chat.eventTs, id)));
-    const r = chat?.receipts ?? {};
-    return Math.max(-1, ...Object.entries(r).filter(([u]) => isBridgeBot(u)).map(([, id]) => receiptIndex(messages, chat?.eventTs, id)));
-  }, [chat?.receipts, chat?.deliveredTo, chat?.statusSeen, chat?.eventTs, messages]);
+    const reported = chat?.statusSeen
+      ? Math.max(-1, ...Object.keys(chat.deliveredTo ?? {}).map((id) => receiptIndex(messages, chat.eventTs, id)))
+      : Math.max(-1, ...Object.entries(chat?.receipts ?? {}).filter(([u]) => isBridgeBot(u)).map(([, id]) => receiptIndex(messages, chat?.eventTs, id)));
+    // Some deliveries are never reported (the bridge only sometimes says so): anything you sent before a message the other side wrote has plainly arrived.
+    let theirs = -1; for (let i = messages.length - 1; i >= 0; i--) if (messages[i].sender !== user && !isBridgeBot(messages[i].sender)) { theirs = i; break; }
+    return Math.max(reported, theirs);
+  }, [chat?.receipts, chat?.deliveredTo, chat?.statusSeen, chat?.eventTs, messages, user]);
   // The newest message you sent: the iPhone look says Delivered or Read under it.
   const latestMine = useMemo(() => { for (let i = messages.length - 1; i >= 0; i--) if (messages[i].sender === user && messages[i].status === STATUS_SENT) return messages[i].id; return undefined; }, [messages, user]);
   const group = chat ? isGroup(chat) || new Set(messages.map((m) => m.sender)).size > 2 : false;
@@ -161,9 +164,14 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   useEffect(() => { if (mayMark()) markRead(roomId); }, [roomId, messages.length, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => onAttended(() => { if (mayMark()) markRead(roomId); }), [roomId, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Just after a chat opens, pictures, older messages and fonts keep moving the page; only a scroll that follows something you did (wheel, touch, keys, the scroll bar) may stop it following the newest message.
+  const lastInput = useRef(0), openedAt = useRef(0);
+  const touched = () => { lastInput.current = Date.now(); };
+  useEffect(() => { openedAt.current = Date.now(); }, [roomId]);
   const onScroll = () => {
     const el = scroller.current; if (!el) return;
     if (Math.abs(el.scrollTop - ours.current) < 2) return; // our own scroll, not yours
+    if (Date.now() - openedAt.current < 4000 && Date.now() - lastInput.current > 800) { if (stick.current) toBottom(); return; }
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (stick.current && st.markReadMode === "scrolled") markRead(roomId);
     groupIds.forEach((id) => readingOlder(id, !stick.current));
@@ -242,7 +250,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
         </header>
 
         <LinkedBar chat={chat} nav={nav} roomId={roomId} merged={!!merged} />
-        <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll}>
+        <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll} onWheel={touched} onTouchStart={touched} onPointerDown={touched} onKeyDown={touched}>
           {items.map((it) => it.kind === "day" ? <div key={it.key} className="day"><span>{it.label}</span></div>
             : it.kind === "unread" ? <div key={it.key} id="unread-divider" className="unread-divider"><span>New messages</span></div>
             : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} last={it.last} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} delivered={it.index <= deliveredIndex} latestMine={it.msg.id === latestMine} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}
