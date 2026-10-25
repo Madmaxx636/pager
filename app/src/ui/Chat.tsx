@@ -10,7 +10,7 @@ import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, is
 import { networkMeta } from "../core/emoji";
 import { useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
-  edit, enableEncryption, endPoll, forward as _forward, loadOlder, readingOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendAttention, sendContact, sendFile, gifFile,
+  warmUp, edit, enableEncryption, endPoll, forward as _forward, loadOlder, readingOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendAttention, sendContact, sendFile, gifFile,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory, setAlias, setSolo,
 } from "../core/store";
 import { addLink, buildMerged, groupOf, suggestLinks, unlink } from "../core/links";
@@ -147,6 +147,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     prevTop.current = { first: messages[0]?.id, height: el.scrollHeight };
   }, [roomId, messages, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { opened.current = ""; stick.current = true; setReplyTo(undefined); setEditing(undefined); }, [roomId]);
+  useEffect(() => { warmUp(sendRoom); }, [sendRoom, chat?.encrypted]);
   // Pictures and videos change the chat's height as they load: stay at the newest message while you haven't scrolled up.
   useEffect(() => {
     const el = scroller.current; if (!el) return;
@@ -168,6 +169,23 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const lastInput = useRef(0), openedAt = useRef(0);
   const touched = () => { lastInput.current = Date.now(); };
   useEffect(() => { openedAt.current = Date.now(); }, [roomId]);
+  // The message options (react, reply, more) show while the pointer is anywhere in that message's row, in the empty space on either side too, not only over the bubble.
+  const hoverRow = useRef<HTMLElement | null>(null), hoverRaf = useRef(0);
+  const rowHover = (e: React.MouseEvent) => {
+    const y = e.clientY; cancelAnimationFrame(hoverRaf.current);
+    hoverRaf.current = requestAnimationFrame(() => {
+      const el = scroller.current; if (!el) return;
+      let hit: HTMLElement | null = null;
+      for (const c of Array.from(el.children) as HTMLElement[]) {
+        if (!c.classList.contains("msg")) continue;
+        const r = c.getBoundingClientRect();
+        if (y >= r.top - 1 && y <= r.bottom + 1) { hit = c; break; }
+        if (r.top > y) break;
+      }
+      if (hit !== hoverRow.current) { hoverRow.current?.classList.remove("hovered"); hit?.classList.add("hovered"); hoverRow.current = hit; }
+    });
+  };
+  const rowLeave = () => { cancelAnimationFrame(hoverRaf.current); hoverRow.current?.classList.remove("hovered"); hoverRow.current = null; };
   const onScroll = () => {
     const el = scroller.current; if (!el) return;
     if (Math.abs(el.scrollTop - ours.current) < 2) return; // our own scroll, not yours
@@ -250,7 +268,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
         </header>
 
         <LinkedBar chat={chat} nav={nav} roomId={roomId} merged={!!merged} />
-        <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll} onWheel={touched} onTouchStart={touched} onPointerDown={touched} onKeyDown={touched}>
+        <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll} onMouseMove={rowHover} onMouseLeave={rowLeave} onWheel={touched} onTouchStart={touched} onPointerDown={touched} onKeyDown={touched}>
           {items.map((it) => it.kind === "day" ? <div key={it.key} className="day"><span>{it.label}</span></div>
             : it.kind === "unread" ? <div key={it.key} id="unread-divider" className="unread-divider"><span>New messages</span></div>
             : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} last={it.last} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} delivered={it.index <= deliveredIndex} latestMine={it.msg.id === latestMine} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}

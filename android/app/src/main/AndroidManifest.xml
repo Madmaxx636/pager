@@ -120,6 +120,9 @@
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
         </receiver>
         <receiver android:name=".UpdateReceiver" android:exported="false" />
+        <receiver android:name=".PackageReplacedReceiver" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
+        </receiver>
         <receiver android:name=".WatchdogReceiver" android:exported="false" />
         <provider
             android:name="androidx.core.content.FileProvider"

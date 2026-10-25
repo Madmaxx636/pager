@@ -82,6 +82,10 @@ data class AppSettings(
     val eink: Boolean = false,
     /** How dark E-ink text and lines are, from 1 (dark gray) to 4 (pure black). Darker, never thicker. */
     val einkDark: Int = 4,
+    /** E-ink "Darker": on top of the darkest level, nothing is ever faint, lines and marks are heavier. */
+    val einkDarker: Boolean = false,
+    /** How much detail E-ink screens get, for the refresh modes that wash it out: 0 normal (slow mode) | 1 higher (middle modes) | 2 ultra (the fastest mode). More detail = bigger, bolder marks, clearer emoji, words next to the sent/delivered/read marks. */
+    val einkDetail: Int = 0,
     /** A quick white flash that clears ghosting on e-ink: off | chats (when opening or leaving a chat) | timed. */
     val screenClean: String = "off",
     val screenCleanSec: Int = 20,

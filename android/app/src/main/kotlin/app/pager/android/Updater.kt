@@ -163,6 +163,8 @@ object Updater {
         val id = installer.createSession(params)
         installer.openSession(id).use { s ->
             apk.inputStream().use { i -> s.openWrite("pager.apk", 0, apk.length()).use { o -> i.copyTo(o); s.fsync(o) } }
+            // After the update Android closes Pager and does not start it again: remember that you were in it, so PackageReplacedReceiver can open it.
+            ctx.getSharedPreferences("pager.updates", Context.MODE_PRIVATE).edit().putBoolean("reopen", true).putLong("reopenAt", System.currentTimeMillis()).apply()
             val intent = Intent(ctx, UpdateReceiver::class.java).setPackage(ctx.packageName)
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
             s.commit(PendingIntent.getBroadcast(ctx, id, intent, flags).intentSender)
@@ -188,5 +190,31 @@ class UpdateReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_SUCCESS -> Updater.report("Updated")
             else -> Updater.report("Update didn't install: ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "unknown reason"}")
         }
+    }
+}
+
+/**
+ * Android stops an app while it is being replaced and never starts it again. This runs in the NEW version right after the update (Android sends it
+ * to the updated app itself): sync starts again at once so messages keep coming, and, if you updated from inside Pager, the app opens by itself
+ * (or, where Android won't let a background app open a window, a full-screen notice you tap).
+ */
+class PackageReplacedReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        runCatching { androidx.core.content.ContextCompat.startForegroundService(context, Intent(context, SyncService::class.java)) }
+        val prefs = context.getSharedPreferences("pager.updates", Context.MODE_PRIVATE)
+        val wanted = prefs.getBoolean("reopen", false) && System.currentTimeMillis() - prefs.getLong("reopenAt", 0) < 15 * 60_000L
+        prefs.edit().remove("reopen").apply()
+        if (!wanted) return
+        val open = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (runCatching { context.startActivity(open) }.isSuccess && Build.VERSION.SDK_INT < 29) return
+        // Newer Android only lets a background app open a window through a notification.
+        val nm = context.getSystemService(android.app.NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("pager-updated", "App updated", android.app.NotificationManager.IMPORTANCE_HIGH))
+        val tap = PendingIntent.getActivity(context, 77, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val n = androidx.core.app.NotificationCompat.Builder(context, "pager-updated").setSmallIcon(R.drawable.ic_notif)
+            .setContentTitle("Pager was updated").setContentText("Tap to open it").setContentIntent(tap).setFullScreenIntent(tap, true).setAutoCancel(true)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH).setCategory(androidx.core.app.NotificationCompat.CATEGORY_CALL).build()
+        runCatching { nm.notify(7701, n) }
     }
 }

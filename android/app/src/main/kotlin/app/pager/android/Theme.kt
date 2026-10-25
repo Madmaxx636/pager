@@ -184,6 +184,8 @@ fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int, k
     if (s.eink) e = e.copy(
         themeMode = "light", reduceMotion = true, screenEffects = false, messageAnimation = "none", bubbleFill = "solid", bubbleDepth = "flat",
         bubbleStyle = "outline", outStyle = "", wallpaper = "none", autoPlayGifs = false, colorSenderNames = false, accent = "teal",
+        // More detail also means somewhat larger writing: thin small strokes are what a fast refresh mode drops first.
+        fontScale = s.fontScale * (1f + 0.05f * s.einkDetail.coerceIn(0, 2)),
     )
     // Low data: nothing downloads by itself. Low-end: only the heavy things go (glass, full-screen effects, GIF autoplay); small motion, wallpaper and shadows stay. Your own settings are untouched.
     if (s.lowData) e = e.copy(autoDownload = "never", autoPlayGifs = false, linkPreviews = false, autoTranscribe = false, sendTyping = false)
@@ -196,15 +198,24 @@ fun effectiveSettings(s: AppSettings, screenWidthDp: Int, screenHeightDp: Int, k
 
 /** True while E-ink mode is on. Lets plain helpers (no composition access) make faint things solid. */
 object Ink { @Volatile var on = false; @Volatile var dark = 4
-    /** The heaviest level (5): pure black, bold text, thick lines. For screens where even black looks washed out. */
-    val heavy get() = on && dark >= 5 }
+    /** "Darker" (Settings > Appearance > E-ink): nothing is ever faint, lines and marks are heavier. */
+    @Volatile var darker = false
+    /** Detail for the fast refresh modes: 0 normal, 1 higher, 2 ultra. Bigger and bolder marks, clearer emoji, words next to the sent/delivered/read marks. */
+    @Volatile var detail = 0
+    /** The heaviest level (5), or "Darker": pure black, bold text, thick lines. For screens where even black looks washed out. */
+    val heavy get() = on && (dark >= 5 || darker)
+    /** How much bigger marks and icons are drawn: 1 at normal detail, up to 1.35 at ultra. */
+    val boost get() = if (!on) 1f else 1f + 0.18f * detail + (if (darker) 0.05f else 0f) }
 /** The colour of E-ink text and lines: from dark gray to pure black. Darkness is the only thing the setting changes; lines stay thin. */
-fun inkColor(): Color = when (Ink.dark) { 1 -> Color(0xFF5A5A5A); 2 -> Color(0xFF383838); 3 -> Color(0xFF1C1C1C); else -> Color.Black }
-/** A thin line width for E-ink drawings (never more than about 1.5 dp, however dark). */
-fun inkDp(base: Float) = if (Ink.heavy) (minOf(base, 3f) * 1.25f).dp else (minOf(base, 2f) * 0.75f).dp
+fun inkColor(): Color = if (Ink.darker) Color.Black else when (Ink.dark) { 1 -> Color(0xFF5A5A5A); 2 -> Color(0xFF383838); 3 -> Color(0xFF1C1C1C); else -> Color.Black }
+/** A thin line width for E-ink drawings (never more than about 1.5 dp, however dark); more detail and "Darker" make it heavier. */
+fun inkDp(base: Float): androidx.compose.ui.unit.Dp {
+    val grow = 1f + 0.35f * Ink.detail + (if (Ink.darker) 0.25f else 0f)
+    return (if (Ink.heavy) (minOf(base, 3f) * 1.25f) else (minOf(base, 2f) * 0.75f)).times(grow).dp
+}
 
 /** Like Color.copy(alpha) for text, icons and lines, but never faint in E-ink mode: faded gray disappears on a fast-refresh screen. */
-fun Color.dim(alpha: Float): Color = if (Ink.on && alpha >= 0.4f) copy(alpha = 1f) else copy(alpha = alpha)
+fun Color.dim(alpha: Float): Color = if (Ink.on && alpha >= (if (Ink.detail > 0 || Ink.darker) 0.15f else 0.4f)) copy(alpha = 1f) else copy(alpha = alpha)
 
 /**
  * How much to scale the whole interface. Automatic reads the screen: Android already normalizes density, so what differs is how many
@@ -276,7 +287,12 @@ private val PagerTypography = Typography(
 /** E-ink typography: every style at least semi-bold, titles and labels bold, so thin strokes don't vanish. */
 private fun einkTypography(base: Typography) = base.let { t ->
     // Text gets a touch heavier than normal so it stays readable, but never bold: the setting makes it darker, not thicker.
-    fun TextStyle.bold(w: FontWeight) = copy(fontWeight = if (Ink.heavy) (if (w.weight >= 600) FontWeight.ExtraBold else FontWeight.Bold) else if (w.weight >= 600) FontWeight.SemiBold else FontWeight.Medium)
+    fun TextStyle.bold(w: FontWeight) = copy(fontWeight = when {
+        Ink.detail >= 2 -> if (w.weight >= 600) FontWeight.Black else FontWeight.ExtraBold
+        Ink.heavy || Ink.detail == 1 -> if (w.weight >= 600) FontWeight.ExtraBold else FontWeight.Bold
+        w.weight >= 600 -> FontWeight.SemiBold
+        else -> FontWeight.Medium
+    })
     Typography(
         displayLarge = t.displayLarge.bold(FontWeight.Bold), displayMedium = t.displayMedium.bold(FontWeight.Bold), displaySmall = t.displaySmall.bold(FontWeight.Bold),
         headlineLarge = t.headlineLarge.bold(FontWeight.ExtraBold), headlineMedium = t.headlineMedium.bold(FontWeight.ExtraBold), headlineSmall = t.headlineSmall.bold(FontWeight.Bold),
@@ -324,7 +340,7 @@ fun PagerTheme(rawSettings: AppSettings, content: @Composable () -> Unit) {
     val config = androidx.compose.ui.platform.LocalConfiguration.current
     val keypad = rawSettings.keypad == "on" || (rawSettings.keypad == "auto" && keypadDevice(config))
     val settings = effectiveSettings(rawSettings, config.screenWidthDp, config.screenHeightDp, keypad)
-    Ink.on = settings.eink; Ink.dark = settings.einkDark.coerceIn(1, 5)
+    Ink.on = settings.eink; Ink.dark = settings.einkDark.coerceIn(1, 5); Ink.darker = settings.eink && settings.einkDarker; Ink.detail = if (settings.eink) settings.einkDetail.coerceIn(0, 2) else 0
     val dark = isDarkTheme(settings)
     val context = LocalContext.current
     // The app has its own light/dark setting, so the system bars must follow it, not the phone's theme

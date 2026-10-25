@@ -127,6 +127,18 @@ class E2ee private constructor(
 
     // ---- Writing ------------------------------------------------------------------------------------------------------
 
+    /**
+     * Gets a page ready to send in before you type: learns everyone's devices, sets up the secure channels and shares the room key. The first message
+     * of a visit used to do all of this while the clock showed, which on a page with many devices (WhatsApp, with your old devices too) took a while.
+     */
+    suspend fun prepare(roomId: String, members: List<String>) {
+        withContext(Dispatchers.IO) { machine.updateTrackedUsers(members) }
+        pump()
+        withContext(Dispatchers.IO) { machine.getMissingSessions(members) }?.let { send(it) }
+        val settings = EncryptionSettings(EventEncryptionAlgorithm.MEGOLM_V1_AES_SHA2, 604_800_000uL, 100uL, HistoryVisibility.SHARED, false, false)
+        withContext(Dispatchers.IO) { machine.shareRoomKey(roomId, members, settings) }.forEach { send(it) }
+    }
+
     /** Encrypts an event for a room. [members] is everyone in the room, so their devices all get the key. */
     suspend fun encrypt(roomId: String, type: String, content: JsonObject, members: List<String>): JsonObject {
         withContext(Dispatchers.IO) { machine.updateTrackedUsers(members) }
