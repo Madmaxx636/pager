@@ -541,6 +541,7 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
     SettingsPage("Notifications", { navigate("") }) {
         SettingsGroup {
             SwitchRow("Notifications", "Master switch for message alerts", s.notifEnabled) { v -> set { copy(notifEnabled = v) } }; GroupDivider()
+            SwitchRow("Pop-ups inside the app", "A message for another page slides in at the top while you are using Pager", s.inAppPopups, !off) { v -> set { copy(inAppPopups = v) } }; GroupDivider()
             ButtonRow("Send a test notification") { Notifier.test(context, store) }; GroupDivider()
             ButtonRow("Check priority & bubbles") { diagnosis = Notifier.diagnose(context) }
         }

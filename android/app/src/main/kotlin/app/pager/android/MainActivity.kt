@@ -79,6 +79,7 @@ class MainActivity : FragmentActivity() {
                             if (locked && settings.appLock) LockScreen(onUnlock = { unlock() }) else Root()
                             GreetingOverlay()
                             AttentionOverlay(onAnswer = { id -> openRoom = id })
+                            InAppBanner(onOpen = { id -> openRoom = id })
                         }
                     }
                     if (settings.eink && settings.screenClean != "off") ScreenCleanOverlay(settings.screenClean, settings.screenCleanSec)

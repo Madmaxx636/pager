@@ -303,7 +303,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
             // The words go with the first item; the rest follow on their own.
             staged.toList().forEachIndexed { i, x ->
                 val cap = if (i == 0 && body.isNotEmpty()) body else null
-                if (x.gif != null) store.sendGif(sendRoom, x.gif, cap) else x.uri?.let { store.sendFile(sendRoom, it, x.viewOnce, cap) }
+                val rid = if (i == 0) replyTo?.id else null
+                if (x.gif != null) store.sendGif(sendRoom, x.gif, cap, rid) else x.uri?.let { store.sendFile(sendRoom, it, x.viewOnce, cap, replyTo = rid) }
             }
             staged.clear(); text = ""; replyTo = null; mentionIds.clear(); store.setDraft(roomId, "")
             return
@@ -455,7 +456,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                         }
                         holding = false
                         if (System.currentTimeMillis() - began > 450) {
-                            if (holdCancel) recorder.cancel() else recorder.stop()?.let { (f, ms) -> store.sendVoice(sendRoom, f, ms) }
+                            if (holdCancel) recorder.cancel() else recorder.stop()?.let { (f, ms) -> store.sendVoice(sendRoom, f, ms, replyTo?.id); replyTo = null }
                             recording = false; holdCancel = false
                         }
                     }
@@ -465,7 +466,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                         IconBtn(Icons.Rounded.Delete, "Cancel recording", { recorder.cancel(); recording = false }, tint = scheme.error)
                         Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFEF4444)))
                         Text(if (holding && holdCancel) "  Let go to cancel" else "  Recording  %d:%02d".format(recordedMs / 60000, (recordedMs / 1000) % 60) + if (holding) "  ·  let go to send, slide left to cancel" else "", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        Box(Modifier.size(48.dp).clip(CircleShape).background(scheme.primary).dpadFocus().clickable { recorder.stop()?.let { (f, ms) -> store.sendVoice(sendRoom, f, ms) }; recording = false }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(48.dp).clip(CircleShape).background(scheme.primary).dpadFocus().clickable { recorder.stop()?.let { (f, ms) -> store.sendVoice(sendRoom, f, ms, replyTo?.id); replyTo = null }; recording = false }, contentAlignment = Alignment.Center) {
                             Icon(Icons.AutoMirrored.Rounded.Send, "Send voice message", tint = scheme.onPrimary)
                         }
                     }
