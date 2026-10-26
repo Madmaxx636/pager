@@ -7,7 +7,8 @@ import { HttpError, asUser, registerUser, synapseAdmin, verifyPassword, whoami }
 /** Wrong admin passwords on the recover screen, per admin, so the screen cannot be used to guess a password. */
 const recoverTries = new Map<string, number[]>();
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { bridgeRequest } from "./bridges.ts";
 import { control, dockerAvailable, findContainer, logs } from "./docker.ts";
 import { readRegistration, readSettings, writeSettings } from "./bridgeconfig.ts";
@@ -315,6 +316,28 @@ export function createApp(cfg: Config) {
         const ids = (d.devices ?? []).map((x: any) => x.device_id);
         if (ids.length) await synapseAdmin(cfg, token, "POST", `/_synapse/admin/v2/users/${enc(target)}/delete_devices`, { devices: ids });
         return send(res, 200, { signedOut: ids.length });
+      }
+
+      // ---- Restart the Pager server's services (not the computer). The API never touches the container runtime for this: it leaves a note in its
+      // state folder and a small watcher on the server (scripts/restart-watcher.sh) does the restarting, so a restart still works while the API itself restarts.
+      if (parts[1] === "restart" && parts.length === 2) {
+        const dir = cfg.stateFile ? dirname(cfg.stateFile) : undefined;
+        const f = (n: string) => (dir ? join(dir, n) : "");
+        const age = (n: string) => { try { return Date.now() - statSync(f(n)).mtimeMs; } catch { return Infinity; } };
+        const read = (n: string) => { try { return JSON.parse(readFileSync(f(n), "utf8")); } catch { return undefined; } };
+        if (method === "GET") return send(res, 200, { available: !!dir && age("restart-watcher") < 30_000, pending: !!dir && existsSync(f("restart-request")), last: read("restart-last") ?? null });
+        if (method === "POST") {
+          if (!dir) throw new HttpError(409, "The server has nowhere to keep its state");
+          if (age("restart-watcher") >= 30_000) throw new HttpError(409, "Server restart isn't set up yet. Run this once on the server: cd ~/pager/server && ./scripts/restart-watcher.sh --install");
+          const { password } = await readJson(req);
+          const tries = (recoverTries.get(me) ?? []).filter((t) => Date.now() - t < 10 * 60_000);
+          if (tries.length >= 5) throw new HttpError(429, "Too many wrong passwords. Wait ten minutes");
+          try { await verifyPassword(cfg, me, String(password ?? "")); } catch (e) { if ((e as HttpError).status === 403) recoverTries.set(me, [...tries, Date.now()]); throw e; }
+          recoverTries.delete(me);
+          writeFileSync(f("restart-request"), JSON.stringify({ by: me, at: new Date().toISOString() }));
+          console.log(`[admin] ${me} asked for a server restart`);
+          return send(res, 200, { ok: true });
+        }
       }
 
       // ---- Bridge controls (need the container runtime: see scripts/enable-admin-control.sh) ----

@@ -97,6 +97,8 @@ export const pager = {
     recover: (id: string, adminPassword: string, newPassword?: string) => call<{ ok: boolean; backupRemoved: boolean; temporaryPassword?: string }>("POST", `/api/admin/users/${enc(id)}/recover`, { adminPassword, ...(newPassword ? { newPassword } : {}) }),
     resetPassword: (id: string, password: string) => call("POST", `/api/admin/users/${enc(id)}/password`, { password }),
     remove: (id: string) => call("POST", `/api/admin/users/${enc(id)}/delete`, {}),
+    restartInfo: () => call<{ available: boolean; pending: boolean; last: { at: string; ok: boolean } | null }>("GET", "/api/admin/restart"),
+    restartServer: (password: string) => call<{ ok: boolean }>("POST", "/api/admin/restart", { password }),
     server: () => call<{ domain: string; signup: "invite" | "open" | "closed"; inviteCode: string }>("GET", "/api/admin/server"),
     setServer: (body: { signup?: string; regenerateInvite?: boolean }) => call<{ domain: string; signup: "invite" | "open" | "closed"; inviteCode: string }>("POST", "/api/admin/server", body),
     bridges: () => call<{ bridges: { id: string; name: string; up: boolean }[] }>("GET", "/api/admin/bridges").then((r) => r.bridges),
