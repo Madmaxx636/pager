@@ -108,6 +108,12 @@ class PagerApi(private val http: Http) {
         val r = http.request("POST", "/api/admin/users/${enc(id)}/recover", buildJsonObject { put("adminPassword", adminPassword); if (!newPassword.isNullOrEmpty()) put("newPassword", newPassword) })
         return ((r["backupRemoved"] as? JsonPrimitive)?.booleanOrNull == true) to r["temporaryPassword"].str()
     }
+    /** Whether the server's restart helper is installed, and when it last restarted (null if never). */
+    suspend fun adminRestartInfo(): Pair<Boolean, String?> {
+        val r = http.request("GET", "/api/admin/restart")
+        return ((r["available"] as? JsonPrimitive)?.booleanOrNull == true) to (r["last"] as? JsonObject)?.get("at").str()
+    }
+    suspend fun adminRestartServer(password: String) { http.request("POST", "/api/admin/restart", buildJsonObject { put("password", password) }) }
     suspend fun adminResetPassword(id: String, password: String) { http.request("POST", "/api/admin/users/${enc(id)}/password", buildJsonObject { put("password", password) }) }
     suspend fun adminRemove(id: String) { http.request("POST", "/api/admin/users/${enc(id)}/delete", JsonObject(emptyMap())) }
     private fun serverFrom(o: JsonObject) = ServerSettings(o["domain"].str().orEmpty(), o["signup"].str().orEmpty(), o["inviteCode"].str().orEmpty())

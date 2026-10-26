@@ -310,6 +310,9 @@ fun AdminScreen(onBack: () -> Unit) {
     var scheduleFor by remember { mutableStateOf<AdminBridge?>(null) }
     var busy by remember { mutableStateOf("") }
     var err by remember { mutableStateOf("") }
+    var restartInfo by remember { mutableStateOf<Pair<Boolean, String?>?>(null) }
+    var restartAsk by remember { mutableStateOf(false) }
+    var restartState by remember { mutableStateOf("") }
     fun load() = scope.launch {
         err = ""
         runCatching { store.pager.adminOverview() }.onSuccess { people = it }.onFailure { err = it.message ?: "Couldn't load" }
@@ -317,6 +320,7 @@ fun AdminScreen(onBack: () -> Unit) {
         runCatching { store.pager.adminControl() }.onSuccess { control = it }
         runCatching { store.pager.adminSchedules() }.onSuccess { schedules = it }
         runCatching { store.pager.adminServer() }.onSuccess { server = it }
+        runCatching { store.pager.adminRestartInfo() }.onSuccess { restartInfo = it }
     }
     LaunchedEffect(Unit) { load() }
     fun act(f: suspend () -> Unit) = scope.launch { runCatching { f() }.onFailure { err = it.message ?: "Failed" }; load() }
@@ -413,6 +417,10 @@ fun AdminScreen(onBack: () -> Unit) {
         }
 
         if (tab == "server") {
+            SettingsGroup("Restart", footer = if (restartInfo?.first == false) "Not set up yet. Run this once on the server: cd ~/pager/server && ./scripts/restart-watcher.sh --install" else "Restarts Synapse, every bridge, the database, the web server and the API. Everyone is offline for about a minute. The computer itself is not rebooted.") {
+                Text(when (restartState) { "restarting" -> "Restarting… this takes about a minute"; "back" -> "Back online"; else -> restartInfo?.second?.let { "Last restarted " + (runCatching { dateFmt.format(java.util.Date.from(java.time.Instant.parse(it))) }.getOrDefault(it)) } ?: "Restart the server" }, Modifier.padding(16.dp))
+                GroupDivider(); ButtonRow("Restart the server", danger = true, enabled = restartInfo?.first == true && restartState != "restarting") { restartAsk = true }
+            }
             SettingsGroup("Signups", footer = "The invite code lets people create an account. Closing signups stops everyone except the admin code.") {
                 server?.let { sv ->
                     Text(sv.domain, Modifier.padding(16.dp)); GroupDivider()
@@ -422,6 +430,33 @@ fun AdminScreen(onBack: () -> Unit) {
                 } ?: Text("Loading…", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+    if (restartAsk) {
+        var pw by remember { mutableStateOf("") }
+        var rerr by remember { mutableStateOf("") }
+        var sending by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { if (!sending) restartAsk = false }, title = { Text("Restart the server?") },
+            text = { Column {
+                Text("Everyone is offline for about a minute while it restarts. Messages sent in the meantime wait and go out afterwards.")
+                androidx.compose.material3.OutlinedTextField(pw, { pw = it }, singleLine = true, label = { Text("Your password, to confirm") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                if (rerr.isNotEmpty()) Text(rerr, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+            } },
+            confirmButton = { TextButton(enabled = !sending && pw.isNotEmpty(), onClick = {
+                sending = true; rerr = ""
+                scope.launch {
+                    runCatching { store.pager.adminRestartServer(pw) }.onSuccess {
+                        restartAsk = false; restartState = "restarting"
+                        // Wait until the server stops answering, then until it answers again.
+                        var down = false
+                        for (i in 0 until 90) { kotlinx.coroutines.delay(2000); val up = runCatching { store.pager.isAdmin() }.isSuccess; if (!up) down = true else if (down || i > 20) break }
+                        restartState = "back"; load()
+                    }.onFailure { rerr = it.message ?: "That didn't work" }
+                    sending = false
+                }
+            }) { Text("Restart now") } },
+            dismissButton = { TextButton(enabled = !sending, onClick = { restartAsk = false }) { Text("Cancel") } },
+        )
     }
     renameFor?.let { u ->
         var nm by remember { mutableStateOf(people?.firstOrNull { it.user.id == u.id }?.let { nameOf(it) } ?: "") }

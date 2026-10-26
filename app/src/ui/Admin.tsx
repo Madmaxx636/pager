@@ -265,8 +265,28 @@ function SettingsModal({ bridge, onClose }: { bridge: AdminBridge; onClose: () =
 function ServerTab({ setErr }: { setErr: (m: string) => void }) {
   const [server, setServer] = useState<{ domain: string; signup: "invite" | "open" | "closed"; inviteCode: string }>();
   const [copied, setCopied] = useState(false);
-  useEffect(() => { pager.admin.server().then(setServer).catch((e) => setErr(e.message)); }, [setErr]);
-  return (
+  const [rs, setRs] = useState<{ available: boolean; pending: boolean; last: { at: string; ok: boolean } | null }>();
+  const [asking, setAsking] = useState(false);
+  const [state, setState] = useState<"" | "restarting" | "back">("");
+  useEffect(() => { pager.admin.server().then(setServer).catch((e) => setErr(e.message)); pager.admin.restartInfo().then(setRs).catch(() => {}); }, [setErr]);
+  /** After asking for a restart: wait until the server stops answering, then until it answers again. */
+  const waitForRestart = async () => {
+    setState("restarting");
+    let down = false;
+    for (let i = 0; i < 90; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const up = await pager.me().then(() => true).catch(() => false);
+      if (!up) down = true; else if (down || i > 20) break;
+    }
+    setState("back"); pager.admin.restartInfo().then(setRs).catch(() => {});
+  };
+  return (<>
+    <Group title="Restart" footer={rs && !rs.available ? "Not set up yet. Run this once on the server: cd ~/pager/server && ./scripts/restart-watcher.sh --install" : "Restarts Synapse, every bridge, the database, the web server and the API. Everyone is offline for about a minute. The computer itself is not rebooted."}>
+      <Row title="Restart the server" hint={state === "restarting" ? "Restarting… this takes about a minute" : state === "back" ? "Back online" : rs?.last ? `Last restarted ${new Date(rs.last.at).toLocaleString()}${rs.last.ok ? "" : " (it reported a problem)"}` : ""}>
+        <button className="link danger" disabled={!rs?.available || state === "restarting"} onClick={() => setAsking(true)}>Restart</button>
+      </Row>
+    </Group>
+    {asking && <Modal title="Restart the server?" onClose={() => setAsking(false)}><TextForm label="Your password, to confirm" type="password" min={1} cta="Restart now" note="Everyone is offline for about a minute while it restarts. Messages sent in the meantime wait and go out afterwards." onDone={() => setAsking(false)} onSubmit={(v) => pager.admin.restartServer(v).then(() => { void waitForRestart(); })} /></Modal>}
     <Group title="Signups" footer="The invite code lets people create an account. Closing signups stops everyone except the admin code.">
       {!server && <Row title="Loading…" />}
       {server && <>
@@ -279,7 +299,7 @@ function ServerTab({ setErr }: { setErr: (m: string) => void }) {
         </Row>
       </>}
     </Group>
-  );
+  </>);
 }
 
 /** For someone who lost both their password and their recovery key. The admin must type their own password to continue. */

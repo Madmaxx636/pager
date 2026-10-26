@@ -21,6 +21,8 @@ Dialog {
     property var schedules: ({})
     property bool canSave: false
     property var server: null
+    property var restartInfo: null
+    property string restartState: ""
     property string openUser: ""
     property var info: null
     property string busyBridge: ""
@@ -40,7 +42,27 @@ Dialog {
         core.api("GET", "/api/admin/control", null, function (s, b) { if (s === 200) control = b })
         core.api("GET", "/api/admin/schedules", null, function (s, b) { if (s === 200) { schedules = b.schedules || ({}); canSave = !!b.canSave } })
     }
-    function loadServer() { call("GET", "/api/admin/server", null, function (b) { server = b }) }
+    function loadServer() {
+        call("GET", "/api/admin/server", null, function (b) { server = b })
+        core.api("GET", "/api/admin/restart", null, function (s, b) { if (s === 200) restartInfo = b })
+    }
+    /** Asks for a restart, then waits until the server stops answering and answers again. */
+    function restartServer(password) {
+        core.api("POST", "/api/admin/restart", { password: password }, function (s, b) {
+            if (s !== 200) { fail(s, b); return }
+            restartState = "restarting"; waitTries = 0; sawDown = false; waitTimer.start()
+        })
+    }
+    property int waitTries: 0
+    property bool sawDown: false
+    Timer {
+        id: waitTimer; interval: 2000; repeat: true
+        onTriggered: { dlg.waitTries++; core.api("GET", "/api/me", null, function (s) {
+            const up = s === 200
+            if (!up) dlg.sawDown = true
+            if ((up && (dlg.sawDown || dlg.waitTries > 20)) || dlg.waitTries >= 90) { waitTimer.stop(); dlg.restartState = "back"; dlg.loadServer() }
+        }) }
+    }
     function loadInfo(id) { info = null; core.api("GET", "/api/admin/users/" + encodeURIComponent(id) + "/info", null, function (s, b) { if (s === 200) info = b }) }
     function toggleUser(id) { openUser = openUser === id ? "" : id; if (openUser) loadInfo(id) }
     function userAction(id, action, body, after) {
@@ -197,6 +219,14 @@ Dialog {
                     width: parent.width - 32; x: 16; spacing: 10
                     Item { height: 6 }
                     Label { visible: !dlg.server; text: "Loading…"; color: look.muted }
+                    Field { label: "Restart"
+                        ColumnLayout { Layout.fillWidth: true; spacing: 6
+                            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.text
+                                text: dlg.restartState === "restarting" ? "Restarting… this takes about a minute" : dlg.restartState === "back" ? "Back online" : (dlg.restartInfo && dlg.restartInfo.last ? "Last restarted " + new Date(dlg.restartInfo.last.at).toLocaleString() : "Restart the server") }
+                            Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: look.muted; font.pixelSize: Math.round(12 * look.textScale)
+                                text: dlg.restartInfo && !dlg.restartInfo.available ? "Not set up yet. Run this once on the server: cd ~/pager/server && ./scripts/restart-watcher.sh --install" : "Restarts Synapse, every bridge, the database, the web server and the API. Everyone is offline for about a minute. The computer itself is not rebooted." }
+                            Pill { text: "Restart the server"; enabled: !!dlg.restartInfo && dlg.restartInfo.available && dlg.restartState !== "restarting"
+                                onClicked: prompt.ask("Your password, to confirm the restart", "", true, 1, function (pw) { dlg.restartServer(pw) }) } } }
                     ColumnLayout {
                         visible: !!dlg.server; Layout.fillWidth: true; spacing: 10
                         Field { label: "Address"; Label { text: dlg.server ? dlg.server.domain : ""; color: look.text } }
