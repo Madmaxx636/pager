@@ -92,8 +92,17 @@ export function createApp(cfg: Config) {
   async function authedUser(req: IncomingMessage) {
     return whoami(cfg, tokenOf(req));
   }
+  // Whether someone is an admin is asked of Synapse every time the app starts. When that one answer was slow or failed, the Admin button
+  // used to vanish; now the last known answer stands (an error is not "not an admin").
+  const adminSeen = new Map<string, boolean>();
   async function isAdmin(token: string, userId: string) {
-    try { return !!(await synapseAdmin(cfg, token, "GET", `/_synapse/admin/v2/users/${encodeURIComponent(userId)}`)).admin; } catch { return false; }
+    try {
+      const yes = !!(await synapseAdmin(cfg, token, "GET", `/_synapse/admin/v2/users/${encodeURIComponent(userId)}`)).admin;
+      adminSeen.set(userId, yes); return yes;
+    } catch (e) {
+      if ((e as { status?: number }).status === 403) { adminSeen.set(userId, false); return false; }      // Synapse itself says: not an admin
+      return adminSeen.get(userId) ?? false;
+    }
   }
 
   /** Makes sure [userId] is in [room]. Best effort: if anything is missing the chat simply opens as before. */
@@ -394,7 +403,8 @@ export function createApp(cfg: Config) {
               return { id: b.id, name: b.name, logins: who.logins ?? [] };
             } catch (e) {
               console.log(`[bridges] ${b.id} did not answer for ${userId}: ${(e as Error).message}`);
-              if ((e as { status?: number }).status === 502) bridgeDownUntil.set(b.id, Date.now() + (recent ? 15_000 : 60_000));
+              const gone = (e as { body?: { dns?: boolean } }).body?.dns === true;      // its name does not exist: not running at all, so leave it alone for a while
+              if ((e as { status?: number }).status === 502) bridgeDownUntil.set(b.id, Date.now() + (gone ? 10 * 60_000 : recent ? 15_000 : 60_000));
               return { id: b.id, name: b.name, logins: recent ?? [], error: (e as Error).message };
             }
           }),

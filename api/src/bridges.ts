@@ -22,8 +22,9 @@ export async function bridgeRequest(
     headers: { authorization: `Bearer ${cfg.provisioningSecret}`, "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
-  }).catch(() => {
-    throw new HttpError(502, `${bridge.name} bridge is unreachable`);
+  }).catch((e: { cause?: { code?: string } }) => {
+    const code = e?.cause?.code;
+    throw new HttpError(502, `${bridge.name} bridge is unreachable`, { dns: code === "EAI_AGAIN" || code === "ENOTFOUND" });
   });
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};
