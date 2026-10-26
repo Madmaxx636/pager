@@ -10,12 +10,14 @@ WheelHandler {
     property real notch: 0.9 * gain            // pixels per wheel unit: one click of a normal wheel (120 units) moves about 108 px
     property real settle: 0.075         // seconds the wheel glide takes to cover most of the distance to where it is heading
     property real goal: 0
+    signal moved()                      // you scrolled (as opposed to the view moving by itself)
     property var samples: []            // recent finger movements of a touchpad: [time, pixels]
     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
     Component.onCompleted: if (view) view.boundsBehavior = Flickable.StopAtBounds      // no stretching or bouncing past the ends, like the web app
     function bounds() { const lo = view.originY; return [lo, Math.max(lo, view.originY + view.contentHeight - view.height)] }
     onWheel: (e) => {
         if (!view) return
+        moved()
         const b = bounds(), lo = b[0], hi = b[1]
         if (hi <= lo) return
         // a touchpad reports pixels, or small steps that are not whole wheel clicks

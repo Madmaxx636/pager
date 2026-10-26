@@ -187,7 +187,7 @@ public:
     Q_INVOKABLE QString fullPath(const QString &eventId) const { return m_store.mediaPath(QStringLiteral("full:") + eventId); }
     /// Copies a downloaded file somewhere the person chose.
     Q_INVOKABLE bool saveCopy(const QString &eventId, const QString &destination) const;
-    Q_INVOKABLE void sendFile(const QString &path, const QString &mime, int width, int height, const QString &caption = QString(), bool voice = false, double durationMs = 0);
+    Q_INVOKABLE void sendFile(const QString &path, const QString &mime, int width, int height, const QString &caption = QString(), bool voice = false, double durationMs = 0, const QString &replyTo = QString());
     Q_INVOKABLE void createPoll(const QString &question, const QStringList &answers, int maxSelections, bool disclosed);
     /// Picks (or un-picks, in polls that allow several) an answer.
     Q_INVOKABLE void vote(const QString &pollId, const QString &answerId);

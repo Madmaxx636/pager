@@ -8,6 +8,8 @@ Dialog {
     id: dlg
     property string error: ""
     property bool done: false
+    property string replyTo: ""          // a voice message sent while replying answers that message
+    signal sent()
     modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(340, Overlay.overlay ? Overlay.overlay.width - 32 : 340)
     title: "Voice message"; closePolicy: Popup.NoAutoClose
     function start() { error = ""; done = false; open(); Qt.callLater(function () { rec.record() }) }
@@ -21,7 +23,7 @@ Dialog {
             onErrorOccurred: (e, msg) => { dlg.error = msg.length ? msg : "Couldn't use the microphone"; }
             onRecorderStateChanged: if (recorderState === MediaRecorder.StoppedState && dlg.done && actualLocation.toString().length) {
                 const path = files.path(actualLocation); const ms = rec.duration
-                dlg.close(); core.sendFile(path, "audio/ogg", 0, 0, "", true, ms)
+                dlg.close(); core.sendFile(path, "audio/ogg", 0, 0, "", true, ms, dlg.replyTo); dlg.sent()
             }
         }
     }

@@ -384,11 +384,11 @@ QString Store::reactionIdOf(const QString &roomId, const QString &target, const 
     return {};
 }
 
-QString Store::addLocalFile(const QString &roomId, const QString &path, const QString &name, bool image, int w, int h) {
+QString Store::addLocalFile(const QString &roomId, const QString &path, const QString &name, bool image, int w, int h, const QString &replyTo) {
     Room *r = mutableRoom(roomId);
     if (!r) return {};
     Msg m; m.id = QStringLiteral("local-%1").arg(++m_localCounter); m.sender = m_me; m.senderName = QStringLiteral("You"); m.body = name; m.fileName = name;
-    m.kind = image ? QStringLiteral("image") : QStringLiteral("file"); m.width = w; m.height = h;
+    m.kind = image ? QStringLiteral("image") : QStringLiteral("file"); m.width = w; m.height = h; m.replyTo = replyTo;
     m.ts = QDateTime::currentMSecsSinceEpoch(); m.local = true; m.status = 1;
     m_media.insert(m.id, path);
     r->msgs.append(m);
@@ -493,4 +493,6 @@ void Store::receiptPositions(const Room &r, int &readPos, int &deliveredPos) con
     // Once the bridge reports deliveries in this chat only those count (its own receipt then just means "sent"); until then its receipt is the best there is.
     if (r.statusSeen) { for (auto d = r.deliveredTo.cbegin(); d != r.deliveredTo.cend(); ++d) deliveredPos = qMax(deliveredPos, r.receiptIndex(d.key())); }
     else for (auto u = r.receipts.cbegin(); u != r.receipts.cend(); ++u) if (isBridgeBot(u.key())) deliveredPos = qMax(deliveredPos, r.receiptIndex(u.value()));
+    // Some deliveries are never reported (the bridge only sometimes says so): anything sent before a message the other side wrote has plainly arrived.
+    for (int i = r.msgs.size() - 1; i >= 0; --i) if (r.msgs[i].sender != m_me && !isBridgeBot(r.msgs[i].sender)) { deliveredPos = qMax(deliveredPos, i); break; }
 }
