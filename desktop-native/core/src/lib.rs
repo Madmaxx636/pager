@@ -286,10 +286,10 @@ pub extern "C" fn pager_redact(h: *mut Arc<Engine>, room_id: *const c_char, even
 /// Sends a file or picture from this computer (encrypted automatically in encrypted chats). Answers like pager_send_event.
 /// [width] and [height] are the picture's size, or 0.
 #[no_mangle]
-pub extern "C" fn pager_send_file(h: *mut Arc<Engine>, room_id: *const c_char, path: *const c_char, mime_type: *const c_char, caption: *const c_char, width: u32, height: u32, txn: *const c_char, voice: bool, duration_ms: u64) {
+pub extern "C" fn pager_send_file(h: *mut Arc<Engine>, room_id: *const c_char, path: *const c_char, mime_type: *const c_char, caption: *const c_char, width: u32, height: u32, txn: *const c_char, voice: bool, duration_ms: u64, reply_to: *const c_char) {
     use matrix_sdk::attachment::{AttachmentConfig, AttachmentInfo, BaseAudioInfo, BaseImageInfo};
     let Some(e) = (unsafe { h.as_ref() }).cloned() else { return };
-    let (rid, path, mime_s, caption, txn) = (s(room_id), s(path), s(mime_type), s(caption), s(txn));
+    let (rid, path, mime_s, caption, txn, reply_to) = (s(room_id), s(path), s(mime_type), s(caption), s(txn), s(reply_to));
     let e2 = e.clone();
     e.rt.spawn(async move {
         let fail = |why: String| e2.tell.say("send_failed", &json!({ "room": rid, "txn": txn, "error": why }));
@@ -300,6 +300,10 @@ pub extern "C" fn pager_send_file(h: *mut Arc<Engine>, room_id: *const c_char, p
         let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into());
         let mime: mime::Mime = mime_s.parse().unwrap_or(mime::APPLICATION_OCTET_STREAM);
         let mut cfg = AttachmentConfig::new();
+        // A file or voice message sent while replying answers that message.
+        if let Ok(eid) = matrix_sdk::ruma::OwnedEventId::try_from(reply_to.as_str()) {
+            cfg = cfg.reply(Some(matrix_sdk::room::reply::Reply { event_id: eid, enforce_thread: matrix_sdk::room::reply::EnforceThread::MaybeThreaded, add_mentions: matrix_sdk::ruma::events::room::message::AddMentions::No }));
+        }
         if mime.type_() == mime::IMAGE && width > 0 && height > 0 {
             cfg = cfg.info(AttachmentInfo::Image(BaseImageInfo { width: Some(width.into()), height: Some(height.into()), size: matrix_sdk::ruma::UInt::new(data.len() as u64), blurhash: None, is_animated: None }));
         }

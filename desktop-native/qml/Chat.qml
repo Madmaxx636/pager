@@ -19,6 +19,8 @@ Rectangle {
     property string jumpTarget: ""
     onJumpTargetChanged: if (jumpTarget.length) { pane.jumpTo(jumpTarget); jumpTarget = "" }
     property string target: ""; property bool targetMine: false        // the message a menu was opened on
+    // Just after a page opens, pictures and older messages keep changing the page's height; only something you did (wheel, drag, keys) may stop it staying at the newest message.
+    property bool followNewest: true; property real openedAt: 0
     property string replyingTo: ""; property string editing: ""        // set while the composer is answering or editing
     property string highlight: ""
     property var mentionIds: ({})            // names picked from the @ list -> user ids, for the message's mentions
@@ -49,13 +51,14 @@ Rectangle {
         input.clear(); editing = ""; replyingTo = ""; mentionIds = ({})
         msgs.positionViewAtBeginning()
     }
-    function attach(urls) { for (const u of urls) { const p = files.path(u); if (!p.length) continue; const sz = files.imageSize(p); core.sendFile(p, files.mime(p), sz.width, sz.height) } }
+    function attach(urls) { let first = true; for (const u of urls) { const p = files.path(u); if (!p.length) continue; const sz = files.imageSize(p); core.sendFile(p, files.mime(p), sz.width, sz.height, "", false, 0, first ? replyingTo : ""); first = false }; replyingTo = "" }
     Timer { id: flash; interval: 1400; onTriggered: pane.highlight = "" }
 
     onRoomIdChanged: {
         replyingTo = ""; editing = ""
         input.text = core.draft(roomId)
-        Qt.callLater(function () { const r = settings.openAtUnread ? core.dividerRow() : -1; if (r >= 0) msgs.positionViewAtIndex(r, ListView.Center); else msgs.positionViewAtBeginning() })
+        openedAt = Date.now(); followNewest = true
+        Qt.callLater(function () { const r = settings.openAtUnread ? core.dividerRow() : -1; if (r >= 0) { followNewest = false; msgs.positionViewAtIndex(r, ListView.Center) } else msgs.positionViewAtBeginning() })
     }
 
     ColumnLayout {
@@ -136,8 +139,10 @@ Rectangle {
                 model: core.timeline
                 spacing: 0; cacheBuffer: 2400; reuseItems: true
                 boundsBehavior: Flickable.StopAtBounds; maximumFlickVelocity: 7000; flickDeceleration: 2200
-                ScrollBar.vertical: ScrollBar { }
-                SmoothWheel { view: msgs }
+                ScrollBar.vertical: ScrollBar { onPressedChanged: if (pressed) pane.followNewest = false }
+                SmoothWheel { view: msgs; onMoved: pane.followNewest = false }
+                onMovementStarted: pane.followNewest = false
+                onContentHeightChanged: if (pane.followNewest && Date.now() - pane.openedAt < 4000) Qt.callLater(function () { if (pane.followNewest) msgs.positionViewAtBeginning() })
                 delegate: Bubble {
                     lk: mine ? lookMine : lookTheirs
                     showName: core.currentIsGroup
@@ -269,7 +274,7 @@ Rectangle {
                             onTextChanged: { core.setTyping(text.length > 0 && settings.sendTyping); draftTimer.restart() }
                             Keys.onPressed: (e) => {
                                 if ((e.key === Qt.Key_V) && (e.modifiers & Qt.ControlModifier) && files.clipboardHasImage()) {
-                                    e.accepted = true; const p = files.saveClipboardImage(); if (p.length) { const sz = files.imageSize(p); core.sendFile(p, "image/png", sz.width, sz.height) }
+                                    e.accepted = true; const p = files.saveClipboardImage(); if (p.length) { const sz = files.imageSize(p); core.sendFile(p, "image/png", sz.width, sz.height, "", false, 0, pane.replyingTo); pane.replyingTo = "" }
                                     return
                                 }
                                 if (e.key !== Qt.Key_Return && e.key !== Qt.Key_Enter) return
@@ -307,8 +312,8 @@ Rectangle {
 
     PollDialog { id: pollDialog }
     // recording (and the multimedia libraries behind it) is loaded the first time you press the microphone
-    Loader { id: voiceLoader; active: false; source: "VoiceDialog.qml"; onLoaded: item.start() }
-    QtObject { id: voiceDialog; function start() { if (voiceLoader.active) voiceLoader.item.start(); else voiceLoader.active = true } }
+    Loader { id: voiceLoader; active: false; source: "VoiceDialog.qml"; onLoaded: { item.replyTo = pane.replyingTo; item.sent.connect(function () { pane.replyingTo = "" }); item.start() } }
+    QtObject { id: voiceDialog; function start() { if (voiceLoader.active) { voiceLoader.item.replyTo = pane.replyingTo; voiceLoader.item.start() } else voiceLoader.active = true } }
     ScheduleDialog { id: scheduleDialog; onScheduled: { input.clear() } }
     FileDialog { id: filePicker; title: "Send a file"; fileMode: FileDialog.OpenFiles; onAccepted: pane.attach(selectedFiles) }
     FileDialog { id: photoPicker; title: "Send photos or videos"; fileMode: FileDialog.OpenFiles; nameFilters: ["Photos and videos (*.png *.jpg *.jpeg *.gif *.webp *.bmp *.mp4 *.mov *.webm *.mkv)", "All files (*)"]; onAccepted: pane.attach(selectedFiles) }

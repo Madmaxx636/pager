@@ -76,6 +76,7 @@ Item {
             open("!long")
             const lv = messages(); lv.positionViewAtBeginning(); wait(100)
             verify(lv.atYEnd)
+            lv.movementStarted()                  // the person scrolls away (a page that has just opened keeps following the newest message until they do)
             lv.positionViewAtIndex(200, ListView.Center); wait(100)
             verify(!lv.atYEnd)
         }

@@ -417,12 +417,12 @@ bool Engine::saveCopy(const QString &eventId, const QString &destination) const 
     return QFile::copy(src, destination);
 }
 
-void Engine::sendFile(const QString &path, const QString &mime, int w, int h, const QString &caption, bool voice, double durationMs) {
+void Engine::sendFile(const QString &path, const QString &mime, int w, int h, const QString &caption, bool voice, double durationMs, const QString &replyTo) {
     if (m_current.isEmpty()) return;
     const QString name = QFileInfo(path).fileName();
-    const QString localFile = m_store.addLocalFile(sendTarget(), path, name, mime.startsWith(QLatin1String("image/")), w, h);
+    const QString localFile = m_store.addLocalFile(sendTarget(), path, name, mime.startsWith(QLatin1String("image/")), w, h, replyTo);
     m_timeline.show(m_current); m_rooms.refresh(); emit currentChanged();
-    if (m_core) pager_send_file(m_core, sendTarget().toUtf8().constData(), path.toUtf8().constData(), mime.toUtf8().constData(), caption.toUtf8().constData(), w, h, localFile.toUtf8().constData(), voice, quint64(durationMs));
+    if (m_core) pager_send_file(m_core, sendTarget().toUtf8().constData(), path.toUtf8().constData(), mime.toUtf8().constData(), caption.toUtf8().constData(), w, h, localFile.toUtf8().constData(), voice, quint64(durationMs), replyTo.toUtf8().constData());
 }
 
 void Engine::createPoll(const QString &question, const QStringList &answers, int maxSelections, bool disclosed) {

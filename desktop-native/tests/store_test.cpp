@@ -135,6 +135,12 @@ private slots:
         int read, delivered; s.receiptPositions(*s.room("!r"), read, delivered);
         QCOMPARE(read, 1);                                     // up to the second message, not the third
     }
+    void whatYouSentBeforeTheirNewestMessageCountsAsDelivered() {
+        Store s; s.setMe("@me:x");
+        s.applyRooms({room("!r", "R", {msg("$1", "@me:x", "a", 1000), msg("$2", "@me:x", "b", 2000), msg("$3", "@maya:x", "hi", 3000), msg("$4", "@me:x", "c", 4000)})});
+        int read, delivered; s.receiptPositions(*s.room("!r"), read, delivered);
+        QCOMPARE(delivered, 2);                                // up to their message; the newest one of yours is not known to have arrived
+    }
     void deliveryReportsAndCaptionsAndStickers() {
         Store s; s.setMe("@me:x");
         QJsonObject status{{"event_id", "$st"}, {"type", "com.beeper.message_send_status"}, {"sender", "@bot:x"}, {"origin_server_ts", 2000.0}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"event_id", "$1"}}}, {"delivered_to_users", QJsonArray{"@maya:x"}}}}};

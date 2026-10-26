@@ -86,7 +86,7 @@ public:
     QString applyHistory(const QJsonObject &page);
     QString addLocal(const QString &roomId, const QString &body, const QString &replyTo = QString(), const QString &html = QString());
     void removeMessage(const QString &roomId, const QString &id);
-    QString addLocalFile(const QString &roomId, const QString &path, const QString &name, bool image, int w, int h);
+    QString addLocalFile(const QString &roomId, const QString &path, const QString &name, bool image, int w, int h, const QString &replyTo = QString());
     /// Applies one event we made ourselves (a reaction, an edit, a deletion) so it shows before the server echoes it.
     void applyLocalEvent(const QString &roomId, const QJsonObject &event);
     /// The event id of this person's reaction with [key] on [target], or empty.
