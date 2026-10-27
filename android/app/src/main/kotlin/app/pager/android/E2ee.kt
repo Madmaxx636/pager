@@ -117,13 +117,26 @@ class E2ee private constructor(
     /** Decrypts one m.room.encrypted event. Returns the readable event, or null if we do not have the key (yet). */
     suspend fun decrypt(roomId: String, event: JsonObject): JsonObject? {
         if ((event["type"] as? JsonPrimitive)?.contentOrNull != "m.room.encrypted") return event
+        val id = (event["event_id"] as? JsonPrimitive)?.contentOrNull.orEmpty()
         return try {
             val clear = withContext(Dispatchers.IO) { machine.decryptRoomEvent(event.toString(), roomId, false, false, trust) }
             val c = kotlinx.serialization.json.Json.parseToJsonElement(clear.clearEvent).jsonObject
             // Keep the envelope (id, sender, time, relations) and take what was hidden: the real type and content.
+            locked.remove(id)
             JsonObject(event + mapOf("type" to (c["type"] ?: JsonPrimitive("m.room.message")), "content" to (c["content"] ?: JsonObject(emptyMap())), "pagerEncrypted" to JsonPrimitive(true)))
-        } catch (_: Exception) { null }
+        } catch (e: Exception) {
+            locked[id] = when (e) {
+                is org.matrix.rustcomponents.sdk.crypto.DecryptionException.MissingRoomKey -> e.withheldCode?.let { "the sender kept the key back ($it)" } ?: "the key never arrived"
+                is org.matrix.rustcomponents.sdk.crypto.DecryptionException.Megolm -> "the key is here but does not fit (${e.error.take(60)})"
+                else -> "${e::class.java.simpleName}: ${e.message.orEmpty().take(60)}"
+            }
+            null
+        }
     }
+
+    /** Why each message that could not be read is still locked (by event id): the most useful clue when keys go missing. */
+    private val locked = java.util.concurrent.ConcurrentHashMap<String, String>()
+    fun whyLocked(): String = locked.values.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(3).joinToString("; ") { "${it.key} ×${it.value}" }
 
     // ---- Writing ------------------------------------------------------------------------------------------------------
 

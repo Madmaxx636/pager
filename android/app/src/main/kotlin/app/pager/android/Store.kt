@@ -323,7 +323,7 @@ class Store(private val context: Context) {
     // --- End-to-end encryption -----------------------------------------------------
 
     /** [error] says why encryption could not start, if it could not. */
-    data class EncryptionStatus(val ready: Boolean = false, val backupHere: Boolean = false, val backupOnServer: Boolean = false, val deviceId: String = "", val fingerprint: String = "", val error: String? = null, val mismatch: Boolean = false, val missing: Boolean = false, val serverVersion: String? = null, /** Another device made a new recovery key: this phone still saves to the old one and cannot read the new one until its key is entered. */ val keyChanged: Boolean = false)
+    data class EncryptionStatus(val ready: Boolean = false, val backupHere: Boolean = false, val backupOnServer: Boolean = false, val deviceId: String = "", val fingerprint: String = "", val error: String? = null, val mismatch: Boolean = false, val missing: Boolean = false, val serverVersion: String? = null, /** Another device made a new recovery key: this phone still saves to the old one and cannot read the new one until its key is entered. */ val keyChanged: Boolean = false, val whyLocked: String = "")
     private var startError: String? = null
     private var keyMismatch = false
     private var keyMissing = false
@@ -364,7 +364,7 @@ class Store(private val context: Context) {
         val e = e2ee ?: run { _encryption.value = EncryptionStatus(error = startError); return }
         val here = e.backupOn(); val server = e.backupVersion(); val mine = e.localBackupVersion()
         _encryption.value = EncryptionStatus(true, here, server != null, e.deviceId, e.fingerprint(), mismatch = keyMismatch, missing = keyMissing,
-            serverVersion = server?.first, keyChanged = server != null && here && mine != null && mine != server.first)
+            serverVersion = server?.first, keyChanged = server != null && here && mine != null && mine != server.first, whyLocked = e.whyLocked())
     }
 
     /** Deletes the old recovery backup and starts a new one: every other device is then asked for the new key. Returns the new key to show once. */
