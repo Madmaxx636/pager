@@ -94,8 +94,20 @@ export class Crypto {
       const r = await this.machine.decryptRoomEvent(JSON.stringify(event), new sdk.RoomId(roomId), new sdk.DecryptionSettings(sdk.TrustRequirement.Untrusted));
       const clear = JSON.parse(r.event);
       // Keep the envelope (id, sender, time, relations) and take what was hidden: the real type and content.
+      this.locked.delete(String(event.event_id));
       return { ...event, type: clear.type, content: clear.content, pagerEncrypted: true };
-    } catch { return undefined; }
+    } catch (e) {
+      const x = e as { code?: unknown; maybe_withheld?: string; message?: string };
+      this.locked.set(String(event.event_id), x.maybe_withheld ? `the sender kept the key back (${x.maybe_withheld})` : /missing|room ?key|no session/i.test(`${x.code ?? ""} ${x.message ?? ""}`) ? "the key never arrived" : `${x.code ?? "error"}: ${String(x.message ?? "").slice(0, 60)}`);
+      return undefined;
+    }
+  }
+
+  /** Why each message that could not be read is still locked (by event id): the most useful clue when keys go missing. */
+  private locked = new Map<string, string>();
+  whyLocked(): string {
+    const n = new Map<string, number>(); for (const v of this.locked.values()) n.set(v, (n.get(v) ?? 0) + 1);
+    return [...n].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, c]) => `${k} ×${c}`).join("; ");
   }
 
   // ---- Writing ---------------------------------------------------------------------------------------------------------

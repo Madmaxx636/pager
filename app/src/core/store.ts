@@ -309,7 +309,7 @@ async function roomMembers(roomId: string): Promise<string[]> {
 }
 
 // What the settings screen shows about encryption on this device.
-export interface EncryptionStatus { ready: boolean; backupHere: boolean; backupOnServer: boolean; deviceId: string; fingerprint: string; /** The server holds a different key for this device than we do. */ mismatch?: boolean; /** The server's newest recovery backup (undefined when none). */ serverVersion?: string; /** Another device made a new recovery key: this one still saves to the old one and cannot read the new one until its key is entered. */ keyChanged?: boolean; /** Why encryption could not start, if it could not. */ error?: string }
+export interface EncryptionStatus { ready: boolean; backupHere: boolean; backupOnServer: boolean; deviceId: string; fingerprint: string; /** The server holds a different key for this device than we do. */ mismatch?: boolean; /** The server's newest recovery backup (undefined when none). */ serverVersion?: string; /** Another device made a new recovery key: this one still saves to the old one and cannot read the new one until its key is entered. */ keyChanged?: boolean; /** Why encryption could not start, if it could not. */ error?: string; /** Why some messages are still locked (empty when none are). */ whyLocked?: string }
 let encStatus: EncryptionStatus = { ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "" };
 const encListeners = new Set<() => void>();
 function setEncStatus(s: EncryptionStatus) {
@@ -319,7 +319,7 @@ function setEncStatus(s: EncryptionStatus) {
 export async function refreshEncryptionStatus() {
   if (!e2ee) { setEncStatus({ ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "", error: startError }); return; }
   const [backupHere, ver, mine] = await Promise.all([e2ee.backupOn(), e2ee.backupVersion(), e2ee.localBackupVersion()]);
-  setEncStatus({ ready: true, backupHere, backupOnServer: !!ver, deviceId: e2ee.deviceId, fingerprint: e2ee.machine.identityKeys.ed25519.toBase64(), mismatch: keyMismatch, serverVersion: ver?.version, keyChanged: !!ver && backupHere && !!mine && mine !== ver.version });
+  setEncStatus({ ready: true, backupHere, backupOnServer: !!ver, deviceId: e2ee.deviceId, fingerprint: e2ee.machine.identityKeys.ed25519.toBase64(), mismatch: keyMismatch, serverVersion: ver?.version, keyChanged: !!ver && backupHere && !!mine && mine !== ver.version, whyLocked: e2ee.whyLocked() });
 }
 // One fixed function: a new one on every render would make React subscribe again each time, and each subscribe asks the server.
 const subscribeEncryption = (l: () => void) => { encListeners.add(l); void refreshEncryptionStatus(); return () => { encListeners.delete(l); }; };
