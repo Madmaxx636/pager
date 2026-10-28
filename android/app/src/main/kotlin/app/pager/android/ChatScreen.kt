@@ -524,6 +524,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                         val hasText = text.isNotBlank() || (staged.isNotEmpty() && editing == null)
                         // Send and Send later are one oval: Send is most of it, the little clock is the smaller end and still easy to hit.
                         val canLater = hasText && editing == null && staged.isEmpty()
+                        val eink = LocalSettings.current.eink      // gray does not exist on an E-ink screen: a dimmed icon would vanish into the black, so it stays full strength
                         Row(Modifier.padding(bottom = 4.dp).height(40.dp).clip(RoundedCornerShape(20.dp)).background(scheme.primary)) {
                             Box(
                                 Modifier.width(48.dp).fillMaxHeight()
@@ -539,8 +540,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                                 contentAlignment = Alignment.Center,
                             ) { Icon(if (hasText) Icons.AutoMirrored.Rounded.Send else Icons.Rounded.Mic, if (hasText) "Send (hold to send later)" else "Record voice message", tint = scheme.onPrimary) }
                             // Always there, so nothing jumps about while you type; it waits until there is something to send.
-                            Box(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 8.dp).background(scheme.onPrimary.copy(alpha = 0.3f)))
-                            Box(Modifier.width(32.dp).fillMaxHeight().then(if (canLater) Modifier.clickable { scheduleDialog = true } else Modifier), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Schedule, "Send later", tint = scheme.onPrimary.copy(alpha = if (canLater) 1f else 0.4f), modifier = Modifier.size(18.dp)) }
+                            Box(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 8.dp).background(scheme.onPrimary.copy(alpha = if (eink) 1f else 0.3f)))
+                            Box(Modifier.width(32.dp).fillMaxHeight().then(if (canLater) Modifier.clickable { scheduleDialog = true } else Modifier), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Schedule, "Send later", tint = scheme.onPrimary.copy(alpha = if (canLater || eink) 1f else 0.4f), modifier = Modifier.size(18.dp)) }
                         }
                         }
                         }
