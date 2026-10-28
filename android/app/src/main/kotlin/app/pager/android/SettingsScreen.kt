@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -843,7 +844,7 @@ private fun EncryptionGroup() {
         NavRow("Encryption on this device", if (e.ready) "Ready · device ${e.deviceId}" else if (e.error != null) "Couldn't start: ${e.error}. Tap to try again" else "Starting…", Icons.Rounded.Lock) { if (!e.ready && e.error != null) scope.launch { store.retryEncryptionStart() } }
         if (e.mismatch) { GroupDivider(); NavRow("This phone's keys don't match your account", "New messages can't be read here. Tap to sign out, then sign in again and enter your recovery key.", Icons.AutoMirrored.Rounded.Help) { store.signOut() } }
         if (e.ready && e.missing) { GroupDivider(); NavRow("This phone's keys haven't reached the server", "Apps can't send it messages until they do. Check the connection; Pager keeps trying. If it stays like this, sign out and in again.", Icons.AutoMirrored.Rounded.Help) {} }
-        if (e.whyLocked.isNotEmpty()) { GroupDivider(); NavRow("Why some messages are locked", e.whyLocked, Icons.AutoMirrored.Rounded.Help) {} }
+        GroupDivider(); NavRow("Encryption details", if (e.whyLocked.isNotEmpty()) "Why some messages are locked: ${e.whyLocked}" else "Errors, keys and device information. Copy it or save it to a file", Icons.AutoMirrored.Rounded.Help) { dialog = "report" }
         problem?.let { GroupDivider(); NavRow("Last problem reading updates", it, Icons.AutoMirrored.Rounded.Help) {} }
         val crashPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("pager.crash", android.content.Context.MODE_PRIVATE)
         var crash by remember { mutableStateOf(crashPrefs.getString("last", null)) }
@@ -866,6 +867,25 @@ private fun EncryptionGroup() {
             GroupDivider(); NavRow("Advanced: save keys to a file", "Not your recovery key. A separate file you protect with a passphrase you choose", Icons.Rounded.Save) { dialog = "export" }
             GroupDivider(); NavRow("Advanced: restore keys from a file", "Only for a file made with the row above. Asks for that file's passphrase", Icons.Rounded.FileOpen) { dialog = "import" }
         }
+    }
+    if (dialog == "report") {
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val clip = LocalClipboardManager.current
+        var text by remember { mutableStateOf("Reading…") }
+        var note by remember { mutableStateOf("") }
+        LaunchedEffect(Unit) { text = runCatching { store.encryptionReport() }.getOrElse { "Couldn't make the report: ${it.message}" } }
+        val save = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            if (uri != null) note = runCatching { ctx.contentResolver.openOutputStream(uri)!!.use { it.write(text.toByteArray()) } }.fold({ "Saved" }, { "Couldn't save the file" })
+        }
+        AlertDialog(
+            onDismissRequest = { dialog = null }, title = { Text("Encryption details") },
+            text = { Column {
+                Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) { androidx.compose.foundation.text.selection.SelectionContainer { Text(text, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp) } }
+                if (note.isNotEmpty()) Text(note, Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.primary)
+            } },
+            confirmButton = { Row { TextButton(onClick = { clip.setText(AnnotatedString(text)); note = "Copied" }) { Text("Copy") }; TextButton(onClick = { save.launch("pager-encryption-report.txt") }) { Text("Save to file") } } },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Close") } },
+        )
     }
     if (dialog == "all") {
         var stage by remember { mutableStateOf("ask") }

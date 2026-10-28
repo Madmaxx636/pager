@@ -316,6 +316,26 @@ function setEncStatus(s: EncryptionStatus) {
   if (JSON.stringify(s) === JSON.stringify(encStatus)) return; // nothing new: do not wake the screen (and so do not ask the server again)
   encStatus = s; encListeners.forEach((l) => l());
 }
+/** Everything about this device's encryption as plain text, to read here, copy or save to a file and send. Holds no keys or message text. */
+export async function encryptionReport(): Promise<string> {
+  await refreshEncryptionStatus().catch(() => {});
+  const e = encStatus, locked = e2ee?.lockedLines() ?? [], log = e2ee?.problemLog() ?? [];
+  const L = [
+    `Pager encryption report (${window.pagerDesktop ? "desktop " + window.pagerDesktop.platform : "web"})`,
+    `App version: ${import.meta.env.VITE_APP_VERSION ?? "?"}    ${navigator.userAgent}`,
+    `Made: ${new Date().toISOString().replace("T", " ").slice(0, 19)} UTC`,
+    `Account: ${me()}`,
+    `Device: ${e.deviceId || "(none)"}`,
+    `Device fingerprint: ${(e.fingerprint.match(/.{1,4}/g) ?? []).join(" ")}`,
+    `Encryption: ${e.ready ? "ready" : "not ready" + (e.error ? ` (${e.error})` : "")}`,
+    `Recovery backup: on this device = ${e.backupHere}; on the server = ${e.backupOnServer}; server version = ${e.serverVersion ?? "none"}; changed on another device = ${!!e.keyChanged}`,
+    `This device's key matches the server: ${e.mismatch ? "NO (mismatch)" : "yes"}`,
+    `Messages still locked: ${locked.length}${e.whyLocked ? `  (${e.whyLocked})` : ""}`,
+    ...locked.slice(0, 60).map((l) => "  " + l), ...(locked.length > 60 ? [`  ... and ${locked.length - 60} more`] : []),
+    "", "Recent problems (oldest first; kept after reloads):", ...(log.length ? log.map((l) => "  " + l) : ["  none"]),
+  ];
+  return L.join("\n") + "\n";
+}
 export async function refreshEncryptionStatus() {
   if (!e2ee) { setEncStatus({ ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "", error: startError }); return; }
   const [backupHere, ver, mine] = await Promise.all([e2ee.backupOn(), e2ee.backupVersion(), e2ee.localBackupVersion()]);

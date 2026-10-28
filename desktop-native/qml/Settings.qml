@@ -55,6 +55,34 @@ Dialog {
     property string encNote: ""
     RecoveryKeyDialog { id: recoveryKeyDlg }
     KeyFileDialog { id: keyFileDlg }
+    // Everything about this device's encryption as text, to read here, copy or save to a file. Holds no keys or message text.
+    Dialog {
+        id: reportDlg
+        modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(640, dlg.width - 24); height: Math.min(520, dlg.height - 40); title: "Encryption details"
+        property string note: ""
+        function build() {
+            const e = core.encryption || ({}), L = []
+            L.push("Pager encryption report (native app)")
+            L.push("App version: " + core.appVersion + "    engine " + core.version)
+            L.push("Made: " + new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC")
+            L.push("Device: " + (e.device_id || "(none)"))
+            L.push("Device fingerprint: " + (e.fingerprint || "").replace(/(.{4})/g, "$1 ").trim())
+            L.push("Encryption: " + (e.device_id ? "ready" : "not ready"))
+            L.push("Recovery backup: on this device = " + !!e.backup_here + "; on the server = " + !!e.backup_on_server + "; changed on another device = " + !!e.key_changed)
+            L.push("Messages locked in the open page: " + core.currentLocked)
+            return L.join("\n") + "\n"
+        }
+        onAboutToShow: { note = ""; core.refreshEncryption(); body.text = build() }
+        contentItem: ScrollView { clip: true; TextArea { id: body; readOnly: true; selectByMouse: true; wrapMode: TextArea.Wrap; font.family: "monospace"; font.pixelSize: Math.round(11 * look.textScale); color: look.text; background: Rectangle { color: look.bg } } }
+        footer: DialogButtonBox {
+            Label { text: reportDlg.note; color: look.accent; DialogButtonBox.buttonRole: DialogButtonBox.InvalidRole }
+            Button { text: "Copy"; DialogButtonBox.buttonRole: DialogButtonBox.ActionRole; onClicked: { files.copy(body.text); reportDlg.note = "Copied" } }
+            Button { text: "Save to file"; DialogButtonBox.buttonRole: DialogButtonBox.ActionRole; onClicked: reportSave.open() }
+            Button { text: "Close"; DialogButtonBox.buttonRole: DialogButtonBox.RejectRole }
+        }
+        FileDialog { id: reportSave; fileMode: FileDialog.SaveFile; currentFile: "file://" + files.downloadsDir() + "/pager-encryption-report.txt"; nameFilters: ["Text (*.txt)"]
+            onAccepted: reportDlg.note = files.writeText(files.path(selectedFile), body.text) ? "Saved" : "Couldn't save the file" }
+    }
     FileDialog { id: soundPick; title: "Choose a sound"; nameFilters: ["Sounds (*.wav *.mp3 *.ogg *.oga *.m4a *.flac *.opus)", "All files (*)"]
         onAccepted: { const f = files.importFile(String(selectedFile), core.dataDir(), "custom-sound"); if (f.length) { settings.set("customSoundPath", f); core.previewSound("custom", settings.notifSoundVolume) } } }
     FileDialog { id: photoPick; title: "Choose a wallpaper photo"; nameFilters: ["Pictures (*.png *.jpg *.jpeg *.webp *.bmp)"]
@@ -534,6 +562,7 @@ Dialog {
             }
             SGroup { title: "Encryption"; footer: "Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you."
                 SAction { title: "Encryption on this device"; hint: core.encryption.device_id ? "Ready · device " + core.encryption.device_id : "Starting…"; button: "Refresh"; onClicked: core.refreshEncryption() }
+                SAction { title: "Encryption details"; hint: "Errors, keys and device information. Copy it or save it to a file"; button: "Open"; onClicked: reportDlg.open() }
                 SAction { visible: !!core.encryption.fingerprint; title: "Device fingerprint"; hint: (core.encryption.fingerprint || "").replace(/(.{4})/g, "$1 ").trim(); button: "Copy"; onClicked: files.copy(core.encryption.fingerprint) }
                 SAction { visible: !!core.encryption.key_changed; title: "Your recovery key was changed"; hint: "Another device made a new one. Enter it here so this device can read the new backup and keep saving to it"; button: "Enter new key"; onClicked: { dlg.close(); dlg.restoreRequested() } }
                 SAction { title: "Recovery key"; hint: core.encryption.backup_here ? "On: your message keys are backed up" : core.encryption.backup_on_server ? "A backup exists. Enter the recovery key to read your history here" : "Not set up yet"

@@ -98,15 +98,25 @@ export class Crypto {
       return { ...event, type: clear.type, content: clear.content, pagerEncrypted: true };
     } catch (e) {
       const x = e as { code?: unknown; maybe_withheld?: string; message?: string };
-      this.locked.set(String(event.event_id), x.maybe_withheld ? `the sender kept the key back (${x.maybe_withheld})` : /missing|room ?key|no session/i.test(`${x.code ?? ""} ${x.message ?? ""}`) ? "the key never arrived" : `${x.code ?? "error"}: ${String(x.message ?? "").slice(0, 60)}`);
+      const why = x.maybe_withheld ? `the sender kept the key back (${x.maybe_withheld})` : /missing|room ?key|no session/i.test(`${x.code ?? ""} ${x.message ?? ""}`) ? "the key never arrived" : `${x.code ?? "error"}: ${String(x.message ?? "").slice(0, 60)}`;
+      const id = String(event.event_id), old = this.locked.get(id), session = String((event.content as { session_id?: string } | undefined)?.session_id ?? "");
+      this.locked.set(id, { room: roomId, session, why, since: old?.since ?? Date.now() });
+      if (old?.why !== why) this.note(`${why}  event ${id.slice(0, 12)}  session ${session.slice(0, 10)}  room ${roomId.slice(0, 14)}`);
       return undefined;
     }
   }
 
   /** Why each message that could not be read is still locked (by event id): the most useful clue when keys go missing. */
-  private locked = new Map<string, string>();
+  private locked = new Map<string, { room: string; session: string; why: string; since: number }>();
+  /** Kept in this browser so it is still there after a reload, and after the message has long since unlocked. */
+  note(line: string) {
+    try { const k = "pager.e2ee.log"; const all = (localStorage.getItem(k) ?? "").split("\n").filter(Boolean); all.push(`${new Date().toISOString().replace("T", " ").slice(0, 19)}  ${line}`); localStorage.setItem(k, all.slice(-150).join("\n")); } catch { /* nowhere to keep it */ }
+  }
+  problemLog(): string[] { try { return (localStorage.getItem("pager.e2ee.log") ?? "").split("\n").filter(Boolean); } catch { return []; } }
+  /** One line for each message that is still locked. */
+  lockedLines(): string[] { return [...this.locked].sort((a, b) => a[1].since - b[1].since).map(([id, v]) => `event ${id.slice(0, 14)}  room ${v.room.slice(0, 18)}  session ${v.session.slice(0, 12)}  since ${new Date(v.since).toLocaleString()}  ${v.why}`); }
   whyLocked(): string {
-    const n = new Map<string, number>(); for (const v of this.locked.values()) n.set(v, (n.get(v) ?? 0) + 1);
+    const n = new Map<string, number>(); for (const v of this.locked.values()) n.set(v.why, (n.get(v.why) ?? 0) + 1);
     return [...n].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, c]) => `${k} ×${c}`).join("; ");
   }
 
