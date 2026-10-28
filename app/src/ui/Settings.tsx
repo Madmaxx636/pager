@@ -13,7 +13,7 @@ import { AppSettings, BubbleBorder, bubbleColorsFor, bubbleLook, SYNC_GROUPS, gr
 import { Tour } from "./Tour";
 import { comboOf } from "../core/combo";
 import { RecoveryKeyDialog, RestoreDialog } from "./KeyDialogs";
-import { addStickers, cancelReminder, retryEncryptionStart, enableEncryptionForAll, exportKeyFile, importKeyFile, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore, loadEveryHistory, loadSavedSettings, saveSettingsToAccount, resyncFromServer } from "../core/store";
+import { encryptionReport, addStickers, cancelReminder, retryEncryptionStart, enableEncryptionForAll, exportKeyFile, importKeyFile, useEncryption, cancelScheduled, deleteLabel, deleteProfile, me, renameLabel, signOut, useChatsRaw, useLabels, useStore, loadEveryHistory, loadSavedSettings, saveSettingsToAccount, resyncFromServer } from "../core/store";
 import { labelsOf } from "../core/types";
 import { http } from "../core/api";
 import { networkMeta } from "../core/emoji";
@@ -529,14 +529,30 @@ function ColorDialog({ value, onClose, onPick }: { value: string; onClose: () =>
   );
 }
 
+/** Everything about this device's encryption as text: read it, copy it or save it to a file. */
+function ReportDialog({ onClose }: { onClose: () => void }) {
+  const [text, setText] = useState("Reading…");
+  const [note, setNote] = useState("");
+  useEffect(() => { encryptionReport().then(setText).catch((e) => setText(`Couldn't make the report: ${(e as Error).message}`)); }, []);
+  const save = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" })); a.download = "pager-encryption-report.txt"; a.click(); URL.revokeObjectURL(a.href); setNote("Saved"); };
+  const copy = () => { navigator.clipboard?.writeText(text).then(() => setNote("Copied"), () => setNote("Couldn't copy")); };
+  return (
+    <Modal title="Encryption details" onClose={onClose} wide>
+      <pre className="report" style={{ maxHeight: "50vh", overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: "0.75rem", userSelect: "text" }}>{text}</pre>
+      {note && <p className="muted">{note}</p>}
+      <div className="row-end"><button className="link" onClick={onClose}>Close</button><button className="link" onClick={copy}>Copy</button><button className="primary" onClick={save}>Save to file</button></div>
+    </Modal>
+  );
+}
+
 /** End-to-end encryption on this device: the recovery key that brings your history back on a new device. */
 function EncryptionGroup() {
   const e = useEncryption();
-  const [dlg, setDlg] = useState<"create" | "reset" | "restore" | "export" | "import" | "all">();
+  const [dlg, setDlg] = useState<"create" | "reset" | "restore" | "export" | "import" | "all" | "report">();
   return (
     <Group title="Encryption" footer="Encrypted pages can only be read by your devices. The recovery key lets a new device read your history; Pager can't recover it for you.">
       <Row title="Encryption on this device" hint={e.ready ? `Ready · device ${e.deviceId}` : e.error ? `Couldn't start: ${e.error}` : "Starting…"} onClick={!e.ready && e.error ? () => void retryEncryptionStart() : undefined}>{!e.ready && e.error && <span className="accent">Try again</span>}</Row>
-      {e.whyLocked && <Row title="Why some messages are locked" hint={e.whyLocked} />}
+      <Row title="Encryption details" hint={e.whyLocked ? `Why some messages are locked: ${e.whyLocked}` : "Errors, keys and device information. Copy it or save it to a file"} onClick={() => setDlg("report")} chevron />
       {e.mismatch && <Row title="This device's keys don't match your account" hint="New messages can't be read here. Sign out, sign in again and enter your recovery key." onClick={() => signOut()}><span className="danger">Sign out</span></Row>}
       {e.ready && <Row title="Device fingerprint" hint={e.fingerprint.match(/.{1,4}/g)?.join(" ")} />}
       {e.keyChanged && <Row title="Your recovery key was changed" hint="Another device made a new one. Enter it here so this device can read the new backup and keep saving to it" onClick={() => setDlg("restore")}><span className="accent">Enter new key</span></Row>}
@@ -556,6 +572,7 @@ function EncryptionGroup() {
       {dlg === "restore" && <RestoreDialog onClose={() => setDlg(undefined)} onLost={() => setDlg("create")} />}
       {dlg === "all" && <EncryptAllDialog onClose={() => setDlg(undefined)} hasKey={e.backupHere} />}
       {dlg === "export" && <ExportKeysDialog onClose={() => setDlg(undefined)} />}
+      {dlg === "report" && <ReportDialog onClose={() => setDlg(undefined)} />}
       {dlg === "import" && <ImportKeysDialog onClose={() => setDlg(undefined)} />}
     </Group>
   );

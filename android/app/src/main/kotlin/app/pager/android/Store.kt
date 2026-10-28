@@ -353,8 +353,36 @@ class Store(private val context: Context) {
             scope.launch { retryWaiting() } // messages saved while waiting for a key may have their key now
             retryJob?.cancel()
             retryJob = scope.launch { while (isActive) { delay(45_000); runCatching { c.pump() }; if (keyMissing) { keyMismatch = c.serverKeyMatches() == false; keyMissing = c.serverKeyMatches() == null }; runCatching { refreshEncryptionStatus() }; retryWaiting() } } // and keys can turn up later, from the backup
-        } catch (e: Throwable) { startError = e.message ?: e.toString(); android.util.Log.w("Pager", "encryption could not start", e) }
+        } catch (e: Throwable) { startError = e.message ?: e.toString(); android.util.Log.w("Pager", "encryption could not start", e); e2ee?.note("encryption could not start: $startError") }
         refreshEncryptionStatus()
+    }
+
+    /** Everything about this phone's encryption as plain text, to read here, copy or save to a file and send. Holds no keys or message text. */
+    suspend fun encryptionReport(): String {
+        runCatching { refreshEncryptionStatus() }
+        val e = _encryption.value; val x = e2ee
+        val ver = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+        val sb = StringBuilder()
+        sb.appendLine("Pager encryption report (phone)")
+        sb.appendLine("App version: $ver    Android ${android.os.Build.VERSION.RELEASE}    ${android.os.Build.MODEL}")
+        sb.appendLine("Made: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}")
+        sb.appendLine("Account: ${_session.value?.userId}")
+        sb.appendLine("Device: ${e.deviceId.ifEmpty { "(none)" }}")
+        sb.appendLine("Device fingerprint: ${e.fingerprint.chunked(4).joinToString(" ")}")
+        sb.appendLine("Encryption: " + if (e.ready) "ready" else "not ready" + (e.error?.let { " ($it)" } ?: ""))
+        sb.appendLine("Recovery backup: on this phone = ${e.backupHere}; on the server = ${e.backupOnServer}; server version = ${e.serverVersion ?: "none"}; changed on another device = ${e.keyChanged}")
+        sb.appendLine("This phone's key matches the server: " + if (e.mismatch) "NO (mismatch)" else if (e.missing) "unknown (not on the server yet)" else "yes")
+        sb.appendLine("Last problem reading updates: ${_syncProblem.value ?: "none"}")
+        sb.appendLine("Messages waiting for their key now: ${waiting.size}")
+        val locked = x?.lockedLines().orEmpty()
+        sb.appendLine("Messages still locked: ${locked.size}" + (x?.whyLocked()?.takeIf { it.isNotEmpty() }?.let { "  ($it)" } ?: ""))
+        locked.take(60).forEach { sb.appendLine("  $it") }
+        if (locked.size > 60) sb.appendLine("  ... and ${locked.size - 60} more")
+        sb.appendLine()
+        sb.appendLine("Recent problems (oldest first; kept after restarts):")
+        val log = x?.problemLog().orEmpty()
+        if (log.isEmpty()) sb.appendLine("  none") else log.forEach { sb.appendLine("  $it") }
+        return sb.toString()
     }
 
     /** Tries again (from the settings screen) after a failed start. */
@@ -567,6 +595,7 @@ class Store(private val context: Context) {
     private fun noteSyncProblem(what: String, e: Throwable) {
         android.util.Log.w("Pager", "problem $what", e)
         _syncProblem.value = "$what: ${e::class.java.simpleName}: ${e.message ?: ""}".take(300)
+        e2ee?.note(_syncProblem.value.orEmpty())
     }
 
     /**

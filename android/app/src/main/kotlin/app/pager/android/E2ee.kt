@@ -37,6 +37,7 @@ class E2ee private constructor(
     private val tx: suspend (method: String, path: String, body: JsonElement?) -> JsonObject,
     val userId: String,
     val deviceId: String,
+    private val logFile: File,
 ) {
     /** Called when a key arrives that may unlock messages we could not read before. */
     var onKeys: ((List<String>) -> Unit)? = null
@@ -47,7 +48,7 @@ class E2ee private constructor(
     companion object {
         suspend fun create(context: Context, tx: suspend (String, String, JsonElement?) -> JsonObject, userId: String, deviceId: String): E2ee = withContext(Dispatchers.IO) {
             val dir = File(context.filesDir, "e2ee/" + (userId + "_" + deviceId).replace(Regex("[^A-Za-z0-9._-]"), "_")).apply { mkdirs() }
-            E2ee(OlmMachine(userId, deviceId, dir.path, null), tx, userId, deviceId)
+            E2ee(OlmMachine(userId, deviceId, dir.path, null), tx, userId, deviceId, File(context.filesDir, "e2ee-problems.log"))
         }
 
         /** JSON with sorted keys and no spaces, the form Matrix signs. */
@@ -125,18 +126,30 @@ class E2ee private constructor(
             locked.remove(id)
             JsonObject(event + mapOf("type" to (c["type"] ?: JsonPrimitive("m.room.message")), "content" to (c["content"] ?: JsonObject(emptyMap())), "pagerEncrypted" to JsonPrimitive(true)))
         } catch (e: Exception) {
-            locked[id] = when (e) {
+            val why = when (e) {
                 is org.matrix.rustcomponents.sdk.crypto.DecryptionException.MissingRoomKey -> e.withheldCode?.let { "the sender kept the key back ($it)" } ?: "the key never arrived"
                 is org.matrix.rustcomponents.sdk.crypto.DecryptionException.Megolm -> "the key is here but does not fit (${e.error.take(60)})"
                 else -> "${e::class.java.simpleName}: ${e.message.orEmpty().take(60)}"
             }
+            val session = ((event["content"] as? JsonObject)?.get("session_id") as? JsonPrimitive)?.contentOrNull.orEmpty()
+            val old = locked[id]
+            locked[id] = Locked(roomId, session, why, old?.since ?: System.currentTimeMillis())
+            if (old?.reason != why) note("$why  event ${id.take(12)}  session ${session.take(10)}  room ${roomId.take(14)}")
             null
         }
     }
 
+    class Locked(val room: String, val session: String, val reason: String, val since: Long)
+    private fun stamp() = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+    /** Kept in a file so it is still there after the app restarts, and after the message has long since unlocked. */
+    fun note(line: String) { val line = "${stamp()}  $line"; runCatching { if (logFile.length() > 64_000) logFile.writeText(logFile.readLines().takeLast(150).joinToString("\n", postfix = "\n")); logFile.appendText(line + "\n") } }
+    fun problemLog(): List<String> = runCatching { logFile.readLines().takeLast(150) }.getOrDefault(emptyList())
+    /** One line for each message that is still locked. */
+    fun lockedLines(): List<String> = locked.entries.sortedBy { it.value.since }.map { "event ${it.key.take(14)}  room ${it.value.room.take(18)}  session ${it.value.session.take(12)}  since ${java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(it.value.since))}  ${it.value.reason}" }
+
     /** Why each message that could not be read is still locked (by event id): the most useful clue when keys go missing. */
-    private val locked = java.util.concurrent.ConcurrentHashMap<String, String>()
-    fun whyLocked(): String = locked.values.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(3).joinToString("; ") { "${it.key} ×${it.value}" }
+    private val locked = java.util.concurrent.ConcurrentHashMap<String, Locked>()
+    fun whyLocked(): String = locked.values.map { it.reason }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(3).joinToString("; ") { "${it.key} ×${it.value}" }
 
     // ---- Writing ------------------------------------------------------------------------------------------------------
 
