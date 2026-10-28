@@ -851,3 +851,9 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 /* Desktop update progress */
 .update-toast { position: fixed; right: 16px; bottom: 16px; z-index: 900; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); min-width: 220px; display: grid; gap: 8px; font-size: .9rem; }
 .update-toast i { display: block; height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; } .update-toast u { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+
+/* Send + Send later: one oval in every look. Send is most of it, the little clock is the smaller end, still easy to hit. */
+:root:root:root .send-group { display: flex; align-items: stretch; height: 46px; border-radius: 23px; overflow: hidden; flex: none; background: var(--accent); box-shadow: none; }
+:root:root:root .send-group .send { width: 48px; height: 46px; border-radius: 0; background: transparent; color: var(--accent-ink); box-shadow: none; margin: 0; }
+:root:root:root .send-group .send-more { display: grid; place-items: center; width: 32px; height: 46px; margin: 0; border-radius: 0; background: transparent; color: var(--accent-ink); box-shadow: none; border-left: 1px solid color-mix(in srgb, var(--accent-ink) 30%, transparent); }
+:root:root:root .send-group .send:hover, :root:root:root .send-group .send-more:hover { background: color-mix(in srgb, var(--accent-ink) 12%, transparent); }
