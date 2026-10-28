@@ -756,7 +756,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-look="imessage"] .composer .field { background: var(--bg); border: 1px solid var(--line); border-radius: 19px; padding: 0 4px 0 14px; }
 :root[data-look="imessage"] .composer textarea { padding: 8px 0; font-size: 1.02rem; }
 :root[data-look="imessage"] .send { width: 32px; height: 32px; margin-bottom: 1px; }
-:root[data-look="imessage"] .send-group .send { border-radius: 50%; width: 32px; } :root[data-look="imessage"] .send-more { display: none; }
+:root[data-look="imessage"] .send-group .send { border-radius: 50%; width: 32px; } :root[data-look="imessage"] .send-more { width: 22px; height: 32px; border-radius: 0; background: transparent; color: var(--accent); box-shadow: none; display: grid; place-items: center; margin-left: -4px; }
 :root[data-look="imessage"] .side-head h1 { font-size: 2rem; font-weight: 800; letter-spacing: -.035em; }
 :root[data-look="imessage"] .pill-search { border-radius: 10px; height: 38px; margin: 2px 16px 10px; background: var(--panel-2); }
 :root[data-look="imessage"] .chat-row { border-radius: 0; padding: 9px 14px 9px 24px; position: relative; border-bottom: .5px solid var(--line); align-items: flex-start; }
@@ -795,7 +795,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-look="hangouts"] .reactions button { border-radius: 2px; background: var(--panel); box-shadow: 0 1px 2px rgba(0, 0, 0, .2); border: 0; padding: 2px 8px; }
 :root[data-look="hangouts"] .composer-wrap { background: var(--panel); border-top: 0; box-shadow: 0 -1px 3px rgba(0, 0, 0, .15); }
 :root[data-look="hangouts"] .composer .field { background: transparent; border-radius: 0; border-bottom: 2px solid var(--accent); padding: 0 4px; }
-:root[data-look="hangouts"] .send { background: transparent; color: var(--accent); width: 44px; } :root[data-look="hangouts"] .send-group .send { border-radius: 50%; } :root[data-look="hangouts"] .send-more { display: none; }
+:root[data-look="hangouts"] .send { background: transparent; color: var(--accent); width: 44px; } :root[data-look="hangouts"] .send-group .send { border-radius: 50%; } :root[data-look="hangouts"] .send-more { width: 22px; height: 32px; border-radius: 0; background: transparent; color: var(--accent); box-shadow: none; display: grid; place-items: center; margin-left: -4px; }
 :root[data-look="hangouts"] .fab, :root[data-look="gmessages"] .fab { display: inline-flex; position: absolute; right: 18px; bottom: 18px; z-index: 6; align-items: center; gap: 10px; border: 0; cursor: pointer; }
 :root[data-look="hangouts"] .fab { width: 56px; height: 56px; border-radius: 50%; justify-content: center; background: var(--accent); color: #fff; box-shadow: 0 3px 6px rgba(0, 0, 0, .3), 0 3px 10px rgba(0, 0, 0, .2); transition: box-shadow .2s var(--ease), transform .2s var(--ease); }
 :root[data-look="hangouts"] .fab span { display: none; } :root[data-look="hangouts"] .fab:hover { box-shadow: 0 6px 10px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .22); } :root[data-look="hangouts"] .fab:active { transform: scale(.94); }
@@ -828,7 +828,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-look="gmessages"] .composer-wrap { background: var(--bg); border: 0; } :root[data-look="gmessages"] .composer { padding: 8px 10px 12px; }
 :root[data-look="gmessages"] .composer .field { background: var(--panel-2); border-radius: 28px; padding: 3px 6px 3px 18px; min-height: 52px; align-items: center; }
 :root[data-look="gmessages"] .composer textarea { padding: 10px 0; font-size: 1rem; }
-:root[data-look="gmessages"] .send { width: 48px; height: 48px; } :root[data-look="gmessages"] .send-group .send { border-radius: 50%; width: 48px; } :root[data-look="gmessages"] .send-more { display: none; }
+:root[data-look="gmessages"] .send { width: 48px; height: 48px; } :root[data-look="gmessages"] .send-group .send { border-radius: 50%; width: 48px; } :root[data-look="gmessages"] .send-more { width: 22px; height: 32px; border-radius: 0; background: transparent; color: var(--accent); box-shadow: none; display: grid; place-items: center; margin-left: -4px; }
 :root[data-look="gmessages"] .fab { height: 56px; padding: 0 22px 0 18px; border-radius: 16px; background: var(--chip); color: var(--text); font-weight: 600; font-size: .95rem; box-shadow: 0 2px 6px rgba(0, 0, 0, .22); transition: box-shadow .3s var(--ease), transform .3s var(--ease); }
 :root[data-look="gmessages"] .fab:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, .28); } :root[data-look="gmessages"] .fab:active { transform: scale(.96); }
 :root[data-look="gmessages"] .icon:hover, :root[data-look="gmessages"] .pill:hover, :root[data-look="gmessages"] .send:hover { filter: none; background-image: linear-gradient(color-mix(in srgb, currentColor 9%, transparent), color-mix(in srgb, currentColor 9%, transparent)); transform: none; }

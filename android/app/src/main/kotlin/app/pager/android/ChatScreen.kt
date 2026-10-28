@@ -534,6 +534,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                                 ),
                             contentAlignment = Alignment.Center,
                         ) { Icon(if (hasText) Icons.AutoMirrored.Rounded.Send else Icons.Rounded.Mic, if (hasText) "Send (hold to schedule)" else "Record voice message", tint = scheme.onPrimary) }
+                        // The same as holding Send, but you can see it: schedule the message for later.
+                        if (hasText && editing == null && staged.isEmpty()) Box(Modifier.padding(bottom = 4.dp).size(28.dp, 40.dp).clickable { scheduleDialog = true }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.KeyboardArrowDown, "Send later", tint = scheme.primary) }
                         }
                         }
                     }

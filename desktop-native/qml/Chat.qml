@@ -294,8 +294,18 @@ Rectangle {
                     TapHandler { onTapped: { if (sendBtn.hasText) pane.sendIt(); else voiceDialog.start() } }
                     TapHandler { acceptedButtons: Qt.RightButton; enabled: sendBtn.hasText; onTapped: scheduleDialog.openFor(pane.roomId, input.text) }
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
-                    ToolTip.visible: sendHover.hovered; ToolTip.text: sendBtn.hasText ? "Send (right-click to schedule)" : "Record a voice message"; ToolTip.delay: 600
+                    ToolTip.visible: sendHover.hovered; ToolTip.text: sendBtn.hasText ? "Send (right-click or hold to send later)" : "Record a voice message"; ToolTip.delay: 600
                     HoverHandler { id: sendHover }
+                    TapHandler { acceptedDevices: PointerDevice.TouchScreen; longPressThreshold: 0.5; enabled: sendBtn.hasText; onLongPressed: scheduleDialog.openFor(pane.roomId, input.text) }
+                }
+                // The same as right-clicking Send, but you can see it: schedule the message for later.
+                Rectangle {
+                    visible: sendBtn.hasText && pane.editing === ""
+                    Layout.alignment: Qt.AlignBottom; implicitWidth: 28; implicitHeight: 46; radius: 14; color: later.hovered ? look.panel2 : "transparent"
+                    Icon { anchors.centerIn: parent; name: "chevron-down"; size: 16; color: look.accent }
+                    TapHandler { onTapped: scheduleDialog.openFor(pane.roomId, input.text) }
+                    HoverHandler { id: later; cursorShape: Qt.PointingHandCursor }
+                    ToolTip.visible: later.hovered; ToolTip.text: "Send later"; ToolTip.delay: 600
                 }
             }
             Timer { id: draftTimer; interval: 600; onTriggered: core.setDraft(pane.roomId, input.text) }
