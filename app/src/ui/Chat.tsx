@@ -403,6 +403,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
   const [sheet, setSheet] = useState<AttachKind>();
   const [emoji, setEmoji] = useState(false);
   const [later, setLater] = useState(false);
+  const holdLater = useRef(0), skipClick = useRef(false);
   const [error, setError] = useState<string>();
   const [rec, setRec] = useState<{ ms: number } | null>(null);
   const mentionIds = useRef(new Map<string, string>());
@@ -542,7 +543,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
           </div>
           {hasText ? (
             <div className="send-group">
-              <button className="send" aria-label="Send"><Send size={18} /></button>
+              <button className="send" aria-label="Send" title="Send (right-click or hold to send later)" onContextMenu={(e) => { if (!editing && !staged.length) { e.preventDefault(); setLater(true); } }} onPointerDown={() => { skipClick.current = false; if (editing || staged.length) return; holdLater.current = window.setTimeout(() => { holdLater.current = 0; skipClick.current = true; setLater(true); }, 600); }} onPointerUp={() => window.clearTimeout(holdLater.current)} onPointerLeave={() => window.clearTimeout(holdLater.current)} onClick={(e) => { if (skipClick.current) { skipClick.current = false; e.preventDefault(); } }}><Send size={18} /></button>
               {!editing && !staged.length && <button type="button" className="send-more" onClick={() => setLater(true)} title="Send later" aria-label="Send later"><ChevronDown size={16} /></button>}
             </div>
           ) : <button type="button" className="send" onPointerDown={pttDown} onPointerMove={pttMove} onPointerUp={pttUp} onPointerCancel={() => { hold.current = undefined; setHoldDx(0); }} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); void startRec(); } }} aria-label="Record voice message: hold to talk, or tap to start" title="Hold to talk, let go to send. Tap to start and stop." style={{ touchAction: "none" }}><Mic size={18} /></button>}

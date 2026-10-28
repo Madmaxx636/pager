@@ -27,7 +27,7 @@ export function AttachMenu({ onPick, onClose, canViewOnce }: { onPick: (k: Attac
   return (
     <div className="attach-pop">
       {ITEMS.filter(([k]) => (k !== "camera" || hasCamera) && (k !== "viewonce" || canViewOnce)).map(([k, label, Icon, color]) => (
-        <button key={k} onClick={() => onPick(k)}>
+        <button type="button" key={k} onClick={() => onPick(k)}>
           <span style={{ background: color }}>{Icon === "gif" ? <b>GIF</b> : <Icon size={22} color="#fff" />}</span>{label}
         </button>
       ))}
