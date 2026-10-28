@@ -526,7 +526,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                         val canLater = hasText && editing == null && staged.isEmpty()
                         Row(Modifier.padding(bottom = 4.dp).height(40.dp).clip(RoundedCornerShape(20.dp)).background(scheme.primary)) {
                             Box(
-                                Modifier.width(if (canLater) 48.dp else 40.dp).fillMaxHeight()
+                                Modifier.width(48.dp).fillMaxHeight()
                                     .onGloballyPositioned { micCoords = it }
                                     .dpadFocus().combinedClick(
                                         onClick = {
@@ -538,10 +538,9 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                                     ),
                                 contentAlignment = Alignment.Center,
                             ) { Icon(if (hasText) Icons.AutoMirrored.Rounded.Send else Icons.Rounded.Mic, if (hasText) "Send (hold to send later)" else "Record voice message", tint = scheme.onPrimary) }
-                            if (canLater) {
-                                Box(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 8.dp).background(scheme.onPrimary.copy(alpha = 0.3f)))
-                                Box(Modifier.width(32.dp).fillMaxHeight().clickable { scheduleDialog = true }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Schedule, "Send later", tint = scheme.onPrimary, modifier = Modifier.size(18.dp)) }
-                            }
+                            // Always there, so nothing jumps about while you type; it waits until there is something to send.
+                            Box(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 8.dp).background(scheme.onPrimary.copy(alpha = 0.3f)))
+                            Box(Modifier.width(32.dp).fillMaxHeight().then(if (canLater) Modifier.clickable { scheduleDialog = true } else Modifier), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Schedule, "Send later", tint = scheme.onPrimary.copy(alpha = if (canLater) 1f else 0.4f), modifier = Modifier.size(18.dp)) }
                         }
                         }
                         }
