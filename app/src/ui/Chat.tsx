@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { Gif } from "../core/gifs";
 import { setInfoPanelOpen } from "../core/layout";
 import {
-  AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
+  AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronLeft, Clock, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
   Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon, Video,
 } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot, isBotRoom, realPeople } from "../core/types";
@@ -544,7 +544,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
           {hasText ? (
             <div className="send-group">
               <button className="send" aria-label="Send" title="Send (right-click or hold to send later)" onContextMenu={(e) => { if (!editing && !staged.length) { e.preventDefault(); setLater(true); } }} onPointerDown={() => { skipClick.current = false; if (editing || staged.length) return; holdLater.current = window.setTimeout(() => { holdLater.current = 0; skipClick.current = true; setLater(true); }, 600); }} onPointerUp={() => window.clearTimeout(holdLater.current)} onPointerLeave={() => window.clearTimeout(holdLater.current)} onClick={(e) => { if (skipClick.current) { skipClick.current = false; e.preventDefault(); } }}><Send size={18} /></button>
-              {!editing && !staged.length && <button type="button" className="send-more" onClick={() => setLater(true)} title="Send later" aria-label="Send later"><ChevronDown size={16} /></button>}
+              {!editing && !staged.length && <button type="button" className="send-more" onClick={() => setLater(true)} title="Send later" aria-label="Send later"><Clock size={16} /></button>}
             </div>
           ) : <button type="button" className="send" onPointerDown={pttDown} onPointerMove={pttMove} onPointerUp={pttUp} onPointerCancel={() => { hold.current = undefined; setHoldDx(0); }} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); void startRec(); } }} aria-label="Record voice message: hold to talk, or tap to start" title="Hold to talk, let go to send. Tap to start and stop." style={{ touchAction: "none" }}><Mic size={18} /></button>}
         </form>

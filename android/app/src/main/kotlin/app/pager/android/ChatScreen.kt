@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
@@ -521,21 +522,27 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                             IconBtn(Icons.Rounded.EmojiEmotions, "Emoji", { emojiForText = true }, size = 44)
                         Spacer(Modifier.width(2.dp))
                         val hasText = text.isNotBlank() || (staged.isNotEmpty() && editing == null)
-                        Box(
-                            Modifier.padding(bottom = 4.dp).size(40.dp).clip(CircleShape).background(scheme.primary)
-                                .onGloballyPositioned { micCoords = it }
-                                .dpadFocus().combinedClick(
-                                    onClick = {
-                                        if (hasText) send()
-                                        else if (System.currentTimeMillis() - lastGesture < 1500 && hasPermission(context, Manifest.permission.RECORD_AUDIO)) Unit // the press already started recording
-                                        else if (hasPermission(context, Manifest.permission.RECORD_AUDIO)) recording = recorder.start() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
-                                    },
-                                    onLongClick = { if (hasText && editing == null) scheduleDialog = true },
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) { Icon(if (hasText) Icons.AutoMirrored.Rounded.Send else Icons.Rounded.Mic, if (hasText) "Send (hold to schedule)" else "Record voice message", tint = scheme.onPrimary) }
-                        // The same as holding Send, but you can see it: schedule the message for later.
-                        if (hasText && editing == null && staged.isEmpty()) Box(Modifier.padding(bottom = 4.dp).size(28.dp, 40.dp).clickable { scheduleDialog = true }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.KeyboardArrowDown, "Send later", tint = scheme.primary) }
+                        // Send and Send later are one oval: Send is most of it, the little clock is the smaller end and still easy to hit.
+                        val canLater = hasText && editing == null && staged.isEmpty()
+                        Row(Modifier.padding(bottom = 4.dp).height(40.dp).clip(RoundedCornerShape(20.dp)).background(scheme.primary)) {
+                            Box(
+                                Modifier.width(if (canLater) 48.dp else 40.dp).fillMaxHeight()
+                                    .onGloballyPositioned { micCoords = it }
+                                    .dpadFocus().combinedClick(
+                                        onClick = {
+                                            if (hasText) send()
+                                            else if (System.currentTimeMillis() - lastGesture < 1500 && hasPermission(context, Manifest.permission.RECORD_AUDIO)) Unit // the press already started recording
+                                            else if (hasPermission(context, Manifest.permission.RECORD_AUDIO)) recording = recorder.start() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                                        },
+                                        onLongClick = { if (hasText && editing == null) scheduleDialog = true },
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(if (hasText) Icons.AutoMirrored.Rounded.Send else Icons.Rounded.Mic, if (hasText) "Send (hold to send later)" else "Record voice message", tint = scheme.onPrimary) }
+                            if (canLater) {
+                                Box(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 8.dp).background(scheme.onPrimary.copy(alpha = 0.3f)))
+                                Box(Modifier.width(32.dp).fillMaxHeight().clickable { scheduleDialog = true }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Schedule, "Send later", tint = scheme.onPrimary, modifier = Modifier.size(18.dp)) }
+                            }
+                        }
                         }
                         }
                     }

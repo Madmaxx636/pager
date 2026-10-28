@@ -286,26 +286,32 @@ Rectangle {
                     }
                     IconButton { anchors.right: parent.right; anchors.rightMargin: 4; anchors.bottom: parent.bottom; anchors.bottomMargin: 3; ico: "smile"; iconSize: 21; onClicked: inputEmoji.open(); ToolTip.text: "Emoji"; ToolTip.visible: hovered; ToolTip.delay: 600 }
                 }
+                // Send and Send later are one oval: Send is most of it, the little clock is the smaller end and still easy to hit.
                 Rectangle {
-                    id: sendBtn
-                    Layout.alignment: Qt.AlignBottom; implicitWidth: 46; implicitHeight: 46; radius: 23; color: look.accent
-                    readonly property bool hasText: input.text.trim().length > 0
-                    Icon { anchors.centerIn: parent; name: sendBtn.hasText ? "send" : "mic"; size: 21; color: look.accentInk }
-                    TapHandler { onTapped: { if (sendBtn.hasText) pane.sendIt(); else voiceDialog.start() } }
-                    TapHandler { acceptedButtons: Qt.RightButton; enabled: sendBtn.hasText; onTapped: scheduleDialog.openFor(pane.roomId, input.text) }
-                    HoverHandler { cursorShape: Qt.PointingHandCursor }
-                    ToolTip.visible: sendHover.hovered; ToolTip.text: sendBtn.hasText ? "Send (right-click or hold to send later)" : "Record a voice message"; ToolTip.delay: 600
-                    HoverHandler { id: sendHover }
-                    TapHandler { acceptedDevices: PointerDevice.TouchScreen; longPressThreshold: 0.5; enabled: sendBtn.hasText; onLongPressed: scheduleDialog.openFor(pane.roomId, input.text) }
-                }
-                // The same as right-clicking Send, but you can see it: schedule the message for later.
-                Rectangle {
-                    visible: sendBtn.hasText && pane.editing === ""
-                    Layout.alignment: Qt.AlignBottom; implicitWidth: 28; implicitHeight: 46; radius: 14; color: later.hovered ? look.panel2 : "transparent"
-                    Icon { anchors.centerIn: parent; name: "chevron-down"; size: 16; color: look.accent }
-                    TapHandler { onTapped: scheduleDialog.openFor(pane.roomId, input.text) }
-                    HoverHandler { id: later; cursorShape: Qt.PointingHandCursor }
-                    ToolTip.visible: later.hovered; ToolTip.text: "Send later"; ToolTip.delay: 600
+                    id: sendPill
+                    Layout.alignment: Qt.AlignBottom; implicitHeight: 46; radius: 23; color: look.accent
+                    implicitWidth: sendBtn.width + (later.visible ? later.width + 1 : 0)
+                    Item {
+                        id: sendBtn
+                        readonly property bool hasText: input.text.trim().length > 0
+                        width: later.visible ? 48 : 46; height: 46
+                        Icon { anchors.centerIn: parent; name: sendBtn.hasText ? "send" : "mic"; size: 21; color: look.accentInk }
+                        TapHandler { onTapped: { if (sendBtn.hasText) pane.sendIt(); else voiceDialog.start() } }
+                        TapHandler { acceptedButtons: Qt.RightButton; enabled: sendBtn.hasText; onTapped: scheduleDialog.openFor(pane.roomId, input.text) }
+                        TapHandler { acceptedDevices: PointerDevice.TouchScreen; longPressThreshold: 0.5; enabled: sendBtn.hasText; onLongPressed: scheduleDialog.openFor(pane.roomId, input.text) }
+                        HoverHandler { id: sendHover; cursorShape: Qt.PointingHandCursor }
+                        ToolTip.visible: sendHover.hovered; ToolTip.text: sendBtn.hasText ? "Send (right-click or hold to send later)" : "Record a voice message"; ToolTip.delay: 600
+                    }
+                    Rectangle { visible: later.visible; x: sendBtn.width; y: 10; width: 1; height: 26; color: Qt.rgba(look.accentInk.r, look.accentInk.g, look.accentInk.b, 0.3) }
+                    Item {
+                        id: later
+                        visible: sendBtn.hasText && pane.editing === ""
+                        x: sendBtn.width + 1; width: 32; height: 46
+                        Icon { anchors.centerIn: parent; name: "clock"; size: 18; color: look.accentInk }
+                        TapHandler { onTapped: scheduleDialog.openFor(pane.roomId, input.text) }
+                        HoverHandler { id: laterHover; cursorShape: Qt.PointingHandCursor }
+                        ToolTip.visible: laterHover.hovered; ToolTip.text: "Send later"; ToolTip.delay: 600
+                    }
                 }
             }
             Timer { id: draftTimer; interval: 600; onTriggered: core.setDraft(pane.roomId, input.text) }
