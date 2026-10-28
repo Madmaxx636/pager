@@ -857,3 +857,4 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root:root:root .send-group .send { width: 48px; height: 46px; border-radius: 0; background: transparent; color: var(--accent-ink); box-shadow: none; margin: 0; }
 :root:root:root .send-group .send-more { display: grid; place-items: center; width: 32px; height: 46px; margin: 0; border-radius: 0; background: transparent; color: var(--accent-ink); box-shadow: none; border-left: 1px solid color-mix(in srgb, var(--accent-ink) 30%, transparent); }
 :root:root:root .send-group .send:hover, :root:root:root .send-group .send-more:hover { background: color-mix(in srgb, var(--accent-ink) 12%, transparent); }
+:root:root:root .send-group .send-more:disabled { opacity: .4; cursor: default; background: transparent; }

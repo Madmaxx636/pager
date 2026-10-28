@@ -541,12 +541,11 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
             <IconButton icon={Smile} label="Emoji" onClick={() => setEmoji(true)} />
             </div>
           </div>
-          {hasText ? (
-            <div className="send-group">
-              <button className="send" aria-label="Send" title="Send (right-click or hold to send later)" onContextMenu={(e) => { if (!editing && !staged.length) { e.preventDefault(); setLater(true); } }} onPointerDown={() => { skipClick.current = false; if (editing || staged.length) return; holdLater.current = window.setTimeout(() => { holdLater.current = 0; skipClick.current = true; setLater(true); }, 600); }} onPointerUp={() => window.clearTimeout(holdLater.current)} onPointerLeave={() => window.clearTimeout(holdLater.current)} onClick={(e) => { if (skipClick.current) { skipClick.current = false; e.preventDefault(); } }}><Send size={18} /></button>
-              {!editing && !staged.length && <button type="button" className="send-more" onClick={() => setLater(true)} title="Send later" aria-label="Send later"><Clock size={16} /></button>}
-            </div>
-          ) : <button type="button" className="send" onPointerDown={pttDown} onPointerMove={pttMove} onPointerUp={pttUp} onPointerCancel={() => { hold.current = undefined; setHoldDx(0); }} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); void startRec(); } }} aria-label="Record voice message: hold to talk, or tap to start" title="Hold to talk, let go to send. Tap to start and stop." style={{ touchAction: "none" }}><Mic size={18} /></button>}
+          {/* Send and Send later: one oval that is always there (no jumping about while you type); the clock end waits until there is something to send. */}
+          <div className="send-group">
+            {hasText ? <button key="send" className="send" aria-label="Send" title="Send (right-click or hold to send later)" onContextMenu={(e) => { if (!editing && !staged.length) { e.preventDefault(); setLater(true); } }} onPointerDown={() => { skipClick.current = false; if (editing || staged.length) return; holdLater.current = window.setTimeout(() => { holdLater.current = 0; skipClick.current = true; setLater(true); }, 600); }} onPointerUp={() => window.clearTimeout(holdLater.current)} onPointerLeave={() => window.clearTimeout(holdLater.current)} onClick={(e) => { if (skipClick.current) { skipClick.current = false; e.preventDefault(); } }}><Send size={18} /></button> : <button key="mic" type="button" className="send" onPointerDown={pttDown} onPointerMove={pttMove} onPointerUp={pttUp} onPointerCancel={() => { hold.current = undefined; setHoldDx(0); }} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); void startRec(); } }} aria-label="Record voice message: hold to talk, or tap to start" title="Hold to talk, let go to send. Tap to start and stop." style={{ touchAction: "none" }}><Mic size={18} /></button>}
+            <button type="button" className="send-more" disabled={!hasText || !!editing || staged.length > 0} onClick={() => setLater(true)} title="Send later" aria-label="Send later"><Clock size={16} /></button>
+          </div>
         </form>
       )}
       {emoji && <EmojiPicker recent={st.recentEmoji} onPick={(e) => { setText(text + e); setEmoji(false); ta.current?.focus(); }} onClose={() => setEmoji(false)} />}
