@@ -10,6 +10,7 @@ import { Links, buildMerged, groupOf, mergeSummaries } from "./links";
 import { shrinkImage } from "./shrink";
 import { forgetTranscripts } from "./transcribe";
 import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity } from "./reducer";
+import { toOggOpus } from "./voice";
 import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
@@ -712,15 +713,21 @@ export function sendFile(roomId: string, file: File | Blob, name = (file as File
     try {
       let w = extra.w, h = extra.h;
       if (type === "m.image" && !w) { const d = await imageSize(file); w = d?.w; h = d?.h; }
+      // WhatsApp (and Signal) only play Ogg/Opus voice notes, and Chrome records WebM/Opus: convert first, and work out the waveform.
+      let wave: number[] | undefined, sendMime = mime, sendName = name, sendBlob: Blob = file, voiceMs = extra.durationMs;
+      if (extra.voice) {
+        const v = await toOggOpus(file);
+        if (v) { sendBlob = v.blob; sendMime = "audio/ogg"; sendName = "voice-message.ogg"; wave = v.waveform; voiceMs = v.durationMs || voiceMs; }
+      }
       // In an encrypted room the file is scrambled first; the key goes inside the (encrypted) message.
-      const sealed = state.chats[roomId]?.encrypted ? await encryptAttachment(file) : undefined;
-      const mxc = await matrix.upload(sealed ? sealed.data : file, sealed ? "encrypted" : name);
-      const info: Record<string, unknown> = { mimetype: mime, size: file.size, ...(w ? { w, h } : {}), ...(extra.durationMs ? { duration: extra.durationMs } : {}) };
+      const sealed = state.chats[roomId]?.encrypted ? await encryptAttachment(sendBlob) : undefined;
+      const mxc = await matrix.upload(sealed ? sealed.data : sendBlob, sealed ? "encrypted" : sendName);
+      const info: Record<string, unknown> = { mimetype: sendMime, size: sendBlob.size, ...(w ? { w, h } : {}), ...(voiceMs ? { duration: voiceMs } : {}) };
       const id = await matrix.send(roomId, "m.room.message", txn, {
-        msgtype: type, body: extra.caption?.trim() || name, ...(extra.caption?.trim() ? { filename: name } : {}), ...(sealed ? { file: { url: mxc, ...sealed.file } } : { url: mxc }), info,
+        msgtype: type, body: extra.caption?.trim() || sendName, ...(extra.caption?.trim() ? { filename: sendName } : {}), ...(sealed ? { file: { url: mxc, ...sealed.file } } : { url: mxc }), info,
         ...(extra.viewOnce && (type === "m.image" || type === "m.video") ? { "com.beeper.view_limited": { type: "count", count: 1 } } : {}),
         ...(extra.attention ? { [ATTENTION_FIELD]: { kind: extra.attention } } : {}),
-        ...(extra.voice ? { "org.matrix.msc3245.voice": {}, "org.matrix.msc1767.audio": { duration: extra.durationMs ?? 0 } } : {}),
+        ...(extra.voice ? { "org.matrix.msc3245.voice": {}, "org.matrix.msc1767.audio": { duration: voiceMs ?? 0, ...(wave ? { waveform: wave } : {}) } } : {}),
         ...(extra.replyTo ? { "m.relates_to": { "m.in_reply_to": { event_id: extra.replyTo } } } : {}),
       });
       setStatus(roomId, localId, STATUS_SENT, id);

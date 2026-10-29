@@ -44,6 +44,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.add
 import java.io.File
 import java.util.UUID
 
@@ -972,7 +974,7 @@ class Store(private val context: Context) {
         }
     }
 
-    fun sendVoice(roomId: String, file: File, durationMs: Long, replyTo: String? = null) {
+    fun sendVoice(roomId: String, file: File, durationMs: Long, replyTo: String? = null, waveform: List<Int> = emptyList()) {
         val me = _session.value?.userId ?: return
         val mime = if (file.extension == "ogg") "audio/ogg" else "audio/mp4"
         val txn = UUID.randomUUID().toString()
@@ -985,7 +987,7 @@ class Store(private val context: Context) {
                     put("msgtype", "m.audio"); put("body", "Voice message"); putMedia(mxc, enc)
                     if (replyTo != null) putJsonObject("m.relates_to") { putJsonObject("m.in_reply_to") { put("event_id", replyTo) } }
                     putJsonObject("info") { put("mimetype", mime); put("size", file.length()); put("duration", durationMs) }
-                    putJsonObject("org.matrix.msc1767.audio") { put("duration", durationMs) }
+                    putJsonObject("org.matrix.msc1767.audio") { put("duration", durationMs); if (waveform.isNotEmpty()) putJsonArray("waveform") { waveform.forEach { add(it) } } }
                     putJsonObject("org.matrix.msc3245.voice") {}
                 })
             }.onSuccess { setStatus(roomId, localId, STATUS_SENT, it) }.onFailure { setStatus(roomId, localId, STATUS_FAILED) }
