@@ -455,7 +455,9 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
   async function startRec() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream, MediaRecorder.isTypeSupported("audio/ogg;codecs=opus") ? { mimeType: "audio/ogg;codecs=opus" } : undefined);
+      // m4a (AAC) is the one format every chat app and bridge can take; otherwise Ogg/Opus, otherwise whatever the browser records (that gets converted when it is sent).
+      const mimeType = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/ogg;codecs=opus"].find((t) => MediaRecorder.isTypeSupported(t));
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       const chunks: Blob[] = [];
       mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
       const start = Date.now();
@@ -466,7 +468,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
         const ms = Date.now() - start, r = recorder.current; recorder.current = undefined; setRec(null);
         if (!r || r.cancel || ms < 700) return;
         const type = mr.mimeType.split(";")[0] || "audio/webm";
-        sendFile(target, new Blob(chunks, { type }), `voice-message.${type.includes("ogg") ? "ogg" : "webm"}`, { voice: true, durationMs: ms, ...(replyId ? { replyTo: replyId } : {}) }); onClearReply();
+        sendFile(target, new Blob(chunks, { type }), `voice-message.${type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm"}`, { voice: true, durationMs: ms, ...(replyId ? { replyTo: replyId } : {}) }); onClearReply();
       };
       recorder.current = { mr, stream }; setRec({ ms: 0 }); mr.start();
     } catch { setError("Couldn't access the microphone."); }

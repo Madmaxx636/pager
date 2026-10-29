@@ -15,7 +15,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import kotlin.coroutines.resume
 
-/** Records a voice message. Opus in an Ogg container where the device supports it (WhatsApp/Signal friendly), AAC otherwise. */
+/** Records a voice message as AAC in an m4a file: the format every chat app and bridge takes (the bridge turns it into what WhatsApp or Signal want). */
 class VoiceRecorder(private val context: Context) {
     private var rec: MediaRecorder? = null
     private var file: File? = null
@@ -31,14 +31,12 @@ class VoiceRecorder(private val context: Context) {
     @Suppress("DEPRECATION")
     fun start(): Boolean {
         cancel()
-        val ogg = Build.VERSION.SDK_INT >= 29
-        val f = File(context.cacheDir, "voice-${System.currentTimeMillis()}.${if (ogg) "ogg" else "m4a"}")
+        val f = File(context.cacheDir, "voice-${System.currentTimeMillis()}.m4a")
         val r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context) else MediaRecorder()
         return runCatching {
             r.setAudioSource(MediaRecorder.AudioSource.MIC)
-            if (ogg) { r.setOutputFormat(MediaRecorder.OutputFormat.OGG); r.setAudioEncoder(MediaRecorder.AudioEncoder.OPUS) }
-            else { r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4); r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC) }
-            r.setAudioSamplingRate(48000); r.setAudioEncodingBitRate(32000)
+            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4); r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            r.setAudioChannels(1); r.setAudioSamplingRate(44100); r.setAudioEncodingBitRate(64000)
             r.setOutputFile(f.path)
             r.prepare(); r.start()
             rec = r; file = f; startedAt = System.currentTimeMillis(); loudness.clear(); waveform = emptyList(); handler.postDelayed(sampler, 100)

@@ -10,7 +10,7 @@ import { Links, buildMerged, groupOf, mergeSummaries } from "./links";
 import { shrinkImage } from "./shrink";
 import { forgetTranscripts } from "./transcribe";
 import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity } from "./reducer";
-import { toOggOpus } from "./voice";
+import { toOggOpus, voiceInfo } from "./voice";
 import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
@@ -716,8 +716,13 @@ export function sendFile(roomId: string, file: File | Blob, name = (file as File
       // WhatsApp (and Signal) only play Ogg/Opus voice notes, and Chrome records WebM/Opus: convert first, and work out the waveform.
       let wave: number[] | undefined, sendMime = mime, sendName = name, sendBlob: Blob = file, voiceMs = extra.durationMs;
       if (extra.voice) {
-        const v = await toOggOpus(file);
-        if (v) { sendBlob = v.blob; sendMime = "audio/ogg"; sendName = "voice-message.ogg"; wave = v.waveform; voiceMs = v.durationMs || voiceMs; }
+        if (/webm/i.test(mime)) {
+          const v = await toOggOpus(file);
+          if (v) { sendBlob = v.blob; sendMime = "audio/ogg"; sendName = "voice-message.ogg"; wave = v.waveform; voiceMs = v.durationMs || voiceMs; }
+        } else {
+          const v = await voiceInfo(file);      // m4a or ogg go as they are; only the waveform is worked out
+          if (v) { wave = v.waveform; voiceMs = voiceMs || v.durationMs; }
+        }
       }
       // In an encrypted room the file is scrambled first; the key goes inside the (encrypted) message.
       const sealed = state.chats[roomId]?.encrypted ? await encryptAttachment(sendBlob) : undefined;
