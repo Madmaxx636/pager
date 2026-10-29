@@ -46,6 +46,18 @@ function waveform(pcm: Float32Array, bars = 64): number[] {
   return out.map((m) => Math.round((top > 0 ? m / top : 0) * 1024));
 }
 
+/** The waveform and length of a recording that is sent as it is (m4a or ogg). */
+export async function voiceInfo(input: Blob): Promise<{ waveform: number[]; durationMs: number } | undefined> {
+  try {
+    const ctx = new AudioContext();
+    const decoded = await ctx.decodeAudioData(await input.arrayBuffer());
+    void ctx.close();
+    const pcm = new Float32Array(decoded.length);
+    for (let c = 0; c < decoded.numberOfChannels; c++) { const ch = decoded.getChannelData(c); for (let i = 0; i < pcm.length; i++) pcm[i] += ch[i] / decoded.numberOfChannels; }
+    return { waveform: waveform(pcm), durationMs: Math.round(decoded.duration * 1000) };
+  } catch { return undefined; }
+}
+
 export interface VoiceFile { blob: Blob; waveform: number[]; durationMs: number }
 
 export async function toOggOpus(input: Blob): Promise<VoiceFile | undefined> {
