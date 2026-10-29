@@ -20,6 +20,13 @@ class VoiceRecorder(private val context: Context) {
     private var rec: MediaRecorder? = null
     private var file: File? = null
     private var startedAt = 0L
+    private val loudness = ArrayList<Int>()
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val sampler = object : Runnable {
+        override fun run() { rec?.let { loudness.add(runCatching { it.maxAmplitude }.getOrDefault(0)); handler.postDelayed(this, 100) } }
+    }
+    /** About 64 bars, each 0..1024, the way chat apps draw a voice message (WhatsApp shows it in the message). */
+    var waveform: List<Int> = emptyList(); private set
 
     @Suppress("DEPRECATION")
     fun start(): Boolean {
@@ -34,7 +41,7 @@ class VoiceRecorder(private val context: Context) {
             r.setAudioSamplingRate(48000); r.setAudioEncodingBitRate(32000)
             r.setOutputFile(f.path)
             r.prepare(); r.start()
-            rec = r; file = f; startedAt = System.currentTimeMillis()
+            rec = r; file = f; startedAt = System.currentTimeMillis(); loudness.clear(); waveform = emptyList(); handler.postDelayed(sampler, 100)
             true
         }.getOrElse { r.release(); false }
     }
@@ -46,14 +53,24 @@ class VoiceRecorder(private val context: Context) {
         val r = rec ?: return null
         val f = file ?: return null
         val ms = elapsedMs
-        rec = null; file = null
+        rec = null; file = null; handler.removeCallbacks(sampler)
+        waveform = bars(loudness)
         val ok = runCatching { r.stop() }.isSuccess
         r.release()
         if (!ok || ms < 700) { f.delete(); return null }
         return f to ms
     }
 
+    private fun bars(raw: List<Int>, n: Int = 64): List<Int> {
+        if (raw.isEmpty()) return emptyList()
+        val per = raw.size.toDouble() / n
+        val peaks = List(n) { i -> val from = (i * per).toInt().coerceAtMost(raw.size - 1); val to = ((i + 1) * per).toInt().coerceIn(from + 1, raw.size); raw.subList(from, to).max() }
+        val top = peaks.max().coerceAtLeast(1)
+        return peaks.map { it * 1024 / top }
+    }
+
     fun cancel() {
+        handler.removeCallbacks(sampler)
         rec?.let { runCatching { it.stop() }; it.release() }
         file?.delete()
         rec = null; file = null
