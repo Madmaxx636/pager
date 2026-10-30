@@ -18,14 +18,14 @@ private fun CarContext.limit(max: Int) = runCatching { getCarService(ConstraintM
 
 /** The extras: start a conversation, answer with a ready-made reply, and switch the driving auto-reply. */
 class CarMoreScreen(carContext: CarContext) : Screen(carContext) {
-    private val modes = listOf("off" to "Off", "car" to "Only in the car", "always" to "Always on")
+    private val modes = listOf("off" to "Off", "car" to "On")
     override fun onGetTemplate(): Template {
         val s = carContext.store.settings
-        val mode = s.value.drivingReply
+        val mode = if (s.value.drivingReply == "off") "off" else "car"
         val list = ItemList.Builder()
             .addItem(Row.Builder().setTitle("New conversation").addText("Pick someone, then answer by voice").setOnClickListener { screenManager.push(CarNewChatScreen(carContext)) }.build())
             .addItem(Row.Builder().setTitle("Quick reply").addText("Answer a chat with a ready-made message").setOnClickListener { screenManager.push(CarQuickChatScreen(carContext)) }.build())
-            .addItem(Row.Builder().setTitle("Driving auto-reply: " + modes.first { it.first == mode }.second).addText("Tap to change. “" + s.value.drivingReplyText.take(60) + "”")
+            .addItem(Row.Builder().setTitle("Driving auto-reply: " + modes.first { it.first == mode }.second).addText("Tap to switch. “" + s.value.drivingReplyText.take(60) + "”")
                 .setOnClickListener {
                     val next = modes[(modes.indexOfFirst { it.first == mode } + 1) % modes.size]
                     s.update { copy(drivingReply = next.first) }

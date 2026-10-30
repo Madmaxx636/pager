@@ -5,8 +5,8 @@ import androidx.car.app.connection.CarConnection
 import androidx.lifecycle.Observer
 
 /**
- * Driving: an automatic "I'm driving" answer, and ready-made quick replies. Both live on this phone only (they are not synced to your other devices,
- * or each phone would answer).
+ * Android Auto only: an automatic "I'm driving" answer, and ready-made quick replies. Both work only while this phone is connected to Android Auto,
+ * and live on this phone only (they are not synced to your other devices, or each phone would answer).
  */
 object Driving {
     /** The phone is connected to Android Auto. */
@@ -25,7 +25,7 @@ object Driving {
 
     /** Called for each new message: answers it when driving mode is on for it. Returns whether it answered. */
     fun maybeReply(store: Store, context: Context, s: AppSettings, m: Incoming, muted: Set<String>, lowPriority: Boolean): Boolean {
-        if (s.drivingReply == "off" || (s.drivingReply == "car" && !inCar)) return false
+        if (s.drivingReply == "off" || !inCar) return false      // ("always", from an earlier version, now also means: in the car)
         if (m.attention != null || m.reaction || m.roomId in muted || lowPriority) return false
         if (m.isGroup && !s.drivingReplyGroups) return false
         if (System.currentTimeMillis() - m.ts > FRESH_MS) return false

@@ -548,8 +548,8 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
             ButtonRow("Send a test notification") { Notifier.test(context, store) }; GroupDivider()
             ButtonRow("Check priority & bubbles") { diagnosis = Notifier.diagnose(context) }
         }
-        SettingsGroup("Driving", footer = "On this phone only. \"Only in the car\" answers while the phone is connected to Android Auto. Each chat gets one answer every three hours, never muted chats. Quick replies show under the Reply box of a notification.") {
-            ChoiceRow("Auto-reply while driving", listOf("off" to "Off", "car" to "Only in the car", "always" to "Always on"), s.drivingReply) { v -> set { copy(drivingReply = v) } }; GroupDivider()
+        SettingsGroup("Android Auto", footer = "Only while this phone is connected to Android Auto, and on this phone only. Each chat gets one answer every three hours, never muted chats. Quick replies are offered in the car (More, Quick reply) and under the Reply box of notifications there.") {
+            SwitchRow("Auto-reply while driving", "Answers new messages for you while you are connected to the car", s.drivingReply != "off") { v -> set { copy(drivingReply = if (v) "car" else "off") } }; GroupDivider()
             TextFieldRow("What it says", s.drivingReplyText, "I'm driving right now…") { v -> set { copy(drivingReplyText = v) } }; GroupDivider()
             SwitchRow("Also answer groups", "Off: only one-to-one chats", s.drivingReplyGroups) { v -> set { copy(drivingReplyGroups = v) } }; GroupDivider()
             TextFieldRow("Quick replies", s.quickReplies, "On my way | OK | Call you later") { v -> set { copy(quickReplies = v) } }
