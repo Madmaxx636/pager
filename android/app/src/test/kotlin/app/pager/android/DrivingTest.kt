@@ -14,6 +14,10 @@ class DrivingTest {
         assertEquals(8, Driving.quickReplies(s).size)
     }
 
+    @Test fun nothingAnswersOutsideTheCar() {
+        assertEquals(false, Driving.inCar)
+    }
+
     @Test fun drivingReplyIsOffAndNotSyncedByDefault() {
         assertEquals("off", AppSettings().drivingReply)
         assertEquals(false, SettingsStore.GROUPS.any { g -> g.keys.any { it.startsWith("driving") || it == "quickReplies" } })

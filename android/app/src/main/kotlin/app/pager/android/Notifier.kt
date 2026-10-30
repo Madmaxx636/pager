@@ -209,7 +209,7 @@ object Notifier {
                     context, id, Intent(context, NotificationActionReceiver::class.java).setAction(ACTION_REPLY).putExtra("roomId", m.roomId),
                     PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 ),
-            ).addRemoteInput(RemoteInput.Builder(KEY_REPLY).setLabel("Reply").setChoices(Driving.quickReplies(s).toTypedArray<CharSequence>()).build()).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).setShowsUserInterface(false).build()
+            ).addRemoteInput(RemoteInput.Builder(KEY_REPLY).setLabel("Reply").apply { if (Driving.inCar) setChoices(Driving.quickReplies(s).toTypedArray<CharSequence>()) }.build()).setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).setShowsUserInterface(false).build()
             val read = NotificationCompat.Action.Builder(
                 R.drawable.ic_notif, "Mark as read",
                 PendingIntent.getBroadcast(
