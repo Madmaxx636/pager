@@ -548,6 +548,12 @@ private fun NotificationSettings(navigate: (String) -> Unit) {
             ButtonRow("Send a test notification") { Notifier.test(context, store) }; GroupDivider()
             ButtonRow("Check priority & bubbles") { diagnosis = Notifier.diagnose(context) }
         }
+        SettingsGroup("Driving", footer = "On this phone only. \"Only in the car\" answers while the phone is connected to Android Auto. Each chat gets one answer every three hours, never muted chats. Quick replies show under the Reply box of a notification.") {
+            ChoiceRow("Auto-reply while driving", listOf("off" to "Off", "car" to "Only in the car", "always" to "Always on"), s.drivingReply) { v -> set { copy(drivingReply = v) } }; GroupDivider()
+            TextFieldRow("What it says", s.drivingReplyText, "I'm driving right now…") { v -> set { copy(drivingReplyText = v) } }; GroupDivider()
+            SwitchRow("Also answer groups", "Off: only one-to-one chats", s.drivingReplyGroups) { v -> set { copy(drivingReplyGroups = v) } }; GroupDivider()
+            TextFieldRow("Quick replies", s.quickReplies, "On my way | OK | Call you later") { v -> set { copy(quickReplies = v) } }
+        }
         SettingsGroup("Inside a page", footer = "A little sound when you send or get a message in the page you have open. Pages you are not looking at use your notification settings.") {
             SwitchRow("Sounds inside a page", null, s.convoSounds) { v -> set { copy(convoSounds = v) } }; GroupDivider()
             ChoiceRow("Send sound", ChatSounds.choices, s.sendSound, s.convoSounds) { v -> set { copy(sendSound = v) }; ChatSounds.play(v, s.convoSoundVolume) }; GroupDivider()

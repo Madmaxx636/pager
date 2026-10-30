@@ -100,7 +100,7 @@ class CarChatListScreen(carContext: CarContext) : Screen(carContext) {
         return ListTemplate.Builder()
             .setHeader(Header.Builder().setStartHeaderAction(Action.APP_ICON).setTitle("Pager").build())
             .setSingleList(list.build())
-            .setActionStrip(ActionStrip.Builder().addAction(Action.Builder().setTitle("New").setOnClickListener { screenManager.push(CarNewChatScreen(carContext)) }.build()).build())
+            .setActionStrip(ActionStrip.Builder().addAction(Action.Builder().setTitle("More").setOnClickListener { screenManager.push(CarMoreScreen(carContext)) }.build()).build())
             .build()
     }
 }
