@@ -681,6 +681,7 @@ class Store(private val context: Context) {
                     val day = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
                     for (m in r.incoming) {
                         val c = r.chats[m.roomId]
+                        if (!initial) Driving.maybeReply(this, context, st, m, muted, c?.lowPriority == true)
                         // A nudge, ring or picture meant to get your attention (only fresh ones, and never from a muted page).
                         if (m.attention != null && m.msgId != null && !initial && m.roomId !in muted && Attention.fresh(m.ts)) {
                             val a = Attention.Alert(m.msgId, m.roomId, m.chat, m.sender, m.attention, if (m.attention == "image") m.mxc else null)

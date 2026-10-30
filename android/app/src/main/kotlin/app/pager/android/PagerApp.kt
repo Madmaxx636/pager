@@ -23,6 +23,7 @@ class PagerApp : Application() {
             previous?.uncaughtException(thread, e)
         }
         store = Store(this)
+        Driving.watch(this)
         Notifier.createChannels(this)
 
         // Keep the process alive while signed in so messages arrive with the app closed.

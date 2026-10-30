@@ -194,6 +194,13 @@ data class AppSettings(
     val lockAfterSec: Int = 0,
     val hideInRecents: Boolean = false,
 
+    // --- Driving (this phone only: not synced, or every phone would answer) ---
+    val drivingReply: String = "off",          // off | car (only while connected to Android Auto) | always
+    val drivingReplyText: String = "I'm driving right now. I'll get back to you as soon as I can.",
+    val drivingReplyGroups: Boolean = false,
+    /** Ready-made answers, separated by "|". */
+    val quickReplies: String = "On my way | Can't talk right now, I'll call you later | OK | Running late, be there soon",
+
     // --- Advanced ---
     val developerMode: Boolean = false,
     val backgroundSync: Boolean = true,
