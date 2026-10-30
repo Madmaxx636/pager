@@ -2,4 +2,5 @@
 <!-- Android Auto: Pager shows up as a messaging app. Messages come to the car as notifications, are read aloud and can be answered by voice. -->
 <automotiveApp>
     <uses name="notification" />
+    <uses name="template" />
 </automotiveApp>

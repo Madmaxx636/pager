@@ -71,6 +71,9 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation("androidx.fragment:fragment-ktx:1.8.4")
+    // Android Auto: the chat list in the car (templated messaging needs car API level 7)
+    implementation("androidx.car.app:app:1.7.0")
+    implementation("androidx.car.app:app-projected:1.7.0")
     implementation("androidx.biometric:biometric:1.1.0")
     // End-to-end encryption (Olm/Megolm), the same Rust library the web app uses.
     implementation("org.matrix.rustcomponents:crypto-android:26.05.12")
