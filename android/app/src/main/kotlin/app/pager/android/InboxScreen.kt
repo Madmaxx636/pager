@@ -263,7 +263,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                 if (stories != null && tab == "inbox" && q.isEmpty() && !selecting) item("stories") { StoriesRow(stories) { onOpen(stories.id) } }
                 if (pins.isNotEmpty()) item("pins") {
-                    PinnedGrid(pins, pulseIds, onOpen = { id -> if (selecting) toggleSelect(id) else onOpen(id) }, onMenu = { menuFor = it }, onMove = { id, to -> store.movePin(id, to) })
+                    PinnedGrid(pins, pulseIds, onOpen = { id -> if (selecting) toggleSelect(id) else onOpen(id) }, onMenu = { menuFor = it }, onMove = { id, to -> store.movePin(id, to, pins.map { it.id }) })
                 }
                 if (shown.isEmpty() && pins.isEmpty()) item("empty") {
                     when {
@@ -319,8 +319,8 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
             if (c.pinned) {
                 val order = all.filter { it.pinned && !it.archived }.sortedBy { it.pinOrder }.map { it.id }
                 val at = order.indexOf(c.id)
-                if (at > 0) SheetItem(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Move earlier in pins", { menuFor = null; store.movePin(c.id, at - 1) })
-                if (at in 0 until order.lastIndex) SheetItem(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Move later in pins", { menuFor = null; store.movePin(c.id, at + 1) })
+                if (at > 0) SheetItem(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, "Move earlier in pins", { menuFor = null; store.movePin(c.id, at - 1, order) })
+                if (at in 0 until order.lastIndex) SheetItem(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Move later in pins", { menuFor = null; store.movePin(c.id, at + 1, order) })
             }
             SheetItem(if (unread) Icons.Rounded.MarkChatRead else Icons.Rounded.MarkChatUnread, if (unread) "Mark as read" else "Mark as unread", { menuFor = null; act("read", c) })
             SheetItem(Icons.Rounded.NotificationsOff, if (c.muted) "Unmute" else "Mute…", { menuFor = null; act("mute", c) })

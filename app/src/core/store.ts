@@ -11,6 +11,7 @@ import { shrinkImage } from "./shrink";
 import { forgetTranscripts } from "./transcribe";
 import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity } from "./reducer";
 import { toOggOpus, voiceInfo } from "./voice";
+import { movedIds } from "./pins";
 import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
@@ -888,12 +889,16 @@ export function pin(roomId: string, on: boolean) {
   setTag(roomId, "m.favourite", true, last + 1);
 }
 /** Moves a pinned chat to [toIndex] within the pin row. */
-export function movePin(roomId: string, toIndex: number) {
-  const others = pinnedChats().filter((c) => c.id !== roomId);
-  const i = Math.max(0, Math.min(toIndex, others.length));
-  const before = others[i - 1]?.pinOrder, after = others[i]?.pinOrder;
-  const order = before === undefined && after === undefined ? 1 : before === undefined ? after! - 1 : after === undefined ? before + 1 : (before + after) / 2;
-  setTag(roomId, "m.favourite", true, order);
+export function movePin(roomId: string, toIndex: number, shown?: string[]) {
+  // [shown] is the pin row as it is on screen (without archived pins, merged chats as one). Every pin gets its own whole number, so a move never
+  // depends on two neighbours that share a number (the bridges can set pins with no order, or all the same) and never runs out of room to halve.
+  const ids = movedIds(shown ?? pinnedChats().map((c) => c.id), roomId, toIndex);
+  ids.forEach((id, i) => {
+    for (const m of groupOf(state.links, id) ?? [id]) {      // a merged row stands for several chats: they move together
+      const c = state.chats[m];
+      if (c && isPinned(c) && c.pinOrder !== i + 1) setTag(m, "m.favourite", true, i + 1);
+    }
+  });
 }
 export const setLowPriority = (roomId: string, on: boolean) => setTag(roomId, "m.lowpriority", on);
 export const addLabel = (roomId: string, name: string) => setTag(roomId, LABEL_PREFIX + name.trim(), true);

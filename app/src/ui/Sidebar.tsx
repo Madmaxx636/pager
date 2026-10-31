@@ -136,7 +136,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
       cleanup();
       if (!was) return;
       dragSwallow.current = true; window.setTimeout(() => { dragSwallow.current = false; }, 0);
-      setDrag((d) => { if (d && d.over !== d.from) movePin(d.id, d.over); return undefined; });
+      setDrag((d) => { if (d && d.over !== d.from) movePin(d.id, d.over, pins.map((p) => p.id)); return undefined; });
     };
     const cleanup = () => {
       window.clearTimeout(hold);
@@ -348,8 +348,8 @@ function ChatMenu({ c, x, y, pins, close, onMute, onLabels, onWhen, onSelect, on
       <div className="menu ctx" style={{ left: Math.min(x, window.innerWidth - 270), top: Math.max(8, Math.min(y, window.innerHeight - 470)) }} onClick={(e) => e.stopPropagation()}>
         <div className="menu-id">{c.name}</div>
         <button onClick={run(() => pin(c.id, !c.pinned))}>{c.pinned ? <PinOff size={18} /> : <Pin size={18} />}{c.pinned ? "Unpin" : "Pin to top"}</button>
-        {c.pinned && at > 0 && <button onClick={run(() => movePin(c.id, at - 1))}><ChevronLeft size={18} />Move earlier in pins</button>}
-        {c.pinned && at >= 0 && at < pins.length - 1 && <button onClick={run(() => movePin(c.id, at + 1))}><ChevronRight size={18} />Move later in pins</button>}
+        {c.pinned && at > 0 && <button onClick={run(() => movePin(c.id, at - 1, pins.map((p) => p.id)))}><ChevronLeft size={18} />Move earlier in pins</button>}
+        {c.pinned && at >= 0 && at < pins.length - 1 && <button onClick={run(() => movePin(c.id, at + 1, pins.map((p) => p.id)))}><ChevronRight size={18} />Move later in pins</button>}
         <button onClick={run(() => (unread ? markRead(c.id) : markUnread(c.id, true)))}>{unread ? <CheckCheck size={18} /> : <MailOpen size={18} />}{unread ? "Mark as read" : "Mark as unread"}</button>
         <button onClick={run(() => (c.muted ? setMuted(c.id, false) : onMute()))}><BellOff size={18} />{c.muted ? "Unmute" : "Mute…"}</button>
         <button onClick={run(() => setTag(c.id, "u.archived", !c.archived))}>{c.archived ? <ArchiveRestore size={18} /> : <Archive size={18} />}{c.archived ? "Move to inbox" : "Archive"}</button>

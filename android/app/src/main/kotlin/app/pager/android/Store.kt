@@ -1160,18 +1160,16 @@ class Store(private val context: Context) {
     }
 
     /** Moves a pinned chat to [toIndex] within the pin row. */
-    fun movePin(roomId: String, toIndex: Int) {
-        val others = pinned().filter { it.id != roomId }
-        val i = toIndex.coerceIn(0, others.size)
-        val before = others.getOrNull(i - 1)?.pinOrder
-        val after = others.getOrNull(i)?.pinOrder
-        val order = when {
-            before == null && after == null -> 1.0
-            before == null -> after!! - 1.0
-            after == null -> before + 1.0
-            else -> (before + after) / 2
+    fun movePin(roomId: String, toIndex: Int, shown: List<String>? = null) {
+        // [shown] is the pin row as it is on screen (without archived pins, merged chats as one). Every pin gets its own whole number, so a move never
+        // depends on two neighbours that share a number (the bridges can set pins with no order, or all the same) and never runs out of room to halve.
+        val ids = (shown ?: pinned().map { it.id }).filter { it != roomId }.toMutableList()
+        ids.add(toIndex.coerceIn(0, ids.size), roomId)
+        ids.forEachIndexed { i, id ->
+            val group = _links.value.firstOrNull { id in it } ?: listOf(id)      // a merged row stands for several chats: they move together
+            val order = (i + 1).toDouble()
+            for (m in group) { val c = _chats.value[m] ?: continue; if (c.pinned && c.pinOrder != order) setTag(m, "m.favourite", true, order) }
         }
-        setTag(roomId, "m.favourite", true, order)
     }
 
     fun setLowPriority(roomId: String, on: Boolean) = setTag(roomId, "m.lowpriority", on)
