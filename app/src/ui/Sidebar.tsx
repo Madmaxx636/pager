@@ -243,7 +243,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
           <div className="pins">
             {pins.map((c, i) => (
               <button key={c.id} className={"pin-chip" + (c.id === selected ? " sel" : "") + (drag?.id === c.id ? " dragging" : "") + (drag ? " shifting" : "")} style={pinShift(c.id, i)}
-                onPointerDown={(e) => startPinDrag(e, c.id, i)}
+                onPointerDown={(e) => startPinDrag(e, c.id, i)} onDragStart={(e) => e.preventDefault()}
                 onClick={() => { if (dragSwallow.current) { dragSwallow.current = false; return; } open(c.id); }} onContextMenu={(e) => { e.preventDefault(); setCtx({ c, x: e.clientX, y: e.clientY }); }} title={c.name}>
                 <span className={"pin-av" + (pulseIds.has(c.id) ? " pulse" : "")}>{c.faces && c.faces.length > 1 ? <GroupAvatar faces={c.faces} size={76} /> : <Avatar name={c.name} mxc={c.avatarMxc} size={76} network={st.showNetworkBadges ? c.network : undefined} />}{(c.unread > 0 || c.markedUnread) && <i className={"pin-dot" + (c.muted ? " muted" : "") + (c.unread > 9 ? " wide" : "")}>{c.unread > 0 ? (c.unread > 99 ? "99+" : c.unread) : ""}</i>}{c.typing && <span className="typing-badge"><TypingDots /></span>}</span>
                 <span className="pin-name">{c.name}</span>

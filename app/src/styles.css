@@ -858,3 +858,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root:root:root .send-group .send-more { display: grid; place-items: center; width: 32px; height: 46px; margin: 0; border-radius: 0; background: transparent; color: var(--accent-ink); box-shadow: none; border-left: 1px solid color-mix(in srgb, var(--accent-ink) 30%, transparent); }
 :root:root:root .send-group .send:hover, :root:root:root .send-group .send-more:hover { background: color-mix(in srgb, var(--accent-ink) 12%, transparent); }
 :root:root:root .send-group .send-more:disabled { opacity: .4; cursor: default; background: transparent; }
+
+/* Pins are rearranged by dragging: the browser must not start its own picture drag from the avatar (that cancelled the move, so it only worked when you started on the name). */
+.pin-chip { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.pin-chip img, .pin-chip .avatar, .pin-chip .pin-av { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
