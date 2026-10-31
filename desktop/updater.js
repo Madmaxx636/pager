@@ -190,4 +190,4 @@ async function install(file, win) {
   await viaTerminal(file);
 }
 
-module.exports = { checkForUpdates, entryFor, newer, verify, terminalPlan, asUserService };
+module.exports = { checkForUpdates, lookup, entryFor, newer, verify, terminalPlan, asUserService };
