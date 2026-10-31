@@ -20,6 +20,11 @@ class UpdaterTest {
         assertNull(Updater.parse(json.replace("pager-android-0.4.1.apk", "a/b.apk"), "https://s"))
     }
 
+    @Test fun theFileComesFromWhereTheAnswerCameFrom() {
+        assertEquals("https://github.com/Madmaxx636/pager/releases/download/updates/pager-android-0.4.1.apk", Updater.parse(json, "https://pager.example", base = Updater.GITHUB)!!.url)
+        assertEquals("https://pager.example/updates/pager-android-0.4.1.apk", Updater.parse(json, "https://pager.example")!!.url)
+    }
+
     @Test fun needsAChecksum() { assertNull(Updater.parse(json.replace(""","sha256":"ABCDEF"""", ""), "https://s")); assertNotNull(Updater.parse(json, "https://s")) }
 
     @Test fun installsOnlyOverTheSameKey() {
