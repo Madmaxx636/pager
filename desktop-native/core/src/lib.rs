@@ -694,6 +694,9 @@ fn version_newer(a: &str, b: &str) -> bool {
 
 fn hex(bytes: &[u8]) -> String { bytes.iter().map(|b| format!("{b:02x}")).collect() }
 
+/// Where the project publishes its releases (works from any network).
+const UPDATES_GITHUB: &str = "https://github.com/Madmaxx636/pager/releases/download/updates/";
+
 /// Looks for a newer version. [server] is the Pager address (empty: the one you are signed in to), [current] this app's version, [entry] which
 /// line of the update information fits this computer ("native" or "nativeWindows"). Answers "update" {state: "none"|"available"|"error", ...}.
 #[no_mangle]
@@ -703,21 +706,33 @@ pub extern "C" fn pager_update_check(h: *mut Arc<Engine>, server: *const c_char,
     let e2 = e.clone();
     e.rt.spawn(async move {
         let say = |v: Value| e2.tell.say("update", &v);
-        let base = if server.is_empty() { match e2.client() { Some(c) => c.homeserver().to_string(), None => return say(json!({ "state": "error", "error": "Sign in first" })) } } else { server };
-        let base = format!("{}/updates/", base.trim_end_matches('/'));
+        // GitHub (the release tagged "updates") works from any network; your own server is asked too. The newer answer wins.
+        let mut bases = vec![UPDATES_GITHUB.to_string()];
+        let own = if server.is_empty() { e2.client().map(|c| c.homeserver().to_string()) } else { Some(server) };
+        if let Some(own) = own { bases.push(format!("{}/updates/", own.trim_end_matches('/'))); }
         let http = matrix_sdk::reqwest::Client::new();
-        let get = |name: &str| { let (http, url) = (http.clone(), format!("{base}{name}")); async move { let r = http.get(url).timeout(Duration::from_secs(30)).send().await.ok()?; if !r.status().is_success() { return None; } r.bytes().await.ok() } };
-        let Some(man) = get("latest.json").await else { return say(json!({ "state": "none", "note": "Your server doesn't publish updates yet." })) };
-        let Some(sig) = get("latest.json.sig").await else { return say(json!({ "state": "error", "error": "The update information isn't signed, so it was ignored." })) };
-        if !update_verified(&man, &sig) { return say(json!({ "state": "error", "error": "The update information isn't signed by the Pager release key, so it was ignored." })); }
-        let all: Value = match serde_json::from_slice(&man) { Ok(v) => v, Err(_) => return say(json!({ "state": "error", "error": "The update information is unreadable." })) };
-        let Some(d) = all.get(&entry) else { return say(json!({ "state": "none", "note": "Your server doesn't publish a native app for this computer yet." })) };
-        let (version, file, sha) = (d["version"].as_str().unwrap_or(""), d["file"].as_str().unwrap_or(""), d["sha256"].as_str().unwrap_or("").to_lowercase());
-        if version.is_empty() || file.is_empty() || file.contains('/') || file.contains('\\') || sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
-            return say(json!({ "state": "error", "error": "The update information is incomplete." }));
+        let mut best: Option<(String, String, String, String, String)> = None;     // version, file, sha, notes, base
+        let (mut first_error, mut anywhere, mut up_to_date_note) = (None::<String>, false, None::<String>);
+        for base in bases {
+            let get = |name: &str| { let (http, url) = (http.clone(), format!("{base}{name}")); async move { let r = http.get(url).timeout(Duration::from_secs(30)).send().await.ok()?; if !r.status().is_success() { return None; } r.bytes().await.ok() } };
+            let Some(man) = get("latest.json").await else { continue };
+            anywhere = true;
+            let Some(sig) = get("latest.json.sig").await else { first_error.get_or_insert("The update information isn't signed, so it was ignored.".into()); continue };
+            if !update_verified(&man, &sig) { first_error.get_or_insert("The update information isn't signed by the Pager release key, so it was ignored.".into()); continue; }
+            let all: Value = match serde_json::from_slice(&man) { Ok(v) => v, Err(_) => { first_error.get_or_insert("The update information is unreadable.".into()); continue } };
+            let Some(d) = all.get(&entry) else { up_to_date_note.get_or_insert("No native app is published for this computer yet.".into()); continue };
+            let (version, file, sha) = (d["version"].as_str().unwrap_or(""), d["file"].as_str().unwrap_or(""), d["sha256"].as_str().unwrap_or("").to_lowercase());
+            if version.is_empty() || file.is_empty() || file.contains('/') || file.contains('\\') || sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+                first_error.get_or_insert("The update information is incomplete.".into()); continue;
+            }
+            if best.as_ref().map_or(true, |b| version_newer(version, &b.0)) { best = Some((version.to_string(), file.to_string(), sha, d["notes"].as_str().unwrap_or("").to_string(), base.clone())); }
         }
-        if !version_newer(version, &current) { return say(json!({ "state": "none", "version": current, "note": format!("You're up to date ({current}).") })); }
-        say(json!({ "state": "available", "version": version, "file": file, "sha256": sha, "notes": d["notes"].as_str().unwrap_or(""), "base": base }));
+        match best {
+            Some((version, file, sha, notes, base)) if version_newer(&version, &current) => say(json!({ "state": "available", "version": version, "file": file, "sha256": sha, "notes": notes, "base": base })),
+            Some(_) => say(json!({ "state": "none", "version": current, "note": format!("You're up to date ({current}).") })),
+            None if !anywhere => say(json!({ "state": "none", "note": "No updates are published yet." })),
+            None => match first_error { Some(err) => say(json!({ "state": "error", "error": err })), None => say(json!({ "state": "none", "note": up_to_date_note.unwrap_or_else(|| "No native app is published for this computer yet.".into()) })) },
+        }
     });
 }
 

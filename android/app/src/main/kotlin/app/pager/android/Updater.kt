@@ -24,8 +24,8 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * Updates from your own server: it publishes /updates/latest.json (version, file, checksum) next to the APK. This asks it, downloads a
- * newer APK, checks the checksum and hands it to Android's installer. Android itself refuses an APK not signed by the same key as the
+ * Updates from GitHub (the release tagged "updates") and from your own server: both publish latest.json (version, file, checksum) next to the APK.
+ * This asks them, takes the newer answer, downloads that APK, checks the checksum and hands it to Android's installer. Android itself refuses an APK not signed by the same key as the
  * installed app, so a swapped file cannot replace Pager.
  */
 object Updater {
@@ -65,21 +65,34 @@ object Updater {
     /** Phones that cannot run 64-bit code (a few small and older ones) take the lighter 32-bit file when the server publishes one. */
     internal fun entryFor(all: JsonObject, abis: List<String>): String = if (abis.none { it == "arm64-v8a" || it == "x86_64" } && all["android32"] is JsonObject) "android32" else "android"
 
-    internal fun parse(json: String, server: String, abis: List<String> = runCatching { Build.SUPPORTED_ABIS.toList() }.getOrDefault(listOf("arm64-v8a"))): Info? {
+    /** Where the project publishes its releases. Works from any network, so an update does not need your server (or you at home). */
+    const val GITHUB = "https://github.com/Madmaxx636/pager/releases/download/updates/"
+
+    internal fun parse(json: String, server: String, abis: List<String> = runCatching { Build.SUPPORTED_ABIS.toList() }.getOrDefault(listOf("arm64-v8a")), base: String? = null): Info? {
         val all = Json.parseToJsonElement(json).jsonObject
         val a = (all[entryFor(all, abis)] as? JsonObject) ?: return null
         fun s(k: String) = (a[k] as? JsonPrimitive)?.contentOrNull
         val code = (a["code"] as? JsonPrimitive)?.longOrNull ?: return null
         val file = s("file") ?: return null
         if (file.contains('/') || file.contains("..")) return null
-        return Info(s("version") ?: code.toString(), code, server.trimEnd('/') + "/updates/" + file, (s("sha256") ?: return null).lowercase(), s("notes") ?: "", s("signer")?.lowercase()?.replace(":", ""))
+        return Info(s("version") ?: code.toString(), code, (base ?: (server.trimEnd('/') + "/updates/")) + file, (s("sha256") ?: return null).lowercase(), s("notes") ?: "", s("signer")?.lowercase()?.replace(":", ""))
     }
 
+    /** Asks GitHub and the server, and takes whichever has the newer version. Only fails when neither could be reached. */
     private fun fetch(server: String): Info? {
-        val c = URL(server.trimEnd('/') + "/updates/latest.json").openConnection() as HttpURLConnection
-        c.connectTimeout = 10_000; c.readTimeout = 15_000
-        if (c.responseCode == 404) return null
-        return parse(c.inputStream.bufferedReader().use { it.readText() }, server)
+        var best: Info? = null; var reached = false; var failure: Exception? = null
+        for (base in listOfNotNull(GITHUB, server.takeIf { it.isNotBlank() }?.let { it.trimEnd('/') + "/updates/" })) {
+            try {
+                val c = URL(base + "latest.json").openConnection() as HttpURLConnection
+                c.connectTimeout = 10_000; c.readTimeout = 15_000
+                if (c.responseCode == 404) { reached = true; continue }
+                val info = parse(c.inputStream.bufferedReader().use { it.readText() }, server, base = base)
+                reached = true
+                if (info != null && (best == null || info.code > best.code)) best = info
+            } catch (e: Exception) { failure = e }
+        }
+        if (!reached && failure != null) throw failure
+        return best
     }
 
     /** True when an update signed by [theirs] can be installed over an app signed by [mine] (Android refuses anything else). */

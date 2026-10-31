@@ -1,5 +1,6 @@
-// Updates from your own server. It publishes /updates/latest.json (with a signature file next to it) and the .deb. This checks the signature
-// with the public key that ships inside the app, so a file on the server cannot be swapped for a different one without the release key.
+// Updates from GitHub (the release tagged "updates", which works from any network) and from your own server: both publish latest.json (with a signature
+// file next to it) and the installers. This checks the signature with the public key that ships inside the app, so a file cannot be swapped for a
+// different one without the release key, and takes whichever answer is newer.
 // On Windows the installer runs quietly for your user and reopens Pager. Installing a .deb needs root, so the system asks for your password (pkexec). AppImage builds don't update themselves.
 const { app, dialog, shell } = require("electron");
 const crypto = require("node:crypto");
@@ -9,6 +10,7 @@ const https = require("node:https");
 const http = require("node:http");
 const { spawn } = require("node:child_process");
 
+const GITHUB_UPDATES = "https://github.com/Madmaxx636/pager/releases/download/updates/";
 const PUBLIC_KEY = () => fs.readFileSync(path.join(__dirname, "update-pubkey.pem"), "utf8");
 
 const parts = (v) => String(v).split(".").map((n) => parseInt(n, 10) || 0);
@@ -26,10 +28,17 @@ function verify(manifest, signature, publicKeyPem) {
   try { return crypto.verify(null, manifest, publicKeyPem, signature); } catch { return false; }
 }
 
-function get(url, { toFile, maxBytes = 300 * 1024 * 1024, onProgress } = {}) {
+function get(url, { toFile, maxBytes = 300 * 1024 * 1024, onProgress, hops = 0 } = {}) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith("https:") ? https : http;
     const req = lib.get(url, { timeout: 30000 }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        res.resume();
+        if (hops >= 5) return reject(new Error("too many redirects"));
+        const next = new URL(res.headers.location, url).toString();
+        if (!next.startsWith("https:")) return reject(new Error("redirected to an unsafe address"));
+        return get(next, { toFile, maxBytes, onProgress, hops: hops + 1 }).then(resolve, reject);
+      }
       if (res.statusCode === 404) { res.resume(); return resolve(null); }
       if (res.statusCode !== 200) { res.resume(); return reject(new Error(`server said ${res.statusCode}`)); }
       const hash = crypto.createHash("sha256"); let size = 0; const total = Number(res.headers["content-length"]) || 0;
@@ -43,22 +52,43 @@ function get(url, { toFile, maxBytes = 300 * 1024 * 1024, onProgress } = {}) {
   });
 }
 
+/**
+ * Asks GitHub and your server for the update information and takes the newer answer. The signature is checked on each. Returns
+ * { d, base } for the entry that fits this computer, or { note } saying why there is none; throws when the only answers were bad.
+ */
+async function lookup(server, platform, arch) {
+  const bases = [GITHUB_UPDATES]; if (server) bases.push(server.replace(/\/+$/, "") + "/updates/");
+  let best = null, reached = false, firstError = null, note = null;
+  for (const base of bases) {
+    try {
+      const man = await get(base + "latest.json", { maxBytes: 1024 * 1024 });
+      if (!man) continue;
+      reached = true;
+      const sig = await get(base + "latest.json.sig", { maxBytes: 4096 });
+      if (!sig || !verify(man.body, sig.body, PUBLIC_KEY())) { firstError ??= "the update information isn't signed by the Pager release key, so it was ignored"; continue; }
+      const d = entryFor(JSON.parse(man.body.toString("utf8")), platform, arch);
+      if (!d) { note ??= platform === "win32" && arch === "ia32" ? "No 32-bit Windows version is published yet." : "No version for this computer is published yet."; continue; }
+      if (!d.version || !d.file || !/^[0-9a-f]{64}$/.test(String(d.sha256).toLowerCase()) || /[\/\\]/.test(d.file)) { firstError ??= "the update information is incomplete"; continue; }
+      if (!best || newer(d.version, best.d.version)) best = { d, base };
+    } catch (e) { firstError ??= e.message || String(e); }
+  }
+  if (best) return best;
+  if (!reached) throw new Error(firstError || "no update information could be reached");
+  if (firstError) throw new Error(firstError);
+  return { note: note || "No updates are published yet." };
+}
+
 let busy = false;
 /** Looks for a newer version; asks before installing. [quiet] false also says "you're up to date" and shows errors. */
 async function checkForUpdates({ server, win, quiet }) {
-  if (busy || !server) return;
+  if (busy) return;
   const win32 = process.platform === "win32";
   if (!(win32 || process.platform === "linux") || process.env.APPIMAGE || !app.isPackaged) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: "This copy of Pager doesn't update itself. Install the .deb from your server to get automatic updates." }); return; }
   busy = true; let accepted = false;
   try {
-    const base = server.replace(/\/+$/, "") + "/updates/";
-    const man = await get(base + "latest.json", { maxBytes: 1024 * 1024 });
-    const sig = man && (await get(base + "latest.json.sig", { maxBytes: 4096 }));
-    if (!man) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: "Your server doesn't publish updates yet." }); return; }
-    if (!sig || !verify(man.body, sig.body, PUBLIC_KEY())) throw new Error("the update information isn't signed by the Pager release key, so it was ignored");
-    const all = JSON.parse(man.body.toString("utf8")); const d = entryFor(all, process.platform, process.arch);
-    if (!d && win32 && process.arch === "ia32") { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: "Your server doesn't publish a 32-bit Windows version yet." }); return; }
-    if (!d || !d.version || !d.file || !/^[0-9a-f]{64}$/.test(String(d.sha256).toLowerCase()) || /[\/\\]/.test(d.file)) throw new Error("the update information is incomplete");
+    const found = await lookup(server, process.platform, process.arch);
+    if (!found.d) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: found.note }); return; }
+    const { d, base } = found;
     if (!newer(d.version, app.getVersion())) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: `You're up to date (${app.getVersion()}).` }); return; }
     const asked = await dialog.showMessageBox(win ?? undefined, { type: "info", message: `Pager ${d.version} is available`, detail: (d.notes || "") + (win32 ? "\n\nPager will close, update and reopen." : "\n\nYour computer will ask for your password to install it."), buttons: ["Update now", "Later"], defaultId: 0, cancelId: 1 });
     if (asked.response !== 0) return;
