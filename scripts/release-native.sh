@@ -9,6 +9,7 @@ V="${1:?Usage: $0 [--build-only] <version like 0.2.0> \"notes\"}"; NOTES="${2:-}
 [ -f "$HOME/.config/pager/release.env" ] && . "$HOME/.config/pager/release.env"
 SERVER="${SERVER:-}"; SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"; REMOTE_DIR="${REMOTE_DIR:-pager/server/updates}"
 # SERVER is optional: GitHub is where the apps look first, and your server is added when it can be reached.
+grep -qF "$V" CHANGELOG.md 2>/dev/null || { echo "Add an entry for native $V to CHANGELOG.md first (what changed, in plain words): it goes into the GitHub release too." >&2; exit 1; }
 KEY="$HOME/.config/pager/update-signing.pem"; [ -f "$KEY" ] || { echo "No release key at $KEY" >&2; exit 1; }
 cmp -s <(openssl pkey -in "$KEY" -pubout) desktop/update-pubkey.pem || { echo "The release key doesn't match desktop/update-pubkey.pem" >&2; exit 1; }
 DIST=desktop-native/dist; LINUX="pager-native-$V-linux-x64.tar.gz"; WINDOWS="pager-native-setup-$V.exe"

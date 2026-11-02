@@ -32,4 +32,29 @@ prune 'pager-desktop-setup-VERSION.exe'
 prune 'pager-desktop-setup-VERSION-32bit.exe'
 prune 'pager-native-VERSION-linux-x64.tar.gz'
 prune 'pager-native-setup-VERSION.exe'
+
+# The release text: what changed (from CHANGELOG.md) and the SHA-256 of every file the apps can download, from the signed list.
+LIST=""; for f in "$@"; do [ "$(basename "$f")" = latest.json ] && LIST="$f"; done
+if [ -n "$LIST" ]; then
+  notes="$(mktemp)"
+  python3 - "$LIST" "$(dirname "$0")/../CHANGELOG.md" > "$notes" <<'PY'
+import json, re, sys
+names = {"android": "Phone (64-bit)", "android32": "Phone (32-bit)", "desktop": "Linux desktop (.deb)", "windows": "Windows desktop (64-bit)", "windows32": "Windows desktop (32-bit)", "native": "Native app, Linux", "nativeWindows": "Native app, Windows"}
+m = json.load(open(sys.argv[1]))
+print("The files the apps check for updates. The list that points to them is signed; the apps verify the signature and each file's checksum before installing.\n")
+print("## Current versions\n\n| App | Version | File | SHA-256 |\n|---|---|---|---|")
+for k, label in names.items():
+    v = m.get(k)
+    if isinstance(v, dict): print(f"| {label} | {v.get('version','')} | `{v.get('file','')}` | `{v.get('sha256','')}` |")
+try:
+    log = open(sys.argv[2], encoding="utf-8").read()
+    parts = re.split(r"(?m)^## ", log)
+    print("\n## What changed\n")
+    for p in parts[1:4]:
+        if not p.startswith("Native app"): print("### " + p.strip() + "\n")
+except OSError:
+    pass
+PY
+  gh release edit "$TAG" -R "$REPO" --notes-file "$notes" >/dev/null && echo "   release text updated"; rm -f "$notes"
+fi
 echo "Published to https://github.com/$REPO/releases/tag/$TAG"

@@ -116,7 +116,7 @@ public:
     /// A sticker pack from the content of an im.ponies.*_emotes event.
     static QJsonObject parseStickerPack(const QString &key, const QString &fallbackName, const QJsonObject &content);
     // ---- chats shown as one (the same person on several networks)
-    struct LinkAgg { const Room *top = nullptr; int unread = 0; bool marked = false, pinned = false, muted = false, archived = false; QStringList ids; };
+    struct LinkAgg { const Room *top = nullptr; int unread = 0; bool marked = false, pinned = false, muted = false, archived = false; double pinOrder = 0; QStringList ids; };
     void setLinks(const QList<QStringList> &groups) { m_links = groups; }
     const QList<QStringList> &links() const { return m_links; }
     /// The chats that exist in [id]'s group (two or more), or nothing when it is not linked.

@@ -546,7 +546,7 @@ QVariantList Engine::pins() const {
         const Store::LinkAgg ag = m_store.linkAgg(*it);
         if (ag.top == &*it && ag.pinned && !ag.archived && !it->lowPriority()) { list.append(&*it); aggs.insert(it->id, ag); }
     }
-    std::sort(list.begin(), list.end(), [](const Room *a, const Room *b) { return a->pinOrder != b->pinOrder ? a->pinOrder < b->pinOrder : a->id < b->id; });
+    std::sort(list.begin(), list.end(), [&](const Room *a, const Room *b) { const double x = aggs[a->id].pinOrder, y = aggs[b->id].pinOrder; return x != y ? x < y : a->id < b->id; });
     for (const Room *r : list) {
         const QString av = r->avatar.isEmpty() ? QString() : m_store.mediaPath(QStringLiteral("av:") + r->avatar);
         if (!r->avatar.isEmpty() && av.isEmpty()) m_store.wantAvatar(r->avatar);
@@ -594,9 +594,10 @@ void Engine::movePin(const QString &roomId, int toIndex) {
     for (const QVariant &v : pins()) { const QString id = v.toMap().value("id").toString(); if (id != roomId) ids << id; }
     ids.insert(qBound(0, toIndex, int(ids.size())), roomId);
     for (int i = 0; i < ids.size(); ++i) {
-        const Room *r = m_store.room(ids[i]);
         const double order = i + 1;
-        if (r && (!r->pinned() || r->pinOrder != order)) setTag(ids[i], QStringLiteral("m.favourite"), true, order);
+        // A merged row stands for several chats: the pinned ones in its group move together.
+        QStringList group = m_store.linkGroup(ids[i]); if (group.isEmpty()) group << ids[i];
+        for (const QString &g : group) { const Room *r = m_store.room(g); if (r && r->pinned() && r->pinOrder != order) setTag(g, QStringLiteral("m.favourite"), true, order); }
     }
 }
 void Engine::setMuted(const QString &roomId, bool on) {

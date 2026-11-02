@@ -35,6 +35,16 @@ describe("one person on two networks", () => {
     expect(rows[0]).toMatchObject({ unread: 5, pinned: true });
     expect(rows[0].linked?.map((l) => l.network).sort()).toEqual(["gmessages", "signal"]);
   });
+  it("keeps the merged row where the pinned chat is pinned, even when the other chat spoke last", () => {
+    // "b" spoke last but is not pinned; "a" is pinned at place 3. The row must sit at place 3, or moving pins would seem to do nothing.
+    const rows = mergeSummaries([sum("a", "signal", 100, 0, { pinned: true, pinOrder: 3 }), sum("b", "gmessages", 200, 0, { pinOrder: Number.MAX_VALUE })], [["a", "b"]]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: "b", pinned: true, pinOrder: 3 });
+  });
+  it("takes the earliest place when both chats of a group are pinned", () => {
+    const rows = mergeSummaries([sum("a", "signal", 100, 0, { pinned: true, pinOrder: 5 }), sum("b", "gmessages", 200, 0, { pinned: true, pinOrder: 2 })], [["a", "b"]]);
+    expect(rows[0].pinOrder).toBe(2);
+  });
   it("leaves a group alone when only one of its chats is on screen", () => {
     const rows = mergeSummaries([sum("a", "signal", 100)], [["a", "b"]]);
     expect(rows).toHaveLength(1); expect(rows[0].linked).toBeUndefined();

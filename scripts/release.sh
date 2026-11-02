@@ -25,6 +25,7 @@ SERVER="${SERVER:-}"; SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"; REMOTE_DIR="$
 ELECTRON32="${ELECTRON32:-43.8.3}"
 KEY="$HOME/.config/pager/update-signing.pem"
 [ -f "$KEY" ] || { echo "No release key at $KEY" >&2; exit 1; }
+grep -qF "## $V" CHANGELOG.md 2>/dev/null || { echo "Add an entry for $V to CHANGELOG.md first (what changed, in plain words): it goes into the GitHub release too." >&2; exit 1; }
 cmp -s <(openssl pkey -in "$KEY" -pubout) desktop/update-pubkey.pem || { echo "The release key doesn't match desktop/update-pubkey.pem, installed apps would reject this release" >&2; exit 1; }
 ssh_() { ssh -i "$SSH_KEY" -o IdentitiesOnly=yes "$SERVER" "$@"; }
 

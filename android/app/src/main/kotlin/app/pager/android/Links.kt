@@ -52,6 +52,8 @@ object Links {
             val top = members.maxByOrNull { m -> m.ts }!!
             out.add(top.copy(
                 unread = members.sumOf { m -> m.unread }, markedUnread = members.any { m -> m.markedUnread }, pinned = members.any { m -> m.pinned },
+                // The row sits where the pinned chat of the group sits (not where the chat that spoke last would: that one may not be pinned at all).
+                pinOrder = members.filter { m -> m.pinned }.minOfOrNull { m -> m.pinOrder } ?: top.pinOrder,
                 muted = members.all { m -> m.muted }, archived = members.all { m -> m.archived }, linked = members.map { m -> m.id to m.network },
             ))
         }

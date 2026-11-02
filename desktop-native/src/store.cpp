@@ -420,12 +420,15 @@ QStringList Store::linkGroup(const QString &id) const {
 Store::LinkAgg Store::linkAgg(const Room &r) const {
     LinkAgg a; a.top = &r;
     const QStringList g = m_links.isEmpty() ? QStringList() : linkGroup(r.id);
-    if (g.isEmpty()) { a.unread = r.unread; a.marked = r.markedUnread; a.pinned = r.pinned(); a.muted = muted(r.id); a.archived = r.archived(); return a; }
+    if (g.isEmpty()) { a.unread = r.unread; a.marked = r.markedUnread; a.pinned = r.pinned(); a.pinOrder = r.pinOrder; a.muted = muted(r.id); a.archived = r.archived(); return a; }
     a.muted = true; a.archived = true;
     for (const QString &id : g) {
         const Room *m = room(id); if (!m) continue;
         if (m->lastTs() > a.top->lastTs() || (m->lastTs() == a.top->lastTs() && m->id < a.top->id)) a.top = m;
-        a.unread += m->unread; a.marked = a.marked || m->markedUnread; a.pinned = a.pinned || m->pinned();
+        a.unread += m->unread; a.marked = a.marked || m->markedUnread;
+        // The row sits where the pinned chat of the group sits (not where the chat that spoke last would: that one may not be pinned at all).
+        if (m->pinned() && (!a.pinned || m->pinOrder < a.pinOrder)) a.pinOrder = m->pinOrder;
+        a.pinned = a.pinned || m->pinned();
         a.muted = a.muted && muted(id); a.archived = a.archived && m->archived();
     }
     a.ids = g;

@@ -65,6 +65,8 @@ export function mergeSummaries(items: ChatSummary[], links: Links): ChatSummary[
       unread: members.reduce((n, m) => n + m.unread, 0),
       markedUnread: members.some((m) => m.markedUnread),
       pinned: members.some((m) => m.pinned),
+      // The row sits where the pinned chat of the group sits (not where the chat that spoke last would: that one may not be pinned at all).
+      pinOrder: members.some((m) => m.pinned) ? Math.min(...members.filter((m) => m.pinned).map((m) => m.pinOrder)) : top.pinOrder,
       muted: members.every((m) => m.muted),
       archived: members.every((m) => m.archived),
       linked: members.map((m) => ({ id: m.id, network: m.network })),

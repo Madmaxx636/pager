@@ -125,7 +125,7 @@ void RoomListModel::refresh() {
     std::sort(keep.begin(), keep.end(), [&](const Room *a, const Room *b) {
         const Store::LinkAgg &x = aggs[a->id], &y = aggs[b->id];
         if (pinsFirst && x.pinned != y.pinned) return x.pinned;
-        if (pinsFirst && x.pinned && y.pinned && a->pinOrder != b->pinOrder) return a->pinOrder < b->pinOrder;
+        if (pinsFirst && x.pinned && y.pinned && x.pinOrder != y.pinOrder) return x.pinOrder < y.pinOrder;
         const bool ux = x.unread > 0 || x.marked, uy = y.unread > 0 || y.marked;
         if (m_unreadFirst && pinsFirst && ux != uy) return ux;
         const qint64 ta = a->lastTs(), tb = b->lastTs();

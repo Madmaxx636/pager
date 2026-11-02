@@ -26,6 +26,17 @@ class LinksTest {
         assertEquals(1, Links.suggest(chats, listOf(listOf("s", "g"))).size)
     }
 
+    @Test fun theMergedRowSitsWherethePinnedChatIsPinned() {
+        // "b" spoke last but is not pinned; "a" is pinned at place 3. The row must sit at place 3, or moving pins would seem to do nothing.
+        val a = sum("a", "signal", 100, pinned = true).copy(pinOrder = 3.0)
+        val b = sum("b", "gmessages", 200).copy(pinOrder = Double.MAX_VALUE)
+        val rows = Links.merge(listOf(a, b), listOf(listOf("a", "b")))
+        assertEquals(1, rows.size); assertEquals("b", rows[0].id); assertEquals(3.0, rows[0].pinOrder, 0.0)
+        // both pinned: the earlier place
+        val both = Links.merge(listOf(a.copy(pinOrder = 5.0), b.copy(pinned = true, pinOrder = 2.0)), listOf(listOf("a", "b")))
+        assertEquals(2.0, both[0].pinOrder, 0.0)
+    }
+
     @Test fun showsOneRowTheNewestChatWithUnreadAddedUp() {
         val rows = Links.merge(listOf(sum("a", "signal", 100, 2), sum("x", "whatsapp", 90), sum("b", "gmessages", 200, 3, pinned = true)), listOf(listOf("a", "b")))
         assertEquals(listOf("b", "x"), rows.map { it.id })

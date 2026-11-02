@@ -141,6 +141,17 @@ private slots:
         int read, delivered; s.receiptPositions(*s.room("!r"), read, delivered);
         QCOMPARE(delivered, 2);                                // up to their message; the newest one of yours is not known to have arrived
     }
+    void aMergedRowSitsWhereThePinnedChatIsPinned() {
+        // "b" spoke last but is not pinned; "a" is pinned at place 3. The merged row must sit at place 3, or moving pins would seem to do nothing.
+        Store s; s.setMe("@me:x");
+        s.applyRooms({room("!a", "Sam", {msg("$1", "@sam:x", "hi", 1000)}), room("!b", "Sam", {msg("$2", "@sam:x", "hello", 2000)})});
+        s.mutableRoom("!a")->tags << QStringLiteral("m.favourite"); s.mutableRoom("!a")->pinOrder = 3;
+        s.setLinks({QStringList{"!a", "!b"}});
+        const Store::LinkAgg ag = s.linkAgg(*s.room("!b"));
+        QCOMPARE(ag.top->id, QString("!b")); QVERIFY(ag.pinned); QCOMPARE(ag.pinOrder, 3.0);
+        s.mutableRoom("!b")->tags << QStringLiteral("m.favourite"); s.mutableRoom("!b")->pinOrder = 2;      // both pinned: the earlier place
+        QCOMPARE(s.linkAgg(*s.room("!b")).pinOrder, 2.0);
+    }
     void deliveryReportsAndCaptionsAndStickers() {
         Store s; s.setMe("@me:x");
         QJsonObject status{{"event_id", "$st"}, {"type", "com.beeper.message_send_status"}, {"sender", "@bot:x"}, {"origin_server_ts", 2000.0}, {"content", QJsonObject{{"m.relates_to", QJsonObject{{"event_id", "$1"}}}, {"delivered_to_users", QJsonArray{"@maya:x"}}}}};
