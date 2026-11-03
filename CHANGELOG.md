@@ -4,6 +4,11 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.4 (phone, desktop, web)
+
+- **Encryption details:** when this device cannot send something its encryption needs (for example the server refusing the device's keys), the problem log now says so. Before, these failures were silent, so "waiting for the keys" had no reason to show.
+- **Server (no app update needed):** Admin > Logs now warns when a bridge remembers different keys for one of your devices than the device uploaded (that device would see everything from that bridge as locked), or when a device you use has no keys left to hand out. Checked every 15 minutes.
+
 ## 0.6.3 (phone)
 
 - **Contacts (phone):** two of your phones could keep undoing each other's contact names, rewriting the contacts saved in your account every few seconds, all day. A phone now saves its address book only when that address book really changed, and never more than once in ten minutes. This also cuts the database write conflicts the server was logging.

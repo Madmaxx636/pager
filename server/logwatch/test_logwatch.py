@@ -143,5 +143,17 @@ class Versions(unittest.TestCase):
         self.assertEqual(lw.waiting_versions(p), ["whatsapp", "signal"])
 
 
+class EncryptionHealth(unittest.TestCase):
+    def test_a_bridge_with_another_key_is_found(self):
+        server = {("@a:x", "D1"): "KEY1", ("@a:x", "D2"): "KEY2"}
+        bridge = [("@a:x", "D1", "KEY1"), ("@a:x", "D2", "OLD"), ("@a:x", "D3", "ANY"), ("@b:x", "D1", "KEY1")]
+        self.assertEqual(lw.key_mismatches(server, bridge), [("@a:x", "D2")])
+
+    def test_devices_without_keys_left(self):
+        now = 10 * 86400 * 1000
+        rows = [("@a:x", "OLD", 1, 0, 0), ("@a:x", "OK", now, 50, 1), ("@a:x", "EMPTY", now - 1000, 0, 0), ("@a:x", "FALLBACK", now, 0, 1)]
+        self.assertEqual(lw.starved_devices(rows, now), [("@a:x", "EMPTY")])
+
+
 if __name__ == "__main__":
     unittest.main()

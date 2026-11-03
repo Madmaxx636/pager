@@ -192,6 +192,45 @@ def follow_events(w):
             w.event("logwatch", "error", "event reader stopped: %s" % e)
         time.sleep(5)
 
+# ---- Encryption health: do the bridges and the server agree about each device's keys? ------------------------------------------------
+def key_mismatches(server_keys, bridge_keys):
+    """server_keys: {(user, device): curve25519 key} from Synapse. bridge_keys: [(user, device, curve25519 key)] a bridge has remembered.
+    A bridge that remembers a different key for a device than the one the device uploaded encrypts to a key nobody holds: that device sees every message as locked."""
+    return sorted({(u, d) for u, d, k in bridge_keys if (u, d) in server_keys and server_keys[(u, d)] != k})
+
+def starved_devices(rows, now, days=7):
+    """rows: (user, device, last_seen_ms, one_time_keys, unused_fallback_keys). Devices in use lately that nobody can start a conversation with."""
+    return sorted((u, d) for u, d, seen, otk, fb in rows if now - seen < days * 86400 * 1000 and otk == 0 and fb == 0)
+
+def psql(host, db, sql):
+    p = subprocess.run(["docker", "compose", "exec", "-T", host, "psql", "-U", "pager", "-d", db, "-At", "-F", "|", "-c", sql],
+                       cwd=SERVER, capture_output=True, text=True, timeout=60)
+    if p.returncode: raise RuntimeError(p.stderr.strip()[:200] or "psql failed")
+    return [l.split("|") for l in p.stdout.splitlines() if l]
+
+def encryption_check(w):
+    """Every 15 minutes. Reads the databases (nothing is changed)."""
+    server = {(u, d): k for u, d, k in psql("postgres", "synapse",
+        "select j.user_id, j.device_id, j.key_json::json->'keys'->>('curve25519:'||j.device_id) from e2e_device_keys_json j join users u on u.name=j.user_id where u.appservice_id is null")}
+    now = time.time() * 1000
+    rows = []
+    for u, d, seen, otk, fb in psql("postgres", "synapse",
+        "select d.user_id, d.device_id, coalesce((select max(last_seen) from user_ips i where i.user_id=d.user_id and i.device_id=d.device_id),0), "
+        "(select count(*) from e2e_one_time_keys_json o where o.user_id=d.user_id and o.device_id=d.device_id), "
+        "(select count(*) from e2e_fallback_keys_json f where f.user_id=d.user_id and f.device_id=d.device_id and not f.used) "
+        "from devices d join users u on u.name=d.user_id where u.appservice_id is null"):
+        rows.append((u, d, int(seen), int(otk), int(fb)))
+    for u, d in starved_devices(rows, now):
+        w.event("server", "attention", "Device %s of %s has no encryption keys left to hand out, so new conversations with it cannot be started." % (d, u))
+    host = "bridgedb"
+    try: dbs = [r[0] for r in psql(host, "postgres", "select datname from pg_database where datname not in ('postgres','template0','template1')")]
+    except RuntimeError: host = "postgres"; dbs = [r[0] for r in psql(host, "postgres", "select datname from pg_database where datname not in ('postgres','template0','template1','synapse')")]
+    for db in dbs:
+        try: known = [(u, d, k) for u, d, k in psql(host, db, "select user_id, device_id, identity_key from crypto_device where not deleted")]
+        except RuntimeError: continue            # this bridge keeps no encryption data
+        for u, d in key_mismatches(server, known):
+            w.event("server", "error", "The %s bridge remembers different keys for device %s of %s than the device uploaded: messages from it stay locked on that device." % (db, d, u))
+
 def waiting_versions(path):
     """The names listed in data/versions.available (written weekly by update-bridges.sh), or [] when none."""
     try:
@@ -222,9 +261,16 @@ def checks(w):
             w.event("logwatch", "error", "a check failed: %s" % e)
         time.sleep(60)
 
+def every_15_minutes(w):
+    time.sleep(30)
+    while True:
+        try: encryption_check(w)
+        except Exception as e: w.event("logwatch", "warning", "the encryption check could not run: %s" % e)
+        time.sleep(900)
+
 def main():
     w = Watcher()
-    for fn in (follow_logs, follow_events, checks):
+    for fn in (follow_logs, follow_events, checks, every_15_minutes):
         threading.Thread(target=fn, args=(w,), daemon=True).start()
     while True:
         time.sleep(1)

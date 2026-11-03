@@ -69,8 +69,20 @@ export class Crypto {
         case sdk.RequestType.RoomMessage: res = await this.tx("PUT", `/_matrix/client/v3/rooms/${enc(r.room_id)}/send/${enc(r.event_type)}/${enc(r.txn_id)}`, JSON.parse(r.content ?? r.body)); break;
         default: return; // cross-signing upload needs interactive sign-in; not used yet
       }
-    } catch { return; /* the library will offer the request again */ }
+    } catch (e) { this.noteRequest(r.type, e); return; /* the library will offer the request again */ }
     try { await this.machine.markRequestAsSent(r.id, r.type, JSON.stringify(res ?? {})); } catch { /* closed while the request was in flight */ }
+  }
+
+  private failedAt = new Map<string, number>();
+  /** A request the library wants sent failed. It offers it again, so say so only now and then: a key upload the server keeps refusing is the kind of thing that leaves messages locked. */
+  private noteRequest(type: unknown, e: unknown): void {
+    if (this.closed) return;
+    const name = String((sdk.RequestType as unknown as Record<string, unknown>)[String(type)] ?? type);
+    const msg = String((e as { message?: unknown })?.message ?? e).slice(0, 120);
+    const key = name + msg, now = Date.now();
+    if (now - (this.failedAt.get(key) ?? 0) < 600_000) return;
+    this.failedAt.set(key, now);
+    this.note(`could not send ${name}: ${msg}`);
   }
 
   // ---- Sync ------------------------------------------------------------------------------------------------------------

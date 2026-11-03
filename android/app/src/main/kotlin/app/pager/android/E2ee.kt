@@ -92,8 +92,18 @@ class E2ee private constructor(
                 is Request.KeysBackup -> Triple(r.requestId, RequestType.KEYS_BACKUP, tx("PUT", "/_matrix/client/v3/room_keys/keys?version=${enc(r.version)}", buildJsonObject { put("rooms", parsed(r.rooms)) }))
                 is Request.RoomMessage -> Triple(r.requestId, RequestType.ROOM_MESSAGE, tx("PUT", "/_matrix/client/v3/rooms/${enc(r.roomId)}/send/${enc(r.eventType)}/${enc(r.requestId)}", parsed(r.content)))
             }
-        } catch (_: Exception) { return /* the library will offer the request again */ }
+        } catch (e: Exception) { if (e !is kotlinx.coroutines.CancellationException) noteRequest(r::class.java.simpleName, e); return /* the library will offer the request again */ }
         runCatching { withContext(Dispatchers.IO) { machine.markRequestAsSent(id, type, response.toString()) } }
+    }
+
+    private val failedAt = HashMap<String, Long>()
+    /** A request the library wants sent failed. It offers it again, so say so only now and then: a key upload the server keeps refusing is the kind of thing that leaves messages locked. */
+    private fun noteRequest(name: String, e: Exception) {
+        if (closed) return
+        val msg = (e.message ?: e::class.java.simpleName).take(120); val key = name + msg; val now = System.currentTimeMillis()
+        if (now - (failedAt[key] ?: 0L) < 600_000) return
+        failedAt[key] = now
+        note("could not send $name: $msg")
     }
 
     // ---- Sync ---------------------------------------------------------------------------------------------------------
