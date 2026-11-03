@@ -39,7 +39,6 @@ export function addToPhonebook(entries: { number: string; name: string }[], over
   return ownChanged;
 }
 export const lookup = (number: string) => book[phoneKey(number)];
-export const phonebookSize = () => Object.keys(book).length;
 
 /** A name fit to show: no network tag, and a contact's name instead of a bare number when we know it. */
 export function prettyName(raw: string): string {

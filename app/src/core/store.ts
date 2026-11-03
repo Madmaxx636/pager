@@ -1299,7 +1299,6 @@ export async function gifFile(gif: Gif): Promise<File> {
   const blob = await res.blob();
   return new File([blob], `${(gif.title || "gif").replace(/[^\w .-]/g, "").slice(0, 40) || "gif"}.gif`, { type: "image/gif" });
 }
-export async function sendGif(roomId: string, gif: Gif) { sendFile(roomId, await gifFile(gif), undefined, { w: gif.w || undefined, h: gif.h || undefined }); }
 
 export function sendContact(roomId: string, name: string, phone: string) {
   const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL;TYPE=CELL:${phone}\nEND:VCARD\n`;

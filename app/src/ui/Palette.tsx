@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArrowDownToLine, BellOff, CheckCheck, Inbox, Keyboard, MailOpen, Pin, Search, Settings as SettingsIcon, SquarePen, Star, Hourglass, MessageSquare } from "lucide-react";
+import { Archive, ArrowDownToLine, BellOff, CheckCheck, Keyboard, MailOpen, Pin, Search, Settings as SettingsIcon, SquarePen, Star, Hourglass, MessageSquare } from "lucide-react";
 import { markAllRead, markUnread, pin, setLowPriority, setMuted, setTag, useInbox } from "../core/store";
 import { networkMeta } from "../core/emoji";
 import { Avatar } from "./common";
@@ -76,4 +76,3 @@ export function Palette({ nav, current, onClose, onSnooze }: { nav: Nav; current
   );
 }
 
-export { Inbox };

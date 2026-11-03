@@ -42,7 +42,7 @@ object Updater {
     fun clearMessage() { _message.value = null }
     fun later() { _available.value = null }
 
-    fun currentCode(ctx: Context): Long = ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
+    fun currentCode(ctx: Context): Long = androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(ctx.packageManager.getPackageInfo(ctx.packageName, 0))      // (the plain field only exists from Android 9)
     fun currentName(ctx: Context): String = ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
 
     /** Asks the server whether a newer version exists. Quietly does nothing when checked in the last 20 minutes, unless [force]. */
@@ -223,7 +223,7 @@ class PackageReplacedReceiver : BroadcastReceiver() {
         if (runCatching { context.startActivity(open) }.isSuccess && Build.VERSION.SDK_INT < 29) return
         // Newer Android only lets a background app open a window through a notification.
         val nm = context.getSystemService(android.app.NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(android.app.NotificationChannel("pager-updated", "App updated", android.app.NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(android.app.NotificationChannel("pager-updated", "App updated", android.app.NotificationManager.IMPORTANCE_HIGH))
         val tap = PendingIntent.getActivity(context, 77, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = androidx.core.app.NotificationCompat.Builder(context, "pager-updated").setSmallIcon(R.drawable.ic_notif)
             .setContentTitle("Pager was updated").setContentText("Tap to open it").setContentIntent(tap).setFullScreenIntent(tap, true).setAutoCancel(true)

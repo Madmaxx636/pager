@@ -4,6 +4,15 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.1 (phone, desktop, web)
+
+- **Older Android phones (8 and 9):** the background sync service could fail to start, and on 8.0 and 8.1 the update check could not read the app's own version. Both are fixed.
+- **Nudges and rings (phone):** the vibration was being refused because the app never asked for the permission; it now has it.
+- **Android Auto (phone):** only the real Android Auto may connect to Pager's car screen (a test build still accepts any).
+- **Maps (web, desktop):** a location message with a broken position no longer opens a map page.
+- **Cleaned up:** unused code, imports and resources removed; Android lint now runs in the automatic checks, so new problems of that kind are caught before a release.
+- **Server (no app update needed):** the Discord bridge no longer tries to post "can't decrypt" notices into rooms that are not its own (hundreds of refused attempts a day).
+
 ## 0.6.0 (phone, desktop, web; native 0.5.15)
 
 - **One contact, one set of notification settings:** a contact's Notifications settings, mute, Low priority and snooze are the same on all of their chats: a second number, the same person on another network, merged or not. The chat's Notifications sheet says when they are shared.

@@ -1,0 +1,773 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 9.2.1" type="baseline" client="gradle" dependencies="false" name="AGP (9.2.1)" variant="all" version="9.2.1">
+
+    <issue
+        id="MissingPermission"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        errorLine1="        runCatching { NotificationManagerCompat.from(context).notify(m.roomId.hashCode(), b.build()) }"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="106"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="MissingPermission"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        errorLine1="            nm.notify(id, b.build())"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="243"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="MissingPermission"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        errorLine1="            nm.notify(0, NotificationCompat.Builder(context, CH_SILENT).setSmallIcon(R.drawable.ic_notif).setContentTitle(&quot;Pager&quot;).setContentText(&quot;New messages&quot;).setContentIntent(openApp).setGroup(GROUP).setGroupSummary(true).setAutoCancel(true).build())"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="247"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="MissingPermission"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        errorLine1="        runCatching { NotificationManagerCompat.from(context).notify(ATTN_ID, note) }"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="271"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="MissingPermission"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        errorLine1="        runCatching { NotificationManagerCompat.from(context).notify((&quot;lost&quot; + l.key).hashCode(), b.build()) }"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="281"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="MissingPermission"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        errorLine1="        runCatching { NotificationManagerCompat.from(context).notify(4711, b.build()) }"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="291"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="MissingPermission"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        errorLine1="        runCatching { NotificationManagerCompat.from(context).notify((&quot;upd&quot; + u.at).hashCode(), b.build()) }"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="302"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="MissingPermission"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        errorLine1="        runCatching { NotificationManagerCompat.from(context).notify(r.id, n) }"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Reminders.kt"
+            line="61"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 26): `android.app.NotificationManager#getBubblePreference`"
+        errorLine1="            if (sdk >= 31) when (nm.bubblePreference) { NotificationManager.BUBBLE_PREFERENCE_ALL -> &quot;allowed for all conversations&quot;; NotificationManager.BUBBLE_PREFERENCE_SELECTED -> &quot;allowed for selected conversations&quot;; else -> &quot;OFF for Pager (Settings → Apps → Pager → Notifications → Bubbles)&quot; }"
+        errorLine2="                                    ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="146"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 29 (current min is 26): `android.app.NotificationManager#areBubblesAllowed`"
+        errorLine1="            else if (@Suppress(&quot;DEPRECATION&quot;) nm.areBubblesAllowed()) &quot;allowed&quot; else &quot;OFF for Pager (Settings → Apps → Pager → Notifications → Bubbles)&quot;,"
+        errorLine2="                                                 ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="147"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="OldTargetApi"
+        message="Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the `android.os.Build.VERSION_CODES` javadoc for details."
+        errorLine1="        targetSdk = 34"
+        errorLine2="        ~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="18"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="BatteryLife"
+        message="Use of `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` violates the Play Store Content Policy regarding acceptable use cases, as described in https://developer.android.com/training/monitoring-device-state/doze-standby.html"
+        errorLine1="        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse(&quot;package:&quot; + context.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)"
+        errorLine2="                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Watchdog.kt"
+            line="28"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="VectorRaster"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; xmlns:aapt=&quot;http://schemas.android.com/aapt&quot; android:width=&quot;512dp&quot; android:height=&quot;512dp&quot; android:viewportWidth=&quot;512&quot; android:viewportHeight=&quot;512&quot;>"
+        errorLine2="                                                                                                                               ~~~~~">
+        <location
+            file="src/main/res/drawable/pager_body.xml"
+            line="2"
+            column="128"/>
+    </issue>
+
+    <issue
+        id="VectorRaster"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; xmlns:aapt=&quot;http://schemas.android.com/aapt&quot; android:width=&quot;512dp&quot; android:height=&quot;512dp&quot; android:viewportWidth=&quot;512&quot; android:viewportHeight=&quot;512&quot;>"
+        errorLine2="                                                                                                                               ~~~~~">
+        <location
+            file="src/main/res/drawable/pager_ring.xml"
+            line="2"
+            column="128"/>
+    </issue>
+
+    <issue
+        id="VectorRaster"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; xmlns:aapt=&quot;http://schemas.android.com/aapt&quot; android:width=&quot;512dp&quot; android:height=&quot;512dp&quot; android:viewportWidth=&quot;512&quot; android:viewportHeight=&quot;512&quot;>"
+        errorLine2="                                                                                                                               ~~~~~">
+        <location
+            file="src/main/res/drawable/pager_shadow.xml"
+            line="2"
+            column="128"/>
+    </issue>
+
+    <issue
+        id="VectorRaster"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; xmlns:aapt=&quot;http://schemas.android.com/aapt&quot; android:width=&quot;512dp&quot; android:height=&quot;512dp&quot; android:viewportWidth=&quot;512&quot; android:viewportHeight=&quot;512&quot;>"
+        errorLine2="                                                                                                                               ~~~~~">
+        <location
+            file="src/main/res/drawable/pager_waves.xml"
+            line="2"
+            column="128"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of Gradle than 9.6.0 is available: 9.8.2"
+        errorLine1="distributionUrl=https\://services.gradle.org/distributions/gradle-9.6.0-bin.zip"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="$HOME/Projects/pager/android/gradle/wrapper/gradle-wrapper.properties"
+            line="4"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of `compileSdk` than 34 is available: 37"
+        errorLine1="    compileSdk = 34"
+        errorLine2="    ~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="11"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.9.2 is available: 1.13.0"
+        errorLine1="    implementation(&quot;androidx.activity:activity-compose:1.9.2&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="68"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.13.1 is available: 1.19.1"
+        errorLine1="    implementation(&quot;androidx.core:core-ktx:1.13.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="69"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.fragment:fragment-ktx than 1.8.4 is available: 1.9.1"
+        errorLine1="    implementation(&quot;androidx.fragment:fragment-ktx:1.8.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="75"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.9.0 is available: 1.11.0"
+        errorLine1="    implementation(&quot;org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="70"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-serialization-json than 1.7.3 is available: 1.12.0"
+        errorLine1="    implementation(&quot;org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="71"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of com.squareup.okhttp3:okhttp than 4.12.0 is available: 5.5.1"
+        errorLine1="    implementation(&quot;com.squareup.okhttp3:okhttp:4.12.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="72"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of com.google.zxing:core than 3.5.3 is available: 3.5.4"
+        errorLine1="    implementation(&quot;com.google.zxing:core:3.5.3&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="73"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of net.java.dev.jna:jna than 5.14.0 is available: 5.19.1"
+        errorLine1="    implementation(&quot;net.java.dev.jna:jna:5.14.0@aar&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="82"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewerVersionAvailable"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-serialization-json than 1.7.3 is available: 1.12.0"
+        errorLine1="    testImplementation(&quot;org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="85"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="RestrictedApi"
+        message="ComponentActivity.dispatchKeyEvent can only be called from within the same library group prefix (referenced groupId=`androidx.core` with prefix androidx from groupId=`pager-android`)"
+        errorLine1="    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {"
+        errorLine2="                 ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/MainActivity.kt"
+            line="53"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="RestrictedApi"
+        message="ComponentActivity.dispatchKeyEvent can only be called from within the same library group prefix (referenced groupId=`androidx.core` with prefix androidx from groupId=`pager-android`)"
+        errorLine1="            android.view.KeyEvent.KEYCODE_SOFT_LEFT -> return super.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MENU))"
+        errorLine2="                                                                    ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/MainActivity.kt"
+            line="57"
+            column="69"/>
+    </issue>
+
+    <issue
+        id="RestrictedApi"
+        message="ComponentActivity.dispatchKeyEvent can only be called from within the same library group prefix (referenced groupId=`androidx.core` with prefix androidx from groupId=`pager-android`)"
+        errorLine1="            android.view.KeyEvent.KEYCODE_SOFT_LEFT -> return super.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_MENU))"
+        errorLine2="                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/MainActivity.kt"
+            line="57"
+            column="86"/>
+    </issue>
+
+    <issue
+        id="RestrictedApi"
+        message="ComponentActivity.dispatchKeyEvent can only be called from within the same library group prefix (referenced groupId=`androidx.core` with prefix androidx from groupId=`pager-android`)"
+        errorLine1="        return super.dispatchKeyEvent(event)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/MainActivity.kt"
+            line="59"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="RestrictedApi"
+        message="ComponentActivity.dispatchKeyEvent can only be called from within the same library group prefix (referenced groupId=`androidx.core` with prefix androidx from groupId=`pager-android`)"
+        errorLine1="        return super.dispatchKeyEvent(event)"
+        errorLine2="                                      ~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/MainActivity.kt"
+            line="59"
+            column="39"/>
+    </issue>
+
+    <issue
+        id="PrivateResource"
+        message="The resource `@array/hosts_allowlist_sample` is marked as private in androidx.car.app:app:1.7.0"
+        errorLine1="        else HostValidator.Builder(applicationContext).addAllowedHosts(androidx.car.app.R.array.hosts_allowlist_sample).build()"
+        errorLine2="                                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/car/PagerCarService.kt"
+            line="18"
+            column="72"/>
+    </issue>
+
+    <issue
+        id="Aligned16KB"
+        message="The native library `x86_64/libjnidispatch.so` (from `net.java.dev.jna:jna:5.14.0`) is not 16 KB aligned"
+        errorLine1="    implementation(&quot;net.java.dev.jna:jna:5.14.0@aar&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="82"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="Aligned16KB"
+        message="The native library `x86_64/libjnidispatch.so` (from `net.java.dev.jna:jna:5.14.0`) is not 16 KB aligned">
+        <location
+            file="$GRADLE_USER_HOME/caches/9.6.0/transforms/d5eb32fcf00b62cbafa68033036db4f5/transformed/jna-5.14.0/jni/x86_64/libjnidispatch.so"/>
+    </issue>
+
+    <issue
+        id="Aligned16KB"
+        message="The native library `x86_64/libjnidispatch.so` (from `net.java.dev.jna:jna:5.14.0`) is not 16 KB aligned">
+        <location
+            file="$GRADLE_USER_HOME/caches/9.6.0/transforms/d5eb32fcf00b62cbafa68033036db4f5/transformed/jna-5.14.0/jni/x86_64/libjnidispatch.so"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
+        errorLine1="            val res = ctx.resources.getIdentifier(id, &quot;raw&quot;, ctx.packageName); if (res == 0) return"
+        errorLine2="                                    ~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/ChatSounds.kt"
+            line="127"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="ChromeOsAbiSupport"
+        message="Missing x86_64 ABI support for ChromeOS"
+        errorLine1="        ndk { abiFilters += ((project.findProperty(&quot;abis&quot;) as String?) ?: &quot;arm64-v8a,armeabi-v7a&quot;).split(&quot;,&quot;) }"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="26"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="ExportedService"
+        message="Exported service does not require permission"
+        errorLine1="        &lt;service android:name=&quot;.car.PagerCarService&quot; android:exported=&quot;true&quot;>"
+        errorLine2="         ~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="35"
+            column="10"/>
+    </issue>
+
+    <issue
+        id="DataExtractionRules"
+        message="The attribute `android:allowBackup` is deprecated from Android 12 and higher and may be removed in future versions. Consider adding the attribute `android:dataExtractionRules` specifying an `@xml` resource which configures cloud backups and device transfers on Android 12 and higher."
+        errorLine1="        android:allowBackup=&quot;false&quot;"
+        errorLine2="                             ~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="28"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 26. Merge all the resources in this folder into `mipmap-anydpi`.">
+        <location
+            file="src/main/res/mipmap-anydpi-v26"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX function `createBitmap` instead?"
+        errorLine1="    val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/AccountsDialog.kt"
+            line="64"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.set` instead?"
+        errorLine1="    for (x in 0 until px) for (y in 0 until px) bmp.setPixel(x, y, if (m[x, y]) AColor.BLACK else AColor.WHITE)"
+        errorLine2="                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/AccountsDialog.kt"
+            line="65"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                else SettingsGroup { links.take(40).forEachIndexed { i, (m, u) -> if (i > 0) GroupDivider(); NavRow(u, &quot;${c.nameOf(m.sender)} · ${timeLabel(m.ts)}&quot;, Icons.Rounded.Link, Color(0xFF0EA5E9)) { runCatching { store.openUrl(android.net.Uri.parse(u)) } } } }"
+        errorLine2="                                                                                                                                                                                                                                          ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/ChatInfoScreen.kt"
+            line="141"
+            column="235"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                                        m.type == &quot;m.location&quot; &amp;&amp; m.geo != null -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(m.geo)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }"
+        errorLine2="                                                                                                                                                  ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/ChatScreen.kt"
+            line="412"
+            column="147"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putLong(m.roomId, System.currentTimeMillis()).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Driving.kt"
+            line="36"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX function `createBitmap` instead?"
+        errorLine1="    val bmp = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888)"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/InkEmoji.kt"
+            line="57"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        val edit = prefs?.edit()"
+        errorLine2="                   ~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Names.kt"
+            line="51"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="        val open = PendingIntent.getActivity(context, m.roomId.hashCode(), Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(android.net.Uri.parse(&quot;pager://room/&quot; + android.net.Uri.encode(m.roomId))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)"
+        errorLine2="                                                                                                                                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="103"
+            column="156"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX function `createBitmap` instead?"
+        errorLine1="        val bmp = android.graphics.Bitmap.createBitmap(128, 128, android.graphics.Bitmap.Config.ARGB_8888)"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="118"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX function `createBitmap` instead?"
+        errorLine1="        val out = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="129"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(android.net.Uri.parse(&quot;pager://chat/&quot; + android.net.Uri.encode(m.roomId))).putExtra(&quot;roomId&quot;, m.roomId)"
+        errorLine2="                                                                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="200"
+            column="93"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="            Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(android.net.Uri.parse(&quot;pager://chat/&quot; + android.net.Uri.encode(a.roomId))).putExtra(&quot;roomId&quot;, a.roomId).putExtra(&quot;attention&quot;, a.id)"
+        errorLine2="                                                                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Notifier.kt"
+            line="256"
+            column="93"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            runCatching { getSharedPreferences(&quot;pager.crash&quot;, MODE_PRIVATE).edit().putString(&quot;last&quot;, (java.util.Date().toString() + &quot;\n&quot; + e.stackTraceToString()).take(3000)).commit() }"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/PagerApp.kt"
+            line="22"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="    private fun save(list: List&lt;Reminder>) = prefs.edit().putString(&quot;json&quot;, json.encodeToString(ser, list)).apply()"
+        errorLine2="                                             ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Reminders.kt"
+            line="22"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().putString(&quot;json&quot;, json.encodeToString(AppSettings.serializer(), next)).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Settings.kt"
+            line="284"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        crash?.let { c -> GroupDivider(); NavRow(&quot;The app closed unexpectedly last time&quot;, &quot;Tap to copy the details and send them to me. ${c.lineSequence().drop(1).firstOrNull().orEmpty().take(120)}&quot;, Icons.AutoMirrored.Rounded.Help) { clip.setText(AnnotatedString(c)); crashPrefs.edit().remove(&quot;last&quot;).apply(); crash = null } }"
+        errorLine2="                                                                                                                                                                                                                                                                             ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/SettingsScreen.kt"
+            line="858"
+            column="270"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        val later = { prefs.edit().putBoolean(changedFlag, true).apply(); changedDismissed = true; Unit }"
+        errorLine2="                      ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/SettingsScreen.kt"
+            line="1101"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="    val finish = { prefs.edit().putBoolean(flag, true).apply(); dismissed = true; KeySetupState.finished++; Unit }"
+        errorLine2="                   ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/SettingsScreen.kt"
+            line="1106"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        onDismissRequest = { prefs.edit().putBoolean(&quot;batteryAsked&quot;, true).apply(); asked = true },"
+        errorLine2="                             ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/SettingsScreen.kt"
+            line="1123"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        confirmButton = { TextButton(onClick = { prefs.edit().putBoolean(&quot;batteryAsked&quot;, true).apply(); asked = true; Watchdog.requestExemption(context) }) { Text(&quot;Allow&quot;) } },"
+        errorLine2="                                                 ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/SettingsScreen.kt"
+            line="1126"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        dismissButton = { TextButton(onClick = { prefs.edit().putBoolean(&quot;batteryAsked&quot;, true).apply(); asked = true }) { Text(&quot;Not now&quot;) } },"
+        errorLine2="                                                 ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/SettingsScreen.kt"
+            line="1127"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        if (done) prefs.edit().putBoolean(&quot;done.$user&quot;, true).apply() else { index = 0; open = true }"
+        errorLine2="                  ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Tour.kt"
+            line="93"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs.edit().putBoolean(&quot;done.$user&quot;, true).apply()"
+        errorLine2="            ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Tour.kt"
+            line="108"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs.edit().clear().apply { _book.value.forEach { (k, v) -> putString(k, v) } }.apply()"
+        errorLine2="            ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Transcribe.kt"
+            line="50"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="    fun forgetAll() { _book.value = emptyMap(); prefs.edit().clear().apply() }"
+        errorLine2="                                                ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Transcribe.kt"
+            line="55"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            prefs.edit().putLong(&quot;checked&quot;, System.currentTimeMillis()).apply()"
+        errorLine2="            ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Updater.kt"
+            line="56"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            ctx.getSharedPreferences(&quot;pager.updates&quot;, Context.MODE_PRIVATE).edit().putBoolean(&quot;reopen&quot;, true).putLong(&quot;reopenAt&quot;, System.currentTimeMillis()).apply()"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Updater.kt"
+            line="180"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        prefs.edit().remove(&quot;reopen&quot;).apply()"
+        errorLine2="        ~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Updater.kt"
+            line="220"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.scale` instead?"
+        errorLine1="        val scaled = if (w == raw.width) raw else Bitmap.createScaledBitmap(raw, w, h, true)"
+        errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/WallpaperPhoto.kt"
+            line="35"
+            column="51"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse(&quot;package:&quot; + context.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)"
+        errorLine2="                                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/kotlin/app/pager/android/Watchdog.kt"
+            line="28"
+            column="83"/>
+    </issue>
+
+</issues>

@@ -11,8 +11,11 @@ import androidx.car.app.validation.HostValidator
  * conversation. Messages still arrive as car notifications too (see Notifier).
  */
 class PagerCarService : CarAppService() {
-    // Sideloaded builds are checked by Android Auto's own "Unknown sources" switch; the host list only matters for Play releases.
-    override fun createHostValidator(): HostValidator = HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
+    // Only the real Android Auto (and the car makers' own hosts) may connect: the list holds your chats. A debuggable test build accepts any host, so the
+    // desktop head unit works for development.
+    override fun createHostValidator(): HostValidator =
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
+        else HostValidator.Builder(applicationContext).addAllowedHosts(androidx.car.app.R.array.hosts_allowlist_sample).build()
 
     override fun onCreateSession(): Session = object : Session() {
         override fun onCreateScreen(intent: Intent): Screen = CarChatListScreen(carContext)

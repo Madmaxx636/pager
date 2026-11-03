@@ -3,8 +3,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { Gif } from "../core/gifs";
 import { setInfoPanelOpen } from "../core/layout";
 import {
-  AlarmClock, Archive, ArrowDownToLine, ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronLeft, Clock, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
-  Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, MailOpen, Image as ImageIcon, Video,
+  AlarmClock, ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronLeft, Clock, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
+  Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, Video,
 } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot, isBotRoom, realPeople } from "../core/types";
 import { networkMeta } from "../core/emoji";
@@ -217,7 +217,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     }
   }, [groupIds]);
   const openMsg = useCallback((m: Msg) => {
-    if (m.type === "m.location" && m.geo) { const [lat, lon] = m.geo.replace("geo:", "").split(";")[0].split(","); window.open(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`, "_blank", "noopener"); }
+    if (m.type === "m.location" && m.geo) { const [lat, lon] = m.geo.replace("geo:", "").split(";")[0].split(","); if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) return; window.open(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`, "_blank", "noopener"); }
     else if (m.type === "m.image" && m.mxc && !m.sticker) setViewer(m.id);
     else if ((m.type === "m.file" || m.type === "m.video") && m.mxc) void download(m);
   }, []);
@@ -684,7 +684,6 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
 }
 function Thumb({ mxc, onClick }: { mxc: string; onClick: () => void }) { const s = useMxc(mxc, 200); return <button className="thumb" onClick={onClick}>{s && <img src={s} alt="" />}</button>; }
 
-export { ImageIcon, Archive, ArrowDownToLine, MailOpen, _forward };
 
 function EnableEncryptionDialog({ roomId, onClose }: { roomId: string; onClose: () => void }) {
   const [busy, setBusy] = useState(false);

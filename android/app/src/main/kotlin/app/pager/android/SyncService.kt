@@ -32,7 +32,8 @@ class SyncService : Service() {
             .setContentIntent(open)
             .setOngoing(true)
             .build()
-        startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        // The form with a service type exists from Android 10; on Android 8 and 9 it is not there and calling it stopped the service from starting.
+        if (android.os.Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else startForeground(1, n)
 
         val store = (application as PagerApp).store
         Watchdog.schedule(this)

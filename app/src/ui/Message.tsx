@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { VideoPlayer } from "./Video";
-import { AlertCircle, Check, CheckCheck, Clock, FileText, MapPin, Music, Pause, Play, Star, UserRound, Mic } from "lucide-react";
+import { AlertCircle, Check, CheckCheck, Clock, FileText, MapPin, Music, Star, UserRound, Mic } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, nameOf, previewOf } from "../core/types";
 import { isEmojiOnly } from "../core/format";
 import { AppSettings, bubbleColorsFor, bubbleLook } from "../core/settings";
@@ -228,7 +228,6 @@ function PollCard({ msg, chat, onVote, onEnd }: { msg: Msg; chat: ChatState; onV
   );
 }
 
-export { Play, Pause };
 
 /** The words of a voice message, or a button to make them (when your server can). */
 function Words({ id, media, auto }: { id: string; media: string; auto: boolean }) {

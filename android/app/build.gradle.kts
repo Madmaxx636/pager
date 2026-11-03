@@ -9,6 +9,8 @@ plugins {
 android {
     namespace = "app.pager.android"
     compileSdk = 34
+    // The known, harmless findings are recorded in lint-baseline.xml; anything new fails the check (see .github/workflows/ci.yml).
+    lint { baseline = file("lint-baseline.xml") }
 
     defaultConfig {
         applicationId = "app.pager.android"
