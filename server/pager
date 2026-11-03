@@ -79,10 +79,10 @@ cmd_doctor() { # read-only checks, safe to run any time and to paste when asking
 # Backups made on a schedule are locked with a public key, so the server can make them but cannot read them back: the private key stays with you.
 # File layout: "PAGERBK2", a newline, the random file key locked with RSA (512 bytes for a 4096-bit key), then the AES-256 encrypted backup.
 BK_MAGIC="PAGERBK2"; BK_HEAD=9; BK_WRAP=512
-bk_lock() { # bk_lock <in> <out> <public key>
-  local k; k="$(openssl rand -hex 32)"
+bk_lock() { # bk_lock <in file, or - for standard input> <out> <public key>
+  local k src=(); k="$(openssl rand -hex 32)"; [ "$1" = - ] || src=(-in "$1")
   { printf '%s\n' "$BK_MAGIC"; printf %s "$k" | openssl pkeyutl -encrypt -pubin -inkey "$3" -pkeyopt rsa_padding_mode:oaep
-    PASS="$k" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PASS -in "$1"; } > "$2"
+    PASS="$k" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PASS "${src[@]}"; } > "$2"
 }
 bk_unlock() { # bk_unlock <in> <out> <private key>
   local k; k="$(dd if="$1" bs=1 skip=$BK_HEAD count=$BK_WRAP 2>/dev/null | openssl pkeyutl -decrypt -inkey "$3" -pkeyopt rsa_padding_mode:oaep)" || return 1
@@ -94,7 +94,7 @@ bk_is_keyed() { [ "$(head -c 8 "$1" 2>/dev/null)" = "$BK_MAGIC" ]; }
 cmd_backup() {
   local auto=0 out="" pass="" noenc=0 a
   for a in "$@"; do case "$a" in --auto) auto=1;; --no-encrypt) noenc=1;; *) out="$a";; esac; done
-  local dir="$HERE/data/backups" pub="${BACKUP_PUBKEY:-$HERE/data/backup-public.pem}" keep="${BACKUP_KEEP:-4}"
+  local dir="$HERE/data/backups" pub="${BACKUP_PUBKEY:-$HERE/data/backup-public.pem}" keep="${BACKUP_KEEP:-2}"
   if [ $auto = 1 ]; then
     [ -f "$pub" ] || die "No backup key at $pub (see scripts/backup-schedule.sh)"
     mkdir -p "$dir"; out="$dir/pager-backup-$(date +%Y%m%d-%H%M%S).tar.enc"
@@ -105,7 +105,7 @@ cmd_backup() {
       if [ -n "$pass" ]; then local again; read -r -s -p "Again: " again; echo; [ "$pass" = "$again" ] || die "The passphrases don't match"; out="${out%.enc}.enc"; fi
     fi
   fi
-  local tmp; if [ $auto = 1 ]; then mkdir -p "$dir"; tmp="$(mktemp -d "$dir/.work.XXXXXX")"; else tmp="$(mktemp -d)"; fi; TMPD="$tmp"
+  local tmp; if [ $auto = 1 ]; then mkdir -p "$dir"; tmp="$(mktemp -d "$dir/.work.XXXXXX")"; else tmp="$(mktemp -d "${TMPDIR:-/var/tmp}/pager.XXXXXX")"; fi; TMPD="$tmp"
   say "Saving the databases…"
   for host in $(printf '%s\n' postgres "$BRIDGE_DB" | sort -u); do
     for db in $(compose exec -T "$host" psql -U pager -d postgres -Atc "select datname from pg_database where datname not in ('postgres','template0','template1')"); do
@@ -117,9 +117,8 @@ cmd_backup() {
   # (a file that changes while it is read gives tar a warning, exit code 1: the copy is still good)
   tar -C "$HERE" -czhf "$tmp/files.tar.gz" "${items[@]}" 2>/dev/null || [ $? = 1 ] || tar -C "$HERE" -czhf "$tmp/files.tar.gz" "${items[@]:0:3}"
   printf 'pager-backup 1\nversion %s\ndate %s\nbridge-db-host %s\n' "$(cat ../VERSION 2>/dev/null)" "$(date -u +%FT%TZ)" "$BRIDGE_DB" > "$tmp/MANIFEST"
-  (cd "$tmp" && tar -cf all.tar MANIFEST files.tar.gz ./*.dump)
-  if [ $auto = 1 ]; then bk_lock "$tmp/all.tar" "$out.part" "$pub" && mv "$out.part" "$out"
-  elif [ -n "$pass" ]; then PASS="$pass" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PASS -in "$tmp/all.tar" -out "$out"; else gzip -c "$tmp/all.tar" > "$out"; fi
+  if [ $auto = 1 ]; then (cd "$tmp" && tar -cf - MANIFEST files.tar.gz ./*.dump) | bk_lock - "$out.part" "$pub" && mv "$out.part" "$out"
+  elif [ -n "$pass" ]; then (cd "$tmp" && tar -cf all.tar MANIFEST files.tar.gz ./*.dump); PASS="$pass" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PASS -in "$tmp/all.tar" -out "$out"; else (cd "$tmp" && tar -cf all.tar MANIFEST files.tar.gz ./*.dump); gzip -c "$tmp/all.tar" > "$out"; fi
   chmod 600 "$out"
   say "Backup saved: $out ($(du -h "$out" | cut -f1))"
   if [ $auto = 1 ]; then
@@ -136,7 +135,7 @@ cmd_backup() {
 cmd_verify() {
   local file="${1:?Usage: pager verify <backup file> [private key]}" key="${2:-${PAGER_BACKUP_KEY:-}}"
   [ -f "$file" ] || die "No such file: $file"
-  local tmp; tmp="$(mktemp -d)"; TMPD="$tmp"
+  local tmp; tmp="$(mktemp -d "${TMPDIR:-/var/tmp}/pager.XXXXXX")"; TMPD="$tmp"
   if bk_is_keyed "$file"; then
     [ -f "$key" ] || die "This backup is locked with a key: pager verify <file> <private key file>"
     bk_unlock "$file" "$tmp/all.tar" "$key" || die "The key does not open this backup, or the file is damaged"
@@ -158,7 +157,7 @@ cmd_restore() {
   local file="${1:?Usage: pager restore <backup file>}"; [ -f "$file" ] || die "No such file: $file"
   say "This REPLACES everything on this server with the backup."
   read -r -p "Type restore to continue: " ok; [ "${ok,,}" = "restore" ] || { say "Cancelled."; exit 0; }
-  local tmp; tmp="$(mktemp -d)"; TMPD="$tmp"
+  local tmp; tmp="$(mktemp -d "${TMPDIR:-/var/tmp}/pager.XXXXXX")"; TMPD="$tmp"
   if bk_is_keyed "$file"; then
     local key="${PAGER_BACKUP_KEY:-}"; [ -f "$key" ] || read -r -p "Private key file for this backup: " key
     [ -f "$key" ] || die "No such key file"

@@ -39,7 +39,7 @@ WantedBy=timers.target
 UNITEOF
     systemctl --user daemon-reload && systemctl --user enable --now pager-backup.timer
     loginctl enable-linger "$USER" 2>/dev/null || echo "(Couldn't turn on lingering: backups then only run while you are logged in.)"
-    echo "Backups are on: every night around 04:30, newest ${BACKUP_KEEP:-4} kept in $ROOT/data/backups."; exit 0;;
+    echo "Backups are on: every night around 04:30, newest ${BACKUP_KEEP:-2} kept in $ROOT/data/backups."; exit 0;;
   --remove)
     systemctl --user disable --now pager-backup.timer 2>/dev/null; rm -f "$UNIT_DIR/pager-backup.service" "$UNIT_DIR/pager-backup.timer"
     systemctl --user daemon-reload; echo "Scheduled backups are off (the backups already made stay in data/backups)."; exit 0;;
