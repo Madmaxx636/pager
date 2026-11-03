@@ -4,7 +4,7 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
-## 0.6.0 (phone, desktop, web; native 0.5.14)
+## 0.6.0 (phone, desktop, web; native 0.5.15)
 
 - **One contact, one set of notification settings:** a contact's Notifications settings, mute, Low priority and snooze are the same on all of their chats: a second number, the same person on another network, merged or not. The chat's Notifications sheet says when they are shared.
 - **Pinned pages show a glance:** when a message arrives on a pinned page while you are in the app, a short look at it appears over the pin's picture for a few seconds (it follows the page's preview setting: the words, only the sender, or "New message").
