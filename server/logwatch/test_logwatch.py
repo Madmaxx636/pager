@@ -32,6 +32,15 @@ class Importance(unittest.TestCase):
         self.assertNotEqual(a, lw.fingerprint("whatsapp", "2026-11-03T04:55:01Z ERR Something else entirely"))
 
 
+class Prefix(unittest.TestCase):
+    def test_the_service_is_taken_from_the_line_docker_compose_prints(self):
+        self.assertEqual(lw.split_prefix("postgres-1  | 2026-11-03 ERROR:  could not serialize"), ("postgres", "2026-11-03 ERROR:  could not serialize"))
+        self.assertEqual(lw.split_prefix("whatsapp-1  | hello\n"), ("whatsapp", "hello"))
+        self.assertEqual(lw.split_prefix("heisenbridge-1 | x"), ("heisenbridge", "x"))
+        self.assertEqual(lw.split_prefix("my-service-2  | y | z"), ("my-service", "y | z"))
+        self.assertIsNone(lw.split_prefix("no prefix here"))
+
+
 class Secrets(unittest.TestCase):
     def test_secrets_are_removed(self):
         t = lw.redact("login with password=hunter2hunter2 and access_token: abcdef123456789 and Authorization: Bearer abcdefghijklmnop")

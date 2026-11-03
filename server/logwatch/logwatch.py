@@ -151,7 +151,12 @@ class Watcher:
 def compose_cmd(*args):
     return ["docker", "compose", *args]
 
-SERVICE_OF = re.compile(r"^(?:[a-z0-9]+-)?([a-z0-9_.-]+?)(?:-\d+)?\s+\|\s?(.*)$")
+SERVICE_OF = re.compile(r"^([a-z0-9_.-]+?)-\d+\s+\|\s?(.*)$")      # "postgres-1  | the line": docker compose prints the service name and its number
+
+def split_prefix(raw):
+    """("postgres", "the line") from a line of `docker compose logs`, or None when it has no service in front."""
+    m = SERVICE_OF.match(raw.rstrip("\n"))
+    return (m.group(1), m.group(2)) if m else None
 
 def follow_logs(w):
     """Reads `docker compose logs -f` for all services; starts again if it ends."""
@@ -159,8 +164,8 @@ def follow_logs(w):
         try:
             p = subprocess.Popen(compose_cmd("logs", "-f", "--tail", "0", "--no-color"), cwd=SERVER, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
             for raw in p.stdout:
-                m = SERVICE_OF.match(raw.rstrip("\n"))
-                if m: w.line(m.group(1), m.group(2))
+                got = split_prefix(raw)
+                if got: w.line(*got)
             p.wait()
         except Exception as e:
             w.event("logwatch", "error", "log reader stopped: %s" % e)
