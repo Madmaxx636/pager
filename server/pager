@@ -76,13 +76,36 @@ cmd_doctor() { # read-only checks, safe to run any time and to paste when asking
 }
 
 # ---- Backup and restore ------------------------------------------------------------------------------------------------
+# Backups made on a schedule are locked with a public key, so the server can make them but cannot read them back: the private key stays with you.
+# File layout: "PAGERBK2", a newline, the random file key locked with RSA (512 bytes for a 4096-bit key), then the AES-256 encrypted backup.
+BK_MAGIC="PAGERBK2"; BK_HEAD=9; BK_WRAP=512
+bk_lock() { # bk_lock <in> <out> <public key>
+  local k; k="$(openssl rand -hex 32)"
+  { printf '%s\n' "$BK_MAGIC"; printf %s "$k" | openssl pkeyutl -encrypt -pubin -inkey "$3" -pkeyopt rsa_padding_mode:oaep
+    PASS="$k" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PASS -in "$1"; } > "$2"
+}
+bk_unlock() { # bk_unlock <in> <out> <private key>
+  local k; k="$(dd if="$1" bs=1 skip=$BK_HEAD count=$BK_WRAP 2>/dev/null | openssl pkeyutl -decrypt -inkey "$3" -pkeyopt rsa_padding_mode:oaep)" || return 1
+  [ -n "$k" ] || return 1
+  tail -c +$((BK_HEAD + BK_WRAP + 1)) "$1" | PASS="$k" openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:PASS -out "$2"
+}
+bk_is_keyed() { [ "$(head -c 8 "$1" 2>/dev/null)" = "$BK_MAGIC" ]; }
+
 cmd_backup() {
-  local out="${1:-$HOME/pager-backup-$(date +%Y%m%d-%H%M%S).tar.gz}" pass=""
-  if [ -t 0 ] && [ "${2:-}" != "--no-encrypt" ]; then
-    read -r -s -p "Passphrase to lock this backup (empty = unencrypted): " pass; echo
-    if [ -n "$pass" ]; then local again; read -r -s -p "Again: " again; echo; [ "$pass" = "$again" ] || die "The passphrases don't match"; out="${out%.enc}.enc"; fi
+  local auto=0 out="" pass="" noenc=0 a
+  for a in "$@"; do case "$a" in --auto) auto=1;; --no-encrypt) noenc=1;; *) out="$a";; esac; done
+  local dir="$HERE/data/backups" pub="${BACKUP_PUBKEY:-$HERE/data/backup-public.pem}" keep="${BACKUP_KEEP:-4}"
+  if [ $auto = 1 ]; then
+    [ -f "$pub" ] || die "No backup key at $pub (see scripts/backup-schedule.sh)"
+    mkdir -p "$dir"; out="$dir/pager-backup-$(date +%Y%m%d-%H%M%S).tar.enc"
+  else
+    out="${out:-$HOME/pager-backup-$(date +%Y%m%d-%H%M%S).tar.gz}"
+    if [ -t 0 ] && [ $noenc = 0 ]; then
+      read -r -s -p "Passphrase to lock this backup (empty = unencrypted): " pass; echo
+      if [ -n "$pass" ]; then local again; read -r -s -p "Again: " again; echo; [ "$pass" = "$again" ] || die "The passphrases don't match"; out="${out%.enc}.enc"; fi
+    fi
   fi
-  local tmp; tmp="$(mktemp -d)"; TMPD="$tmp"
+  local tmp; if [ $auto = 1 ]; then mkdir -p "$dir"; tmp="$(mktemp -d "$dir/.work.XXXXXX")"; else tmp="$(mktemp -d)"; fi; TMPD="$tmp"
   say "Saving the databases…"
   for host in $(printf '%s\n' postgres "$BRIDGE_DB" | sort -u); do
     for db in $(compose exec -T "$host" psql -U pager -d postgres -Atc "select datname from pg_database where datname not in ('postgres','template0','template1')"); do
@@ -91,14 +114,44 @@ cmd_backup() {
   done
   say "Saving settings, keys and files…"
   local items=(.env data/synapse data/bridges data/api data/caddy)
-  tar -C "$HERE" -czhf "$tmp/files.tar.gz" "${items[@]}" 2>/dev/null || tar -C "$HERE" -czhf "$tmp/files.tar.gz" "${items[@]:0:3}"
+  # (a file that changes while it is read gives tar a warning, exit code 1: the copy is still good)
+  tar -C "$HERE" -czhf "$tmp/files.tar.gz" "${items[@]}" 2>/dev/null || [ $? = 1 ] || tar -C "$HERE" -czhf "$tmp/files.tar.gz" "${items[@]:0:3}"
   printf 'pager-backup 1\nversion %s\ndate %s\nbridge-db-host %s\n' "$(cat ../VERSION 2>/dev/null)" "$(date -u +%FT%TZ)" "$BRIDGE_DB" > "$tmp/MANIFEST"
   (cd "$tmp" && tar -cf all.tar MANIFEST files.tar.gz ./*.dump)
-  if [ -n "$pass" ]; then PASS="$pass" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PASS -in "$tmp/all.tar" -out "$out"; else gzip -c "$tmp/all.tar" > "$out"; fi
+  if [ $auto = 1 ]; then bk_lock "$tmp/all.tar" "$out.part" "$pub" && mv "$out.part" "$out"
+  elif [ -n "$pass" ]; then PASS="$pass" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PASS -in "$tmp/all.tar" -out "$out"; else gzip -c "$tmp/all.tar" > "$out"; fi
   chmod 600 "$out"
   say "Backup saved: $out ($(du -h "$out" | cut -f1))"
-  [ -z "$pass" ] && say "It is NOT encrypted: it holds your server's keys and your chats' data. Keep it somewhere private."
-  say "Restore it with: pager restore $out"
+  if [ $auto = 1 ]; then
+    # keep the newest few
+    ls -1t "$dir"/pager-backup-*.tar.enc 2>/dev/null | tail -n +$((keep + 1)) | xargs -r rm -f --
+    say "Kept the newest $keep backups in $dir."
+  else
+    [ -z "$pass" ] && say "It is NOT encrypted: it holds your server's keys and your chats' data. Keep it somewhere private."
+    say "Restore it with: pager restore $out"
+  fi
+}
+
+# Checks that a backup can be opened and read, without changing anything. Needs the private key (so run it where you keep it).
+cmd_verify() {
+  local file="${1:?Usage: pager verify <backup file> [private key]}" key="${2:-${PAGER_BACKUP_KEY:-}}"
+  [ -f "$file" ] || die "No such file: $file"
+  local tmp; tmp="$(mktemp -d)"; TMPD="$tmp"
+  if bk_is_keyed "$file"; then
+    [ -f "$key" ] || die "This backup is locked with a key: pager verify <file> <private key file>"
+    bk_unlock "$file" "$tmp/all.tar" "$key" || die "The key does not open this backup, or the file is damaged"
+  elif [[ "$file" == *.enc ]]; then
+    local pass; read -r -s -p "Backup passphrase: " pass; echo; PASS="$pass" openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:PASS -in "$file" -out "$tmp/all.tar" || die "Wrong passphrase, or the file is damaged"
+  else gzip -dc "$file" > "$tmp/all.tar"; fi
+  tar -C "$tmp" -xf "$tmp/all.tar"
+  grep -q '^pager-backup 1' "$tmp/MANIFEST" || die "That doesn't look like a Pager backup"
+  tar -tzf "$tmp/files.tar.gz" >/dev/null || die "The files inside are damaged"
+  local f n=0
+  for f in "$tmp"/*.dump; do
+    docker run --rm -i docker.io/library/postgres:16-alpine pg_restore -l < "$f" >/dev/null || die "The database dump $(basename "$f") is damaged"
+    n=$((n + 1))
+  done
+  say "OK: $(grep '^date' "$tmp/MANIFEST" | cut -d' ' -f2), version $(grep '^version' "$tmp/MANIFEST" | cut -d' ' -f2), $n databases and the files all read back."
 }
 
 cmd_restore() {
@@ -106,7 +159,11 @@ cmd_restore() {
   say "This REPLACES everything on this server with the backup."
   read -r -p "Type restore to continue: " ok; [ "${ok,,}" = "restore" ] || { say "Cancelled."; exit 0; }
   local tmp; tmp="$(mktemp -d)"; TMPD="$tmp"
-  if [[ "$file" == *.enc ]]; then local pass; read -r -s -p "Backup passphrase: " pass; echo; PASS="$pass" openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:PASS -in "$file" -out "$tmp/all.tar" || die "Wrong passphrase, or the file is damaged"
+  if bk_is_keyed "$file"; then
+    local key="${PAGER_BACKUP_KEY:-}"; [ -f "$key" ] || read -r -p "Private key file for this backup: " key
+    [ -f "$key" ] || die "No such key file"
+    bk_unlock "$file" "$tmp/all.tar" "$key" || die "The key does not open this backup, or the file is damaged"
+  elif [[ "$file" == *.enc ]]; then local pass; read -r -s -p "Backup passphrase: " pass; echo; PASS="$pass" openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:PASS -in "$file" -out "$tmp/all.tar" || die "Wrong passphrase, or the file is damaged"
   else gzip -dc "$file" > "$tmp/all.tar"; fi
   tar -C "$tmp" -xf "$tmp/all.tar"
   grep -q '^pager-backup 1' "$tmp/MANIFEST" || die "That doesn't look like a Pager backup"
@@ -141,12 +198,14 @@ pager update              get the newest Pager and restart
 pager codes               show the invite and admin codes
 pager doctor              checks that are safe to run any time; paste the output when asking for help
 pager backup [file]       save everything (asks for a passphrase to lock it)
+pager backup --auto       the scheduled kind: locked with the public key, kept in data/backups
+pager verify <file> [key] check that a backup opens and reads back
 pager restore <file>      put a backup back (replaces what is here)
 H
 }
 
 case "${1:-help}" in
   status) cmd_status;; logs) shift; cmd_logs "$@";; start) cmd_start;; stop) cmd_stop;; restart) shift; cmd_restart "$@";;
-  codes) cmd_codes;; update) cmd_update;; doctor) cmd_doctor;; backup) shift; cmd_backup "$@";; restore) shift; cmd_restore "$@";;
+  codes) cmd_codes;; update) cmd_update;; doctor) cmd_doctor;; backup) shift; cmd_backup "$@";; verify) shift; cmd_verify "$@";; restore) shift; cmd_restore "$@";;
   help|-h|--help) cmd_help;; *) cmd_help; exit 1;;
 esac
