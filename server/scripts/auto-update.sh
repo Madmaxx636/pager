@@ -87,11 +87,13 @@ git -C "$ROOT" fetch -q origin "$BRANCH" 2>>"$LOG" || { log "can't reach GitHub 
 before="$(git -C "$ROOT" rev-parse HEAD)"; target="$(git -C "$ROOT" rev-parse "origin/$BRANCH")"
 [ "$before" = "$target" ] && exit 0
 [ "$(cat "$SERVER_DIR/data/.auto-update-bad" 2>/dev/null)" = "$target" ] && exit 0      # that version failed here before: wait for a newer one
-if ! git -C "$ROOT" merge-base --is-ancestor "$before" "$target"; then log "GitHub's version is not a straight continuation of this one; leaving things as they are"; exit 0; fi
+# If GitHub's history was rewritten (not a straight continuation of this copy), follow it anyway: this copy has no changes of its own (checked next) and GitHub is its source.
+rewritten=0; git -C "$ROOT" merge-base --is-ancestor "$before" "$target" || rewritten=1
 if [ -n "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]; then log "this server has changes of its own in the code; not updating over them"; exit 0; fi
 
 changed="$(git -C "$ROOT" diff --name-only "$before" "$target")"
-git -C "$ROOT" merge -q --ff-only "origin/$BRANCH" || { log "couldn't bring in the new version"; exit 0; }
+if [ "$rewritten" = 1 ]; then log "GitHub's history was rewritten; following it"; git -C "$ROOT" reset -q --hard "origin/$BRANCH" || { log "couldn't bring in the new version"; exit 0; }
+else git -C "$ROOT" merge -q --ff-only "origin/$BRANCH" || { log "couldn't bring in the new version"; exit 0; }; fi
 log "new version $(cat "$ROOT/VERSION" 2>/dev/null) ($(git -C "$ROOT" rev-parse --short HEAD)): $(echo "$changed" | wc -l) files changed"
 
 fail=0
