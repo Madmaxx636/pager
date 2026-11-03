@@ -218,6 +218,8 @@ data class Incoming(
     val preview: String = "full",
     /** Someone reacted to a message (the text says how). */
     val reaction: Boolean = false,
+    /** The message could not be read yet (its key has not arrived): no alert is made for it until it can be, never one that says so. */
+    val locked: Boolean = false,
 )
 
 /** The bridge's own bot account (e.g. @signalbot:server). It sends a receipt when a message reaches the other network: that means "delivered", not "read". */

@@ -8,9 +8,9 @@ import {
 } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot, isBotRoom, realPeople } from "../core/types";
 import { networkMeta } from "../core/emoji";
-import { useSettings, updateSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
+import { useSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
 import {
-  warmUp, edit, enableEncryption, endPoll, forward as _forward, loadOlder, readingOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendAttention, sendContact, sendFile, gifFile,
+  chatNotifPrefs, setChatNotif, siblingsOf, warmUp, edit, enableEncryption, endPoll, forward as _forward, loadOlder, readingOlder, markRead, markUnread, me, members, muteLeft, mediaUrl, pin, react, remind, remove, rename, schedule, send, sendAttention, sendContact, sendFile, gifFile,
   sendLocation, sendPoll, sendSticker, setDraft, setLowPriority, setMuted, setTag, snooze, leave, saveAsSticker, toggleStar, typing, useStore, votePoll, getState, setLinks, loadWholeHistory, setAlias, setSolo,
 } from "../core/store";
 import { addLink, buildMerged, groupOf, suggestLinks, unlink } from "../core/links";
@@ -641,7 +641,7 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
         <SheetItem icon={Tag} label="Labels" hint={labels.length ? labels.join(", ") : "None"} onClick={() => nav(`settings/labels`)} />
         {!chat.encrypted && <SheetItem icon={Lock} label="Turn on encryption" hint="Messages from now on are end-to-end encrypted" onClick={() => setEncDlg(true)} />}
         {chat.encrypted && <SheetItem icon={Lock} label="Encrypted" hint="End-to-end encrypted. This can't be turned off" onClick={() => {}} />}
-        <SheetItem icon={Bell} label="Notifications" hint={notifSummary(st.notifChat[chat.id])} onClick={() => setNotifDlg(true)} />
+        <SheetItem icon={Bell} label="Notifications" hint={notifSummary(chatNotifPrefs(chat.id))} onClick={() => setNotifDlg(true)} />
         <SheetItem icon={Hourglass} label="Snooze…" hint="Hide this page and bring it back later" onClick={() => setWhen("snooze")} />
         <div className="tabs flat">{(["photos", "links", "files"] as const).map((t) => <button key={t} className={"tab" + (tab === t ? " on" : "")} onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)} {t === "photos" ? photos.length : t === "links" ? links.length : files.length}</button>)}</div>
         {tab === "photos" && (photos.length ? <div className="photo-grid">{photos.slice(0, 60).map((m) => <Thumb key={m.id} mxc={m.mxc!} onClick={() => onViewImage(m.id)} />)}</div> : <p className="muted pad">No photos loaded yet. Scroll up in the page to load more.</p>)}
@@ -658,16 +658,17 @@ function InfoPanel({ chat, nav, onClose, onViewImage }: { chat: ChatState; nav: 
         <Modal title={`Notifications for ${name}`} onClose={() => setNotifDlg(false)}>
           <div className="stack">
             {(() => {
-              const p = st.notifChat[chat.id] ?? {};
-              const set = (patch: Partial<ChatNotifPrefs>) => updateSettings({ notifChat: { ...st.notifChat, [chat.id]: { ...p, ...patch } } });
+              const p = chatNotifPrefs(chat.id);
+              const set = (patch: Partial<ChatNotifPrefs>) => setChatNotif(chat.id, patch);
               return <>
                 <Select title="Importance" value={p.level ?? "default"} options={[["default", "Default"], ["priority", "Priority: always gets through"], ["silent", "Silent: shown without sound"]]} onChange={(v) => set({ level: v })} />
                 <Select title="Notify me about" value={p.mode ?? "default"} options={[["default", "Use my general settings"], ["all", "Every message"], ["mentions", "Mentions and replies only"], ["none", "Nothing"]]} onChange={(v) => set({ mode: v })} />
                 <Select title="Sound" value={p.sound ?? "default"} options={[["default", "Use my general settings"], ["off", "Silent"]]} onChange={(v) => set({ sound: v })} />
                 <Select title="Alert sound" value={p.soundId ?? "default"} options={[["default", "Use the app or network sound"], ...SOUNDS]} onChange={(v) => { set({ soundId: v }); if (v !== "default") playSound(v, st.notifSoundVolume); }} />
                 <Select title="Message previews" value={p.preview ?? "default"} options={[["default", "Use my general settings"], ["show", "Show message"], ["hide", "Hide message"]]} onChange={(v) => set({ preview: v })} />
+                {siblingsOf(chat.id).length > 0 && <p className="muted">These settings, mute and Low priority are shared with {name}'s other chats.</p>}
                 <p className="muted">Mute and Low priority still apply: muted pages only notify for mentions, replies and your keywords.</p>
-                <div className="row-end"><button className="link" onClick={() => { const { [chat.id]: _x, ...rest } = st.notifChat; updateSettings({ notifChat: rest }); }}>Reset</button><button className="primary" onClick={() => setNotifDlg(false)}>Done</button></div>
+                <div className="row-end"><button className="link" onClick={() => setChatNotif(chat.id, null)}>Reset</button><button className="primary" onClick={() => setNotifDlg(false)}>Done</button></div>
               </>;
             })()}
           </div>

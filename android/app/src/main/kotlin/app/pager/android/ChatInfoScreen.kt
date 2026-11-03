@@ -158,7 +158,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
                 if (c.encrypted) NavRow("Encrypted", "End-to-end encrypted. This can't be turned off", Icons.Rounded.Lock) {}
                 else NavRow("Turn on encryption", "Messages from now on are end-to-end encrypted", Icons.Rounded.Lock) { encDialog = true }
             }
-            SettingsGroup { NavRow("Notifications", notifSummary(LocalRawSettings.current.notifChat[roomId]), Icons.Rounded.Notifications) { notifSheet = true } }
+            SettingsGroup { NavRow("Notifications", notifSummary(LocalRawSettings.current.notifChat[roomId] ?: store.chatNotifPrefs(roomId)), Icons.Rounded.Notifications) { notifSheet = true } }
             SettingsGroup { ButtonRow("Delete page", danger = true) { confirmLeave = true } }
         }
     }
@@ -181,8 +181,8 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
     }
     if (notifSheet) {
         val raw = LocalRawSettings.current
-        val p = raw.notifChat[roomId] ?: ChatNotifPrefs()
-        fun upd(n: ChatNotifPrefs) = store.settings.update { copy(notifChat = if (n.isDefault) notifChat - roomId else notifChat + (roomId to n)) }
+        val p = raw.notifChat[roomId] ?: store.chatNotifPrefs(roomId)
+        fun upd(n: ChatNotifPrefs) = store.setChatNotif(roomId, n)
         Sheet({ notifSheet = false }) {
             SheetTitle("Notifications for $name")
             ChoiceRow("Importance", listOf("default" to "Default", "priority" to "Priority: always gets through", "silent" to "Silent: shown without sound"), p.level) { upd(p.copy(level = it)) }
@@ -194,6 +194,7 @@ fun ChatInfoScreen(roomId: String, onBack: () -> Unit, onLeft: () -> Unit, onSea
             ButtonRow("Send a test notification for this page") { Notifier.testFor(ctx, store, roomId, name, c.network, c.isGroup) }
             Text("Then long-press it in the shade to set Priority, Bubble or Silent for just this page.", Modifier.padding(horizontal = 24.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             NavRow("Android settings for this page", "Priority conversation, bubble and sound, in the system's own settings", Icons.Rounded.Notifications) { Notifier.openSystemSettings(ctx, roomId) }
+            if (store.siblingsOf(roomId).isNotEmpty()) Text("These settings, mute and Low priority are shared with $name's other chats.", Modifier.padding(horizontal = 24.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("Mute and Low priority still apply: muted pages only notify for mentions, replies and your keywords.", Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

@@ -1,4 +1,4 @@
-import { AppSettings, inQuietHours } from "./settings";
+import { AppSettings, ChatNotifPrefs, inQuietHours } from "./settings";
 
 /** What to do with one incoming message, from every notification setting. Pure, so it is the same everywhere and testable. */
 export interface PolicyInput {
@@ -16,6 +16,8 @@ export interface PolicyInput {
   day: number;
   /** Current time in ms; only needed for Do not disturb. */
   nowMs?: number;
+  /** This chat's settings when they come from the contact's other chats (see chatNotifPrefs); else the chat's own entry in notifChat. */
+  chat?: ChatNotifPrefs;
 }
 export interface Decision {
   show: boolean;
@@ -37,7 +39,7 @@ type Slice = Pick<AppSettings, "notifEnabled" | "notifScope" | "notifGroupMentio
 
 export function decide(m: PolicyInput, s: Slice): Decision {
   const direct = m.mentioned || !!m.replyToMe || keywordHit(m.text, s.notifKeywords);
-  const chat = s.notifChat[m.roomId] ?? {};
+  const chat = m.chat ?? s.notifChat[m.roomId] ?? {};
   const chatMode = chat.mode && chat.mode !== "default" ? chat.mode : undefined;
   const netMode = s.notifNetworkMode[m.network] ?? (s.notifMutedNetworks.includes(m.network) ? "none" : "all");
   const preview = chat.preview === "show" ? "full" : chat.preview === "hide" ? "hidden" : s.notifPreview;

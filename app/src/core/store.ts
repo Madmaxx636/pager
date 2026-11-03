@@ -6,17 +6,17 @@ import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { BlobCache } from "./lru";
 import { groupFaces } from "./faces";
-import { Links, buildMerged, groupOf, mergeSummaries } from "./links";
+import { Links, buildMerged, contactIndex, groupOf, mergeSummaries } from "./links";
 import { shrinkImage } from "./shrink";
 import { forgetTranscripts } from "./transcribe";
-import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity } from "./reducer";
+import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity, textOfClear } from "./reducer";
 import { toOggOpus, voiceInfo } from "./voice";
 import { movedIds } from "./pins";
 import { Crypto, isEncryptedType } from "./crypto";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
 import { playSound } from "./sounds";
-import { getSettings, updateSettings, useSettings, AppSettings, SYNC_TYPE, SavedSettings, deviceLabel, mergeSaved } from "./settings";
+import { getSettings, updateSettings, ChatNotifPrefs, useSettings, AppSettings, SYNC_TYPE, SavedSettings, deviceLabel, mergeSaved } from "./settings";
 import {
   ChatState, ChatSummary, Incoming, LABEL_PREFIX, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, StickerPack, Sticker, displayName, isStoriesRoom, isArchived, isBotRoom, isGroup, isLowPriority, isPinned,
   labelsOf, lastPreview, lastTs, nameOf, previewOf,
@@ -105,7 +105,7 @@ function buildRows(s: State, st: AppSettings, user: string): ChatSummary[] {
       const last = c.messages[c.messages.length - 1];
       return {
         id: c.id, name: displayName(c, user), network: c.network, avatarMxc: c.avatarMxc, preview: lastPreview(c), ts: lastTs(c), unread: c.unread,
-        faces: isGroup(c) && !c.avatarMxc ? groupFaces(c, user) : undefined, markedUnread: c.markedUnread, pinned: isPinned(c), archived: isArchived(c), muted: s.muted.includes(c.id), isGroup: isGroup(c), draft: s.drafts[c.id]?.trim() || undefined,
+        faces: isGroup(c) && !c.avatarMxc ? groupFaces(c, user) : undefined, markedUnread: c.markedUnread, pinned: isPinned(c), archived: isArchived(c), muted: s.muted.includes(c.id) || (contacts().get(c.id) ?? []).some((o) => s.muted.includes(o)), isGroup: isGroup(c), draft: s.drafts[c.id]?.trim() || undefined,
         lowPriority: isLowPriority(c), stories: isStoriesRoom(c) || undefined, labels: labelsOf(c), pinOrder: c.pinOrder ?? Number.MAX_VALUE,
         unanswered: !!last && last.sender !== user, lastFromMe: last?.sender === user, typing: c.typing.length > 0,
       };
@@ -296,7 +296,7 @@ async function retryWaiting(rooms?: string[]) {
       const sid = (m.sealed as any)?.content?.session_id as string | undefined;
       if (sid && Date.now() - (askedBackup.get(roomId + sid) ?? 0) > 6_000) { askedBackup.set(roomId + sid, Date.now()); await e2ee.fetchKeyFromBackup(roomId, sid); }
       const clear = await e2ee.decrypt(roomId, m.sealed as any);
-      if (clear) patchChat(roomId, (c) => replaceDecrypted(c, clear));
+      if (clear) { patchChat(roomId, (c) => replaceDecrypted(c, clear)); releaseAlert(m.id, textOfClear(clear)); }
     }
     patchChat(roomId, (c) => relabelUnreadable(c, Date.now()));
   }
@@ -458,6 +458,21 @@ async function holdUntilKeys(s: Session, signal: AbortSignal) {
   }
 }
 
+// ---- Keeping sync alive ----------------------------------------------------------------------------------------------------
+let lastSyncAt = 0;
+/** Starts the sync loop again: a request left waiting on a connection that went away (the computer slept, the Wi-Fi changed) would otherwise hold messages back. */
+function restartSync() {
+  if (!state.session) return;
+  syncAbort?.abort(); syncAbort = new AbortController();
+  void syncLoop(state.session, syncAbort.signal);
+}
+if (typeof window !== "undefined") {
+  // The long wait for news returns every half minute or so: a long silence while we are online means it is stuck.
+  window.setInterval(() => { if (state.session && navigator.onLine && lastSyncAt && Date.now() - lastSyncAt > 90_000) restartSync(); }, 30_000);
+  window.addEventListener("online", () => { if (state.session && lastSyncAt && Date.now() - lastSyncAt > 20_000) restartSync(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && state.session && lastSyncAt && Date.now() - lastSyncAt > 60_000) restartSync(); });
+}
+
 async function syncLoop(s: Session, signal: AbortSignal) {
   await holdUntilKeys(s, signal).catch(() => {});
   let backoff = 1000;
@@ -472,6 +487,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       // The update is in: move on to the next one now, whatever the notifications and bookkeeping below do. One failure there must never make
       // this device read the same update again forever (that left it out of step with your other devices).
       since = typeof res.next_batch === "string" ? res.next_batch : since;
+      lastSyncAt = Date.now();
       try {
         // Pages whose newest events were all bookkeeping arrive with no messages: fetch a few older messages for the first of them now, so
         // the list shows something to read instead of "No messages yet" until each one is opened.
@@ -496,9 +512,13 @@ async function syncLoop(s: Session, signal: AbortSignal) {
         for (const m of r.incoming) {
           const c = r.chats[m.roomId];
           if (m.attention && !initial && m.id && isFresh(m.ts) && !muted.includes(m.roomId)) raise({ id: m.id, roomId: m.roomId, chat: m.chat, sender: m.sender, kind: m.attention, mxc: m.attention === "image" ? m.mxc : undefined });
+          // A message that cannot be read yet makes no alert (and never one that says it is locked): it waits for its key and then alerts with its own words.
+          if (m.locked && m.id) { holdAlert(m); continue; }
           if (st.convoSounds && looking(m.roomId) && attended()) { playSound(m.reaction ? st.reactionSound : st.receiveSound, st.convoSoundVolume); continue; }
-          const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text,
-            quiet: muted.includes(m.roomId) || (c ? isLowPriority(c) : false), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
+          // The settings of a contact are the same on all of their chats: another number, another network, merged or not.
+          const same = [m.roomId, ...siblingsOf(m.roomId)];
+          const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text, chat: chatNotifPrefs(m.roomId),
+            quiet: same.some((id) => muted.includes(id) || (state.chats[id] ? isLowPriority(state.chats[id]) : false)), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
           if (!d.show) continue;
           notify(m, d);
         }
@@ -544,7 +564,48 @@ async function signOutLocal() {
 
 // ---- Notifications ----------------------------------------------------------------------
 
+// ---- Alerts that wait for their key ---------------------------------------------------------------------------------------
+const heldAlerts = new Map<string, { m: Incoming; timer: number }>();
+const HOLD_MS = 90_000;
+/** Keeps the alert for an unreadable message until it can be read; if the key does not come in time, it still alerts, with no words of its own. */
+function holdAlert(m: Incoming) {
+  if (!m.id || heldAlerts.has(m.id)) return;
+  const id = m.id;
+  heldAlerts.set(id, { m, timer: window.setTimeout(() => releaseAlert(id, undefined), HOLD_MS) });
+}
+/** The key came (with the message's words), or time ran out (no words): make the alert now, by the same rules as any other. */
+function releaseAlert(id: string | undefined, text: string | undefined) {
+  const h = id ? heldAlerts.get(id) : undefined;
+  if (!h || !id) return;
+  window.clearTimeout(h.timer); heldAlerts.delete(id);
+  const m: Incoming = { ...h.m, locked: false, text: text ?? "New message" };
+  const st = getSettings(), when = new Date(), c = state.chats[m.roomId];
+  if (st.convoSounds && looking(m.roomId) && attended()) { playSound(m.reaction ? st.reactionSound : st.receiveSound, st.convoSoundVolume); return; }
+  const same = [m.roomId, ...siblingsOf(m.roomId)];
+  const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text, chat: chatNotifPrefs(m.roomId),
+    quiet: same.some((x) => state.muted.includes(x) || (state.chats[x] ? isLowPriority(state.chats[x]) : false)), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
+  if (d.show) notify(m, d);
+}
+
+// ---- A glance at the newest message of a pinned page ----------------------------------------------------------------------
+type Glance = { text: string; at: number };
+let glanceMap: Record<string, Glance> = {};
+const glanceListeners = new Set<() => void>();
+/** The messages that have just come in on pinned pages, by chat: shown over the pin for a few seconds. */
+export function useGlances(): Record<string, Glance> {
+  return useSyncExternalStore((cb) => { glanceListeners.add(cb); return () => glanceListeners.delete(cb); }, () => glanceMap);
+}
+function glance(m: Incoming, d: Decision) {
+  const same = [m.roomId, ...siblingsOf(m.roomId)];
+  if (!same.some((id) => state.chats[id] && isPinned(state.chats[id]))) return;
+  const text = d.preview === "hidden" ? "New message" : d.preview === "sender" ? m.sender : m.isGroup ? `${m.sender}: ${m.text}` : m.text;
+  const g: Glance = { text: text.replace(/\s+/g, " ").trim().slice(0, 60), at: Date.now() };
+  glanceMap = { ...glanceMap, [m.roomId]: g }; glanceListeners.forEach((l) => l());
+  window.setTimeout(() => { if (glanceMap[m.roomId] === g) { const { [m.roomId]: _x, ...rest } = glanceMap; glanceMap = rest; glanceListeners.forEach((l) => l()); } }, 7_000);
+}
+
 function notify(m: Incoming, d: Decision) {
+  glance(m, d);
   const inApp = attended();
   // The alert sound plays for a page you are not looking at even while you are in Pager; the pop-up only appears when you are not.
   if (inApp) { if (!d.silent) playSound(m.reaction ? getSettings().reactionSound : d.sound, getSettings().notifSoundVolume); return; }
@@ -900,7 +961,7 @@ export function movePin(roomId: string, toIndex: number, shown?: string[]) {
     }
   });
 }
-export const setLowPriority = (roomId: string, on: boolean) => setTag(roomId, "m.lowpriority", on);
+export const setLowPriority = (roomId: string, on: boolean) => [roomId, ...siblingsOf(roomId)].forEach((id) => setTag(id, "m.lowpriority", on));
 export const addLabel = (roomId: string, name: string) => setTag(roomId, LABEL_PREFIX + name.trim(), true);
 export const removeLabel = (roomId: string, name: string) => setTag(roomId, LABEL_PREFIX + name, false);
 export function renameLabel(old: string, next: string) {
@@ -915,19 +976,45 @@ export function useLabels(): string[] {
 
 /** Beeper-style snooze: tuck the chat into the archive and bring it back, unread, at [whenMs]. */
 export function snooze(roomId: string, whenMs: number) {
-  setTag(roomId, "u.archived", true);
-  remind(roomId, whenMs, true);
+  for (const id of [roomId, ...siblingsOf(roomId)]) { setTag(id, "u.archived", true); remind(id, whenMs, true); }
 }
 
 const muteUntil: Record<string, number> = lsGet("pager.muteUntil", {});
+/** Mutes (or unmutes) a contact: every chat of the same person, so the other number is quiet too. */
 export function setMuted(roomId: string, muted: boolean, forMs?: number) {
+  for (const id of [roomId, ...siblingsOf(roomId)]) setMutedOne(id, muted, forMs);
+}
+function setMutedOne(roomId: string, muted: boolean, forMs?: number) {
   set({ muted: muted ? [...new Set([...state.muted, roomId])] : state.muted.filter((r) => r !== roomId) });
   if (muted && forMs) muteUntil[roomId] = Date.now() + forMs; else delete muteUntil[roomId];
   lsSet("pager.muteUntil", muteUntil);
   void matrix.setMuted(roomId, muted).catch(() => {});
 }
-function expireMutes() { const now = Date.now(); Object.entries(muteUntil).filter(([, t]) => t <= now).forEach(([r]) => setMuted(r, false)); }
-export const muteLeft = (roomId: string) => (muteUntil[roomId] ? muteUntil[roomId] - Date.now() : undefined);
+function expireMutes() { const now = Date.now(); Object.entries(muteUntil).filter(([, t]) => t <= now).forEach(([r]) => setMutedOne(r, false)); }
+export const muteLeft = (roomId: string) => { const t = [roomId, ...siblingsOf(roomId)].map((id) => muteUntil[id]).filter(Boolean).sort()[0]; return t ? t - Date.now() : undefined; };
+
+// ---- One contact, one set of notification settings ----------------------------------------------------------------------
+let contactCache: { chats: Record<string, ChatState>; links: Links; index: Map<string, string[]> } | undefined;
+/** For each chat, the other chats of the same contact (merged, or the same person on another number or network). */
+function contacts(): Map<string, string[]> {
+  if (!contactCache || contactCache.chats !== state.chats || contactCache.links !== state.links) {
+    const user = me();
+    contactCache = { chats: state.chats, links: state.links, index: contactIndex(Object.values(state.chats).filter((c) => !isBotRoom(c, user)).map((c) => ({ id: c.id, name: displayName(c, user), network: c.network, isGroup: isGroup(c) })), state.links) };
+  }
+  return contactCache.index;
+}
+export const siblingsOf = (roomId: string): string[] => contacts().get(roomId) ?? [];
+/** A chat's notification settings: its own, else those of the same contact's other chats. */
+export function chatNotifPrefs(roomId: string): ChatNotifPrefs {
+  const all = getSettings().notifChat;
+  return all[roomId] ?? siblingsOf(roomId).map((o) => all[o]).find(Boolean) ?? {};
+}
+/** Changes a contact's notification settings on all of their chats at once ([patch] null puts them back to the defaults). */
+export function setChatNotif(roomId: string, patch: Partial<ChatNotifPrefs> | null) {
+  const base = chatNotifPrefs(roomId), next = { ...getSettings().notifChat };
+  for (const id of [roomId, ...siblingsOf(roomId)]) { if (patch === null) delete next[id]; else next[id] = { ...base, ...patch }; }
+  updateSettings({ notifChat: next });
+}
 
 export const members = (roomId: string) => matrix.joinedMembers(roomId).catch(() => ({} as Record<string, string>));
 export function rename(roomId: string, name: string) { patchChat(roomId, (c) => ({ ...c, name })); void matrix.rename(roomId, name).catch(() => {}); }

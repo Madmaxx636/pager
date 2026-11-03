@@ -106,6 +106,8 @@ fn sync_filter() -> Option<matrix_sdk::ruma::api::client::filter::FilterDefiniti
     })).ok()
 }
 
+fn unix_secs() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
+
 async fn run_sync(client: Client, tell: Tell) {
     tell.say("state", &json!({ "signedIn": true, "user": client.user_id().map(|u| u.to_string()), "device": client.device_id().map(|d| d.to_string()), "syncing": true, "homeserver": client.homeserver().to_string() }));
     let mut waited = 0u64;
@@ -113,14 +115,20 @@ async fn run_sync(client: Client, tell: Tell) {
     loop {
         // Every start begins with a fresh first sync: the engine only tells the screens what a sync brings, so continuing from the saved
         // position would show nothing but what changed since the last run (an empty list for anyone who just reopens the app).
+        let initial = first;
         let token = if first { matrix_sdk::config::SyncToken::NoToken } else { matrix_sdk::config::SyncToken::ReusePrevious };
         first = false;
         let mut settings = SyncSettings::default().timeout(Duration::from_secs(30)).token(token);
         if let Some(f) = sync_filter() { settings = settings.filter(matrix_sdk::ruma::api::client::sync::sync_events::v3::Filter::FilterDefinition(f)); }
         let (c2, t2) = (client.clone(), tell.clone());
-        let result = client.sync_with_callback(settings, move |resp| {
-            let (client, tell) = (c2.clone(), t2.clone());
+        // The news this connection last brought: a connection that went away (the computer slept, the Wi-Fi changed) may leave a request waiting for
+        // minutes, and no message would arrive meanwhile. The watchdog below ends such a wait.
+        let last = Arc::new(std::sync::atomic::AtomicU64::new(unix_secs()));
+        let l2 = last.clone();
+        let sync = client.sync_with_callback(settings, move |resp| {
+            let (client, tell, last) = (c2.clone(), t2.clone(), l2.clone());
             async move {
+                last.store(unix_secs(), std::sync::atomic::Ordering::Relaxed);
                 let mut rooms = Vec::new();
                 for (id, update) in resp.rooms.joined.iter() {
                     let Some(room) = client.get_room(id) else { continue };
@@ -142,7 +150,11 @@ async fn run_sync(client: Client, tell: Tell) {
                 tell.say("synced", &json!({ "rooms": rooms.len(), "joined": resp.rooms.joined.len(), "known": client.rooms().len() }));
                 LoopCtrl::Continue
             }
-        }).await;
+        });
+        // The long wait for news returns every half minute; 100 seconds of silence (the first sync of a big account gets ten minutes) means it is stuck.
+        let limit = if initial { 600 } else { 100 };
+        let watchdog = async { loop { tokio::time::sleep(Duration::from_secs(15)).await; if unix_secs().saturating_sub(last.load(std::sync::atomic::Ordering::Relaxed)) > limit { break; } } };
+        let result: Result<(), String> = tokio::select! { r = sync => r.map_err(|e| e.to_string()), _ = watchdog => Err("no news for a while".to_string()) };
         // The loop only ends when something went wrong: say so, wait a little (longer each time) and start again.
         if let Err(e) = result { tell.problem("sync stopped, trying again", e); }
         tell.say("state", &json!({ "signedIn": true, "syncing": false }));

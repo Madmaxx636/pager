@@ -97,7 +97,7 @@ object SyncReducer {
                 if (!initial && m.sender != me && worthAlert(m.ts, newestKnown)) {
                     val mine = pre.members[me] ?: me.removePrefix("@").substringBefore(':')
                     val mentioned = me in m.mentions || m.body.contains("@$mine", ignoreCase = true)
-                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.isGroup, mentioned, m.ts, replyToMe = parentSender == me, attention = m.attention, msgId = m.id, mxc = m.mxc))
+                    incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(m.sender), previewOf(m), pre.network, pre.isGroup, mentioned, m.ts, replyToMe = parentSender == me, attention = m.attention, msgId = m.id, mxc = m.mxc, locked = m.sealed != null))
                 }
             })
 

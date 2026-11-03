@@ -209,7 +209,7 @@ public:
     Q_INVOKABLE void pin(const QString &roomId, bool on);
     Q_INVOKABLE void movePin(const QString &roomId, int toIndex);   // rearrange the pinned row
     Q_INVOKABLE void archive(const QString &roomId, bool on) { setTag(roomId, QStringLiteral("u.archived"), on); }
-    Q_INVOKABLE void setLowPriority(const QString &roomId, bool on) { setTag(roomId, QStringLiteral("m.lowpriority"), on); }
+    Q_INVOKABLE void setLowPriority(const QString &roomId, bool on);
     Q_INVOKABLE void setLabel(const QString &roomId, const QString &label, bool on) { setTag(roomId, QStringLiteral("u.label.") + label, on); }
     Q_INVOKABLE void addLabel(const QString &roomId, const QString &label) { setTag(roomId, QStringLiteral("u.label.") + label, true); }
     Q_INVOKABLE void removeLabel(const QString &roomId, const QString &label) { setTag(roomId, QStringLiteral("u.label.") + label, false); }
@@ -217,6 +217,11 @@ public:
     Q_INVOKABLE void markRead(const QString &roomId);
     Q_INVOKABLE void markAllRead();
     Q_INVOKABLE void setMuted(const QString &roomId, bool on);
+    /// One contact, one set of notification settings: the other chats of the same person (merged or not), and the settings shared by all of them.
+    Q_INVOKABLE QStringList siblingsOf(const QString &roomId) const;
+    Q_INVOKABLE QVariantMap chatNotif(const QString &roomId) const;
+    Q_INVOKABLE void setChatNotif(const QString &roomId, const QString &key, const QVariant &value);
+    Q_INVOKABLE void resetChatNotif(const QString &roomId);
     /// Takes a chat out of Pager. [atSource] asks the bridge to delete the conversation on its own network as well.
     Q_INVOKABLE void leaveRoom(const QString &roomId, bool atSource);
     Q_INVOKABLE void renameRoom(const QString &roomId, const QString &name);
@@ -247,7 +252,7 @@ public:
     Q_INVOKABLE void toggleStar(const QString &eventId);
     /// A reminder to look at a chat at [whenMs]. A snooze also tucks the chat into the archive until then.
     Q_INVOKABLE void remind(const QString &roomId, double whenMs, bool snoozed = false);
-    Q_INVOKABLE void snooze(const QString &roomId, double whenMs) { remind(roomId, whenMs, true); }
+    Q_INVOKABLE void snooze(const QString &roomId, double whenMs);
     Q_INVOKABLE QVariantList reminders() const;
     Q_INVOKABLE void cancelReminder(const QString &id);
     /// Sends [text] to a chat in [delayMs] ms, from the server (so it goes even if Pager is closed). [done](error) says how it went ("" = scheduled).
@@ -337,6 +342,8 @@ signals:
     void restartRequested();
     /// A message arrived that deserves a pop-up: which chat, who from, what it says.
     void notify(const QString &roomId, const QString &title, const QString &body, bool silent);
+    /// A short look at the newest message of a pinned page, shown over its picture in the pin row for a few seconds.
+    void glance(const QString &roomId, const QString &text);
     void unreadChanged(int total);
 private:
     static void callback(void *user, const char *kind, const char *json);
@@ -394,6 +401,11 @@ private:
     int m_updProgress = 0;
     bool m_updQuiet = false;
     QHash<QString, QString> m_seen;      // room -> id of the newest message we have already looked at
+    QHash<QString, QString> m_held;      // message id -> room: alerts waiting for their key
+    void alertFor(const QString &roomId, const Msg &last, bool neutral);
+    void holdAlert(const QString &roomId, const QString &msgId);
+    void releaseAlert(const QString &msgId, bool timedOut);
+    void setMutedOne(const QString &roomId, bool on);
     bool m_synced = false, m_admin = false, m_active = true, m_recovering = false, m_recoveryDone = false;
     QString m_user, m_error, m_problem, m_current, m_recoveryMessage, m_lastRead;
 };

@@ -30,6 +30,13 @@ private slots:
         Input m = msg(); m.mentioned = true; QVERIFY(!decide(m, S({{"notifChat", QVariantMap{{"!a", QVariantMap{{"mode", "none"}}}}}})).show);
         QVERIFY(!decide(msg(), S({{"notifChat", QVariantMap{{"!a", QVariantMap{{"mode", "mentions"}}}}}})).show);
     }
+    void aContactsSettingsComeFromTheirOtherChatsWhenTheChatHasNone() {
+        // The settings found for the contact (see Engine::chatNotif) are used instead of the chat's own entry in notifChat.
+        Input m = msg(); m.useChat = true; m.chat = QVariantMap{{"mode", "none"}};
+        QVERIFY(!decide(m, S()).show);
+        m.chat = QVariantMap{{"mode", "all"}}; QVERIFY(decide(m, S({{"notifNetworkMode", QVariantMap{{"signal", "none"}}}})).show);
+        m.chat = {}; m.quiet = true; QVERIFY(!decide(m, S()).show);       // nothing set for the contact: the general rules apply
+    }
     void scope() {
         Input g = msg(); g.isGroup = true; QVERIFY(!decide(g, S({{"notifScope", "dm_mentions"}})).show); g.mentioned = true; QVERIFY(decide(g, S({{"notifScope", "dm_mentions"}})).show);
         Input p = msg(); p.pinned = true; QVERIFY(decide(p, S({{"notifScope", "favorites"}})).show); QVERIFY(!decide(msg(), S({{"notifScope", "favorites"}})).show);

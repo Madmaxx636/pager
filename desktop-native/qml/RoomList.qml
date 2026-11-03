@@ -12,6 +12,16 @@ Rectangle {
     signal newChat()
     signal searchRequested(string text)
     property string menuRoom: ""
+    // A short look at the newest message of a pinned page, shown over its picture for a few seconds.
+    property var glances: ({})
+    Connections {
+        target: core
+        function onGlance(id, text) { const g = Object.assign({}, pane.glances); g[id] = { text: text, until: Date.now() + 7000 }; pane.glances = g; glanceTimer.restart() }
+    }
+    Timer {
+        id: glanceTimer; interval: 7100
+        onTriggered: { const now = Date.now(), g = {}; for (const k in pane.glances) if (pane.glances[k].until > now) g[k] = pane.glances[k]; pane.glances = g; if (Object.keys(g).length) restart() }
+    }
     property var menuInfo: ({})
     // choosing several pages at once (the web's "Select"): the ones ticked so far
     property var picked: []
@@ -234,6 +244,13 @@ Rectangle {
                                 Rectangle { visible: modelData.unread; height: modelData.count > 0 ? 22 : 16; width: modelData.count > 0 ? Math.max(22, pinCount.implicitWidth + 10) : 16; radius: height / 2
                                     x: parent.width - width + 2; y: -2; color: modelData.muted ? look.muted : look.accent
                                     Label { id: pinCount; visible: modelData.count > 0; anchors.centerIn: parent; text: modelData.count > 99 ? "99+" : modelData.count; color: modelData.muted ? look.bg : look.accentInk; font.pixelSize: 11; font.weight: Font.Bold } } }
+                            Rectangle {
+                                readonly property var g: (pane.glances || {})[modelData.id]
+                                visible: !!g; z: 3; anchors.horizontalCenter: parent.horizontalCenter; y: 8 + 76 - 12
+                                width: Math.min(pinGrid.cell - 8, glanceText.implicitWidth + 18); height: glanceText.implicitHeight + 10; radius: 12; color: look.text
+                                Label { id: glanceText; anchors.centerIn: parent; width: Math.min(implicitWidth, pinGrid.cell - 26); text: parent.g ? parent.g.text : ""; color: look.bg
+                                    font.pixelSize: Math.round(11 * look.textScale); font.weight: Font.DemiBold; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight }
+                            }
                             Label { y: 8 + 76 + 5; width: parent.width - 4; x: 2; text: modelData.name; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; font.pixelSize: Math.round(13 * look.textScale); font.weight: Font.DemiBold; color: look.text }
                             TapHandler { acceptedButtons: Qt.LeftButton; onTapped: { core.openRoom(modelData.id); pane.opened() } }
                             TapHandler { acceptedButtons: Qt.RightButton; onTapped: pane.showMenu(modelData.id) }

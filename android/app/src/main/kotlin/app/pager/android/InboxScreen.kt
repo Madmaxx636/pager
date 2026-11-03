@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
@@ -511,6 +512,7 @@ private fun UnreadBadge(c: ChatSummary) {
 private fun PinnedGrid(pins: List<ChatSummary>, pulseIds: Set<String>, onOpen: (String) -> Unit, onMenu: (ChatSummary) -> Unit, onMove: (String, Int) -> Unit) {
     val cols = 3
     val s = LocalSettings.current
+    val glances by LocalStore.current.glances.collectAsState()      // a message that has just come in, shown for a few seconds over the pin
     val bounds = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
     var dragId by remember { mutableStateOf<String?>(null) }
     var drag by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
@@ -566,6 +568,12 @@ private fun PinnedGrid(pins: List<ChatSummary>, pulseIds: Set<String>, onOpen: (
                     ) {
                         Box {
                             Box(Modifier.pulseRing(c.id in pulseIds, MaterialTheme.colorScheme.primary)) { ChatAvatar(c.name, if (s.showNetworkBadges) c.network else null, 76.dp, c.avatarMxc, c.faces) }
+                            // A short glance at the newest message, over the picture.
+                            (glances[c.id] ?: c.linked.firstNotNullOfOrNull { glances[it.first] })?.let { g ->
+                                Box(Modifier.align(Alignment.BottomCenter).offset(y = 6.dp).zIndex(2f).widthIn(max = 124.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.inverseSurface).padding(horizontal = 9.dp, vertical = 5.dp)) {
+                                    Text(g.text, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 11.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.inverseOnSurface)
+                                }
+                            }
                             // The number of new messages sits on the picture (a plain dot when it was only marked unread).
                             if (unread) Box(
                                 Modifier.align(Alignment.TopEnd).defaultMinSize(minWidth = 24.dp, minHeight = 24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.background).padding(3.dp).clip(CircleShape)

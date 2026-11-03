@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 afterEach(() => { vi.useRealTimers(); });
-import { STUCK_TEXT, WAITING_TEXT, applyHistory, applySync, parseMuted, relabelUnreadable, stripReplyFallback } from "./reducer";
+import { STUCK_TEXT, WAITING_TEXT, applyHistory, applySync, parseMuted, relabelUnreadable, stripReplyFallback, textOfClear } from "./reducer";
 import { encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { ChatState, STATUS_SENDING, displayName, emptyChat, isBotRoom, previewOf } from "./types";
 import { inQuietHours, DEFAULTS } from "./settings";
@@ -253,5 +253,17 @@ describe("chats with the Discord and IRC bridge bots", () => {
       expect(applySync(base0, join([react("$r1", t0 - 86_400_000)]), me, false).incoming).toEqual([]);
       expect(applySync(base0, join([react("$r2", t0 - 2_000)]), me, false).incoming.map((i) => i.reaction)).toEqual([true]);
     });
+  });
+});
+
+describe("alerts for messages that could not be read yet", () => {
+  it("an unreadable message is marked locked, so no alert says so", () => {
+    const sealed = { event_id: "$e", type: "m.room.message", sender: "@sam:x", origin_server_ts: Date.now(), content: { msgtype: "m.text", body: WAITING_TEXT, pagerWaiting: true, pagerRaw: { type: "m.room.encrypted" } } };
+    const r = applySync({}, { rooms: { join: { "!r:x": { state: { events: [] }, timeline: { events: [sealed] } } } } } as any, "@me:x", false);
+    expect(r.incoming).toHaveLength(1);
+    expect(r.incoming[0].locked).toBe(true);
+  });
+  it("what the message says once it is unlocked is what the alert shows", () => {
+    expect(textOfClear({ event_id: "$e", type: "m.room.message", sender: "@sam:x", origin_server_ts: 1, content: { msgtype: "m.text", body: "see you at 8" } })).toBe("see you at 8");
   });
 });

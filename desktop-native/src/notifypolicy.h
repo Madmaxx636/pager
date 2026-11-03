@@ -12,6 +12,8 @@ struct Input {
     int nowMin = 0;            // minutes since midnight
     int day = 0;               // 0 = Sunday
     qint64 nowMs = 0;
+    QVariantMap chat;          // this chat's settings when they come from the contact's other chats (see Engine::chatNotif)
+    bool useChat = false;
 };
 struct Decision {
     bool show = false;

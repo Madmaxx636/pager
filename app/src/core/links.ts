@@ -92,3 +92,30 @@ export function buildMerged(chats: Record<string, ChatState>, links: Links, room
     typing: [...new Set(all.flatMap((c) => c.typing))], encrypted: all.every((c) => c.encrypted), reachedStart: all.every((c) => c.reachedStart),
   };
 }
+
+/** What the notification settings need to know about a chat to tell whether two of them are the same person. */
+export interface ContactInfo { id: string; name: string; network: string; isGroup: boolean }
+
+/**
+ * For every chat, the other chats of the same contact: the ones it is merged with, and other one-to-one chats with the same person (the same name
+ * or phone number, on another number or another network). Notification settings are shared across all of them, merged or not.
+ */
+export function contactIndex(chats: ContactInfo[], links: Links): Map<string, string[]> {
+  const byKey = new Map<string, string[]>();
+  for (const c of chats) {
+    if (c.isGroup || c.network === "matrix") continue;
+    const k = linkKey(c.name); if (!k) continue;
+    byKey.set(k, [...(byKey.get(k) ?? []), c.id]);
+  }
+  const keyOf = new Map<string, string>();
+  for (const c of chats) if (!c.isGroup && c.network !== "matrix") { const k = linkKey(c.name); if (k) keyOf.set(c.id, k); }
+  const out = new Map<string, string[]>();
+  for (const c of chats) {
+    const set = new Set<string>();
+    const mine = groupOf(links, c.id) ?? [c.id];
+    for (const id of mine) { set.add(id); const k = keyOf.get(id); if (k) for (const o of byKey.get(k) ?? []) set.add(o); }
+    set.delete(c.id);
+    if (set.size) out.set(c.id, [...set]);
+  }
+  return out;
+}

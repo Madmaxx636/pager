@@ -79,16 +79,36 @@ object ChatSounds {
     /** Needed for the Android sounds, which are files in the app rather than made from tones. */
     fun init(context: android.content.Context) { appContext = context.applicationContext }
 
+    /**
+     * The alert for a message in the app on another page. It always plays (the sounds-inside-a-page switch is for the page you are in), as a
+     * notification: out of the same speaker or Bluetooth as your music, with the music lowered for a moment. Your own sound if you chose one.
+     */
+    fun playAlert(s: AppSettings, fallback: String) {
+        val ctx = appContext ?: return
+        if (!s.notifSound) return
+        play(if (s.alertSound == "custom" && CustomSound.exists(ctx)) "custom" else fallback, maxOf(s.convoSoundVolume, 0.7f), alert = true)
+    }
+
+    /** Lowers whatever is playing while a short alert sounds, and gives it back afterwards. */
+    private fun duck(ctx: android.content.Context, attrs: AudioAttributes): () -> Unit {
+        val am = ctx.getSystemService(android.media.AudioManager::class.java) ?: return {}
+        val req = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK).setAudioAttributes(attrs).setWillPauseWhenDucked(false).build()
+        return if (am.requestAudioFocus(req) == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { { am.abandonAudioFocusRequest(req) } } else { {} }
+    }
+
     /** Plays a sound at [volume] (0..1). Quiet if the phone's sounds are turned down. */
-    fun play(id: String, volume: Float) {
+    fun play(id: String, volume: Float, alert: Boolean = false) {
         if (volume <= 0f) return
-        if (id == "custom") { if (!appContext.let { c -> c != null && CustomSound.play(c, volume, android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION) }) play("ding", volume); return }
-        if (id.startsWith("android_")) { playFile(id, volume); return }
+        val usage = if (alert) AudioAttributes.USAGE_NOTIFICATION else AudioAttributes.USAGE_ASSISTANCE_SONIFICATION
+        if (id == "custom") { if (!appContext.let { c -> c != null && CustomSound.play(c, volume, usage) }) play("ding", volume, alert); return }
+        if (id.startsWith("android_")) { playFile(id, volume, usage); return }
         val pcm = render(id) ?: return
+        val attrs = AudioAttributes.Builder().setUsage(usage).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+        val release = if (alert) appContext?.let { duck(it, attrs) } ?: {} else ({})
         Thread {
             runCatching {
                 val track = AudioTrack.Builder()
-                    .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                    .setAudioAttributes(attrs)
                     .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(RATE).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
                     .setBufferSizeInBytes(pcm.size * 2).setTransferMode(AudioTrack.MODE_STATIC).build()
                 track.write(pcm, 0, pcm.size)
@@ -97,14 +117,15 @@ object ChatSounds {
                 Thread.sleep((pcm.size * 1000L / RATE) + 80)
                 track.release()
             }
+            release()
         }.start()
     }
 
-    private fun playFile(id: String, volume: Float) {
+    private fun playFile(id: String, volume: Float, usage: Int = AudioAttributes.USAGE_ASSISTANCE_SONIFICATION) {
         val ctx = appContext ?: return
         runCatching {
             val res = ctx.resources.getIdentifier(id, "raw", ctx.packageName); if (res == 0) return
-            val mp = android.media.MediaPlayer.create(ctx, res, android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build(), 0) ?: return
+            val mp = android.media.MediaPlayer.create(ctx, res, android.media.AudioAttributes.Builder().setUsage(usage).setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build(), 0) ?: return
             mp.setVolume(volume.coerceIn(0f, 1f), volume.coerceIn(0f, 1f))
             mp.setOnCompletionListener { it.release() }
             mp.start()

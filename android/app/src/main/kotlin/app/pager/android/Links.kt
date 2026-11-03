@@ -24,6 +24,24 @@ object Links {
 
     class Candidate(val id: String, val name: String, val network: String, val isGroup: Boolean)
 
+    /**
+     * For every chat, the other chats of the same contact: the ones it is merged with, and other one-to-one chats with the same person (the same name or
+     * phone number, on another number or another network). Notification settings are shared across all of them, merged or not.
+     */
+    fun contactIndex(chats: List<Candidate>, links: List<List<String>>): Map<String, List<String>> {
+        val plain = chats.filter { !it.isGroup && it.network != "matrix" }
+        val keyOf = plain.associate { it.id to key(it.name) }.filterValues { it.isNotEmpty() }
+        val byKey = plain.filter { it.id in keyOf }.groupBy({ keyOf.getValue(it.id) }, { it.id })
+        val out = HashMap<String, List<String>>()
+        for (c in chats) {
+            val set = LinkedHashSet<String>()
+            for (id in groupOf(links, c.id) ?: listOf(c.id)) { set.add(id); keyOf[id]?.let { k -> byKey[k]?.let { set.addAll(it) } } }
+            set.remove(c.id)
+            if (set.isNotEmpty()) out[c.id] = set.toList()
+        }
+        return out
+    }
+
     /** Pairs of one-to-one chats on different networks that look like the same person and are not joined yet. */
     fun suggest(chats: List<Candidate>, links: List<List<String>>): List<Pair<String, String>> {
         val byKey = chats.filter { !it.isGroup && it.network != "matrix" }.groupBy { key(it.name) }.filterKeys { it.isNotEmpty() }

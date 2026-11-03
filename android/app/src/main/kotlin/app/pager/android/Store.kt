@@ -72,6 +72,58 @@ class Store(private val context: Context) {
     val importJob: StateFlow<ImportJob?> = _import.asStateFlow()
     private val recentAlerts = object : LinkedHashMap<String, Unit>() { override fun removeEldestEntry(e: MutableMap.MutableEntry<String, Unit>?) = size > 300 }
     /** False when this exact message (same page, sender, text and time) has already been alerted for. */
+    // --- Alerts ---
+
+    /** A short look at the newest message of a pinned page, shown over its picture in the pin grid for a few seconds. */
+    data class Glance(val text: String, val at: Long)
+    private val _glances = MutableStateFlow<Map<String, Glance>>(emptyMap())
+    val glances: StateFlow<Map<String, Glance>> = _glances.asStateFlow()
+    private fun glance(m: Incoming, text: String) {
+        val g = Glance(text.replace('\n', ' ').trim().take(60), System.currentTimeMillis())
+        _glances.update { it + (m.roomId to g) }
+        scope.launch { delay(7_000); _glances.update { cur -> if (cur[m.roomId] === g) cur - m.roomId else cur } }
+    }
+
+    private val heldAlerts = java.util.concurrent.ConcurrentHashMap<String, Pair<Incoming, Job>>()
+    /** Keeps the alert for an unreadable message until it can be read; if the key does not come in time, it still alerts, with no words of its own. */
+    private fun holdAlert(m: Incoming) {
+        val id = m.msgId ?: return
+        if (heldAlerts.containsKey(id)) return
+        heldAlerts[id] = m to scope.launch { delay(90_000); releaseAlert(id, null) }
+    }
+    /** The key came (with the message's words), or time ran out (no words): make the alert now, by the same rules as any other. */
+    fun releaseAlert(id: String?, text: String?) {
+        val (m, job) = (id?.let { heldAlerts.remove(it) }) ?: return
+        job.cancel()
+        alertFor(m.copy(locked = false, text = text ?: "New message"))
+    }
+
+    /** What a message does when it arrives: a small sound in the page you are in; a sound (and a pop-up, and a glance at a pin) in the app on another page; else a notification. */
+    private fun alertFor(m: Incoming) {
+        val st = settings.value; val muted = _muted.value
+        val cal = java.util.Calendar.getInstance()
+        val nowMin = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+        val day = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
+        val c = _chats.value[m.roomId]
+        if (appInForeground && isOpenRoom(m.roomId)) { if (st.convoSounds) ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume); return }
+        // The settings of a contact are the same on all of their chats: another number, another network, merged or not.
+        val same = listOf(m.roomId) + siblingsOf(m.roomId)
+        val d = NotifyPolicy.decide(m, quiet = same.any { it in muted || _chats.value[it]?.lowPriority == true }, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st, chatPrefs = chatNotifPrefs(m.roomId))
+        if (!d.show) return
+        if (appInForeground) {
+            // In the app but on another page the alert sound always plays (over music too), whatever the sounds-inside-a-page switch says.
+            if (!d.silent) ChatSounds.playAlert(st, if (m.reaction) st.reactionSound else st.receiveSound)
+            val shown = m.copy(silent = d.silent, preview = d.preview)
+            if (c?.pinned == true || same.any { _chats.value[it]?.pinned == true }) glance(m, when (d.preview) { "hidden" -> "New message"; "sender" -> m.sender; else -> if (m.isGroup) "${m.sender}: ${m.text}" else m.text })
+            if (st.inAppPopups && firstTimeSeen(shown)) _inApp.tryEmit(shown)
+            return
+        }
+        val out = m.copy(silent = d.silent, preview = d.preview)
+        // The same message can reach us more than once (a refetched page, two sync passes); alert for it only once.
+        // Posted from here, not handed to the sync service through a flow: with nobody listening at that moment (the service was just restarted) the alert would be lost.
+        if (firstTimeSeen(out)) { _incoming.tryEmit(out); Notifier.show(context, this, out) }
+    }
+
     private fun firstTimeSeen(m: Incoming): Boolean = synchronized(recentAlerts) {
         val key = "${m.roomId}|${m.sender}|${m.text}|${if (m.reaction) m.ts / 5000 else m.ts}"
         if (recentAlerts.containsKey(key)) false else { recentAlerts[key] = Unit; true }
@@ -159,10 +211,14 @@ class Store(private val context: Context) {
     @Volatile var demo = false
     fun loadDemo(s: Session, chats: Map<String, ChatState>) { demo = true; _session.value = s; _chats.value = chats }
 
-    fun ensureSyncing() {
+    /** How long since the last update from the server arrived (0 when none has yet). */
+    fun syncAgeMs(): Long = if (lastSyncOk == 0L) 0L else System.currentTimeMillis() - lastSyncOk
+
+    /** [force]: the network has just come back or changed, so a request waiting on the old connection is cut short and sync starts again at once. */
+    fun ensureSyncing(force: Boolean = false) {
         if (demo) return
         val s = _session.value ?: return
-        val quiet = lastSyncOk > 0 && System.currentTimeMillis() - lastSyncOk > 150_000
+        val quiet = force || (lastSyncOk > 0 && System.currentTimeMillis() - lastSyncOk > 150_000)
         if (syncJob?.isActive == true && !quiet) return
         android.util.Log.i("Pager", "sync was ${if (quiet) "quiet" else "stopped"}: starting it again")
         syncJob?.cancel()
@@ -212,7 +268,7 @@ class Store(private val context: Context) {
             val last = it.messages.lastOrNull()
             ChatSummary(
                 it.id, SyncReducer.displayName(it, me), it.network, it.avatarMxc, it.preview, it.lastTs, it.unread,
-                it.markedUnread, it.pinned, it.archived, it.id in muted, it.isGroup, drafts[it.id]?.takeIf { d -> d.isNotBlank() },
+                it.markedUnread, it.pinned, it.archived, it.id in muted || (contacts()[it.id] ?: emptyList()).any { o -> o in muted }, it.isGroup, drafts[it.id]?.takeIf { d -> d.isNotBlank() },
                 lowPriority = it.lowPriority, labels = it.labels, pinOrder = it.pinOrder ?: Double.MAX_VALUE,
                 unanswered = last != null && last.sender != me, lastFromMe = last?.sender == me, typing = it.typing.isNotEmpty(), stories = it.isStories, faces = if (it.isGroup && it.avatarMxc == null) groupFaces(it, me) else emptyList(),
             )
@@ -525,6 +581,7 @@ class Store(private val context: Context) {
                 if (sid != null && System.currentTimeMillis() - (askedBackup[roomId + sid] ?: 0L) > 6_000L) { askedBackup[roomId + sid] = System.currentTimeMillis(); e.fetchKeyFromBackup(roomId, sid) }
                 val clear = e.decrypt(roomId, raw) ?: continue
                 update(roomId) { SyncReducer.replaceDecrypted(it, clear) }
+                releaseAlert(m.id, SyncReducer.toMsg(clear)?.let { previewOf(it) })
             }
             update(roomId) { SyncReducer.relabelUnreadable(it, System.currentTimeMillis()) }
         }
@@ -689,21 +746,9 @@ class Store(private val context: Context) {
                             if (!appInForeground) Notifier.attention(context, store = this, a)
                             continue
                         }
-                        // Inside that page you get a small sound instead of a notification.
-                        // The page you are looking at (or one merged with it) gets a small sound instead of a notification.
-                        if (appInForeground && isOpenRoom(m.roomId)) { if (st.convoSounds) ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume); continue }
-                        val d = NotifyPolicy.decide(m, quiet = m.roomId in muted || c?.lowPriority == true, pinned = c?.pinned == true, nowMin = nowMin, day = day, s = st)
-                        if (!d.show) continue
-                        // In the app but on another page: no pop-up (you are in Pager), but the alert sound still plays.
-                        if (appInForeground) {
-                            if (!d.silent && st.convoSounds) ChatSounds.play(if (m.reaction) st.reactionSound else st.receiveSound, st.convoSoundVolume)
-                            val shown = m.copy(silent = d.silent, preview = d.preview)
-                            if (st.inAppPopups && firstTimeSeen(shown)) _inApp.tryEmit(shown)
-                            continue
-                        }
-                        val out = m.copy(silent = d.silent, preview = d.preview)
-                        // The same message can reach us more than once (a refetched page, two sync passes); alert for it only once.
-                        if (firstTimeSeen(out)) _incoming.tryEmit(out)
+                        // A message that cannot be read yet makes no alert (and never one that says it is locked): it waits for its key and then alerts with its own words.
+                        if (m.locked && m.msgId != null) { holdAlert(m); continue }
+                        alertFor(m)
                     }
                     if (settings.value.unarchiveOnMessage) {
                         r.incoming.map { it.roomId }.distinct().filter { it !in muted && r.chats[it]?.archived == true }.forEach { setTag(it, "u.archived", false) }
@@ -1172,7 +1217,7 @@ class Store(private val context: Context) {
         }
     }
 
-    fun setLowPriority(roomId: String, on: Boolean) = setTag(roomId, "m.lowpriority", on)
+    fun setLowPriority(roomId: String, on: Boolean) = (listOf(roomId) + siblingsOf(roomId)).forEach { setTag(it, "m.lowpriority", on) }
     fun addLabel(roomId: String, name: String) = setTag(roomId, ChatState.LABEL_PREFIX + name.trim(), true)
     fun removeLabel(roomId: String, name: String) = setTag(roomId, ChatState.LABEL_PREFIX + name, false)
     fun renameLabel(old: String, new: String) {
@@ -1183,9 +1228,11 @@ class Store(private val context: Context) {
 
     /** Beeper-style snooze: tuck the chat into the archive and bring it back, unread, at [atMs]. */
     fun snooze(roomId: String, atMs: Long) {
-        setTag(roomId, "u.archived", true)
-        val name = _chats.value[roomId]?.let { SyncReducer.displayName(it, me) } ?: "a page"
-        reminders.add(roomId, name, atMs, snooze = true)
+        for (id in listOf(roomId) + siblingsOf(roomId)) {
+            setTag(id, "u.archived", true)
+            val name = _chats.value[id]?.let { SyncReducer.displayName(it, me) } ?: "a page"
+            reminders.add(id, name, atMs, snooze = true)
+        }
     }
 
     // --- Polls, GIFs, stickers, contacts ---------------------------------------------
@@ -1374,7 +1421,12 @@ class Store(private val context: Context) {
         settings.update { s }
     }.isSuccess
 
+    /** Mutes (or unmutes) a contact: every chat of the same person, so their other number is quiet too. */
     fun setMuted(roomId: String, muted: Boolean, forMs: Long? = null) {
+        for (id in listOf(roomId) + siblingsOf(roomId)) setMutedOne(id, muted, forMs)
+    }
+
+    private fun setMutedOne(roomId: String, muted: Boolean, forMs: Long? = null) {
         _muted.update { if (muted) it + roomId else it - roomId }
         muteUntil.update { if (muted && forMs != null) it + (roomId to System.currentTimeMillis() + forMs) else it - roomId }
         writeJson("muteUntil", MapSerializer(String.serializer(), Long.serializer()), muteUntil.value)
@@ -1383,10 +1435,33 @@ class Store(private val context: Context) {
 
     private fun expireMutes() {
         val now = System.currentTimeMillis()
-        muteUntil.value.filterValues { it <= now }.keys.forEach { setMuted(it, false) }
+        muteUntil.value.filterValues { it <= now }.keys.forEach { setMutedOne(it, false) }
     }
 
-    fun muteLeft(roomId: String): Long? = muteUntil.value[roomId]?.let { it - System.currentTimeMillis() }
+    fun muteLeft(roomId: String): Long? = (listOf(roomId) + siblingsOf(roomId)).mapNotNull { muteUntil.value[it] }.minOrNull()?.let { it - System.currentTimeMillis() }
+
+    // --- One contact, one set of notification settings ---
+    private var contactCache: Triple<Map<String, ChatState>, List<List<String>>, Map<String, List<String>>>? = null
+    /** For each chat, the other chats of the same contact (merged, or the same person on another number or network). */
+    private fun contacts(): Map<String, List<String>> {
+        val chats = _chats.value; val links = _links.value
+        contactCache?.let { if (it.first === chats && it.second === links) return it.third }
+        val me = _session.value?.userId.orEmpty()
+        val index = Links.contactIndex(chats.values.filter { !it.isBotRoom(me) }.map { Links.Candidate(it.id, SyncReducer.displayName(it, me), it.network, it.isGroup) }, links)
+        contactCache = Triple(chats, links, index)
+        return index
+    }
+    fun siblingsOf(roomId: String): List<String> = contacts()[roomId] ?: emptyList()
+    /** A chat's notification settings: its own, else those of the same contact's other chats. */
+    fun chatNotifPrefs(roomId: String): ChatNotifPrefs {
+        val all = settings.value.notifChat
+        return all[roomId] ?: siblingsOf(roomId).firstNotNullOfOrNull { all[it] } ?: ChatNotifPrefs()
+    }
+    /** Changes a contact's notification settings on all of their chats at once. */
+    fun setChatNotif(roomId: String, n: ChatNotifPrefs) {
+        val ids = listOf(roomId) + siblingsOf(roomId)
+        settings.update { copy(notifChat = ids.fold(notifChat) { m, id -> if (n.isDefault) m - id else m + (id to n) }) }
+    }
 
     suspend fun members(roomId: String): Map<String, String> = runCatching { matrix.joinedMembers(roomId) }.getOrDefault(emptyMap())
 

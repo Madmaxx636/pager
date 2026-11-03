@@ -79,7 +79,7 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
         if (!initial && m.sender !== me && worthAlert(m.ts, newestKnown)) {
           const mine = pre.members[me] ?? me.replace(/^@/, "").split(":")[0];
           const mentioned = m.mentions.includes(me) || m.body.toLowerCase().includes(`@${mine}`.toLowerCase());
-          incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: isGroup(pre), mentioned, ts: m.ts, replyToMe: parentSender === me, attention: m.attention, mxc: m.mxc, id: m.id });
+          incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, m.sender), text: previewOf(m), network: pre.network, isGroup: isGroup(pre), mentioned, ts: m.ts, replyToMe: parentSender === me, attention: m.attention, mxc: m.mxc, id: m.id, ...(m.sealed ? { locked: true } : {}) });
         }
       }, (sender, key, target, rts0) => {
         const rts = rts0 ?? Date.now();
@@ -426,6 +426,9 @@ export function relabelUnreadable(chat: ChatState, now: number): ChatState {
 }
 
 /** Puts a message that could not be read before (it was waiting for its key) in place of its placeholder. */
+/** What a message that has just been unlocked says, for the alert that was waiting for it. */
+export function textOfClear(clear: J): string | undefined { const m = toMsg(clear); return m ? previewOf(m) : undefined; }
+
 export function replaceDecrypted(chat: ChatState, clear: J): ChatState {
   const msg = toMsg(clear);
   if (!msg || !chat.messages.some((m) => m.id === msg.id)) return chat;

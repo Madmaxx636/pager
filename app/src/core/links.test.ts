@@ -67,3 +67,29 @@ describe("one chat made of several", () => {
     expect(buildMerged({ s: mk("s", "signal", []) }, [["s", "g"]], "s")).toBeUndefined();
   });
 });
+
+import { contactIndex } from "./links";
+describe("the same contact on several numbers", () => {
+  const c = (id: string, name: string, network = "whatsapp", isGroup = false) => ({ id, name, network, isGroup });
+  it("finds a contact's other chats by name, on the same or another network", () => {
+    const idx = contactIndex([c("a", "Sam Lee"), c("b", "sam lee", "signal"), c("c", "Sam Lee (WA)", "whatsapp"), c("d", "Pat")], []);
+    expect([...(idx.get("a") ?? [])].sort()).toEqual(["b", "c"]);
+    expect(idx.get("d")).toBeUndefined();
+  });
+  it("finds them by phone number too", () => {
+    const idx = contactIndex([c("a", "+1 (555) 010-2030"), c("b", "5550102030", "signal")], []);
+    expect(idx.get("a")).toEqual(["b"]);
+  });
+  it("includes the chats it is merged with, whatever their names", () => {
+    const idx = contactIndex([c("a", "Sam"), c("b", "Samantha Lee", "signal")], [["a", "b"]]);
+    expect(idx.get("a")).toEqual(["b"]); expect(idx.get("b")).toEqual(["a"]);
+  });
+  it("a merged chat also brings the same-name chats of the one it is merged with", () => {
+    const idx = contactIndex([c("a", "Sam"), c("b", "Samantha", "signal"), c("x", "Samantha", "whatsapp")], [["a", "b"]]);
+    expect([...(idx.get("a") ?? [])].sort()).toEqual(["b", "x"]);
+  });
+  it("never joins groups, Matrix chats or different people", () => {
+    const idx = contactIndex([c("g1", "Family", "whatsapp", true), c("g2", "Family", "signal", true), c("m1", "Sam", "matrix"), c("m2", "Sam", "matrix"), c("a", "Sam"), c("b", "Pat", "signal")], []);
+    expect(idx.size).toBe(0);
+  });
+});

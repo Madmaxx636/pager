@@ -37,6 +37,17 @@ class LinksTest {
         assertEquals(2.0, both[0].pinOrder, 0.0)
     }
 
+    @Test fun aContactsOtherChatsShareTheirSettings() {
+        fun c(id: String, name: String, net: String = "whatsapp", group: Boolean = false) = Links.Candidate(id, name, net, group)
+        val idx = Links.contactIndex(listOf(c("a", "Sam Lee"), c("b", "sam lee", "signal"), c("c", "Sam Lee (WA)"), c("d", "Pat")), emptyList())
+        assertEquals(listOf("b", "c"), idx["a"]!!.sorted()); assertNull(idx["d"])
+        // merged chats always belong together, whatever their names; and a merged chat also brings the same-name chats of its partner
+        val merged = Links.contactIndex(listOf(c("a", "Sam"), c("b", "Samantha", "signal"), c("x", "Samantha")), listOf(listOf("a", "b")))
+        assertEquals(listOf("b", "x"), merged["a"]!!.sorted())
+        // groups, Matrix chats and different people are never joined
+        assertEquals(0, Links.contactIndex(listOf(c("g1", "Family", group = true), c("g2", "Family", "signal", true), c("m1", "Sam", "matrix"), c("m2", "Sam", "matrix"), c("a", "Sam"), c("b", "Pat", "signal")), emptyList()).size)
+    }
+
     @Test fun showsOneRowTheNewestChatWithUnreadAddedUp() {
         val rows = Links.merge(listOf(sum("a", "signal", 100, 2), sum("x", "whatsapp", 90), sum("b", "gmessages", 200, 3, pinned = true)), listOf(listOf("a", "b")))
         assertEquals(listOf("b", "x"), rows.map { it.id })

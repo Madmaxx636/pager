@@ -58,8 +58,8 @@ object Notifier {
         nm.createNotificationChannel(ch(CH_SYNC, "Background sync", NotificationManager.IMPORTANCE_MIN, false, false))
     }
 
-    private fun channelFor(s: AppSettings, quiet: Boolean, roomId: String): String {
-        val vibrate = s.notifVibrate && s.notifChat[roomId]?.vibrate != "off"
+    private fun channelFor(s: AppSettings, quiet: Boolean, prefs: ChatNotifPrefs): String {
+        val vibrate = s.notifVibrate && prefs.vibrate != "off"
         return when {
             quiet -> CH_SILENT
             s.notifSound && vibrate -> CH_ALL
@@ -82,14 +82,32 @@ object Notifier {
     /** A test notification for one page, using that page's own settings, so you can long-press it and change Priority or Bubble for it. */
     fun testFor(context: Context, store: Store, roomId: String, name: String, network: String, isGroup: Boolean) {
         val s = store.settings.value
-        val p = s.notifChat[roomId]
-        val preview = when (p?.preview) { "hide" -> "hidden"; "show" -> "full"; else -> s.notifPreview }
-        val silent = !s.notifSound || p?.sound == "off" || p?.level == "silent"
+        val p = store.chatNotifPrefs(roomId)
+        val preview = when (p.preview) { "hide" -> "hidden"; "show" -> "full"; else -> s.notifPreview }
+        val silent = !s.notifSound || p.sound == "off" || p.level == "silent"
         show(context, store, Incoming(roomId, name, name, "This is a test notification for this page.", network, isGroup, false, System.currentTimeMillis(), false, silent, preview))
     }
 
     fun show(context: Context, store: Store, m: Incoming) {
+        // Hold the phone awake for the few seconds it takes to build and post the alert (and make its sound), even with the screen off.
+        val lock = runCatching { context.getSystemService(android.os.PowerManager::class.java).newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "pager:alert").apply { acquire(20_000) } }.getOrNull()
         scope.launch {
+            try {
+                try { showNow(context, store, m) } catch (e: Exception) { plain(context, m) }      // whatever goes wrong with the picture or the style, the alert still comes
+            } finally { runCatching { if (lock?.isHeld == true) lock.release() } }
+        }
+    }
+
+    /** The simplest possible alert, for when the full one could not be made. */
+    private fun plain(context: Context, m: Incoming) {
+        val open = PendingIntent.getActivity(context, m.roomId.hashCode(), Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(android.net.Uri.parse("pager://room/" + android.net.Uri.encode(m.roomId))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val text = when (m.preview) { "hidden" -> "New message"; "sender" -> m.sender; else -> m.text }
+        val b = NotificationCompat.Builder(context, if (m.silent) CH_SILENT else CH_ALL).setSmallIcon(R.drawable.ic_notif).setContentTitle(m.chat).setContentText(text).setContentIntent(open).setAutoCancel(true).setCategory(NotificationCompat.CATEGORY_MESSAGE)
+        runCatching { NotificationManagerCompat.from(context).notify(m.roomId.hashCode(), b.build()) }
+    }
+
+    private suspend fun showNow(context: Context, store: Store, m: Incoming) {
+        run {
             val avatar = store.inbox.value.firstOrNull { it.id == m.roomId }?.avatarMxc
             val bitmap = avatar?.let { withTimeoutOrNull(2500) { runCatching { store.media.bitmap(it, 128) }.getOrNull() } } ?: letterAvatar(m.chat, networkMeta(m.network).color.toArgb())
             post(context, store, m, IconCompat.createWithAdaptiveBitmap(padded(bitmap)))
@@ -163,7 +181,7 @@ object Notifier {
         while (lines.size > 6) lines.removeAt(0)
 
         val me = Person.Builder().setName("You").build()
-        val chatPerson = Person.Builder().setName(m.chat).setKey(m.roomId).setIcon(icon).setImportant(s.notifChat[m.roomId]?.level == "priority").build()
+        val chatPerson = Person.Builder().setName(m.chat).setKey(m.roomId).setIcon(icon).setImportant(store.chatNotifPrefs(m.roomId).level == "priority").build()
         val openIntent = Intent(context, MainActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra("roomId", m.roomId)
         runCatching {
             ShortcutManagerCompat.pushDynamicShortcut(
@@ -172,7 +190,7 @@ object Notifier {
             )
         }
         val style = NotificationCompat.MessagingStyle(me).setConversationTitle(if (m.isGroup) m.chat else null).setGroupConversation(m.isGroup)
-        val prio = s.notifChat[m.roomId]?.level == "priority"
+        val prio = store.chatNotifPrefs(m.roomId).level == "priority"
         lines.forEach { style.addMessage(it.text, it.ts, if (m.isGroup) Person.Builder().setName(it.sender).setKey(it.sender).build() else chatPerson) }
 
         // Tapping opens this page whether Pager is closed, in the background or already open on another page (a unique address per page keeps
@@ -183,7 +201,7 @@ object Notifier {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val parent = channelFor(s, quiet, m.roomId)
+        val parent = channelFor(s, quiet, store.chatNotifPrefs(m.roomId))
         val b = NotificationCompat.Builder(context, parent)
             .setShortcutId(m.roomId).setLocusId(LocusIdCompat(m.roomId)).setLargeIcon(icon.let { runCatching { it.loadDrawable(context)?.let { d -> (d as? android.graphics.drawable.BitmapDrawable)?.bitmap } }.getOrNull() })
             .setSmallIcon(R.drawable.ic_notif).setContentTitle(m.chat)
@@ -262,6 +280,17 @@ object Notifier {
             .setContentIntent(open).setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_STATUS)
         runCatching { NotificationManagerCompat.from(context).notify(("lost" + l.key).hashCode(), b.build()) }
     }
+
+    /** Sync has been failing for a while although the phone is online: say so, because no message can arrive until it is fixed. */
+    fun cantSync(context: Context, minutes: Int) {
+        val open = PendingIntent.getActivity(context, 4711, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val b = NotificationCompat.Builder(context, CH_ALL)
+            .setSmallIcon(R.drawable.ic_notif).setContentTitle("Pager can't get your messages")
+            .setContentText("Nothing has come in for $minutes minutes. Tap to open Pager; it keeps trying.")
+            .setContentIntent(open).setAutoCancel(true).setOnlyAlertOnce(true).setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_STATUS)
+        runCatching { NotificationManagerCompat.from(context).notify(4711, b.build()) }
+    }
+    fun syncOk(context: Context) { runCatching { NotificationManagerCompat.from(context).cancel(4711) } }
 
     /** The weekly bridge update changed something (admins only). */
     fun bridgesUpdated(context: Context, u: AccountAlerts.Update, nameOf: (String) -> String) {

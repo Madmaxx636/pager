@@ -4,6 +4,17 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.0 (phone, desktop, web; native 0.5.14)
+
+- **One contact, one set of notification settings:** a contact's Notifications settings, mute, Low priority and snooze are the same on all of their chats: a second number, the same person on another network, merged or not. The chat's Notifications sheet says when they are shared.
+- **Pinned pages show a glance:** when a message arrives on a pinned page while you are in the app, a short look at it appears over the pin's picture for a few seconds (it follows the page's preview setting: the words, only the sender, or "New message").
+- **Alert sound in the app (phone):** a message on another page always sounds its alert while you are in Pager, whatever the "Sounds inside a page" switch says. It comes out of the same speaker or Bluetooth as your music and lowers the music for a moment.
+- **No more "waiting for the key" alerts:** a message that cannot be read yet makes no alert. It waits for its key and then alerts with its own words; if the key does not come within a minute and a half it alerts as "New message".
+- **Never missing a message:**
+  - phone: alerts are posted by the app itself instead of being handed to the sync service (a message that came in while the service was restarting could be lost); a short wake lock while an alert is made; sync restarts the moment the network returns, and is checked every 45 seconds; if nothing has come in for 10 minutes while you are online, an alert says so; if the full alert cannot be made, a plain one is shown;
+  - web and desktop: sync starts again by itself after sleep, a network change or a stuck connection;
+  - native: a stuck sync connection is dropped and started again after 100 seconds instead of five minutes.
+
 ## 0.5.99 (phone, desktop, web; native 0.5.14)
 
 - **Pins (web, desktop, phone, native):** a chat you had merged with another one could not be moved in the pin row. The merged row took its place from whichever of the two chats spoke last, even when that one was not pinned. It now takes the place of the pinned chat.

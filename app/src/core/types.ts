@@ -109,6 +109,8 @@ export interface Incoming {
   attention?: "nudge" | "ring" | "video" | "image";
   mxc?: string;
   id?: string;
+  /** The message could not be read yet (its key has not arrived): no alert is made for it until it can be, never one that says so. */
+  locked?: boolean;
 }
 
 export interface ChatSummary {

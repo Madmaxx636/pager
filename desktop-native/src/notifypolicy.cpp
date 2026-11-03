@@ -22,7 +22,7 @@ Decision decide(const Input &in, const QVariantMap &s) {
     QStringList keywords; for (const QVariant &k : s.value("notifKeywords").toList()) keywords << k.toString();
     Decision d;
     d.direct = in.mentioned || in.replyToMe || keywordHit(in.text, keywords);
-    const QVariantMap chat = s.value("notifChat").toMap().value(in.roomId).toMap();
+    const QVariantMap chat = in.useChat ? in.chat : s.value("notifChat").toMap().value(in.roomId).toMap();
     const QString chatMode = (!chat.value("mode").toString().isEmpty() && chat.value("mode").toString() != QLatin1String("default")) ? chat.value("mode").toString() : QString();
     const QVariantMap netModes = s.value("notifNetworkMode").toMap();
     QStringList mutedNets; for (const QVariant &n : s.value("notifMutedNetworks").toList()) mutedNets << n.toString();

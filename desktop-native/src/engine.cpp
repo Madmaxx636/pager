@@ -86,6 +86,7 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
                 const Room *r = m_store.room(id);
                 if (r && r->archived() && !r->msgs.isEmpty() && !m_store.mine(r->msgs.last()) && !r->msgs.last().local && m_seen.value(id) != r->msgs.last().id) setTag(id, QStringLiteral("u.archived"), false);
             }
+        for (const QString &held : m_held.keys()) releaseAlert(held, false);      // a key may have come: the alert that was waiting for it
         for (const QString &id : changed) {        // pop-ups: only for new messages from others, never for the first catch-up or the chat in front of you
             const Room *r = m_store.room(id);
             if (!r || r->msgs.isEmpty()) continue;
@@ -107,27 +108,11 @@ void Engine::handle(const QString &kind, const QJsonObject &b) {
                     emit attention(id, RoomListModel::displayName(*r), r->nameOf(last.sender), last.attention, last.id);
                 }
             }
-            if (m_firstRooms || !worthAlert || last.local || m_store.mine(last) || last.locked || (m_active && id == m_current)) continue;
+            if (m_firstRooms || !worthAlert || last.local || m_store.mine(last) || (m_active && id == m_current)) continue;
             if (m_store.isBotRoom(*r)) continue;
-            // what the rules say: about you? muted? quiet hours? do not disturb? per chat and per network overrides?
-            NotifyPolicy::Input in; in.roomId = id; in.network = r->network; in.isGroup = r->isGroup(); in.text = last.body;
-            const QString myName = r->nameOf(m_user).toLower();
-            in.mentioned = last.mentions.contains(m_user) || (!myName.isEmpty() && last.body.toLower().contains(QLatin1Char('@') + myName));
-            if (!last.replyTo.isEmpty()) if (const Msg *parent = r->find(last.replyTo)) in.replyToMe = m_store.mine(*parent);
-            in.quiet = m_store.muted(id) || r->lowPriority(); in.pinned = r->pinned();
-            const QDateTime now = QDateTime::currentDateTime(); in.nowMin = now.time().hour() * 60 + now.time().minute(); in.day = now.date().dayOfWeek() % 7; in.nowMs = now.toMSecsSinceEpoch();
-            NotifyPolicy::Decision d; d.show = true; d.silent = false; d.preview = QStringLiteral("full");
-            if (m_settings) d = NotifyPolicy::decide(in, m_settings->snapshot());
-            if (!d.show) continue;
-            const QString chatName = RoomListModel::displayName(*r);
-            const QString who = r->nameOf(last.sender);
-            QString what = last.kind == QLatin1String("image") ? QStringLiteral("Sent a photo") : last.kind == QLatin1String("video") ? QStringLiteral("Sent a video") : last.kind == QLatin1String("audio") ? (last.voice ? QStringLiteral("Voice message") : QStringLiteral("Sent audio")) : last.kind == QLatin1String("file") ? QStringLiteral("Sent a file")
-                         : last.kind == QLatin1String("poll") ? QStringLiteral("Poll: ") + last.poll.question : Rich::plain(last.html.isEmpty() ? last.body : last.html);
-            QString title = r->isGroup() ? chatName + QStringLiteral(" · ") + who : chatName;
-            if (d.preview == QLatin1String("hidden")) { title = QStringLiteral("New message"); what = QString(); }
-            else if (d.preview == QLatin1String("sender")) what = QString();
-            if (!d.silent && m_settings && m_settings->value(QStringLiteral("notifSound")).toBool()) emit playSound(d.sound.isEmpty() ? m_settings->value(QStringLiteral("notifSoundId")).toString() : d.sound, m_settings->value(QStringLiteral("notifSoundVolume")).toDouble());
-            emit notify(id, title, what, d.silent);
+            // A message that cannot be read yet makes no alert (and never one that says it is locked): it waits for its key, then alerts with its own words.
+            if (last.locked) { holdAlert(id, last.id); continue; }
+            alertFor(id, last, false);
         }
         m_firstRooms = false;
         emit unreadChanged(badgeCount());
@@ -600,7 +585,103 @@ void Engine::movePin(const QString &roomId, int toIndex) {
         for (const QString &g : group) { const Room *r = m_store.room(g); if (r && r->pinned() && r->pinOrder != order) setTag(g, QStringLiteral("m.favourite"), true, order); }
     }
 }
-void Engine::setMuted(const QString &roomId, bool on) {
+
+/// The alert for one message: by the same rules as every other Pager app (muted? mentions? quiet hours? this contact's own settings?).
+/// [neutral]: the key never came, so the alert has no words of its own.
+void Engine::alertFor(const QString &id, const Msg &last, bool neutral) {
+    const Room *r = m_store.room(id); if (!r) return;
+    // what the rules say: about you? muted? quiet hours? do not disturb? per chat and per network overrides?
+    NotifyPolicy::Input in; in.roomId = id; in.network = r->network; in.isGroup = r->isGroup(); in.text = last.body;
+    const QString myName = r->nameOf(m_user).toLower();
+    in.mentioned = last.mentions.contains(m_user) || (!myName.isEmpty() && last.body.toLower().contains(QLatin1Char('@') + myName));
+    if (!last.replyTo.isEmpty()) if (const Msg *parent = r->find(last.replyTo)) in.replyToMe = m_store.mine(*parent);
+    // The settings of a contact are the same on all of their chats: another number, another network, merged or not.
+    const QStringList same = QStringList{id} + siblingsOf(id);
+    in.quiet = false; bool anyPinned = false;
+    for (const QString &x : same) if (const Room *o = m_store.room(x)) { in.quiet = in.quiet || m_store.muted(x) || o->lowPriority(); anyPinned = anyPinned || o->pinned(); }
+    in.pinned = anyPinned;
+    in.chat = chatNotif(id); in.useChat = true;
+    if (neutral) in.text = QStringLiteral("New message");
+    const QDateTime now = QDateTime::currentDateTime(); in.nowMin = now.time().hour() * 60 + now.time().minute(); in.day = now.date().dayOfWeek() % 7; in.nowMs = now.toMSecsSinceEpoch();
+    NotifyPolicy::Decision d; d.show = true; d.silent = false; d.preview = QStringLiteral("full");
+    if (m_settings) d = NotifyPolicy::decide(in, m_settings->snapshot());
+    if (!d.show) return;
+    const QString chatName = RoomListModel::displayName(*r);
+    const QString who = r->nameOf(last.sender);
+    QString what = last.kind == QLatin1String("image") ? QStringLiteral("Sent a photo") : last.kind == QLatin1String("video") ? QStringLiteral("Sent a video") : last.kind == QLatin1String("audio") ? (last.voice ? QStringLiteral("Voice message") : QStringLiteral("Sent audio")) : last.kind == QLatin1String("file") ? QStringLiteral("Sent a file")
+         : last.kind == QLatin1String("poll") ? QStringLiteral("Poll: ") + last.poll.question : Rich::plain(last.html.isEmpty() ? last.body : last.html);
+    QString title = r->isGroup() ? chatName + QStringLiteral(" · ") + who : chatName;
+    if (d.preview == QLatin1String("hidden")) { title = QStringLiteral("New message"); what = QString(); }
+    else if (d.preview == QLatin1String("sender")) what = QString();
+    if (!d.silent && m_settings && m_settings->value(QStringLiteral("notifSound")).toBool()) emit playSound(d.sound.isEmpty() ? m_settings->value(QStringLiteral("notifSoundId")).toString() : d.sound, m_settings->value(QStringLiteral("notifSoundVolume")).toDouble());
+    if (neutral && d.preview == QLatin1String("full")) { title = chatName; what = QStringLiteral("New message"); }
+    // A short glance at the newest message of a pinned page, over its picture in the pin row for a few seconds.
+    if (anyPinned) for (const QString &x : same) emit glance(x, d.preview == QLatin1String("hidden") ? QStringLiteral("New message") : d.preview == QLatin1String("sender") ? who : (r->isGroup() ? who + QStringLiteral(": ") + what : what));
+    emit notify(id, title, what, d.silent);
+}
+
+/// Keeps the alert for an unreadable message until it can be read; if the key does not come within a minute and a half, it still alerts, with no words of its own.
+void Engine::holdAlert(const QString &roomId, const QString &msgId) {
+    if (m_held.contains(msgId)) return;
+    m_held.insert(msgId, roomId);
+    QTimer::singleShot(90000, this, [this, msgId] { releaseAlert(msgId, true); });
+}
+/// The key came (the message now has its words) or time ran out ([neutral]).
+void Engine::releaseAlert(const QString &msgId, bool timedOut) {
+    if (!m_held.contains(msgId)) return;
+    const QString roomId = m_held.value(msgId);
+    const Room *r = m_store.room(roomId); const Msg *msg = r ? r->find(msgId) : nullptr;
+    if (!msg) { m_held.remove(msgId); return; }
+    if (msg->locked && !timedOut) return;                // still waiting
+    m_held.remove(msgId);
+    if (m_active && roomId == m_current) return;
+    alertFor(roomId, *msg, msg->locked);
+}
+
+static QString contactKey(const QString &name) {
+    const QString p = Names::phoneKey(name);
+    if (!p.isEmpty()) return QStringLiteral("p") + p;
+    QString n = Names::stripTag(name).trimmed().toLower(); n.replace(QRegularExpression(QStringLiteral("\\s+")), QStringLiteral(" "));
+    return n.isEmpty() ? QString() : QStringLiteral("n") + n;
+}
+/// The other chats of the same contact: the ones it is merged with, and other one-to-one chats with the same person (the same name or phone number,
+/// on another number or another network). Notification settings are shared across all of them, merged or not.
+QStringList Engine::siblingsOf(const QString &roomId) const {
+    if (!m_store.room(roomId)) return {};
+    QSet<QString> set, keys;
+    QStringList group = m_store.linkGroup(roomId); if (group.isEmpty()) group << roomId;
+    auto key = [](const Room &r) { return (r.isGroup() || r.network == QLatin1String("matrix")) ? QString() : contactKey(RoomListModel::displayName(r)); };
+    for (const QString &g : group) { set.insert(g); if (const Room *r = m_store.room(g)) { const QString k = key(*r); if (!k.isEmpty()) keys.insert(k); } }
+    if (!keys.isEmpty()) for (auto it = m_store.roomsBegin(); it != m_store.roomsEnd(); ++it) { if (m_store.isBotRoom(*it)) continue; const QString k = key(*it); if (!k.isEmpty() && keys.contains(k)) set.insert(it->id); }
+    set.remove(roomId);
+    return QStringList(set.cbegin(), set.cend());
+}
+/// A chat's notification settings: its own, else those of the same contact's other chats.
+QVariantMap Engine::chatNotif(const QString &roomId) const {
+    if (!m_settings) return {};
+    const QVariantMap all = m_settings->value(QStringLiteral("notifChat")).toMap();
+    if (all.contains(roomId)) return all.value(roomId).toMap();
+    for (const QString &o : siblingsOf(roomId)) if (all.contains(o)) return all.value(o).toMap();
+    return {};
+}
+/// Changes one setting of a contact on all of their chats at once.
+void Engine::setChatNotif(const QString &roomId, const QString &key, const QVariant &value) {
+    if (!m_settings) return;
+    QVariantMap all = m_settings->value(QStringLiteral("notifChat")).toMap(); QVariantMap p = chatNotif(roomId); p.insert(key, value);
+    for (const QString &id : QStringList{roomId} + siblingsOf(roomId)) all.insert(id, p);
+    m_settings->set(QStringLiteral("notifChat"), all);
+}
+void Engine::resetChatNotif(const QString &roomId) {
+    if (!m_settings) return;
+    QVariantMap all = m_settings->value(QStringLiteral("notifChat")).toMap();
+    for (const QString &id : QStringList{roomId} + siblingsOf(roomId)) all.remove(id);
+    m_settings->set(QStringLiteral("notifChat"), all);
+}
+void Engine::setLowPriority(const QString &roomId, bool on) { for (const QString &id : QStringList{roomId} + siblingsOf(roomId)) setTag(id, QStringLiteral("m.lowpriority"), on); }
+void Engine::snooze(const QString &roomId, double whenMs) { for (const QString &id : QStringList{roomId} + siblingsOf(roomId)) remind(id, whenMs, true); }
+/// Mutes (or unmutes) a contact: every chat of the same person, so their other number is quiet too.
+void Engine::setMuted(const QString &roomId, bool on) { for (const QString &id : QStringList{roomId} + siblingsOf(roomId)) setMutedOne(id, on); }
+void Engine::setMutedOne(const QString &roomId, bool on) {
     QSet<QString> s = m_store.mutedSet(); if (on) s.insert(roomId); else s.remove(roomId);
     m_store.setMuted(s); refreshLists();
     const QString path = QStringLiteral("/_matrix/client/v3/pushrules/global/override/") + pct(roomId);

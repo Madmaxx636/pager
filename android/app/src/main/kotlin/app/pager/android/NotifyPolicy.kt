@@ -10,9 +10,9 @@ object NotifyPolicy {
     }
 
     /** [quiet]: the chat is muted or in Low priority. [day]: 0 = Sunday. */
-    fun decide(m: Incoming, quiet: Boolean, pinned: Boolean, nowMin: Int, day: Int, s: AppSettings): Decision {
+    fun decide(m: Incoming, quiet: Boolean, pinned: Boolean, nowMin: Int, day: Int, s: AppSettings, chatPrefs: ChatNotifPrefs? = null): Decision {
         val direct = m.mentioned || m.replyToMe || keywordHit(m.text, s.notifKeywords)
-        val chat = s.notifChat[m.roomId] ?: ChatNotifPrefs()
+        val chat = chatPrefs ?: s.notifChat[m.roomId] ?: ChatNotifPrefs()
         val chatMode = chat.mode.takeIf { it != "default" }
         val netMode = s.notifNetworkMode[m.network] ?: if (m.network in s.notifMutedNetworks) "none" else "all"
         val preview = when (chat.preview) { "show" -> "full"; "hide" -> "hidden"; else -> s.notifPreview }

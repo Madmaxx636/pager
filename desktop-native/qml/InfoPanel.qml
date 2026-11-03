@@ -202,9 +202,10 @@ Rectangle {
         modal: true; anchors.centerIn: Overlay.overlay; width: Math.min(440, Overlay.overlay ? Overlay.overlay.width - 32 : 440); title: "Notifications for " + core.currentName; standardButtons: Dialog.Close
 
         property int rev: 0
-        function prefs() { rev; return (settings.notifChat || {})[core.currentRoom] || {} }
-        function setPref(k, v) { const all = Object.assign({}, settings.notifChat || {}); const p = Object.assign({}, all[core.currentRoom] || {}); p[k] = v; all[core.currentRoom] = p; settings.set("notifChat", all); rev++ }
-        function resetPrefs() { const all = Object.assign({}, settings.notifChat || {}); delete all[core.currentRoom]; settings.set("notifChat", all); rev++ }
+        // One contact, one set of settings: the same on all of their chats (another number or network, merged or not).
+        function prefs() { rev; return core.chatNotif(core.currentRoom) }
+        function setPref(k, v) { core.setChatNotif(core.currentRoom, k, v); rev++ }
+        function resetPrefs() { core.resetChatNotif(core.currentRoom); rev++ }
         function summary() {
             const p = prefs(), parts = []
             if (p.level === "priority") parts.push("Priority"); else if (p.level === "silent") parts.push("Silent")
