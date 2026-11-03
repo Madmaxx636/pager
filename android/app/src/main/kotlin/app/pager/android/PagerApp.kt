@@ -17,8 +17,11 @@ class PagerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         // Remember what a crash was, so Settings can show it (there is no other way to see it on a phone).
+        AppLog.init(this)
+        AppLog.crumb("app", "started")
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, e ->
+            runCatching { AppLog.incident("crash", "${e::class.java.simpleName}: ${e.message ?: ""}", e.stackTraceToString()) }
             runCatching { getSharedPreferences("pager.crash", MODE_PRIVATE).edit().putString("last", (java.util.Date().toString() + "\n" + e.stackTraceToString()).take(3000)).commit() }
             previous?.uncaughtException(thread, e)
         }

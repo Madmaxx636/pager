@@ -2,6 +2,7 @@
 // This file is the glue: it feeds sync data in, sends the library's own requests (keys, to-device messages), decrypts incoming events
 // and encrypts outgoing ones. It knows nothing about the rest of the app, so two instances can be tested against each other.
 import * as sdk from "@matrix-org/matrix-sdk-crypto-wasm";
+import { crumb } from "./applog";
 
 type J = Record<string, any>;
 /** How to talk to the homeserver. The app passes its HTTP client; tests pass a fake server. */
@@ -122,6 +123,7 @@ export class Crypto {
   private locked = new Map<string, { room: string; session: string; why: string; since: number }>();
   /** Kept in this browser so it is still there after a reload, and after the message has long since unlocked. */
   note(line: string) {
+    crumb("encryption", line);
     try { const k = "pager.e2ee.log"; const all = (localStorage.getItem(k) ?? "").split("\n").filter(Boolean); all.push(`${new Date().toISOString().replace("T", " ").slice(0, 19)}  ${line}`); localStorage.setItem(k, all.slice(-150).join("\n")); } catch { /* nowhere to keep it */ }
   }
   problemLog(): string[] { try { return (localStorage.getItem("pager.e2ee.log") ?? "").split("\n").filter(Boolean); } catch { return []; } }

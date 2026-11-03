@@ -1,6 +1,7 @@
 import { freshUpdates, lostText, newlyLost, updateText } from "./accountalerts";
 import { ATTENTION_FIELD, attentionText, isFresh, raise, type AttentionKind } from "./attention";
 import { attended } from "./presence";
+import { crumb, recordIncident } from "./applog";
 import { KEEP_MESSAGES, LOW_END_KEEP, poolClearMs } from "./memory";
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
@@ -473,6 +474,7 @@ if (typeof window !== "undefined") {
   document.addEventListener("visibilitychange", () => { if (!document.hidden && state.session && lastSyncAt && Date.now() - lastSyncAt > 60_000) restartSync(); });
 }
 
+let syncFailing = false;
 async function syncLoop(s: Session, signal: AbortSignal) {
   await holdUntilKeys(s, signal).catch(() => {});
   let backoff = 1000;
@@ -480,7 +482,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
     try {
       const res = await matrix.sync(since, signal);
       // If reading the encrypted parts goes wrong, show the update with those messages still locked rather than never moving on.
-      try { await decryptSync(res); } catch (e) { console.warn("problem decrypting an update", e); }
+      try { await decryptSync(res); } catch (e) { console.warn("problem decrypting an update", e); recordIncident("decrypting an update", String((e as Error)?.message ?? e), (e as Error)?.stack); }
       const initial = since === undefined;
       const r = applySync(state.chats, res, s.userId, initial);
       set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}), ...(r.userStickers ? { userStickers: r.userStickers } : {}) });
@@ -526,11 +528,13 @@ async function syncLoop(s: Session, signal: AbortSignal) {
           for (const id of new Set(r.incoming.map((m) => m.roomId))) if (!muted.includes(id) && state.chats[id] && isArchived(state.chats[id])) setTag(id, "u.archived", false);
         }
         expireMutes();
-      } catch (e) { console.warn("problem after an update", e); }
+      } catch (e) { console.warn("problem after an update", e); recordIncident("handling an update", String((e as Error)?.message ?? e), (e as Error)?.stack); }
       scheduleSave(); updateBadge();
+      if (syncFailing) { crumb("sync", "working again"); syncFailing = false; }
       backoff = 1000;
     } catch (e) {
       if (signal.aborted) return;
+      if (!syncFailing) { syncFailing = true; const st = e instanceof ApiError ? `server answered ${e.status}` : String((e as Error)?.message ?? e); crumb("sync", `failed (${st}), trying again`); if (!(e instanceof ApiError) || e.status >= 500) recordIncident("sync", st); }
       if (e instanceof ApiError && e.status === 401) { void signOutLocal(); return; }
       if (e instanceof ApiError && e.status === 400 && since) { since = undefined; set({ chats: {} }); continue; }
       await new Promise((r) => setTimeout(r, backoff)); backoff = Math.min(backoff * 2, 30000);

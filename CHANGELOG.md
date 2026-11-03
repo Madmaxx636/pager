@@ -4,6 +4,10 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.5 (phone, desktop, web)
+
+- **Logs:** Settings > Advanced > Logs shows the problems this device ran into (crashes, sync that kept failing, encryption trouble), each with what the app was doing just before and just after, and the latest activity. A repeat is counted, not listed again. It can be copied or saved to a file. It stays on the device, nothing is sent anywhere, and message text, names, keys and tokens are never in it.
+
 ## 0.6.4 (phone, desktop, web)
 
 - **Encryption details:** when this device cannot send something its encryption needs (for example the server refusing the device's keys), the problem log now says so. Before, these failures were silent, so "waiting for the keys" had no reason to show.

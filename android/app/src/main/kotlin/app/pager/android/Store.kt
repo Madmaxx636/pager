@@ -655,6 +655,7 @@ class Store(private val context: Context) {
         android.util.Log.w("Pager", "problem $what", e)
         _syncProblem.value = "$what: ${e::class.java.simpleName}: ${e.message ?: ""}".take(300)
         e2ee?.note(_syncProblem.value.orEmpty())
+        AppLog.incident(what, "${e::class.java.simpleName}: ${e.message ?: ""}", e.stackTraceToString())
     }
 
     /**
@@ -678,6 +679,7 @@ class Store(private val context: Context) {
         }
     }
 
+    private var syncFailing = false
     private suspend fun syncLoop(s: Session) {
         runCatching { holdUntilKeys() }
         var backoff = 1000L
@@ -757,13 +759,16 @@ class Store(private val context: Context) {
                 } catch (e: CancellationException) { throw e } catch (e: Throwable) { noteSyncProblem("handling an update", e) }
                 _synced.value = true
                 backoff = 1000L
+                if (syncFailing) { AppLog.crumb("sync", "working again"); syncFailing = false }
                 if (res === raw) _syncProblem.value = null
             } catch (e: ApiException) {
                 if (e.status == 401) { signOutLocal(); return }
+                if (!syncFailing) { syncFailing = true; AppLog.crumb("sync", "failed (server answered ${e.status}), trying again"); if (e.status >= 500) AppLog.incident("sync", "server answered ${e.status}") }
                 if (e.status == 400 && since != null) { synchronized(cacheLock) { since = null; chatsSince = null; _chats.value = emptyMap() }; continue } // stale cache token
                 delay(backoff); backoff = (backoff * 2).coerceAtMost(30_000)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                if (!syncFailing) { syncFailing = true; AppLog.crumb("sync", "failed (${e::class.java.simpleName}), trying again") }
                 noteSyncProblem("updating", e)
                 delay(backoff); backoff = (backoff * 2).coerceAtMost(30_000)
             }

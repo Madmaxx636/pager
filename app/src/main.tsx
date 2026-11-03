@@ -9,6 +9,7 @@ import { loadPhoto } from "./core/wallpapers";
 import { loadCustomSound } from "./core/customsound";
 import { ErrorBoundary, recordProblem } from "./ui/ErrorBoundary";
 import { UpdateToast } from "./ui/UpdateToast";
+import { crumb, flushLog } from "./core/applog";
 
 void loadCustomSound(); // a sound of your own for alerts, if you added one
 void loadPhoto(); // a wallpaper photo of your own, if you added one
@@ -18,6 +19,10 @@ createRoot(document.getElementById("root")!).render(<ErrorBoundary><Titlebar /><
 window.addEventListener("error", (e) => recordProblem("error", e.error ?? e.message));
 window.addEventListener("unhandledrejection", (e) => recordProblem("unhandled promise", e.reason));
 window.setInterval(() => window.pagerDesktop?.beat?.(), 5000);
+crumb("app", `started ${import.meta.env.VITE_APP_VERSION ?? ""}`);
+window.addEventListener("online", () => crumb("network", "online")); window.addEventListener("offline", () => crumb("network", "offline"));
+document.addEventListener("visibilitychange", () => { crumb("app", document.hidden ? "in the background" : "in front"); if (document.hidden) flushLog(); });
+window.addEventListener("pagehide", flushLog);
 
 // Everything that moves stops while the window is in the background or minimised: no point drawing what nobody can see.
 installPresence();

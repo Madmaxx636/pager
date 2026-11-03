@@ -152,7 +152,7 @@ class E2ee private constructor(
     class Locked(val room: String, val session: String, val reason: String, val since: Long)
     private fun stamp() = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
     /** Kept in a file so it is still there after the app restarts, and after the message has long since unlocked. */
-    fun note(line: String) { val line = "${stamp()}  $line"; runCatching { if (logFile.length() > 64_000) logFile.writeText(logFile.readLines().takeLast(150).joinToString("\n", postfix = "\n")); logFile.appendText(line + "\n") } }
+    fun note(line: String) { AppLog.crumb("encryption", line); val line = "${stamp()}  $line"; runCatching { if (logFile.length() > 64_000) logFile.writeText(logFile.readLines().takeLast(150).joinToString("\n", postfix = "\n")); logFile.appendText(line + "\n") } }
     fun problemLog(): List<String> = runCatching { logFile.readLines().takeLast(150) }.getOrDefault(emptyList())
     /** One line for each message that is still locked. */
     fun lockedLines(): List<String> = locked.entries.sortedBy { it.value.since }.map { "event ${it.key.take(14)}  room ${it.value.room.take(18)}  session ${it.value.session.take(12)}  since ${java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(it.value.since))}  ${it.value.reason}" }

@@ -775,9 +775,52 @@ private fun AdvancedSettings(navigate: (String) -> Unit) {
             ButtonRow("Reload everything from the server") { store.resyncFromServer() }; GroupDivider()
             ButtonRow("Battery optimization settings") { context.startActivity(Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }
+        LogsGroup()
         SettingsGroup("Developer", footer = "Adds a 'View source' action to messages, showing event IDs and raw details.") {
             SwitchRow("Developer mode", checked = s.developerMode) { v -> store.settings.update { copy(developerMode = v) } }
         }
+    }
+}
+
+@Composable
+private fun LogsGroup() {
+    val ctx = LocalContext.current
+    val clip = androidx.compose.ui.platform.LocalClipboardManager.current
+    var open by remember { mutableStateOf(false) }
+    var tick by remember { mutableStateOf(0) }
+    val incidents = remember(tick, open) { AppLog.incidents() }
+    SettingsGroup("Logs", footer = "Problems this phone ran into, with what it was doing just before and after. Kept on this phone only; nothing is sent anywhere. Message text, names and keys are never in it.") {
+        NavRow("Problems and activity", if (incidents.isEmpty()) "No problems recorded" else "${incidents.size} ${if (incidents.size == 1) "problem" else "problems"} recorded", Icons.Rounded.Code) { open = true }
+    }
+    if (open) {
+        var note by remember { mutableStateOf("") }
+        val save = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            if (uri != null) note = runCatching { ctx.contentResolver.openOutputStream(uri)!!.use { it.write(AppLog.all().toByteArray()) } }.fold({ "Saved" }, { "Couldn't save the file" })
+        }
+        val mono = androidx.compose.ui.text.font.FontFamily.Monospace
+        AlertDialog(
+            onDismissRequest = { open = false }, title = { Text("Logs") },
+            text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                androidx.compose.foundation.text.selection.SelectionContainer { Column {
+                    Text("Problems", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    if (incidents.isEmpty()) Text("Nothing has gone wrong.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    incidents.forEach { i ->
+                        var shown by remember(i.id) { mutableStateOf(false) }
+                        Text("${i.kind}: ${i.message.lineSequence().first().take(80)} · ${if (i.count == 1) "once" else "${i.count} times"}", Modifier.clickable { shown = !shown }.padding(vertical = 6.dp), style = MaterialTheme.typography.bodyMedium)
+                        if (shown) {
+                            Text(AppLog.text(i), fontFamily = mono, style = MaterialTheme.typography.bodySmall)
+                            Row { TextButton(onClick = { clip.setText(AnnotatedString(AppLog.text(i))); note = "Copied" }) { Text("Copy") }; TextButton(onClick = { AppLog.dismiss(i.id); tick++ }) { Text("Dismiss") } }
+                        }
+                    }
+                    Text("Recent activity", Modifier.padding(top = 10.dp), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    val clock = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                    Text(AppLog.crumbs().takeLast(60).reversed().joinToString("\n") { "${clock.format(java.util.Date(it.t))}  ${it.area}: ${it.text}" }.ifEmpty { "Nothing yet." }, fontFamily = mono, style = MaterialTheme.typography.bodySmall)
+                } }
+                if (note.isNotEmpty()) Text(note, Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.primary)
+            } },
+            confirmButton = { Row { TextButton(onClick = { clip.setText(AnnotatedString(AppLog.all())); note = "Copied" }) { Text("Copy all") }; TextButton(onClick = { save.launch("pager-log.txt") }) { Text("Save to file") } } },
+            dismissButton = { Row { TextButton(onClick = { AppLog.clear(); tick++; note = "Cleared" }) { Text("Clear") }; TextButton(onClick = { open = false }) { Text("Close") } } },
+        )
     }
 }
 

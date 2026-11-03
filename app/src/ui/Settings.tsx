@@ -1,6 +1,7 @@
 import { FONTS, PALETTES, PALETTE_GROUPS } from "../core/palettes";
 import { LOOKS } from "../core/looks";
 import { lastProblem } from "./ErrorBoundary";
+import { appIncidentText, clearLog, dismissIncident, getCrumbs, getIncidents, logText, onLogChange } from "../core/applog";
 import { hasCustomSound, importSound, onCustomSoundChange, playCustom, removeCustomSound } from "../core/customsound";
 import { APP_ICONS } from "../core/appicons";
 import { GIF_SOURCES, KEY_PROVIDERS, keyFingerprint, searchGifs } from "../core/gifs";
@@ -214,6 +215,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
       <Group title="Sync" footer="Use this if a chat is missing, a message never showed up, or this device is out of step with your other devices. Your account and the server are not touched.">
         <Row title="Reload everything from the server" hint="Forgets what this device saved and downloads your chats again" onClick={() => { if (confirm("Reload everything from the server? Your chats are downloaded again, which can take a minute.")) { void resyncFromServer(); nav("home"); } }} />
       </Group>
+      <LogsGroup />
       <Group title="Developer" footer="Adds event IDs and a 'Copy event ID' action to messages.">
         <SwitchRow title="Developer mode" checked={s.developerMode} onChange={(v) => u({ developerMode: v })} />
       </Group>
@@ -525,6 +527,44 @@ function ColorDialog({ value, onClose, onPick }: { value: string; onClose: () =>
         <div className="color-preview" style={{ background: ok ? hex : "transparent" }} />
       </div>
       <div className="row-end"><button className="link" onClick={onClose}>Cancel</button><button className="primary" disabled={!ok} onClick={() => onPick(hex.toLowerCase())}>Use this colour</button></div>
+    </Modal>
+  );
+}
+
+/** What this device did and what went wrong, kept on the device. Message text and keys are never in it. */
+function LogsGroup() {
+  const [open, setOpen] = useState(false);
+  const n = useSyncExternalStore(onLogChange, () => getIncidents().length);
+  return (
+    <Group title="Logs" footer="Problems this device ran into, with what it was doing just before and after. Kept on this device only; nothing is sent anywhere. Message text, names and keys are never in it.">
+      <Row title="Problems and activity" hint={n ? `${n} ${n === 1 ? "problem" : "problems"} recorded` : "No problems recorded"} onClick={() => setOpen(true)} chevron />
+      {open && <LogsDialog onClose={() => setOpen(false)} />}
+    </Group>
+  );
+}
+function LogsDialog({ onClose }: { onClose: () => void }) {
+  useSyncExternalStore(onLogChange, () => getCrumbs().length + getIncidents().reduce((a, i) => a + i.count, 0));
+  const [note, setNote] = useState("");
+  const incidents = getIncidents(), crumbs = getCrumbs().slice(-60).reverse();
+  const copy = (text: string) => { navigator.clipboard?.writeText(text).then(() => setNote("Copied"), () => setNote("Couldn't copy")); };
+  const save = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([logText()], { type: "text/plain" })); a.download = "pager-log.txt"; a.click(); URL.revokeObjectURL(a.href); setNote("Saved"); };
+  return (
+    <Modal title="Logs" onClose={onClose} wide>
+      <div style={{ maxHeight: "55vh", overflow: "auto", fontSize: "0.75rem", userSelect: "text" }}>
+        <h4>Problems</h4>
+        {incidents.length === 0 && <p className="muted">Nothing has gone wrong.</p>}
+        {incidents.map((i) => (
+          <details key={i.id} style={{ marginBottom: 8 }}>
+            <summary>{i.kind}: {i.message.split("\n")[0].slice(0, 90)} <span className="muted">· {i.count === 1 ? "once" : `${i.count} times`} · {new Date(i.last).toLocaleString()}</span></summary>
+            <pre className="report" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{appIncidentText(i)}</pre>
+            <button className="link" onClick={() => copy(appIncidentText(i))}>Copy</button> <button className="link" onClick={() => dismissIncident(i.id)}>Dismiss</button>
+          </details>
+        ))}
+        <h4>Recent activity</h4>
+        <pre className="report" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{crumbs.map((c) => `${new Date(c.t).toLocaleTimeString([], { hour12: false })}  ${c.area}: ${c.text}`).join("\n") || "Nothing yet."}</pre>
+      </div>
+      {note && <p className="muted">{note}</p>}
+      <div className="row-end"><button className="link" onClick={onClose}>Close</button><button className="link" onClick={() => { if (confirm("Clear the log on this device?")) clearLog(); }}>Clear</button><button className="link" onClick={() => copy(logText())}>Copy all</button><button className="primary" onClick={save}>Save to file</button></div>
     </Modal>
   );
 }
