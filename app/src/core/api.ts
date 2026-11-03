@@ -54,6 +54,9 @@ export function parseCookies(text: string): Record<string, string> {
 }
 
 export interface AdminInfo { id: string; displayname: string; admin: boolean; deactivated: boolean; locked: boolean; created?: number; devices: { id: string; name: string; lastSeen: number; ip: string }[] }
+/** One thing the server's log watcher kept: an error, crash or condition needing attention, with the lines around it. */
+export interface AdminIncident { id: string; fp: string; service: string; severity: "crash" | "error" | "attention" | "warning"; message: string; first: number; last: number; count: number; before: string[]; after: string[] }
+export interface AdminLogs { available: boolean; unchanged?: boolean; updated: number; counts?: Record<AdminIncident["severity"], number>; incidents?: AdminIncident[] }
 export interface AdminBridge { id: string; name: string; up: boolean; container?: { state: string; status: string; image: string } }
 export interface AdminSchedule { every: "off" | "6h" | "12h" | "daily"; at: string; last: number; result?: "ok" | "failed" }
 export interface AdminSetting { key: string; label: string; hint: string; kind: "bool" | "number"; value: boolean | number }
@@ -97,6 +100,8 @@ export const pager = {
     recover: (id: string, adminPassword: string, newPassword?: string) => call<{ ok: boolean; backupRemoved: boolean; temporaryPassword?: string }>("POST", `/api/admin/users/${enc(id)}/recover`, { adminPassword, ...(newPassword ? { newPassword } : {}) }),
     resetPassword: (id: string, password: string) => call("POST", `/api/admin/users/${enc(id)}/password`, { password }),
     remove: (id: string) => call("POST", `/api/admin/users/${enc(id)}/delete`, {}),
+    logs: (level: "important" | "errors" | "all", since = 0) => call<AdminLogs>("GET", `/api/admin/logs?level=${level}${since ? `&since=${since}` : ""}`),
+    ackLogs: (fps: string[] | "all") => call<{ dismissed: number }>("POST", "/api/admin/logs/ack", fps === "all" ? { all: true } : { fps }),
     restartInfo: () => call<{ available: boolean; pending: boolean; last: { at: string; ok: boolean } | null }>("GET", "/api/admin/restart"),
     restartServer: (password: string) => call<{ ok: boolean }>("POST", "/api/admin/restart", { password }),
     server: () => call<{ domain: string; signup: "invite" | "open" | "closed"; inviteCode: string }>("GET", "/api/admin/server"),

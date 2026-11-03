@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import { AdminBridge, AdminSchedule, AdminInfo, AdminPerson, AdminSetting, pager } from "../core/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AdminBridge, AdminLogs, AdminSchedule, AdminInfo, AdminPerson, AdminSetting, pager } from "../core/api";
 import { networkMeta } from "../core/emoji";
 import { Group, Modal, Row, Select, Switch } from "./common";
 import { stateLabel } from "./Accounts";
+import { SEV_LABEL, ago, incidentText } from "../core/incidents";
 
 const hue = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
 const nameOf = (u: { id: string; displayname?: string }) => u.displayname || u.id.replace(/^@/, "").split(":")[0];
@@ -16,7 +17,7 @@ const CATALOG: { id: string; name: string; how: string }[] = [
   { id: "discord", name: "Discord", how: "Add ENABLE_DISCORD=1 to server/.env, run ./scripts/setup.sh and docker compose up -d. It signs in through its bot page." },
 ];
 
-type Tab = "accounts" | "bridges" | "server";
+type Tab = "accounts" | "bridges" | "server" | "logs";
 
 /** Administrator tools: the accounts on this server, the bridges that connect them to other apps, and who may sign up. The server decides who is allowed. */
 export function AdminPage() {
@@ -28,12 +29,13 @@ export function AdminPage() {
   return (
     <>
       <div className="tabs pad">
-        {([["accounts", "Accounts"], ["bridges", "Bridges"], ["server", "Server"]] as [Tab, string][]).map(([id, label]) => <button key={id} className={"tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{label}{id === "accounts" && people ? ` (${people.length})` : ""}</button>)}
+        {([["accounts", "Accounts"], ["bridges", "Bridges"], ["server", "Server"], ["logs", "Logs"]] as [Tab, string][]).map(([id, label]) => <button key={id} className={"tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>{label}{id === "accounts" && people ? ` (${people.length})` : ""}</button>)}
       </div>
       {err && <div className="error pad">{err}</div>}
       {tab === "accounts" && <Accounts people={people} reload={loadPeople} setErr={setErr} />}
       {tab === "bridges" && <Bridges people={people} setErr={setErr} />}
       {tab === "server" && <ServerTab setErr={setErr} />}
+      {tab === "logs" && <LogsTab setErr={setErr} />}
     </>
   );
 }
@@ -257,6 +259,58 @@ function SettingsModal({ bridge, onClose }: { bridge: AdminBridge; onClose: () =
           <button className="primary" disabled={!dirty} onClick={async () => { try { await pager.admin.saveBridgeSettings(bridge.id, vals, true); onClose(); } catch (e) { setErr((e as Error).message); } }}>Save and restart</button></div>
       </div>
     </Modal>
+  );
+}
+
+// ---- Logs ----------------------------------------------------------------------------------------------------------------------------
+
+/** What went wrong on the server, live: errors and crashes with the lines around them. Warnings are counted and hidden unless asked for. */
+function LogsTab({ setErr }: { setErr: (m: string) => void }) {
+  const [level, setLevel] = useState<"important" | "errors" | "all">("important");
+  const [data, setData] = useState<AdminLogs>();
+  const [open, setOpen] = useState("");
+  const [note, setNote] = useState("");
+  const since = useRef(0);
+  const load = useCallback((force = false) => {
+    pager.admin.logs(level, force ? 0 : since.current).then((r) => { if (r.unchanged) return; since.current = r.updated; setData(r); }).catch((e) => setErr(e.message));
+  }, [level, setErr]);
+  useEffect(() => { since.current = 0; load(true); }, [level, load]);
+  // Live: ask every few seconds while this page is in front (the answer is tiny when nothing has changed).
+  useEffect(() => { const t = window.setInterval(() => { if (!document.hidden) load(); }, 3000); return () => window.clearInterval(t); }, [load]);
+  const dismiss = (fps: string[] | "all") => pager.admin.ackLogs(fps).then(() => load(true)).catch((e) => setErr(e.message));
+  const copy = (text: string) => { void navigator.clipboard?.writeText(text); setNote("Copied"); window.setTimeout(() => setNote(""), 1500); };
+  const list = data?.incidents ?? [];
+  const c = data?.counts;
+  return (
+    <>
+      {data && !data.available && <div className="admin-note"><b>The log watcher isn't running.</b><p>Run this once on the server to turn it on:</p><code className="copy" onClick={() => copy("cd ~/pager/server && ./scripts/logwatch.sh --install")}>cd ~/pager/server && ./scripts/logwatch.sh --install</code></div>}
+      <Group title="Server log" footer="Only errors, crashes and things needing your attention are shown. Warnings are counted and hidden. Tap one to see the lines around it.">
+        <Select title="Show" value={level} options={[["important", "Errors, crashes and attention"], ["errors", "Errors and crashes only"], ["all", "Everything, warnings too"]]} onChange={(v) => setLevel(v as typeof level)} />
+        {c && <Row title="Right now" hint={`${c.crash} crash${c.crash === 1 ? "" : "es"} · ${c.error} error${c.error === 1 ? "" : "s"} · ${c.attention} needing attention · ${c.warning} warning${c.warning === 1 ? "" : "s"} (hidden)`}>
+          <button className="link" disabled={!list.length} onClick={() => copy(list.map(incidentText).join("\n\n--------\n\n"))}>{note || "Copy all"}</button>
+          <button className="link" disabled={!list.length} onClick={() => dismiss("all")}>Dismiss all</button>
+        </Row>}
+        {data && !list.length && data.available && <Row title="Nothing to show" hint="No errors or crashes. This page updates by itself." />}
+      </Group>
+      <div className="admin-list">
+        {list.map((i) => (
+          <section key={i.fp} className={"admin-card log-card " + i.severity}>
+            <button className="admin-head" onClick={() => setOpen(open === i.fp ? "" : i.fp)}>
+              <i className={"log-sev " + i.severity} title={SEV_LABEL[i.severity]} />
+              <span className="admin-who"><b className="log-msg">{i.message}</b><small>{SEV_LABEL[i.severity]} · {i.service} · {i.count > 1 ? `${i.count} times · ` : ""}{ago(i.last)}</small></span>
+            </button>
+            {open === i.fp && (
+              <div className="log-detail">
+                {i.before.length > 0 && <pre className="log-ctx">{i.before.join("\n")}</pre>}
+                <pre className={"log-hit " + i.severity}>{i.message}</pre>
+                {i.after.length > 0 && <pre className="log-ctx">{i.after.join("\n")}</pre>}
+                <footer><button className="pill" onClick={() => copy(incidentText(i))}>Copy</button><button className="pill" onClick={() => dismiss([i.fp])}>Dismiss</button></footer>
+              </div>
+            )}
+          </section>
+        ))}
+      </div>
+    </>
   );
 }
 

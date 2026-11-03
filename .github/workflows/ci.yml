@@ -49,5 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Server log watcher tests
+        run: cd server/logwatch && python3 -W error -m unittest test_logwatch
       - name: Shell scripts parse
         run: for f in install.sh scripts/*.sh server/pager server/scripts/*.sh; do bash -n "$f" || exit 1; done

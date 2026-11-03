@@ -4,6 +4,10 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.2 (phone, desktop, web)
+
+- **Admin > Logs:** what goes wrong on the server, live. Errors, crashes and things needing attention (a service that stopped or is unhealthy, a full disk, no recent backup) with the lines just before and after each one. Repeats are counted, not listed again; warnings are counted and hidden unless asked for; passwords and tokens are removed before anything is kept. You can copy an entry or dismiss it (it comes back only if it happens again). Needs the log watcher on the server: `./scripts/logwatch.sh --install`.
+
 ## 0.6.1 (phone, desktop, web)
 
 - **Older Android phones (8 and 9):** the background sync service could fail to start, and on 8.0 and 8.1 the update check could not read the app's own version. Both are fixed.

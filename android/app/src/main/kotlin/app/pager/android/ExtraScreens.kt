@@ -329,7 +329,7 @@ fun AdminScreen(onBack: () -> Unit) {
 
     SettingsPage("Admin", onBack) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("accounts" to "Accounts", "bridges" to "Bridges", "server" to "Server").forEach { (id, label) ->
+            listOf("accounts" to "Accounts", "bridges" to "Bridges", "server" to "Server", "logs" to "Logs").forEach { (id, label) ->
                 androidx.compose.material3.FilterChip(selected = tab == id, onClick = { tab = id }, label = { Text(label + if (id == "accounts") people?.let { " (${it.size})" }.orEmpty() else "") })
             }
         }
@@ -415,6 +415,8 @@ fun AdminScreen(onBack: () -> Unit) {
             }
             Text("To add a bridge (Telegram, Discord…), set it up on the server; the web admin page lists how.", Modifier.padding(20.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+
+        if (tab == "logs") AdminLogsTab(store) { err = it }
 
         if (tab == "server") {
             SettingsGroup("Restart", footer = if (restartInfo?.first == false) "Not set up yet. Run this once on the server: cd ~/pager/server && ./scripts/restart-watcher.sh --install" else "Restarts Synapse, every bridge, the database, the web server and the API. Everyone is offline for about a minute. The computer itself is not rebooted.") {

@@ -1,4 +1,5 @@
 import { readBridgeUpdates } from "./bridgeupdates.ts";
+import { ackIncidents, listIncidents, type Level } from "./logs.ts";
 import { EVERIES, clean, parseAt, runDue, type Sched } from "./schedule.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Config } from "./config.ts";
@@ -316,6 +317,22 @@ export function createApp(cfg: Config) {
         const ids = (d.devices ?? []).map((x: any) => x.device_id);
         if (ids.length) await synapseAdmin(cfg, token, "POST", `/_synapse/admin/v2/users/${enc(target)}/delete_devices`, { devices: ids });
         return send(res, 200, { signedOut: ids.length });
+      }
+
+      // ---- Logs: the errors and crashes the server's log watcher kept (see server/logwatch/logwatch.py), with the lines around them.
+      if (parts[1] === "logs" && parts.length === 2 && method === "GET") {
+        if (!cfg.stateFile) return send(res, 200, { available: false, updated: 0, counts: { crash: 0, error: 0, attention: 0, warning: 0 }, incidents: [] });
+        const lvl = url.searchParams.get("level");
+        const r = listIncidents(join(dirname(cfg.stateFile), "logs"), lvl === "all" || lvl === "errors" ? (lvl as Level) : "important");
+        // The apps ask every few seconds: say so briefly when nothing has changed.
+        if (Number(url.searchParams.get("since")) === r.updated && r.updated > 0) return send(res, 200, { available: true, unchanged: true, updated: r.updated });
+        return send(res, 200, { available: r.updated > 0, ...r });
+      }
+      if (parts[1] === "logs" && parts[2] === "ack" && method === "POST") {
+        if (!cfg.stateFile) throw new HttpError(409, "The server has nowhere to keep its state");
+        const body = await readJson(req);
+        const fps = body.all === true ? "all" : Array.isArray(body.fps) ? body.fps.filter((x: unknown): x is string => typeof x === "string").slice(0, 500) : [];
+        return send(res, 200, { dismissed: ackIncidents(join(dirname(cfg.stateFile), "logs"), fps) });
       }
 
       // ---- Restart the Pager server's services (not the computer). The API never touches the container runtime for this: it leaves a note in its

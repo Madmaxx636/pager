@@ -42,6 +42,34 @@ data class AdminInfo(val displayname: String, val locked: Boolean, val created: 
 data class AdminBridge(val id: String, val name: String, val up: Boolean, val state: String?, val status: String?)
 data class ServerSettings(val domain: String, val signup: String, val inviteCode: String)
 
+/** One thing the server's log watcher kept: an error, crash or condition needing attention, with the lines around it. */
+data class Incident(val id: String, val fp: String, val service: String, val severity: String, val message: String, val first: Double, val last: Double, val count: Int, val before: List<String>, val after: List<String>)
+data class LogsAnswer(val available: Boolean, val unchanged: Boolean, val updated: Double, val counts: Map<String, Int>, val incidents: List<Incident>)
+
+fun parseLogs(o: JsonObject): LogsAnswer {
+    fun num(k: String, from: JsonObject) = (from[k] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull() ?: 0.0
+    fun strs(e: kotlinx.serialization.json.JsonElement?) = (e as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { p -> p.isString }?.content }.orEmpty()
+    val list = (o["incidents"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { e ->
+        val r = e as? JsonObject ?: return@mapNotNull null
+        fun s(k: String) = (r[k] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+        Incident(s("id"), s("fp"), s("service"), s("severity"), s("message"), num("first", r), num("last", r), num("count", r).toInt().coerceAtLeast(1), strs(r["before"]), strs(r["after"]))
+    }
+    val counts = (o["counts"] as? JsonObject)?.mapValues { num(it.key, o["counts"] as JsonObject).toInt() }.orEmpty()
+    return LogsAnswer((o["available"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true", (o["unchanged"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true", num("updated", o), counts, list)
+}
+
+/** An incident as plain text, to copy or send: the lines before, the event, the lines after. */
+fun incidentText(i: Incident): String {
+    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+    fun at(t: Double) = fmt.format(java.util.Date((t * 1000).toLong()))
+    val kind = when (i.severity) { "crash" -> "Crash"; "error" -> "Error"; "attention" -> "Needs attention"; else -> "Warning" }
+    val sb = StringBuilder("$kind in ${i.service} (${if (i.count == 1) "once" else "${i.count} times"}), first ${at(i.first)}, last ${at(i.last)}\n")
+    if (i.before.isNotEmpty()) { sb.append("\nBefore:\n"); i.before.forEach { sb.append("  ").append(it).append('\n') } }
+    sb.append("\nEvent:\n  ").append(i.message).append('\n')
+    if (i.after.isNotEmpty()) { sb.append("\nAfter:\n"); i.after.forEach { sb.append("  ").append(it).append('\n') } }
+    return sb.toString()
+}
+
 class PagerApi(private val http: Http) {
     // ---- Admin (Synapse checks the caller really is an admin) ----
     data class BridgeSetting(val key: String, val value: Int)
@@ -113,6 +141,9 @@ class PagerApi(private val http: Http) {
         val r = http.request("GET", "/api/admin/restart")
         return ((r["available"] as? JsonPrimitive)?.booleanOrNull == true) to (r["last"] as? JsonObject)?.get("at").str()
     }
+    suspend fun adminLogs(level: String, since: Double): LogsAnswer = parseLogs(http.request("GET", "/api/admin/logs?level=$level" + if (since > 0) "&since=${since}" else ""))
+    /** Dismisses incidents (null: all of them); they come back only if the same thing happens again. */
+    suspend fun adminAckLogs(fps: List<String>?) { http.request("POST", "/api/admin/logs/ack", buildJsonObject { if (fps == null) put("all", true) else put("fps", kotlinx.serialization.json.JsonArray(fps.map { kotlinx.serialization.json.JsonPrimitive(it) })) }) }
     suspend fun adminRestartServer(password: String) { http.request("POST", "/api/admin/restart", buildJsonObject { put("password", password) }) }
     suspend fun adminResetPassword(id: String, password: String) { http.request("POST", "/api/admin/users/${enc(id)}/password", buildJsonObject { put("password", password) }) }
     suspend fun adminRemove(id: String) { http.request("POST", "/api/admin/users/${enc(id)}/delete", JsonObject(emptyMap())) }
