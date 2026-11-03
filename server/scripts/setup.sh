@@ -86,6 +86,9 @@ echo "services:" > data/bridges.compose.yml
 echo "[]" > data/bridges.json
 enabled=()
 
+# Each bridge runs the exact version recorded in data/versions.lock (see update-bridges.sh); with no record it follows the tag.
+pinned() { awk -v r="$1" '$1==r {print $2; f=1} END {if (!f) print r}' data/versions.lock 2>/dev/null || echo "$1"; }
+
 for row in "${BRIDGE_TABLE[@]}"; do
   IFS=';' read -r id name image bin patch need <<< "$row"
   if [ -n "$need" ] && [ -z "${!need:-}" ]; then
@@ -96,6 +99,7 @@ for row in "${BRIDGE_TABLE[@]}"; do
   mkdir -p "$dir"
   # A name with a slash or a colon is a full image reference (the Teams bridge is built here, from source); anything else is a mautrix image.
   case "$image" in */*|*:*) img="$image" ;; *) img="dock.mau.dev/mautrix/$image:latest" ;; esac
+  case "$img" in pager/*) ;; *) img="$(pinned "$img")" ;; esac
   [ "$id" = teams ] && ./scripts/build-teams.sh >/dev/null
 
   if [ ! -f "$dir/config.yaml" ]; then
@@ -195,7 +199,7 @@ enabled+=("GroupMe")
 # set HEISENBRIDGE_OWNER=@you:your.domain in .env. Without that it is skipped.
 if [ -n "${HEISENBRIDGE_OWNER:-}" ]; then
   hid=heisenbridge; hdir="data/bridges/$hid"; mkdir -p "$hdir"
-  himg=docker.io/hif1/heisenbridge:latest
+  himg="$(pinned docker.io/hif1/heisenbridge:latest)"
   if [ ! -f "$hdir/registration.yaml" ]; then
     docker run --rm $USERNS -u "$DOCKER_UID" -v "$PWD/$hdir:/data" "$himg" -c /data/registration.yaml --generate
     yq -i '.url = "http://heisenbridge:9898"' "bridges/$hid/registration.yaml"

@@ -188,6 +188,8 @@ cmd_restore() {
   say "Restored. Check with: pager status"
 }
 
+cmd_upgrade() { ./scripts/update-bridges.sh --apply "$@"; }
+
 cmd_help() {
   cat <<H
 pager status              what is running, and the address
@@ -195,6 +197,7 @@ pager logs [service]      follow the logs (e.g. pager logs whatsapp)
 pager start | stop | restart [service]
 pager update              get the newest Pager and restart
 pager codes               show the invite and admin codes
+pager upgrade [bridge]    install newer bridge versions (one at a time; one that does not start is put back)
 pager doctor              checks that are safe to run any time; paste the output when asking for help
 pager backup [file]       save everything (asks for a passphrase to lock it)
 pager backup --auto       the scheduled kind: locked with the public key, kept in data/backups
@@ -205,6 +208,6 @@ H
 
 case "${1:-help}" in
   status) cmd_status;; logs) shift; cmd_logs "$@";; start) cmd_start;; stop) cmd_stop;; restart) shift; cmd_restart "$@";;
-  codes) cmd_codes;; update) cmd_update;; doctor) cmd_doctor;; backup) shift; cmd_backup "$@";; verify) shift; cmd_verify "$@";; restore) shift; cmd_restore "$@";;
+  codes) cmd_codes;; update) cmd_update;; doctor) cmd_doctor;; upgrade) shift; cmd_upgrade "$@";; backup) shift; cmd_backup "$@";; verify) shift; cmd_verify "$@";; restore) shift; cmd_restore "$@";;
   help|-h|--help) cmd_help;; *) cmd_help; exit 1;;
 esac

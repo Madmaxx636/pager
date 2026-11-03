@@ -22,7 +22,7 @@ services:
     networks: [pager]
 
   synapse:
-    image: docker.io/matrixdotorg/synapse:latest
+    image: docker.io/matrixdotorg/synapse:latest@sha256:abeb932f2a9293fcbb886d5ddd0f55a34d532708ebb8dc5642934dd91ca26237   # 1.162.0: change on purpose, see scripts/update-bridges.sh
     restart: unless-stopped
     environment:
       # Rootless Podman maps the container's root to your user, so run as root there; Docker keeps the image's default user.
@@ -89,7 +89,7 @@ services:
 
   # Keeps a DuckDNS name pointed at your home IP. Enabled by setup.sh when DUCKDNS_TOKEN is in .env.
   duckdns:
-    image: lscr.io/linuxserver/duckdns:latest
+    image: lscr.io/linuxserver/duckdns:latest@sha256:c0ec22ecb89559477ff0ace991dd0e0e67b675636e35c6f50421680304484e0e
     profiles: ["duckdns"]
     restart: unless-stopped
     environment:

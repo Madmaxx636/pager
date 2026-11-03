@@ -192,6 +192,13 @@ def follow_events(w):
             w.event("logwatch", "error", "event reader stopped: %s" % e)
         time.sleep(5)
 
+def waiting_versions(path):
+    """The names listed in data/versions.available (written weekly by update-bridges.sh), or [] when none."""
+    try:
+        with open(path, encoding="utf-8") as f: return [n.strip() for n in f if n.strip()]
+    except OSError:
+        return []
+
 def checks(w):
     """Every minute: the server itself (disk, backups)."""
     while True:
@@ -209,6 +216,8 @@ def checks(w):
             age = (time.time() - newest) / 86400 if newest else None
             if age is None: w.event("server", "attention", "There is no backup of the server yet.")
             elif age > 1.5: w.event("server", "attention", "The newest backup is %d days old." % int(age))
+            names = waiting_versions(os.path.join(SERVER, "data", "versions.available"))
+            if names: w.event("server", "attention", "Newer versions are ready for: %s. Install them with: pager upgrade (Synapse by hand)." % ", ".join(names))
         except Exception as e:
             w.event("logwatch", "error", "a check failed: %s" % e)
         time.sleep(60)

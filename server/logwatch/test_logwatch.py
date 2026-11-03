@@ -135,5 +135,13 @@ class Incidents(unittest.TestCase):
         self.assertEqual(len(w.incidents), 0)
 
 
+class Versions(unittest.TestCase):
+    def test_waiting_versions(self):
+        p = os.path.join(_tmp, "versions.available")
+        self.assertEqual(lw.waiting_versions(p), [])
+        with open(p, "w") as f: f.write("whatsapp\nsignal\n\n")
+        self.assertEqual(lw.waiting_versions(p), ["whatsapp", "signal"])
+
+
 if __name__ == "__main__":
     unittest.main()
