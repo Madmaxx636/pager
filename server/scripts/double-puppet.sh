@@ -9,21 +9,46 @@ USERNS=""; case "$(readlink -f "$(command -v docker)")" in *podman*) USERNS="--u
 yq() { local v=""; [ -L data/bridges ] && v="$(readlink -f data/bridges)"; docker run --rm -i $USERNS -u "$DOCKER_UID" -v "$PWD/data:/work" ${v:+-v "$v:$v"} -w /work docker.io/mikefarah/yq "$@"; }
 set -a; . ./.env; set +a
 
+# One registration of its own (no address, so Synapse never sends it any events) lets every bridge log in as any user. Putting that
+# "any user" pattern in each bridge's own registration made Synapse send every room's events to every bridge, which refused them.
+dp="synapse/appservice-doublepuppet.yaml"
 changed=0
+if [ ! -f "data/$dp" ]; then
+  re="${PAGER_DOMAIN//./\\.}"
+  rand() { head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
+  ( umask 077; cat > "data/$dp" <<YML
+id: doublepuppet
+url:
+as_token: $(rand)
+hs_token: $(rand)
+sender_localpart: doublepuppet
+rate_limited: false
+namespaces:
+  users:
+    - regex: '^@.*:${re}\$'
+      exclusive: false
+YML
+  )
+  changed=1
+fi
+if ! grep -q 'appservice-doublepuppet.yaml' data/synapse/homeserver.yaml; then
+  sed -i '/^app_service_config_files:/a\  - /data/appservice-doublepuppet.yaml' data/synapse/homeserver.yaml
+  changed=1
+fi
+shared="$(yq '.as_token' "$dp")"
 for dir in data/bridges/*/; do
   id="$(basename "$dir")"
   [ -f "$dir/config.yaml" ] && [ -f "$dir/registration.yaml" ] || continue
-  # Let the bridge act as any user on this server (non-exclusive, so it doesn't take the names over).
-  if ! grep -q 'exclusive: false' "$dir/registration.yaml"; then
+  # An older version of this script put the "any user" pattern into the bridge's own registration: take it out again.
+  if grep -q 'exclusive: false' "$dir/registration.yaml"; then
     cp "$dir/registration.yaml" "$dir/registration.yaml.bak"
-    re="${PAGER_DOMAIN//./\\\\.}"
-    yq -i ".namespaces.users += [{\"regex\": \"^@.*:${re}\$\", \"exclusive\": false}]" "bridges/$id/registration.yaml"
+    yq -i '.namespaces.users |= map(select(.exclusive != false))' "bridges/$id/registration.yaml"
     changed=1
   fi
-  token="$(yq '.as_token' "bridges/$id/registration.yaml")"
-  if ! grep -q "as_token:" "$dir/config.yaml" || grep -q 'example.com: as_token:foobar' "$dir/config.yaml"; then
+  # Bridges that have a double_puppet section (mautrix-go ones) use the shared registration's token.
+  if [ "$(yq '.double_puppet | tag' "bridges/$id/config.yaml")" = "!!map" ] && [ "$(yq ".double_puppet.secrets.\"$PAGER_DOMAIN\"" "bridges/$id/config.yaml")" != "as_token:$shared" ]; then
     cp "$dir/config.yaml" "$dir/config.yaml.bak"
-    yq -i ".double_puppet.servers = {} | .double_puppet.allow_discovery = false | .double_puppet.secrets = {\"$PAGER_DOMAIN\": \"as_token:$token\"}" "bridges/$id/config.yaml"
+    yq -i ".double_puppet.servers = {} | .double_puppet.allow_discovery = false | .double_puppet.secrets = {\"$PAGER_DOMAIN\": \"as_token:$shared\"}" "bridges/$id/config.yaml"
     changed=1
   fi
   cp "$dir/registration.yaml" "data/synapse/appservice-$id.yaml"
