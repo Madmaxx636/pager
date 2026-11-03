@@ -4,6 +4,10 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.3 (phone)
+
+- **Contacts (phone):** two of your phones could keep undoing each other's contact names, rewriting the contacts saved in your account every few seconds, all day. A phone now saves its address book only when that address book really changed, and never more than once in ten minutes. This also cuts the database write conflicts the server was logging.
+
 ## 0.6.2 (phone, desktop, web)
 
 - **Admin > Logs:** what goes wrong on the server, live. Errors, crashes and things needing attention (a service that stopped or is unhealthy, a full disk, no recent backup) with the lines just before and after each one. Repeats are counted, not listed again; warnings are counted and hidden unless asked for; passwords and tokens are removed before anything is kept. You can copy an entry or dismiss it (it comes back only if it happens again). Needs the log watcher on the server: `./scripts/logwatch.sh --install`.

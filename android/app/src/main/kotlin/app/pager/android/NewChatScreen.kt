@@ -88,7 +88,7 @@ fun NewChatScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         hasPhone = ok
-        if (ok) scope.launch { if (Names.loadDevice(context)) store.syncContacts() }
+        if (ok) scope.launch { if (Names.loadDevice(context)) store.syncContacts(force = true) }
     }
 
     // Everyone, from every account on every network, merged by phone number (or name).

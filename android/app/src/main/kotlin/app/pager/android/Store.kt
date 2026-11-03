@@ -1538,8 +1538,12 @@ class Store(private val context: Context) {
     private var contactChunks = 0
 
     /** Contacts you bring (your phone's) sync to your account in chunks, so web and desktop show the same names. */
-    suspend fun syncContacts() {
+    @Volatile private var contactsWrittenAt = 0L
+    /** [force]: you just allowed access to your contacts. Otherwise at most one save every ten minutes, whatever happens (a safety net against two devices answering each other). */
+    suspend fun syncContacts(force: Boolean = false) {
         val me = _session.value?.userId ?: return
+        if (!force && System.currentTimeMillis() - contactsWrittenAt < 10 * 60_000L) return
+        contactsWrittenAt = System.currentTimeMillis()
         val rows = Names.ownContacts(); val size = 500
         val count = maxOf(1, (rows.size + size - 1) / size)
         for (i in 0 until maxOf(count, contactChunks)) {

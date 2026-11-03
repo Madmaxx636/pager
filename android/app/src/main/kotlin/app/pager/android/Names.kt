@@ -74,7 +74,16 @@ object Names {
 
     fun hasDevicePermission(context: Context) = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
-    /** Read the phone's own contacts into the phone book (needs the contacts permission). True if there is anything new to sync. */
+    /** The same for the same address book, whatever its order: used to tell whether this phone's contacts have changed since they were last read. */
+    fun deviceSignature(entries: List<Pair<String, String>>): String =
+        entries.mapNotNull { (n, raw) -> val k = phoneKey(n); val nm = stripTag(raw); if (k.isEmpty() || nm.isEmpty() || isPhone(nm)) null else "$k\t$nm" }   // (what add() would keep)
+            .sorted().joinToString("\n").hashCode().toString()
+
+    /**
+     * Read the phone's own contacts into the phone book (needs the contacts permission). True if there is anything new to sync.
+     * Only a change in this phone's own address book counts: reading the same book again and putting its names back over the names another device of yours
+     * just sent made two devices undo each other's names, over and over, forever (and rewrote your account's contacts every few seconds).
+     */
     fun loadDevice(context: Context): Boolean {
         if (!hasDevicePermission(context)) return false
         val out = ArrayList<Pair<String, String>>()
@@ -84,6 +93,10 @@ object Names {
                 arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME), null, null, null,
             )?.use { c -> while (c.moveToNext()) { val num = c.getString(0) ?: continue; val name = c.getString(1) ?: continue; out.add(num to name) } }
         }
-        return add(out, override = true, mine = true)
+        val sig = deviceSignature(out)
+        if (sig == prefs?.getString("deviceSig", null)) return false
+        val changed = add(out, override = true, mine = true)
+        prefs?.edit()?.putString("deviceSig", sig)?.apply()
+        return changed
     }
 }
