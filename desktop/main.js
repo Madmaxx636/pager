@@ -1,6 +1,6 @@
 // Pager desktop shell: loads the bundled web client in a window, adds a tray icon, native notifications,
 // an unread badge, close-to-tray and launch-at-login. Everything else is the shared web app.
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, session, nativeImage, globalShortcut, screen } = require("electron");
+const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, session, nativeImage, globalShortcut, screen, powerMonitor } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -47,6 +47,7 @@ app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 if (process.platform === "win32") app.setAppUserModelId("app.pager.desktop");
 app.commandLine.appendSwitch("renderer-process-limit", "1");
 
+const shownNotifications = new Set();
 let win = null, tray = null, quitting = false, unread = 0, themeWatched = false, watchdogStarted = false, badgePng, crashes = [];
 const hidden = process.argv.includes("--hidden");
 
@@ -129,6 +130,7 @@ function createWindow() {
     if (!quitting && prefs.closeToTray && tray) { e.preventDefault(); win.hide(); }
   });
   win.on("closed", () => { win = null; });
+  win.on("session-end", () => { quitting = true; });   // Windows: the user is logging off or shutting down
   // A page that died, or went blank, starts again by itself, and the reason is written down.
   // (At most three times a minute: a page that dies the moment it starts would otherwise reload for ever.)
   win.webContents.on("render-process-gone", (_e, d) => {
@@ -221,6 +223,7 @@ if (!app.requestSingleInstanceLock()) {
     // Downloaded installers from earlier updates are no longer needed.
     fs.rm(path.join(app.getPath("userData"), "updates"), { recursive: true, force: true }, () => {});
     createWindow();
+    powerMonitor.on("shutdown", () => { quitting = true; });   // (Linux, macOS; the module can only be used once the app is ready)
     // Look for a newer version a minute after starting, then every hour.
     setTimeout(() => void updates(true), 60_000); setInterval(() => void updates(true), 60 * 60_000);
     // Bring Pager forward from anywhere (not every Linux desktop allows global shortcuts, so failure is fine).
@@ -241,6 +244,8 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on("before-quit", () => { quitting = true; });
+  // Logging off or shutting down must not be held up by a window that only hides when closed.
+  process.on("SIGTERM", () => { quitting = true; app.quit(); });
   app.on("will-quit", () => globalShortcut.unregisterAll());
   app.on("activate", showWindow);
   app.on("window-all-closed", () => { if (process.platform !== "darwin" && (quitting || !prefs.closeToTray || !tray)) app.quit(); });
@@ -248,7 +253,10 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.on("notify", (_e, o) => {
     if (!o || typeof o !== "object" || !Notification.isSupported()) return;
     const n = new Notification({ title: String(o.title ?? "Pager"), body: String(o.body ?? ""), silent: !!o.silent, icon: path.join(__dirname, "build", "icon.png") });
-    n.on("click", () => { showWindow(); if (o.roomId && win) win.webContents.send("open-room", o.roomId); });
+    // Held until it is gone: a notification nothing refers to can be cleaned up before you click it, and the click then does nothing.
+    shownNotifications.add(n); const forget = () => shownNotifications.delete(n);
+    n.on("click", () => { forget(); showWindow(); if (o.roomId && win) win.webContents.send("open-room", String(o.roomId)); });
+    n.on("close", forget); n.on("failed", forget);
     n.show();
   });
   // The icon colour you picked in Settings: a PNG from the page, for the window and the tray. An empty one goes back to the original.
@@ -319,6 +327,11 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.on("hostname", (e) => { e.returnValue = os.hostname(); });
   ipcMain.handle("autostart:get", getAutostart);
   ipcMain.on("autostart:set", (_e, on) => setAutostart(!!on));
-  ipcMain.on("prefs", (_e, p) => { prefs = { ...prefs, ...p }; savePrefs(); });
+  // Only the settings the shell itself uses (the page could otherwise overwrite the window position or the icon through this).
+  ipcMain.on("prefs", (_e, p) => {
+    if (!p || typeof p !== "object") return;
+    for (const k of ["closeToTray", "startMinimized", "smoothGraphics", "lowEnd"]) if (typeof p[k] === "boolean") prefs[k] = p[k];
+    savePrefs();
+  });
   ipcMain.on("zoom", (_e, z) => { if (win && typeof z === "number" && z >= 0.5 && z <= 3) win.webContents.setZoomFactor(z); });
 }

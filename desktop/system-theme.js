@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawn } = require("node:child_process");
 const { nativeTheme, systemPreferences } = require("electron");
 
 const hex = (r, g, b) => "#" + [r, g, b].map((n) => Math.max(0, Math.min(255, Number(n))).toString(16).padStart(2, "0")).join("");
@@ -62,8 +62,15 @@ function watchSystemTheme(cb) {
   nativeTheme.on("updated", push);
   if (process.platform === "win32" || process.platform === "darwin") systemPreferences.on?.("accent-color-changed", push);
   if (process.platform === "linux") {
-    const kde = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "kdeglobals");
-    try { let t; fs.watch(kde, () => { clearTimeout(t); t = setTimeout(push, 400); }); } catch { /* not KDE */ }
+    // KDE saves kdeglobals by writing a new file and renaming it over the old one, which ends a watch on the file itself after the first change: watch the folder.
+    const dir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+    try { let t; fs.watch(dir, (_ev, name) => { if (name !== "kdeglobals") return; clearTimeout(t); t = setTimeout(push, 400); }); } catch { /* no such folder */ }
+    // GNOME: the accent colour and light or dark choice are settings that announce their own changes.
+    try {
+      const mon = spawn("gsettings", ["monitor", "org.gnome.desktop.interface"], { stdio: ["ignore", "pipe", "ignore"] });
+      let t; mon.stdout.on("data", (d) => { if (/accent-color|color-scheme/.test(String(d))) { clearTimeout(t); t = setTimeout(push, 300); } });
+      mon.on("error", () => {}); mon.unref(); process.on("exit", () => { try { mon.kill(); } catch { /* gone */ } });
+    } catch { /* no gsettings */ }
   }
   return push;
 }

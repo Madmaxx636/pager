@@ -13,6 +13,10 @@ Versions before 0.5.84 are in the git history.
 - **Page that keeps crashing (desktop):** Pager reloads a crashed page at most three times a minute instead of for ever.
 - **Menu (desktop):** a Pager menu with the version, Check for updates, Show the problem log and Quit.
 - **Logs:** on the desktop, Settings > Advanced > Logs also shows the app shell's own log (a page or graphics process that died, a page that stopped answering).
+- **Shutdown (Windows):** closing to the tray no longer holds up logging off or shutting down.
+- **Notifications (desktop):** clicking one always opens its chat; Electron could drop the notification before the click on some systems.
+- **Colours (Linux):** the KDE theme was followed only until the first change, because KDE replaces its colour file instead of editing it; the GNOME accent colour and light or dark choice are now followed live too.
+- **Security:** the desktop app moves to Electron 44.10.2, which distrusts the compromised eMudhra certificate authorities (the same change Synapse 1.164 made).
 
 ## Server (no app update needed)
 
