@@ -1,5 +1,6 @@
 package app.pager.android
 
+import androidx.core.content.edit
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -96,7 +97,7 @@ object Names {
         val sig = deviceSignature(out)
         if (sig == prefs?.getString("deviceSig", null)) return false
         val changed = add(out, override = true, mine = true)
-        prefs?.edit()?.putString("deviceSig", sig)?.apply()
+        prefs?.edit { putString("deviceSig", sig) }
         return changed
     }
 }

@@ -1,5 +1,6 @@
 package app.pager.android
 
+import androidx.core.net.toUri
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -51,7 +52,7 @@ object CallOut {
 
     fun messengerId(c: ChatState, me: String): String { for (u in others(c, me)) ghostMessenger.find(u)?.let { return it.groupValues[1] }; return "" }
 
-    private fun view(url: String) = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    private fun view(url: String) = Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     /** The ways that need nothing from the phone's contacts. */
     fun options(c: ChatState, me: String, contacts: List<Pair<String, String>>): List<Option> {
@@ -62,7 +63,7 @@ object CallOut {
         if (c.network == "whatsapp" && international) out.add(Option("whatsapp", "Open in WhatsApp (then tap the call button)") { view("https://wa.me/${number.drop(1)}") })
         if (c.network == "signal" && international) out.add(Option("signal", "Open in Signal (then tap the call button)") { view("https://signal.me/#p/$number") })
         if (c.network == "messenger") messengerId(c, me).takeIf { it.isNotEmpty() }?.let { id -> out.add(Option("messenger", "Open in Messenger (then tap the call button)") { view("https://www.messenger.com/t/$id") }) }
-        if (number.isNotEmpty()) out.add(Option("phone", "Call $number with your phone") { Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+        if (number.isNotEmpty()) out.add(Option("phone", "Call $number with your phone") { Intent(Intent.ACTION_DIAL, "tel:$number".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
         return out
     }
 

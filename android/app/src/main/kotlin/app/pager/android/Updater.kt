@@ -1,5 +1,6 @@
 package app.pager.android
 
+import androidx.core.content.edit
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -221,7 +222,7 @@ class PackageReplacedReceiver : BroadcastReceiver() {
         runCatching { androidx.core.content.ContextCompat.startForegroundService(context, Intent(context, SyncService::class.java)) }
         val prefs = context.getSharedPreferences("pager.updates", Context.MODE_PRIVATE)
         val wanted = prefs.getBoolean("reopen", false) && System.currentTimeMillis() - prefs.getLong("reopenAt", 0) < 15 * 60_000L
-        prefs.edit().remove("reopen").apply()
+        prefs.edit { remove("reopen") }
         if (!wanted) return
         val open = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         if (runCatching { context.startActivity(open) }.isSuccess && Build.VERSION.SDK_INT < 29) return
