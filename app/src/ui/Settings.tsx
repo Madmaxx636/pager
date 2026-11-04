@@ -545,9 +545,11 @@ function LogsGroup() {
 function LogsDialog({ onClose }: { onClose: () => void }) {
   useSyncExternalStore(onLogChange, () => getCrumbs().length + getIncidents().reduce((a, i) => a + i.count, 0));
   const [note, setNote] = useState("");
+  const [shellLog, setShellLog] = useState("");
+  useEffect(() => { void window.pagerDesktop?.readLog?.().then(setShellLog).catch(() => {}); }, []);
   const incidents = getIncidents(), crumbs = getCrumbs().slice(-60).reverse();
   const copy = (text: string) => { navigator.clipboard?.writeText(text).then(() => setNote("Copied"), () => setNote("Couldn't copy")); };
-  const save = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([logText()], { type: "text/plain" })); a.download = "pager-log.txt"; a.click(); URL.revokeObjectURL(a.href); setNote("Saved"); };
+  const save = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([logText(shellLog)], { type: "text/plain" })); a.download = "pager-log.txt"; a.click(); URL.revokeObjectURL(a.href); setNote("Saved"); };
   return (
     <Modal title="Logs" onClose={onClose} wide>
       <div style={{ maxHeight: "55vh", overflow: "auto", fontSize: "0.75rem", userSelect: "text" }}>
@@ -560,11 +562,12 @@ function LogsDialog({ onClose }: { onClose: () => void }) {
             <button className="link" onClick={() => copy(appIncidentText(i))}>Copy</button> <button className="link" onClick={() => dismissIncident(i.id)}>Dismiss</button>
           </details>
         ))}
+        {shellLog && <><h4>Desktop app</h4><pre className="report" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{shellLog.split("\n").slice(-40).join("\n")}</pre></>}
         <h4>Recent activity</h4>
         <pre className="report" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{crumbs.map((c) => `${new Date(c.t).toLocaleTimeString([], { hour12: false })}  ${c.area}: ${c.text}`).join("\n") || "Nothing yet."}</pre>
       </div>
       {note && <p className="muted">{note}</p>}
-      <div className="row-end"><button className="link" onClick={onClose}>Close</button><button className="link" onClick={() => { if (confirm("Clear the log on this device?")) clearLog(); }}>Clear</button><button className="link" onClick={() => copy(logText())}>Copy all</button><button className="primary" onClick={save}>Save to file</button></div>
+      <div className="row-end"><button className="link" onClick={onClose}>Close</button><button className="link" onClick={() => { if (confirm("Clear the log on this device?")) clearLog(); }}>Clear</button><button className="link" onClick={() => copy(logText(shellLog))}>Copy all</button><button className="primary" onClick={save}>Save to file</button></div>
     </Modal>
   );
 }

@@ -4,6 +4,16 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.6 (desktop, web)
+
+- **Window (desktop):** Windows could save a minimised window's position as off-screen and then open Pager where you could not see it; the window now reopens where it was, on a screen that is still connected, and remembers when it was maximised.
+- **Launch at login (Windows):** the switch showed "off" after Pager restarted even though it was on.
+- **Unread count (Windows):** the unread number now shows on Pager's taskbar icon.
+- **Updates (desktop):** after pressing Later, the automatic check asked again every hour. It now asks about a version once a day (Check for updates in the menu or tray always asks). A full disk or a lost connection during the download is reported instead of leaving the update stuck.
+- **Page that keeps crashing (desktop):** Pager reloads a crashed page at most three times a minute instead of for ever.
+- **Menu (desktop):** a Pager menu with the version, Check for updates, Show the problem log and Quit.
+- **Logs:** on the desktop, Settings > Advanced > Logs also shows the app shell's own log (a page or graphics process that died, a page that stopped answering).
+
 ## Server (no app update needed)
 
 - **Nightly maintenance:** `./scripts/maintenance.sh --install` sets up a job that runs every night around 05:15. It restarts a Pager timer or service that stopped, reports a container that is not running, makes a backup if the newest is more than 30 hours old, installs newer bridge versions (one at a time, after a backup less than 36 hours old; a bridge that does not start is put back), installs newer Synapse patch releases (after a backup less than 24 hours old; it goes back if Synapse does not become healthy; bigger steps are left for you), and cleans up old images, build cache and logs. Admin > Logs warns when a job failed or nothing has run for three days.

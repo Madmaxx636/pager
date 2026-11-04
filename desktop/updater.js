@@ -43,6 +43,8 @@ function get(url, { toFile, maxBytes = 300 * 1024 * 1024, onProgress, hops = 0 }
       if (res.statusCode !== 200) { res.resume(); return reject(new Error(`server said ${res.statusCode}`)); }
       const hash = crypto.createHash("sha256"); let size = 0; const total = Number(res.headers["content-length"]) || 0;
       const out = toFile ? fs.createWriteStream(toFile) : null; const chunks = [];
+      out?.on("error", (e) => { req.destroy(); reject(e); }); // a full disk or a folder that cannot be written
+      res.on("aborted", () => reject(new Error("the connection was lost")));
       res.on("data", (c) => { size += c.length; onProgress?.(size, total); if (size > maxBytes) { req.destroy(new Error("file too large")); return; } hash.update(c); out ? out.write(c) : chunks.push(c); });
       res.on("end", () => { const done = () => resolve({ sha256: hash.digest("hex"), body: out ? null : Buffer.concat(chunks) }); out ? out.end(done) : done(); });
       res.on("error", reject);
@@ -78,6 +80,15 @@ async function lookup(server, platform, arch) {
   return { note: note || "No updates are published yet." };
 }
 
+/** The automatic hourly check asks about a version once a day, not every hour; a check you start yourself always asks. */
+const ASK_AGAIN_MS = 24 * 3600 * 1000;
+function shouldAsk(declined, version, now, quiet) {
+  if (!quiet) return true;
+  const at = declined.get(version);
+  return at === undefined || now - at >= ASK_AGAIN_MS;
+}
+const declined = new Map();
+
 let busy = false;
 /** Looks for a newer version; asks before installing. [quiet] false also says "you're up to date" and shows errors. */
 async function checkForUpdates({ server, win, quiet }) {
@@ -90,8 +101,9 @@ async function checkForUpdates({ server, win, quiet }) {
     if (!found.d) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: found.note }); return; }
     const { d, base } = found;
     if (!newer(d.version, app.getVersion())) { if (!quiet) dialog.showMessageBox(win ?? undefined, { message: `You're up to date (${app.getVersion()}).` }); return; }
+    if (!shouldAsk(declined, d.version, Date.now(), quiet)) return;
     const asked = await dialog.showMessageBox(win ?? undefined, { type: "info", message: `Pager ${d.version} is available`, detail: (d.notes || "") + (win32 ? "\n\nPager will close, update and reopen." : "\n\nYour computer will ask for your password to install it."), buttons: ["Update now", "Later"], defaultId: 0, cancelId: 1 });
-    if (asked.response !== 0) return;
+    if (asked.response !== 0) { declined.set(d.version, Date.now()); return; }
     accepted = true; // from here on a failure is shown even when the check was automatic
     const dir = path.join(app.getPath("userData"), "updates"); fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, d.file);
@@ -190,4 +202,4 @@ async function install(file, win) {
   await viaTerminal(file);
 }
 
-module.exports = { checkForUpdates, lookup, entryFor, newer, verify, terminalPlan, asUserService };
+module.exports = { checkForUpdates, shouldAsk, lookup, entryFor, newer, verify, terminalPlan, asUserService };

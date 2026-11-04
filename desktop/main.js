@@ -1,11 +1,12 @@
 // Pager desktop shell: loads the bundled web client in a window, adds a tray icon, native notifications,
 // an unread badge, close-to-tray and launch-at-login. Everything else is the shared web app.
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, session, nativeImage, globalShortcut } = require("electron");
+const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, session, nativeImage, globalShortcut, screen } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const { readSystemTheme, watchSystemTheme } = require("./system-theme.js");
 const { checkForUpdates } = require("./updater.js");
+const { startBounds } = require("./windowstate.js");
 
 app.commandLine.appendSwitch("ozone-platform-hint", "auto"); // native Wayland when available
 
@@ -46,7 +47,7 @@ app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 if (process.platform === "win32") app.setAppUserModelId("app.pager.desktop");
 app.commandLine.appendSwitch("renderer-process-limit", "1");
 
-let win = null, tray = null, quitting = false, unread = 0;
+let win = null, tray = null, quitting = false, unread = 0, themeWatched = false, watchdogStarted = false, badgePng, crashes = [];
 const hidden = process.argv.includes("--hidden");
 
 /** What the app's processes hold privately, in MB, summed. This is the number the limits below are about. */
@@ -75,6 +76,12 @@ function applyIcon() {
   try { if (tray) tray.setImage(prefs.iconPng ? currentIcon(22) : nativeImage.createFromPath(path.join(__dirname, "build", "tray.png")).resize({ width: 22, height: 22 })); } catch { /* ignore */ }
 }
 
+/** Windows has no badge count: the unread number is drawn over the taskbar icon instead (the page makes the little picture). */
+function applyOverlay() {
+  if (process.platform !== "win32" || !win || win.isDestroyed()) return;
+  try { win.setOverlayIcon(unread && badgePng ? nativeImage.createFromDataURL(badgePng) : null, unread ? `${unread} unread` : ""); } catch { /* not supported here */ }
+}
+
 function showWindow() {
   if (!win) return createWindow();
   if (win.isMinimized()) win.restore();
@@ -83,7 +90,7 @@ function showWindow() {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: prefs.bounds?.width ?? 1180, height: prefs.bounds?.height ?? 760, x: prefs.bounds?.x, y: prefs.bounds?.y,
+    ...startBounds(prefs.bounds, screen.getAllDisplays().map((d) => d.workArea)),
     minWidth: 360, minHeight: 500, show: false, autoHideMenuBar: true, backgroundColor: "#0b0e13", title: "Pager",
     // Linux: the window's own title bar flickered and hid its buttons when maximized on KDE. Pager draws a thin bar of its own (see .titlebar in the app)
     // and Electron adds the minimize, maximize and close buttons on top of it, the same whether the window is maximized or not.
@@ -91,8 +98,9 @@ function createWindow() {
     icon: prefs.iconPng ? currentIcon() : path.join(__dirname, "build", "icon.png"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });
+  if (prefs.maximized) win.maximize();
   win.loadFile(path.join(__dirname, "app-dist", "index.html"));
-  win.once("ready-to-show", () => { if (!(hidden || prefs.startMinimized) || !tray) win.show(); });
+  win.once("ready-to-show", () => { applyOverlay(); if (!(hidden || prefs.startMinimized) || !tray) win.show(); });
 
   // Links in messages open in the real browser, never inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:|^mailto:|^geo:/.test(url)) shell.openExternal(url); return { action: "deny" }; });
@@ -113,25 +121,36 @@ function createWindow() {
   });
   // Follow the desktop's colors (KDE Plasma, GNOME, Windows, macOS) and tell the page when they change.
   const sendTheme = (t) => { if (win && !win.isDestroyed()) win.webContents.send("system-theme", t); };
-  watchSystemTheme(sendTheme);
+  if (!themeWatched) { themeWatched = true; watchSystemTheme(sendTheme); }
 
   win.on("close", (e) => {
-    prefs.bounds = win.getBounds(); savePrefs();
+    // The normal (not maximised, not minimised) rectangle: getBounds() of a minimised window on Windows is -32000,-32000 and the window then opened out of sight.
+    prefs.bounds = win.getNormalBounds(); prefs.maximized = win.isMaximized(); savePrefs();
     if (!quitting && prefs.closeToTray && tray) { e.preventDefault(); win.hide(); }
   });
   win.on("closed", () => { win = null; });
   // A page that died, or went blank, starts again by itself, and the reason is written down.
-  win.webContents.on("render-process-gone", (_e, d) => { note(`page process gone: ${d.reason} (exit ${d.exitCode})`); if (win && !win.isDestroyed() && d.reason !== "clean-exit") setTimeout(() => { if (win && !win.isDestroyed()) win.reload(); }, 500); });
+  // (At most three times a minute: a page that dies the moment it starts would otherwise reload for ever.)
+  win.webContents.on("render-process-gone", (_e, d) => {
+    note(`page process gone: ${d.reason} (exit ${d.exitCode})`);
+    if (!win || win.isDestroyed() || d.reason === "clean-exit") return;
+    const now = Date.now(); crashes = crashes.filter((t) => now - t < 60_000); crashes.push(now);
+    if (crashes.length > 3) { note("the page keeps dying: not starting it again"); return; }
+    setTimeout(() => { if (win && !win.isDestroyed()) win.reload(); }, 500);
+  });
   win.webContents.on("unresponsive", () => note("page stopped responding"));
   win.webContents.on("responsive", () => note("page responds again"));
   win.webContents.on("did-fail-load", (_e, code, desc) => note(`page failed to load: ${desc} (${code})`));
   win.webContents.on("did-finish-load", () => { lastBeat = Date.now(); });
   for (const ev of ["show", "restore", "focus"]) win.on(ev, () => { lastBeat = Date.now(); });
   // Nothing from the page for a while although the window is on screen: the page is blank or stuck. Start it again.
-  setInterval(() => {
-    if (!win || win.isDestroyed() || !win.isVisible() || win.isMinimized()) { lastBeat = Date.now(); return; }
-    if (Date.now() - lastBeat > 45_000) { note("no sign of life from the page for 45 s: reloading it"); lastBeat = Date.now(); win.reload(); }
-  }, 15_000).unref();
+  if (!watchdogStarted) {
+    watchdogStarted = true;
+    setInterval(() => {
+      if (!win || win.isDestroyed() || !win.isVisible() || win.isMinimized()) { lastBeat = Date.now(); return; }
+      if (Date.now() - lastBeat > 45_000) { note("no sign of life from the page for 45 s: reloading it"); lastBeat = Date.now(); win.reload(); }
+    }, 15_000).unref();
+  }
   ipcMain.removeAllListeners("repaint");
   ipcMain.on("repaint", () => { if (win && !win.isDestroyed() && win.isVisible()) win.webContents.invalidate(); });
   // Whether the window is really in front of you: the page can't tell when another window sits on top of it (Wayland especially).
@@ -168,7 +187,8 @@ function setAutostart(on) {
     fs.writeFileSync(autostartFile, `[Desktop Entry]\nType=Application\nName=Pager\nExec="${exec}" --hidden\nIcon=pager\nX-GNOME-Autostart-enabled=true\n`);
   } else app.setLoginItemSettings({ openAtLogin: on, args: ["--hidden"] });
 }
-const getAutostart = () => (process.platform === "linux" ? fs.existsSync(autostartFile) : app.getLoginItemSettings().openAtLogin);
+// (On Windows the entry is only found again when asked for with the same arguments it was made with; without them the switch showed "off" after a restart.)
+const getAutostart = () => (process.platform === "linux" ? fs.existsSync(autostartFile) : app.getLoginItemSettings({ args: ["--hidden"] }).openAtLogin);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -186,7 +206,16 @@ if (!app.requestSingleInstanceLock()) {
     const allowed = new Set(["notifications", "media", "geolocation", "clipboard-sanitized-write", "fullscreen"]);
     session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)));
     session.defaultSession.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
-    Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" }]));
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      { label: "Pager", submenu: [
+        { label: `Pager ${app.getVersion()}`, enabled: false },
+        { label: "Check for updates", click: () => void updates(false) },
+        { label: "Show the problem log", click: () => shell.showItemInFolder(logFile) },
+        { type: "separator" },
+        { label: "Quit", accelerator: process.platform === "darwin" ? "Cmd+Q" : "Ctrl+Q", click: () => { quitting = true; app.quit(); } },
+      ] },
+      { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" },
+    ]));
 
     try { tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "build", "tray.png")).resize({ width: 22, height: 22 })); tray.on("click", () => (win && win.isVisible() && win.isFocused() ? win.hide() : showWindow())); updateTray(); applyIcon(); } catch { tray = null; }
     // Downloaded installers from earlier updates are no longer needed.
@@ -217,7 +246,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("window-all-closed", () => { if (process.platform !== "darwin" && (quitting || !prefs.closeToTray || !tray)) app.quit(); });
 
   ipcMain.on("notify", (_e, o) => {
-    if (!Notification.isSupported()) return;
+    if (!o || typeof o !== "object" || !Notification.isSupported()) return;
     const n = new Notification({ title: String(o.title ?? "Pager"), body: String(o.body ?? ""), silent: !!o.silent, icon: path.join(__dirname, "build", "icon.png") });
     n.on("click", () => { showWindow(); if (o.roomId && win) win.webContents.send("open-room", o.roomId); });
     n.show();
@@ -227,7 +256,10 @@ if (!app.requestSingleInstanceLock()) {
     const ok = typeof png === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]{20,}$/.test(png) && png.length < 600_000;
     prefs.iconPng = ok ? png : undefined; savePrefs(); applyIcon();
   });
-  ipcMain.on("badge", (_e, n) => { unread = Number(n) || 0; app.setBadgeCount(unread); updateTray(); });
+  ipcMain.on("badge", (_e, n, png) => {
+    unread = Number(n) || 0; app.setBadgeCount(unread); updateTray();
+    badgePng = typeof png === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(png) && png.length < 20_000 ? png : undefined; applyOverlay();
+  });
   // Browser sign-in for networks that need your cookies (Google Messages). Opens a separate, throwaway browser window;
   // nothing from it is kept. Resolves with { field id: cookie value }, or null if the window is closed first.
   ipcMain.handle("cookie-login", (_e, spec) => new Promise((resolve, reject) => {
@@ -259,6 +291,8 @@ if (!app.requestSingleInstanceLock()) {
     w.loadURL(spec.url).catch((e) => { if (!done) { done = true; clearInterval(timer); if (!w.isDestroyed()) w.destroy(); reject(e); } });
   }));
   ipcMain.handle("memory:get", () => memoryNow());
+  // The shell's own problem log (a page or graphics process that died, a page that stopped answering), for Settings > Advanced > Logs.
+  ipcMain.handle("log:read", () => { try { return fs.readFileSync(logFile, "utf8").split("\n").filter(Boolean).slice(-150).join("\n"); } catch { return ""; } });
   // The app tells us its colours so the buttons in the title bar match the theme.
   ipcMain.on("titlebar:set", (_e, o) => {
     if (process.platform !== "linux" || !win || win.isDestroyed() || !o || typeof o.color !== "string" || typeof o.symbolColor !== "string") return;

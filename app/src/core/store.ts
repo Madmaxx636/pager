@@ -2,6 +2,7 @@ import { freshUpdates, lostText, newlyLost, updateText } from "./accountalerts";
 import { ATTENTION_FIELD, attentionText, isFresh, raise, type AttentionKind } from "./attention";
 import { attended } from "./presence";
 import { crumb, recordIncident } from "./applog";
+import { badgePng } from "./badgeicon";
 import { KEEP_MESSAGES, LOW_END_KEEP, poolClearMs } from "./memory";
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
@@ -629,7 +630,7 @@ function updateBadge() {
   const st = getSettings();
   const n = st.notifBadge === "off" ? 0 : Object.values(state.chats).filter((c) => !isArchived(c) && (st.notifBadge === "all" || (!state.muted.includes(c.id) && !isLowPriority(c))) && !st.hiddenNetworks.includes(c.network) && (c.unread > 0 || c.markedUnread)).length;
   document.title = n ? `(${n}) Pager` : "Pager";
-  window.pagerDesktop?.setBadge(n);
+  window.pagerDesktop?.setBadge(n, window.pagerDesktop.platform === "win32" ? badgePng(n) : undefined);
 }
 
 // ---- Chat mutations ------------------------------------------------------------------------
@@ -1218,12 +1219,14 @@ declare global {
   interface Window {
     pagerDesktop?: {
       notify(o: { title: string; body: string; roomId?: string; silent?: boolean }): void;
-      setBadge(n: number): void;
+      setBadge(n: number, png?: string): void;
       getAutostart(): Promise<boolean>; setAutostart(on: boolean): void; setPrefs(p: { closeToTray?: boolean; startMinimized?: boolean; smoothGraphics?: boolean; lowEnd?: boolean }): void; setZoom(z: number): void;
       onOpenRoom(cb: (roomId: string) => void): void;
       onWindowActive?(cb: (active: boolean) => void): void;
       repaint?(): void;
       log?(line: string): void;
+      /** The desktop shell's own problem log (a page or graphics process that died, a page that stopped answering). */
+      readLog?(): Promise<string>;
       onUpdateProgress?(cb: (p: { version?: string; state: "downloading" | "installing" | "failed"; percent: number }) => void): void;
       beat?(): void;
       onMemory?(cb: (level: string) => void): void;

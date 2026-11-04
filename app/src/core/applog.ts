@@ -72,9 +72,9 @@ export function appIncidentText(i: AppIncident): string {
   return [`${i.kind} (${i.count === 1 ? "once" : `${i.count} times`}), first ${when(i.first)}, last ${when(i.last)}${i.version ? `, app ${i.version}` : ""}`, "", ...(i.before.length ? ["Before:", ...i.before.map(line), ""] : []), "Problem:", "  " + i.message, ...(i.stack ? i.stack.split("\n").map((l) => "  " + l) : []), ...(i.after.length ? ["", "After:", ...i.after.map(line)] : [])].join("\n");
 }
 /** Everything, as text: the problems then the latest breadcrumbs. */
-export function logText(): string {
+export function logText(shell = ""): string {
   const inc = getIncidents().map(appIncidentText);
-  return [`Pager ${String(import.meta.env?.VITE_APP_VERSION ?? "")}  ${navigator.userAgent}`, "", `== Problems (${inc.length}) ==`, inc.join("\n\n") || "none", "", `== Recent activity (${loadCrumbs().length}) ==`, loadCrumbs().map(line).join("\n") || "none"].join("\n");
+  return [`Pager ${String(import.meta.env?.VITE_APP_VERSION ?? "")}  ${navigator.userAgent}`, "", `== Problems (${inc.length}) ==`, inc.join("\n\n") || "none", "", `== Recent activity (${loadCrumbs().length}) ==`, loadCrumbs().map(line).join("\n") || "none", ...(shell ? ["", "== Desktop shell ==", shell] : [])].join("\n");
 }
 
 /** Resets the in-memory copy (tests). */

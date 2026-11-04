@@ -54,3 +54,12 @@ test("a 32-bit Windows PC takes the 32-bit installer and never the 64-bit one", 
   assert.equal(entryFor({ windows: { file: "x64.exe" } }, "win32", "ia32"), undefined);
   assert.equal(entryFor(all, "linux", "x64").file, "pager.deb");
 });
+
+test("the hourly check asks about a declined version only once a day", async () => {
+  const { shouldAsk } = (await import("node:module")).createRequire(import.meta.url)("./updater.js");
+  const declined = new Map([["0.7.0", 1000]]);
+  assert.equal(shouldAsk(declined, "0.7.0", 1000 + 3600_000, true), false);
+  assert.equal(shouldAsk(declined, "0.7.0", 1000 + 25 * 3600_000, true), true);
+  assert.equal(shouldAsk(declined, "0.7.0", 1000 + 3600_000, false), true);   // you asked
+  assert.equal(shouldAsk(declined, "0.7.1", 1000 + 3600_000, true), true);    // a different version
+});
