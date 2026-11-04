@@ -366,6 +366,7 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                     }
                 }
                 }
+                chat?.let { CallButton(it, me) }
                 IconBtn(Icons.Rounded.Search, "Search in page", onSearch)
                 IconBtn(Icons.Rounded.Info, "Page info", onInfo)
             }

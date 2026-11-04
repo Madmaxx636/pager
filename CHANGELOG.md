@@ -4,6 +4,15 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.9 (phone, desktop, web)
+
+- **Call button:** a phone icon in the top bar of a one-to-one chat starts a call with that person in the app that has them. Bridges carry messages, not calls, so Pager hands over to the right app and you do not have to find the person again.
+  - WhatsApp and Signal: on the phone, a voice or video call starts at once when the person is in your phone's contacts (those apps add a call entry to the contact; Pager needs permission to read your contacts, which it asks for in Settings). Otherwise it opens their chat in the app, one tap from the call button. On the web and desktop it opens WhatsApp or Signal on their number.
+  - Messenger: opens their conversation in Messenger.
+  - SMS, Google Voice and any chat with a known number: on a phone, "Call with your phone" opens the dialler.
+  - Needs a number Pager can tell: from the bridge's id for the person, a chat named with a number, or one of your own contacts with the same name. Groups get no button.
+- **Media cache (phone):** downloaded pictures and files are cleaned every hour while Pager runs and kept under 300 MB, oldest first. Before, they were cleaned only when the app started, and the background service keeps it running for days, so the folder (decrypted copies of encrypted attachments included) only grew.
+
 ## 0.6.8 (phone, desktop)
 
 - **Background sync (phone):** every restart of the background service (the watchdog does one every 5 minutes) started another copy of its two checking loops without stopping the old ones, so after a day there were hundreds, each asking the server. A restart now replaces them. This also saves battery and stops the server being asked over and over.

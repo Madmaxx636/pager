@@ -1,11 +1,13 @@
 import { attended, onAttended } from "../core/presence";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { hasFiles } from "../core/dragfiles";
+import { callOptions, type CallOption } from "../core/callout";
+import { ownContacts } from "../core/names";
 import type { Gif } from "../core/gifs";
 import { setInfoPanelOpen } from "../core/layout";
 import {
   AlarmClock, ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronLeft, Clock, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
-  Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, Video,
+  Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, Video, Phone,
 } from "lucide-react";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot, isBotRoom, realPeople } from "../core/types";
 import { networkMeta } from "../core/emoji";
@@ -265,6 +267,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
               {<div className="chat-sub"><i style={{ background: merged ? "var(--accent)" : meta.color }} />{merged ? `${groupIds.length} networks together` : meta.label}{chat.encrypted ? <span className="enc-badge" title="End-to-end encrypted"> · <Lock size={11} /> Encrypted</span> : null}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</div>}
             </div>
           </button>)}
+          <CallButton chat={chat} />
           <IconButton icon={Search} label="Search in page (Ctrl+F)" onClick={() => nav(`search:${roomId}`)} />
           <IconButton icon={Info} label="Page info" onClick={() => setInfoOpen(!infoOpen)} active={infoOpen} className="info-toggle" />
         </header>
@@ -752,6 +755,21 @@ function LinkControls({ chat }: { chat: ChatState }) {
 }
 
 /** Desktop header: the picture(s), the name with a small arrow that opens the network switcher, and just "Encrypted" underneath. */
+/** Start a call with this person in the app that has their number: Pager opens it for you (a bridge carries messages, not calls). Only for one-to-one chats where a way is known. */
+function CallButton({ chat }: { chat: ChatState }) {
+  const [open, setOpen] = useState(false);
+  const canDial = !window.pagerDesktop && /Android|iPhone|iPad/i.test(navigator.userAgent);
+  const opts = useMemo(() => callOptions({ ...chat, isGroup: isGroup(chat) }, me(), ownContacts(), canDial), [chat, canDial]);
+  if (!opts.length) return null;
+  const launch = (o: CallOption) => { setOpen(false); if (o.url.startsWith("tel:")) window.location.href = o.url; else window.open(o.url, "_blank", "noopener,noreferrer"); };
+  return (
+    <div className="menu-wrap">
+      <IconButton icon={Phone} label="Call" onClick={() => (opts.length === 1 ? launch(opts[0]) : setOpen(!open))} active={open} />
+      {open && <div className="menu" onMouseLeave={() => setOpen(false)}>{opts.map((o) => <button key={o.id} onClick={() => launch(o)}><Phone size={18} />{o.label}</button>)}</div>}
+    </div>
+  );
+}
+
 function DesktopHead({ chat, name, st, nav, roomId, merged }: { chat: ChatState; name: string; st: AppSettings; nav: Nav; roomId: string; merged: boolean }) {
   const links = useStore((s) => s.links), chats = useStore((s) => s.chats);
   const [open, setOpen] = useState(false);
