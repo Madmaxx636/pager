@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.sp
 /** A round, 40dp tappable icon, the single button style used across the app. */
 @Composable
 fun IconBtn(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant, size: Int = 40) {
-    Box(modifier.size(size.dp).clip(CircleShape).dpadFocus().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(modifier.size(size.dp).clip(CircleShape).dpadFocus().clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, description, tint = tint, modifier = Modifier.size((size * 0.55f).dp))
     }
 }

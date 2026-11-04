@@ -4,6 +4,13 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.10 (phone, desktop, web)
+
+- **Starting up (phone):** the saved copy of your chats was read on the main thread while the app started. On a slow phone with a lot of chats that could hold the start up long enough for Android to stop the background service ("did not start in time") and close Pager. It is now read in the background, and syncing and saving wait for it.
+- **Plain HTTP (phone):** the phone builds allowed unencrypted HTTP to any address. Pager now accepts plain HTTP only for an address on your own network (a home server by its LAN address) and never over the internet, and no longer follows a redirect from HTTPS to HTTP. Servers reached over HTTPS, as yours is, are not affected.
+- **Encryption requests (phone, web, desktop):** two of the library's pending requests (a key upload, say) could run at once, send the same request twice and have the server refuse the second ("already exists"). They now run one at a time.
+- **Screen readers (phone):** the round icon buttons are announced as buttons.
+
 ## 0.6.9 (phone, desktop, web)
 
 - **Call button:** a phone icon in the top bar of a one-to-one chat starts a call with that person in the app that has them. Bridges carry messages, not calls, so Pager hands over to the right app and you do not have to find the person again.

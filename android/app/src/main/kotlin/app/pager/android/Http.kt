@@ -11,6 +11,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -25,6 +26,27 @@ import kotlin.coroutines.resumeWithException
 
 class ApiException(val status: Int, message: String) : Exception(message)
 
+/**
+ * Pager talks to your server over HTTPS. Plain HTTP is accepted only for an address on your own network (a home server reached by its LAN address), never over the internet.
+ * (The Android setting that allows plain HTTP is on in the builds that are signed with the development key, which is how releases are made, so the app checks for itself.)
+ */
+object Transport {
+    /** True for localhost, a private or link-local address, and a ".local" or one-word name (a LAN machine), false for anything on the public internet. */
+    fun isLocalHost(host: String): Boolean {
+        val h = host.trim('[', ']').lowercase()
+        if (h == "localhost" || h == "::1" || h.endsWith(".local") || h.endsWith(".localhost") || !h.contains('.') && !h.contains(':')) return true
+        if (h.startsWith("fe80:") || h.startsWith("fc") && h.contains(':') || h.startsWith("fd") && h.contains(':')) return true
+        val p = h.split('.').map { it.toIntOrNull() ?: return false }
+        if (p.size != 4 || p.any { it !in 0..255 }) return false
+        return p[0] == 10 || p[0] == 127 || (p[0] == 172 && p[1] in 16..31) || (p[0] == 192 && p[1] == 168) || (p[0] == 169 && p[1] == 254)
+    }
+    /** Throws when [url] would send Pager's traffic unencrypted over the internet. */
+    fun check(url: String) {
+        val u = url.toHttpUrlOrNull() ?: return
+        if (u.scheme == "http" && !isLocalHost(u.host)) throw ApiException(0, "Pager only talks to a server over HTTPS (plain HTTP is allowed only on your own network). Use https:// in the server address.")
+    }
+}
+
 val json = Json { ignoreUnknownKeys = true }
 
 /** Shared HTTP plumbing. Long timeouts because /sync and bridge logins block server-side. */
@@ -34,6 +56,9 @@ class Http(var baseUrl: String, var token: String? = null) {
         .readTimeout(90, TimeUnit.SECONDS)
         .writeTimeout(180, TimeUnit.SECONDS)      // a big video over a slow uplink stalls a single write for longer than the 10 s default and the send failed
         .callTimeout(0, TimeUnit.SECONDS)
+        .followSslRedirects(false)                // an HTTPS address that sends you on to plain HTTP is not followed
+        // (An interceptor must fail with an IOException: anything else is an uncaught crash on OkHttp's own thread.)
+        .addInterceptor { chain -> try { Transport.check(chain.request().url.toString()) } catch (e: ApiException) { throw IOException(e.message) }; chain.proceed(chain.request()) }
         .build()
 
     private suspend fun Call.await(): Response = suspendCancellableCoroutine { cont ->

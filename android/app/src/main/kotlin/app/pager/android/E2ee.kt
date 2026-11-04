@@ -2,6 +2,7 @@ package app.pager.android
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -62,8 +63,8 @@ class E2ee private constructor(
     // ---- Requests the library wants sent ---------------------------------------------------------------------------
 
     /** Sends everything the library has queued (key uploads, device queries, key sharing) and reports the answers back. */
-    suspend fun pump() {
-        if (closed) return
+    suspend fun pump() = pumpLock.withLock {
+        if (closed) return@withLock
         for (round in 0 until 5) {
             val requests = withContext(Dispatchers.IO) { machine.outgoingRequests() }
             if (requests.isEmpty()) break
@@ -73,6 +74,8 @@ class E2ee private constructor(
             for (i in 0 until 20) { val r = withContext(Dispatchers.IO) { machine.backupRoomKeys() } ?: break; send(r) }
         }
     }
+    /** One pump at a time: two that overlap both fetch the same waiting requests (a key upload, say) and send them twice, and the server refuses the second. */
+    private val pumpLock = kotlinx.coroutines.sync.Mutex()
 
     private suspend fun send(r: Request) {
         if (closed) return

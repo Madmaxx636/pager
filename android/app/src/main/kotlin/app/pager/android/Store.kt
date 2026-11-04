@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -310,7 +311,10 @@ class Store(private val context: Context) {
         http.baseUrl = s.baseUrl
         http.token = s.token
         restoreIdentity()
-        loadCache(s.userId)
+        // The saved chats are read off the main thread: this runs while the app starts, and a big file on a slow phone held the start up long enough for
+        // Android to give up on the background service ("did not start in time"). Syncing waits for it (see syncLoop), so nothing starts from an empty list.
+        val ready = CompletableDeferred<Unit>(); cacheReady = ready
+        scope.launch(Dispatchers.IO) { try { loadCache(s.userId) } finally { ready.complete(Unit) } }
         _session.value = s
         syncJob?.cancel()
         // Messages wait for encryption to start (a slow phone can take a while). Starting must never be cut short or skipped: the keys other devices send
@@ -359,6 +363,7 @@ class Store(private val context: Context) {
     private suspend fun persistLoop() {
         // At most every 20 seconds, and only when something changed. (A plain debounce waits for a quiet moment, which a busy chat never gives: nothing was saved.)
         _chats.sample(20_000).collect {
+            cacheReady.await()   // never write the list before the saved one has been read into it
             val me = _session.value?.userId ?: return@collect
             // Chats and the sync position they match, read together. (Reading the position later saved a position that was ahead of the chats,
             // and after a restart the messages in between were never fetched.)
@@ -681,7 +686,11 @@ class Store(private val context: Context) {
     }
 
     private var syncFailing = false
+    /** Completes when the saved chats have been read (or there were none). */
+    @Volatile private var cacheReady = CompletableDeferred<Unit>().also { it.complete(Unit) }
+
     private suspend fun syncLoop(s: Session) {
+        cacheReady.await()
         runCatching { holdUntilKeys() }
         var backoff = 1000L
         while (scope.isActive) {

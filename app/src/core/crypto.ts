@@ -43,7 +43,14 @@ export class Crypto {
   // ---- Requests the library wants sent ---------------------------------------------------------------------------------
 
   /** Sends everything the library has queued (key uploads, device queries, key sharing) and reports the answers back. */
-  async pump(): Promise<void> {
+  /** One pump at a time: two that overlap both fetch the same waiting requests (a key upload, say) and send them twice, and the server refuses the second. */
+  private pumping: Promise<void> = Promise.resolve();
+  pump(): Promise<void> {
+    const run = this.pumping.then(() => this.pumpNow());
+    this.pumping = run.catch(() => {});
+    return run;
+  }
+  private async pumpNow(): Promise<void> {
     if (this.closed) return;
     for (let round = 0; round < 5; round++) {
       const requests = await this.machine.outgoingRequests();
