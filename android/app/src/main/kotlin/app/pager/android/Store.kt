@@ -772,7 +772,8 @@ class Store(private val context: Context) {
                 if (syncFailing) { AppLog.crumb("sync", "working again"); syncFailing = false }
                 if (res === raw) _syncProblem.value = null
             } catch (e: ApiException) {
-                if (e.status == 401) { signOutLocal(); return }
+                // The server no longer knows this sign-in. The phone signs out, but keeps its encryption keys: they are the only copy of the keys for messages that were never backed up.
+                if (e.status == 401) { signOutLocal(wipeKeys = false); return }
                 if (!syncFailing) { syncFailing = true; AppLog.crumb("sync", "failed (server answered ${e.status}), trying again"); if (e.status >= 500) AppLog.incident("sync", "server answered ${e.status}") }
                 if (e.status == 400 && since != null) { synchronized(cacheLock) { since = null; chatsSince = null; _chats.value = emptyMap() }; continue } // stale cache token
                 delay(backoff); backoff = (backoff * 2).coerceAtMost(30_000)
@@ -1638,10 +1639,11 @@ class Store(private val context: Context) {
         scope.launch { kotlinx.coroutines.withTimeoutOrNull(2500) { runCatching { matrix.logout() } }; signOutLocal() }
     }
 
-    private fun signOutLocal() {
+    /** [wipeKeys] is true when you signed out yourself (it said so first); false when the server ended the sign-in, so the keys are not thrown away by something you did not choose. */
+    private fun signOutLocal(wipeKeys: Boolean = true) {
         syncJob?.cancel()
         retryJob?.cancel(); e2ee?.close(); e2ee = null; waiting.clear(); memberCache.clear(); transcripts.forgetAll()
-        runCatching { File(context.filesDir, "e2ee").deleteRecursively() }
+        if (wipeKeys) runCatching { File(context.filesDir, "e2ee").deleteRecursively() }
         _encryption.value = EncryptionStatus()
         prefs.edit().remove("token").remove("userId").remove("deviceId").remove("identity.key").remove("identity.names").remove("identity.ids").apply()
         SyncReducer.setOwnIdentity(emptyList(), emptyList())

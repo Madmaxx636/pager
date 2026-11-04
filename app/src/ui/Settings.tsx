@@ -224,7 +224,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
     case "about": return (
       <>
         <Group title="Pager"><Row title={`Version ${import.meta.env.VITE_APP_VERSION ?? "0.3.0"}`} hint={window.pagerDesktop ? `Desktop app (${window.pagerDesktop.platform})` : "Web app"} /><Row title="An open-source, self-hosted unified messenger." />{window.pagerDesktop?.memory && <MemoryRow />}<PerfRow /><Row title="Show the welcome tour again" hint="The mascot walks you through Pager" onClick={() => setTouring(true)} chevron /></Group>
-        <Group title="Account"><Row title={me()} hint={http.base || window.location.origin} /><Row title="Sign out" onClick={() => signOut()}><span className="danger">Sign out</span></Row><Row title="Delete my profile" hint="Removes your account and everything on this server. This can't be undone" onClick={() => setDeleting(true)}><span className="danger">Delete</span></Row></Group>
+        <Group title="Account"><Row title={me()} hint={http.base || window.location.origin} /><SignOutRow /><Row title="Delete my profile" hint="Removes your account and everything on this server. This can't be undone" onClick={() => setDeleting(true)}><span className="danger">Delete</span></Row></Group>
         {deleting && <DeleteProfile onClose={() => setDeleting(false)} />}
         {touring && <Tour nav={nav} forceOpen onClose={() => setTouring(false)} />}
       </>
@@ -585,6 +585,26 @@ function ReportDialog({ onClose }: { onClose: () => void }) {
       {note && <p className="muted">{note}</p>}
       <div className="row-end"><button className="link" onClick={onClose}>Close</button><button className="link" onClick={copy}>Copy</button><button className="primary" onClick={save}>Save to file</button></div>
     </Modal>
+  );
+}
+
+/** Signing out removes this device's encryption keys. Say so before it happens, and loudly when nothing backs them up (they cannot be recovered). */
+function SignOutRow() {
+  const e = useEncryption();
+  const [ask, setAsk] = useState(false);
+  const unsafe = e.ready && !e.backupHere;
+  return (
+    <>
+      <Row title="Sign out" onClick={() => setAsk(true)}><span className="danger">Sign out</span></Row>
+      {ask && (
+        <Modal title={unsafe ? "Your keys are not backed up" : "Sign out?"} onClose={() => setAsk(false)}>
+          <p>{unsafe
+            ? "This device holds the keys to your encrypted pages and they are not backed up. If you sign out, those messages stay locked for good, even after you sign in again. Set up the recovery key first: Settings, Privacy, Encryption, Recovery key."
+            : "Signing out removes this device's message keys. When you sign in again, enter your recovery key to read your history."}</p>
+          <div className="row-end"><button className="link" onClick={() => setAsk(false)}>Cancel</button><button className={unsafe ? "link danger" : "primary"} onClick={() => { setAsk(false); void signOut(); }}>{unsafe ? "Sign out anyway" : "Sign out"}</button></div>
+        </Modal>
+      )}
+    </>
   );
 }
 

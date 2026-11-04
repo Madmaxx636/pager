@@ -819,6 +819,24 @@ private fun LogsGroup() {
     }
 }
 
+/** Signing out removes this phone's encryption keys. Say so before it happens, and loudly when nothing backs them up (they cannot be recovered). */
+@Composable
+private fun SignOutRow() {
+    val store = LocalStore.current
+    val e by store.encryption.collectAsState()
+    var ask by remember { mutableStateOf(false) }
+    val unsafe = e.ready && !e.backupHere
+    ButtonRow("Sign out", danger = true) { ask = true }
+    if (ask) AlertDialog(
+        onDismissRequest = { ask = false },
+        title = { Text(if (unsafe) "Your keys are not backed up" else "Sign out?") },
+        text = { Text(if (unsafe) "This phone holds the keys to your encrypted pages and they are not backed up. If you sign out, those messages stay locked for good, even after you sign in again. Set up the recovery key first: Settings, Privacy, Encryption, Recovery key."
+            else "Signing out removes this phone's message keys. When you sign in again, enter your recovery key to read your history.") },
+        confirmButton = { TextButton(onClick = { ask = false; store.signOut() }) { Text(if (unsafe) "Sign out anyway" else "Sign out", color = if (unsafe) MaterialTheme.colorScheme.error else Color.Unspecified) } },
+        dismissButton = { TextButton(onClick = { ask = false }) { Text("Cancel") } },
+    )
+}
+
 @Composable
 private fun AboutSettings(navigate: (String) -> Unit) {
     val store = LocalStore.current
@@ -840,7 +858,7 @@ private fun AboutSettings(navigate: (String) -> Unit) {
         SettingsGroup("Account") {
             Text(session?.userId ?: "", Modifier.padding(16.dp)); GroupDivider()
             Text(session?.baseUrl ?: "", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant); GroupDivider()
-            ButtonRow("Sign out", danger = true) { store.signOut() }; GroupDivider()
+            SignOutRow(); GroupDivider()
             ButtonRow("Delete my profile", danger = true) { deleting = true }
         }
     }
