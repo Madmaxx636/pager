@@ -39,7 +39,12 @@ object Updater {
     /** What the last check or install said, in words ("You're up to date", "Couldn't reach the server"…). */
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
-    fun later() { _available.value = null }
+    /** "Later": the same version is not offered again for a day (the check on every return to the app used to bring the question straight back). */
+    fun later(ctx: Context) {
+        _available.value?.let { ctx.getSharedPreferences("pager.updates", Context.MODE_PRIVATE).edit().putLong("declinedCode", it.code).putLong("declinedAt", System.currentTimeMillis()).apply() }
+        _available.value = null
+    }
+    internal fun shouldOffer(declinedCode: Long, declinedAt: Long, code: Long, now: Long) = code != declinedCode || now - declinedAt >= 24 * 3600_000L
 
     fun currentCode(ctx: Context): Long = androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(ctx.packageManager.getPackageInfo(ctx.packageName, 0))      // (the plain field only exists from Android 9)
     fun currentName(ctx: Context): String = ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
@@ -55,7 +60,7 @@ object Updater {
             prefs.edit().putLong("checked", System.currentTimeMillis()).apply()
             // An update signed with a different key than this app can't be installed over it: don't offer it (say why only when asked).
             if (info != null && info.signer != null && !sameSigner(signers(ctx), setOf(info.signer))) { if (force && info.code > currentCode(ctx)) _message.value = wrongKey(info) else if (force) _message.value = "You're up to date (${currentName(ctx)})" }
-            else if (info != null && info.code > currentCode(ctx)) _available.value = info
+            else if (info != null && info.code > currentCode(ctx)) { if (force || shouldOffer(prefs.getLong("declinedCode", 0), prefs.getLong("declinedAt", 0), info.code, System.currentTimeMillis())) _available.value = info }
             else if (force) _message.value = "You're up to date (${currentName(ctx)})"
         } catch (e: Exception) { if (force) _message.value = "Couldn't check for updates: ${e.message ?: "server unreachable"}" }
         _stage.value = Stage.IDLE

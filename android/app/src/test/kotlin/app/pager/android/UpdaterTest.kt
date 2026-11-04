@@ -2,6 +2,7 @@ package app.pager.android
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,4 +44,12 @@ class UpdaterTest {
     @Test fun a64BitPhoneTakesTheNormalFile() { assertEquals("pager-android-0.5.71.apk", Updater.parse(both, "https://s", listOf("arm64-v8a", "armeabi-v7a", "armeabi"))!!.url.substringAfterLast('/')) }
     @Test fun a32BitOnlyPhoneTakesTheLighterFile() { assertEquals("pager-android-0.5.71-32bit.apk", Updater.parse(both, "https://s", listOf("armeabi-v7a", "armeabi"))!!.url.substringAfterLast('/')) }
     @Test fun a32BitPhoneUsesTheNormalFileWhenThereIsNoLighterOne() { assertEquals("pager-android-0.4.1.apk", Updater.parse(json, "https://s", listOf("armeabi-v7a"))!!.url.substringAfterLast('/')) }
+
+    @Test fun laterHoldsForADayForThatVersionOnly() {
+        val day = 24 * 3600_000L
+        assertFalse(Updater.shouldOffer(60700, 1_000, 60700, 1_000 + 3600_000L))   // an hour later: not again
+        assertTrue(Updater.shouldOffer(60700, 1_000, 60700, 1_000 + day))          // a day later: yes
+        assertTrue(Updater.shouldOffer(60700, 1_000, 60800, 1_000 + 3600_000L))    // a newer version: yes
+        assertTrue(Updater.shouldOffer(0, 0, 60700, 5_000))                         // nothing declined before
+    }
 }

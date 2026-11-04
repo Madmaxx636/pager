@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -357,7 +357,8 @@ class Store(private val context: Context) {
 
     @OptIn(FlowPreview::class, kotlinx.serialization.ExperimentalSerializationApi::class)
     private suspend fun persistLoop() {
-        _chats.debounce(8000).collect {
+        // At most every 20 seconds, and only when something changed. (A plain debounce waits for a quiet moment, which a busy chat never gives: nothing was saved.)
+        _chats.sample(20_000).collect {
             val me = _session.value?.userId ?: return@collect
             // Chats and the sync position they match, read together. (Reading the position later saved a position that was ahead of the chats,
             // and after a restart the messages in between were never fetched.)

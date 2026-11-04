@@ -40,11 +40,18 @@ class SyncService : Service() {
         store.ensureSyncing()
         watchNetwork(store)
         // Alerts are posted by the store itself (see Store.alertFor); this service only keeps the process, the network and sync alive.
-        scope.launch { checkLoop(store) }
-        // Every few minutes, also with the app closed: a lost login (Google ended the pairing) should reach you soon.
-        scope.launch { while (true) { kotlinx.coroutines.delay(if (store.settings.value.lowData) 15 * 60_000L else 3 * 60_000L); store.refreshBridges() } }
+        // This runs again every time the service is started (the watchdog does that every 5 minutes): the loops of the last start are stopped first,
+        // otherwise a day of restarts left hundreds of copies of them, each asking the server.
+        loops?.cancel()
+        loops = scope.launch {
+            launch { checkLoop(store) }
+            // Every few minutes, also with the app closed: a lost login (Google ended the pairing) should reach you soon.
+            launch { while (true) { kotlinx.coroutines.delay(if (store.settings.value.lowData) 15 * 60_000L else 3 * 60_000L); store.refreshBridges() } }
+        }
         return START_STICKY
     }
+
+    private var loops: kotlinx.coroutines.Job? = null
 
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var lastKick = 0L

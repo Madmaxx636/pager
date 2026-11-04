@@ -4,6 +4,14 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.8 (phone, desktop)
+
+- **Background sync (phone):** every restart of the background service (the watchdog does one every 5 minutes) started another copy of its two checking loops without stopping the old ones, so after a day there were hundreds, each asking the server. A restart now replaces them. This also saves battery and stops the server being asked over and over.
+- **Saving your chats (phone):** the saved copy of your chats on the phone was written only after 8 quiet seconds, which a busy chat never gives, so nothing was saved while you were using it. It is now saved at most every 20 seconds.
+- **Updates (phone):** after pressing Later, the update question came back each time you returned to the app. The same version is now offered again after a day (Settings > Check for updates always asks).
+- **Closed to other apps (phone):** the boot and update receivers can no longer be started by other apps.
+- **Uninstalling (Windows):** the uninstaller removes the launch-at-login entry, so Windows no longer tries to start a program that is gone at every login. It stays when Pager is only being updated.
+
 ## 0.6.7 (phone, desktop, web)
 
 - **Dropping a file (desktop, web):** a file dropped anywhere except an open chat (the page list, settings) made Pager open that file in place of the app. It is now ignored there. In a chat, the "drop to add" hint no longer sticks after you drag out of the window, and no longer appears when you drag text or reorder pins.

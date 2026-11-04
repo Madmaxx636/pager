@@ -1185,11 +1185,11 @@ fun UpdateGate() {
     }
     val i = info ?: return
     AlertDialog(
-        onDismissRequest = { if (stage == Updater.Stage.IDLE) Updater.later() },
+        onDismissRequest = { if (stage == Updater.Stage.IDLE) Updater.later(ctx) },
         title = { Text("Pager ${i.version} is ready") },
         text = { Text(if (stage == Updater.Stage.DOWNLOADING) downloadingText(Updater.progress.collectAsState().value) else if (stage == Updater.Stage.INSTALLING) "Installing…" else i.notes.ifBlank { "A new version is available from your server." }) },
         confirmButton = { TextButton(enabled = stage == Updater.Stage.IDLE, onClick = { scope.launch { Updater.install(ctx, i) } }) { Text("Update now") } },
-        dismissButton = { TextButton(enabled = stage == Updater.Stage.IDLE, onClick = { Updater.later() }) { Text("Later") } },
+        dismissButton = { TextButton(enabled = stage == Updater.Stage.IDLE, onClick = { Updater.later(ctx) }) { Text("Later") } },
     )
 }
 

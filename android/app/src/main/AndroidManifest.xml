@@ -129,11 +129,11 @@
         </activity-alias>
         <receiver android:name=".NotificationActionReceiver" android:exported="false" />
         <receiver android:name=".ReminderReceiver" android:exported="false" />
-        <receiver android:name=".BootReceiver" android:exported="true">
+        <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
         </receiver>
         <receiver android:name=".UpdateReceiver" android:exported="false" />
-        <receiver android:name=".PackageReplacedReceiver" android:exported="true">
+        <receiver android:name=".PackageReplacedReceiver" android:exported="false">
             <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
         </receiver>
         <receiver android:name=".WatchdogReceiver" android:exported="false" />
