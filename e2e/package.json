@@ -1,0 +1,18 @@
+{
+  "name": "pager-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests: the real web app against a throwaway Synapse and the real Pager API (see stack.mjs)",
+  "scripts": {
+    "up": "node stack.mjs up",
+    "seed": "node stack.mjs seed",
+    "down": "node stack.mjs down",
+    "reset": "node stack.mjs reset",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.57.0"
+  },
+  "license": "AGPL-3.0-only"
+}

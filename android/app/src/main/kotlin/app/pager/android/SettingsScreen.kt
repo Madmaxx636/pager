@@ -830,7 +830,7 @@ private fun SignOutRow() {
     if (ask) AlertDialog(
         onDismissRequest = { ask = false },
         title = { Text(if (unsafe) "Your keys are not backed up" else "Sign out?") },
-        text = { Text(if (unsafe) "This phone holds the keys to your encrypted pages and they are not backed up. If you sign out, those messages stay locked for good, even after you sign in again. Set up the recovery key first: Settings, Privacy, Encryption, Recovery key."
+        text = { Text(if (unsafe) "This phone holds the keys to your encrypted pages and they are not backed up. If you sign out, those messages stay locked for good, even after you sign in again. " + (if (e.backupOnServer) "Enter your recovery key first so they are saved (Settings, Privacy & security, Encryption)." else "Set up the recovery key first: Settings, Privacy & security, Encryption, Recovery key.")
             else "Signing out removes this phone's message keys. When you sign in again, enter your recovery key to read your history.") },
         confirmButton = { TextButton(onClick = { ask = false; store.signOut() }) { Text(if (unsafe) "Sign out anyway" else "Sign out", color = if (unsafe) MaterialTheme.colorScheme.error else Color.Unspecified) } },
         dismissButton = { TextButton(onClick = { ask = false }) { Text("Cancel") } },
@@ -1138,7 +1138,11 @@ fun RestoreKeyDialog(first: Boolean, onDone: () -> Unit, onFresh: () -> Unit, ch
 }
 
 /** Lets other screens (the welcome tour) notice that the recovery-key step was finished or skipped. */
-object KeySetupState { var finished by androidx.compose.runtime.mutableIntStateOf(0) }
+object KeySetupState {
+    var finished by androidx.compose.runtime.mutableIntStateOf(0)
+    /** True while the "save your recovery key" screen is up: the welcome tour waits for it. */
+    var open by androidx.compose.runtime.mutableStateOf(false)
+}
 
 /** Right after signing in: a new account saves its recovery key, a new device on an existing account enters it. One screen, one job. */
 @Composable
@@ -1158,10 +1162,18 @@ fun KeySetupGate() {
         RestoreKeyDialog(first = false, changed = true, onDone = later, onFresh = later)
         return
     }
-    if (!e.ready || e.backupHere || dismissed) return
     val finish = { prefs.edit().putBoolean(flag, true).apply(); dismissed = true; KeySetupState.finished++; Unit }
+    // A new account's key is made the moment its screen opens, and making it flips "backed up" to true, which closed the screen again before the key had
+    // been shown (the status refreshes within seconds). Once the screen has opened for a new key it stays until the key has been saved.
+    val needsNewKey = e.ready && !e.backupHere && !dismissed && !(e.backupOnServer && !fresh)
+    var keyShown by remember(e.deviceId) { mutableStateOf(false) }
+    LaunchedEffect(needsNewKey) { if (needsNewKey) keyShown = true }
+    androidx.compose.runtime.SideEffect { KeySetupState.open = keyShown || needsNewKey }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { KeySetupState.open = false } }
+    if (keyShown) { RecoveryKeyDialog(first = true, onDone = { keyShown = false; finish() }); return }
+    if (!e.ready || e.backupHere || dismissed) return
+    // (A new account's own screen is the one above, which stays up; here only a new device on an existing account asks for its key.)
     if (e.backupOnServer && !fresh) RestoreKeyDialog(first = true, onDone = finish, onFresh = { fresh = true })
-    else RecoveryKeyDialog(first = true, onDone = finish)
 }
 
 /** Once, after sign-in: asks the phone to let Pager run in the background, so messages and notifications arrive on time. */

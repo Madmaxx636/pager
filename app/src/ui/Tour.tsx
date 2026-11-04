@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { matrixCall } from "../core/api";
 import { useEncryption, useStore, me } from "../core/store";
+import { useKeyFlowOpen } from "../core/keyflow";
 import { useSettings } from "../core/settings";
 import { TOUR_TYPE, tourSteps, typedLength } from "../core/tour";
 import { Mascot } from "./Mascot";
@@ -21,6 +22,7 @@ export function Tour({ nav, forceOpen, onClose }: { nav: (to: string) => void; f
   const isAdmin = useStore((s) => s.isAdmin);
   const synced = useStore((s) => s.synced);
   const enc = useEncryption();
+  const keyFlow = useKeyFlowOpen();   // the recovery key screen comes first
   const st = useSettings();
   const [open, setOpen] = useState(false);
   const [i, setI] = useState(0);
@@ -32,12 +34,13 @@ export function Tour({ nav, forceOpen, onClose }: { nav: (to: string) => void; f
     if (forceOpen) { setOpen(true); setI(0); return; }
     if (!user || !synced || open) return;
     if (!enc.ready && !enc.error) return; // encryption is still starting: the recovery-key screen may be about to appear, and comes first
+    if (keyFlow) return;
     if (enc.ready && !enc.backupHere && !(() => { try { return localStorage.getItem(`pager.keysetup.${user}.${enc.deviceId}`) === "1"; } catch { return true; } })()) return;
     if (seenHere(user)) return;
     let live = true;
     void doneOnServer(user).then((done) => { if (!live) return; if (done) markHere(user); else { setOpen(true); setI(0); } });
     return () => { live = false; };
-  }, [user, synced, enc.ready, enc.error, enc.backupHere, enc.deviceId, forceOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, synced, enc.ready, enc.error, enc.backupHere, enc.deviceId, forceOpen, keyFlow]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const steps = tourSteps({ admin: isAdmin, hasKey: enc.backupHere, server: session?.baseUrl || window.location.origin, desktop: !!window.pagerDesktop });
   const step = steps[Math.min(i, steps.length - 1)];

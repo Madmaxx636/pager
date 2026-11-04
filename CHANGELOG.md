@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.12 (phone, desktop, web)
+
+- **Recovery key of a new account (phone, web, desktop):** the first-run screen made the account's recovery key and then closed itself at once, so the key was never shown. Making the key counts as "backed up", and that closed the screen. A new phone or computer could then not read the history, because nobody had the key. The screen now stays up, shows the key, and cannot be closed until you tick that you saved it; the welcome tour waits for it. **If you made your account on a version before this one and never saw a key, make a new one: Settings, Privacy, Encryption, Recovery key.** It replaces the hidden one, and from then on you hold the key.
+- **Signing out warning:** it now says what to do when a backup already exists but this device has not entered its key (enter the key), instead of always saying to set one up.
+- **For developers:** `e2e/` has end-to-end tests that run the real web app against a throwaway server with fake chats (see `e2e/README.md`).
+
 ## 0.6.11 (phone, desktop, web)
 
 - **Signing out asks first (phone, web, desktop):** it says that signing out removes this device's message keys. If those keys are not backed up with a recovery key, it says so loudly: the messages in your encrypted pages would stay locked for good, even after you sign in again. Before, one tap signed you out and deleted the keys, with no warning.

@@ -26,3 +26,7 @@ desktop-native/core/target/
 desktop-native/dist/
 desktop-native/build-win/
 desktop-native/build-core-win/
+
+# test stack data (e2e/stack.mjs)
+e2e/.state
+e2e/node_modules

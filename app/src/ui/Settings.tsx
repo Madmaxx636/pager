@@ -599,7 +599,7 @@ function SignOutRow() {
       {ask && (
         <Modal title={unsafe ? "Your keys are not backed up" : "Sign out?"} onClose={() => setAsk(false)}>
           <p>{unsafe
-            ? "This device holds the keys to your encrypted pages and they are not backed up. If you sign out, those messages stay locked for good, even after you sign in again. Set up the recovery key first: Settings, Privacy, Encryption, Recovery key."
+            ? "This device holds the keys to your encrypted pages and they are not backed up. If you sign out, those messages stay locked for good, even after you sign in again. " + (e.backupOnServer ? "Enter your recovery key first so they are saved (Settings, Privacy, Encryption)." : "Set up the recovery key first: Settings, Privacy, Encryption, Recovery key.")
             : "Signing out removes this device's message keys. When you sign in again, enter your recovery key to read your history."}</p>
           <div className="row-end"><button className="link" onClick={() => setAsk(false)}>Cancel</button><button className={unsafe ? "link danger" : "primary"} onClick={() => { setAsk(false); void signOut(); }}>{unsafe ? "Sign out anyway" : "Sign out"}</button></div>
         </Modal>

@@ -1,0 +1,17 @@
+name: End-to-end tests
+# The real web app against a throwaway Synapse and the real Pager API (see e2e/README.md). Run by hand from the Actions tab.
+on: workflow_dispatch
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: cd app && npm ci && npm run build
+      - run: cd api && npm ci
+      - run: cd e2e && npm install && npx playwright install --with-deps chromium
+      - run: cd e2e && npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: e2e-screenshots, path: e2e/.state/shots }
