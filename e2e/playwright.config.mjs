@@ -10,5 +10,5 @@ export default defineConfig({
   workers: 1,                       // one signed-in user on one server: the tests share it
   reporter: [["list"]],
   outputDir: ".state/results",
-  use: { baseURL: "http://127.0.0.1:18081", viewport: { width: 1180, height: 760 }, screenshot: "off", trace: "off" },
+  use: { actionTimeout: 10_000, baseURL: "http://127.0.0.1:18081", viewport: { width: 1180, height: 760 }, screenshot: "off", trace: "off" },
 });

@@ -73,6 +73,15 @@ object Names {
         return if (isPhone(n)) lookup(n) ?: n else n.ifEmpty { raw }
     }
 
+    /** The numbers the phone's own contacts list under exactly this name (empty without the contacts permission). */
+    fun numbersForName(context: Context, name: String): List<String> {
+        if (name.isBlank() || !hasDevicePermission(context)) return emptyList()
+        return runCatching {
+            context.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER), "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} = ? COLLATE NOCASE", arrayOf(name), null)
+                ?.use { c -> generateSequence { if (c.moveToNext()) c.getString(0) else null }.filterNotNull().toList() }.orEmpty()
+        }.getOrDefault(emptyList())
+    }
+
     fun hasDevicePermission(context: Context) = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
     /** The same for the same address book, whatever its order: used to tell whether this phone's contacts have changed since they were last read. */

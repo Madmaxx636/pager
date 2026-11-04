@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { callOptions, messengerId, normalizeNumber, numberFor } from "./callout";
+import { callOptions, callOptionsFor, messengerId, normalizeNumber, numberFor, numbersFor } from "./callout";
 
 const chat = (network: string, name: string, others: string[] = [], isGroup = false) => ({ network, name, heroes: others, joined: ["@me:s", ...others], isGroup });
 
@@ -41,5 +41,17 @@ describe("callOptions", () => {
   it("groups and Matrix chats get nothing", () => {
     expect(callOptions(chat("whatsapp", "Friends", ["@whatsapp_15551234567:s"], true), "@me:s", [], true)).toEqual([]);
     expect(callOptions(chat("matrix", "+1 555 123 4567"), "@me:s", [], true)).toEqual([]);
+  });
+
+  it("a contact with two numbers offers both for the dialler", () => {
+    const contacts: [string, string][] = [["+15551110000", "Sam"], ["+1 (555) 222-0000", "sam"], ["+15551110000", "Sam"]];
+    expect(numbersFor(chat("gmessages", "Sam"), "@me:s", contacts)).toEqual(["+15551110000", "+15552220000"]);
+    expect(callOptions(chat("gmessages", "Sam"), "@me:s", contacts, true).map((o) => o.url)).toEqual(["tel:+15551110000", "tel:+15552220000"]);
+  });
+  it("a merged page offers what each of its chats offers, once", () => {
+    const wa = chat("whatsapp", "Sam", ["@whatsapp_15551110000:s"]), sms = chat("gmessages", "Sam");
+    const contacts: [string, string][] = [["+15551110000", "Sam"], ["+15552220000", "Sam"]];
+    expect(callOptionsFor([sms, wa], "@me:s", contacts, true).map((o) => o.url)).toEqual(["tel:+15551110000", "tel:+15552220000", "https://wa.me/15551110000"]);
+    expect(callOptionsFor([wa], "@me:s", contacts, false).map((o) => o.url)).toEqual(["https://wa.me/15551110000"]);
   });
 });

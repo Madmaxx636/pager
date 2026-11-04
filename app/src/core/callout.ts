@@ -18,14 +18,24 @@ export function normalizeNumber(raw: string): string {
 type Who = Pick<ChatState, "name" | "heroes" | "joined" | "network">;
 const others = (c: Who, me: string) => [...new Set([...c.heroes, ...c.joined])].filter((u) => u !== me);
 
-/** The other person's number in a one-to-one chat, as far as Pager can tell: from their bridge id, else the chat's name when it is a bare number, else one of your own contacts with that name. */
-export function numberFor(c: Who, me: string, contacts: [string, string][] = []): string {
-  for (const u of others(c, me)) { const m = GHOST_NUMBER.exec(u); if (m) return "+" + m[1]; }
+/**
+ * The other person's number(s) in a one-to-one chat, as far as Pager can tell: from their bridge id; else the chat's name when it is a bare number; else every
+ * number your own contacts list for a person with that name (a contact can have two).
+ */
+export function numbersFor(c: Who, me: string, contacts: [string, string][] = []): string[] {
+  for (const u of others(c, me)) { const m = GHOST_NUMBER.exec(u); if (m) return ["+" + m[1]]; }
   const name = stripTag(c.name).trim();
-  if (isPhone(name)) return normalizeNumber(name);
-  const mine = contacts.find(([, n]) => n.trim().toLowerCase() === name.toLowerCase());
-  return mine ? normalizeNumber(mine[0]) : "";
+  if (isPhone(name)) return [normalizeNumber(name)].filter(Boolean);
+  const seen = new Set<string>(), out: string[] = [];
+  for (const [num, n] of contacts) {
+    if (n.trim().toLowerCase() !== name.toLowerCase()) continue;
+    const v = normalizeNumber(num), key = v.replace(/\D/g, "").slice(-10);
+    if (v && !seen.has(key)) { seen.add(key); out.push(v); }
+  }
+  return out;
 }
+/** The first of them (see numbersFor). */
+export const numberFor = (c: Who, me: string, contacts: [string, string][] = []): string => numbersFor(c, me, contacts)[0] ?? "";
 
 /** The Messenger id of the other person, when the bridge gave it in their id. */
 export const messengerId = (c: Who, me: string): string => { for (const u of others(c, me)) { const m = GHOST_MESSENGER.exec(u); if (m) return m[1]; } return ""; };
@@ -37,12 +47,18 @@ export const messengerId = (c: Who, me: string): string => { for (const u of oth
  */
 export function callOptions(c: Who & { isGroup?: boolean }, me: string, contacts: [string, string][], canDial: boolean): CallOption[] {
   if (c.isGroup || c.network === "matrix") return [];
-  const number = numberFor(c, me, contacts);
+  const numbers = numbersFor(c, me, contacts), number = numbers[0] ?? "";
   const international = number.startsWith("+");
   const out: CallOption[] = [];
   if (c.network === "whatsapp" && international) out.push({ id: "whatsapp", label: "Open in WhatsApp (then tap the call button)", url: `https://wa.me/${number.slice(1)}` });
   if (c.network === "signal" && international) out.push({ id: "signal", label: "Open in Signal (then tap the call button)", url: `https://signal.me/#p/${number}` });
   if (c.network === "messenger") { const id = messengerId(c, me); if (id) out.push({ id: "messenger", label: "Open in Messenger (then tap the call button)", url: `https://www.messenger.com/t/${id}` }); }
-  if (canDial && number) out.push({ id: "phone", label: `Call ${number} with your phone`, url: `tel:${number}` });
+  if (canDial) for (const n of numbers) out.push({ id: `phone-${n}`, label: `Call ${n} with your phone`, url: `tel:${n}` });
   return out;
+}
+
+/** One list for a person who has several chats (a merged page): what each of them offers, without repeats. */
+export function callOptionsFor(chats: (Who & { isGroup?: boolean })[], me: string, contacts: [string, string][], canDial: boolean): CallOption[] {
+  const seen = new Set<string>();
+  return chats.flatMap((c) => callOptions(c, me, contacts, canDial)).filter((o) => !seen.has(o.url) && !!seen.add(o.url));
 }

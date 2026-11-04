@@ -24,15 +24,29 @@ class CallOutTest {
 
     @Test fun offersWhatIsPossibleForEachNetwork() {
         val wa = CallOut.options(chat("whatsapp", "Sam", listOf("@whatsapp_15551234567:s")), "@me:s", emptyList())
-        assertEquals(listOf("whatsapp", "phone"), wa.map { it.id })
+        assertEquals(listOf("whatsapp", "phone-+15551234567"), wa.map { it.id })
         val msgr = CallOut.options(chat("messenger", "Alex", listOf("@messenger_1000123456789:s")), "@me:s", emptyList())
         assertEquals(listOf("messenger"), msgr.map { it.id })
-        assertEquals(listOf("phone"), CallOut.options(chat("gmessages", "+1 555 123 4567"), "@me:s", emptyList()).map { it.id })
+        assertEquals(listOf("phone-+15551234567"), CallOut.options(chat("gmessages", "+1 555 123 4567"), "@me:s", emptyList()).map { it.id })
         assertTrue(CallOut.options(chat("whatsapp", "555-123-4567"), "@me:s", emptyList()).none { it.id == "whatsapp" })
     }
 
     @Test fun groupsAndMatrixChatsGetNothing() {
         assertTrue(CallOut.options(chat("whatsapp", "Friends", listOf("@whatsapp_15551234567:s"), group = true), "@me:s", emptyList()).isEmpty())
         assertTrue(CallOut.options(chat("matrix", "+1 555 123 4567"), "@me:s", emptyList()).isEmpty())
+    }
+
+    @Test fun aContactWithTwoNumbersOffersBothForTheDialler() {
+        val contacts = listOf("+15551110000" to "Sam", "+1 (555) 222-0000" to "sam", "+15551110000" to "Sam")
+        assertEquals(listOf("+15551110000", "+15552220000"), CallOut.numbersFor(chat("gmessages", "Sam"), "@me:s", contacts))
+        assertEquals(listOf("phone-+15551110000", "phone-+15552220000"), CallOut.options(chat("gmessages", "Sam"), "@me:s", contacts).map { it.id })
+    }
+
+    @Test fun aMergedPageOffersWhatEachOfItsChatsOffersOnce() {
+        val wa = chat("whatsapp", "Sam", listOf("@whatsapp_15551110000:s")); val sms = chat("gmessages", "Sam")
+        val contacts = listOf("+15551110000" to "Sam", "+15552220000" to "Sam")
+        val ids = CallOut.optionsFor(listOf(sms, wa), "@me:s", contacts).map { it.id }
+        assertEquals(setOf("phone-+15551110000", "phone-+15552220000", "whatsapp"), ids.toSet())
+        assertEquals(ids.size, ids.toSet().size)   // no repeats
     }
 }

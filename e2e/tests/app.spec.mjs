@@ -49,3 +49,14 @@ test("a message you type is sent and shows in the chat", async () => {
   await box.press("Enter");
   await expect(page.locator(".timeline").getByText("Testing from the end-to-end suite")).toBeVisible();
 });
+
+test("a normal session records no problems in Settings > Advanced > Logs", async () => {
+  const go = (to) => page.evaluate((t) => window.dispatchEvent(new CustomEvent("pager:nav", { detail: t })), to);
+  for (const to of ["new", "search", "settings", "settings/appearance", "settings/notifications", "settings/privacy", "settings/system", "settings/shortcuts", "settings/storage", "settings/about"]) { await go(to); await page.waitForTimeout(300); }
+  await go("settings/advanced");
+  await page.getByText("Problems and activity").click();
+  const logs = page.locator(".modal").filter({ hasText: "Recent activity" });
+  await expect(logs).toContainText("Nothing has gone wrong.");
+  await snap(page, "05-logs-clean");
+  await logs.getByRole("button", { name: "Close" }).first().click();
+});

@@ -14,4 +14,4 @@ jobs:
       - run: cd e2e && npm test
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: e2e-screenshots, path: e2e/.state/shots }
+        with: { name: e2e-screenshots, path: e2e/shots }

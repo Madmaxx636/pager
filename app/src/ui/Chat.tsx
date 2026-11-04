@@ -1,7 +1,7 @@
 import { attended, onAttended } from "../core/presence";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { hasFiles } from "../core/dragfiles";
-import { callOptions, type CallOption } from "../core/callout";
+import { callOptionsFor, type CallOption } from "../core/callout";
 import { ownContacts } from "../core/names";
 import type { Gif } from "../core/gifs";
 import { setInfoPanelOpen } from "../core/layout";
@@ -251,7 +251,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const typingNames = chat.typing.map((u) => nameOf(chat, u));
   const attachFiles = (files: FileList | Array<File | Blob>, viewOnce = false, gif?: Gif) => setStaged((cur) => [...cur, ...Array.from(files).map((f) => stageOf(f, viewOnce, gif))]);
   const unstage = (id: string) => setStaged((cur) => { cur.filter((x) => x.id === id).forEach((x) => x.preview && URL.revokeObjectURL(x.preview)); return cur.filter((x) => x.id !== id); });
-  const clearStaged = () => setStaged([]);
+  const clearStaged = () => setStaged((cur) => { cur.forEach((x) => x.preview && URL.revokeObjectURL(x.preview)); return []; });   // (the previews were never let go of after a send)
 
   return (
     <section className={"chat" + (infoOpen ? " with-info" : "")} onDragEnter={(e) => { if (!hasFiles(e)) return; dragDepth.current++; setDragging(true); }} onDragOver={(e) => { if (hasFiles(e)) e.preventDefault(); }} onDragLeave={(e) => { if (!hasFiles(e)) return; dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false); }} onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragging(false); attachFiles(e.dataTransfer.files); }}>
@@ -267,7 +267,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
               {<div className="chat-sub"><i style={{ background: merged ? "var(--accent)" : meta.color }} />{merged ? `${groupIds.length} networks together` : meta.label}{chat.encrypted ? <span className="enc-badge" title="End-to-end encrypted"> · <Lock size={11} /> Encrypted</span> : null}{isGroup(chat) ? ` · ${peopleCount(chat)} members` : ""}</div>}
             </div>
           </button>)}
-          <CallButton chat={chat} />
+          <CallButton chats={groupIds.map((id) => allChats[id]).filter((c): c is ChatState => !!c)} />
           <IconButton icon={Search} label="Search in page (Ctrl+F)" onClick={() => nav(`search:${roomId}`)} />
           <IconButton icon={Info} label="Page info" onClick={() => setInfoOpen(!infoOpen)} active={infoOpen} className="info-toggle" />
         </header>
@@ -444,8 +444,9 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
     const body = text.trim(); if (!body && !staged.length) return;
     if (!editing && staged.length) {
       // The words go with the first item; the rest follow on their own.
-      staged.forEach((x, i) => sendFile(target, x.file, x.name, { viewOnce: x.viewOnce, ...(i === 0 && body ? { caption: body } : {}), ...(i === 0 && replyTo ? { replyTo: replyTo.id } : {}), ...(x.w ? { w: x.w, h: x.h } : {}) }));
-      onSent(); setText(""); setDraft(roomId, ""); mentionIds.current.clear(); onClearReply(); onClearEdit();
+      // However the sending goes, the composer must come back to its normal state: files left staged keep "Send later" switched off.
+      try { staged.forEach((x, i) => sendFile(target, x.file, x.name, { viewOnce: x.viewOnce, ...(i === 0 && body ? { caption: body } : {}), ...(i === 0 && replyTo ? { replyTo: replyTo.id } : {}), ...(x.w ? { w: x.w, h: x.h } : {}) })); }
+      finally { onSent(); setText(""); setDraft(roomId, ""); mentionIds.current.clear(); onClearReply(); onClearEdit(); }
       return;
     }
     if (editing) edit(roomId, editing.id, body);
@@ -553,7 +554,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
           {/* Send and Send later: one oval that is always there (no jumping about while you type); the clock end waits until there is something to send. */}
           <div className="send-group">
             {hasText ? <button key="send" className="send" aria-label="Send" title="Send (right-click or hold to send later)" onContextMenu={(e) => { if (!editing && !staged.length) { e.preventDefault(); setLater(true); } }} onPointerDown={() => { skipClick.current = false; if (editing || staged.length) return; holdLater.current = window.setTimeout(() => { holdLater.current = 0; skipClick.current = true; setLater(true); }, 600); }} onPointerUp={() => window.clearTimeout(holdLater.current)} onPointerLeave={() => window.clearTimeout(holdLater.current)} onClick={(e) => { if (skipClick.current) { skipClick.current = false; e.preventDefault(); } }}><Send size={18} /></button> : <button key="mic" type="button" className="send" onPointerDown={pttDown} onPointerMove={pttMove} onPointerUp={pttUp} onPointerCancel={() => { hold.current = undefined; setHoldDx(0); }} onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); void startRec(); } }} aria-label="Record voice message: hold to talk, or tap to start" title="Hold to talk, let go to send. Tap to start and stop." style={{ touchAction: "none" }}><Mic size={18} /></button>}
-            <button type="button" className="send-more" disabled={!hasText || !!editing || staged.length > 0} onClick={() => setLater(true)} title="Send later" aria-label="Send later"><Clock size={16} /></button>
+            <button type="button" className="send-more" disabled={!hasText || !!editing || staged.length > 0} onClick={() => setLater(true)} title={staged.length > 0 && !editing ? "Send later is for text only: take the files off to use it" : "Send later"} aria-label="Send later"><Clock size={16} /></button>
           </div>
         </form>
       )}
@@ -756,10 +757,11 @@ function LinkControls({ chat }: { chat: ChatState }) {
 
 /** Desktop header: the picture(s), the name with a small arrow that opens the network switcher, and just "Encrypted" underneath. */
 /** Start a call with this person in the app that has their number: Pager opens it for you (a bridge carries messages, not calls). Only for one-to-one chats where a way is known. */
-function CallButton({ chat }: { chat: ChatState }) {
+function CallButton({ chats }: { chats: ChatState[] }) {
   const [open, setOpen] = useState(false);
   const canDial = !window.pagerDesktop && /Android|iPhone|iPad/i.test(navigator.userAgent);
-  const opts = useMemo(() => callOptions({ ...chat, isGroup: isGroup(chat) }, me(), ownContacts(), canDial), [chat, canDial]);
+  // From every chat of this person (a merged page has several), and with the contacts as they are now: which of them is open must not decide whether the button shows.
+  const opts = callOptionsFor(chats.map((c) => ({ ...c, isGroup: isGroup(c) })), me(), ownContacts(), canDial);
   if (!opts.length) return null;
   const launch = (o: CallOption) => { setOpen(false); if (o.url.startsWith("tel:")) window.location.href = o.url; else window.open(o.url, "_blank", "noopener,noreferrer"); };
   return (

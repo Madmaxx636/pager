@@ -180,7 +180,7 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 
 /* Narrow screens: one pane at a time, sheets slide up from the bottom */
 @media (max-width: 760px) {
-  .shell { grid-template-columns: 1fr; } .shell .main { display: none; } .shell.pane-open .sidebar { display: none; } .shell.pane-open .main { display: block; } .sidebar { width: 100% !important; }
+  .shell { grid-template-columns: minmax(0, 1fr); } .shell .main { display: none; } .shell.pane-open .sidebar { display: none; } .shell.pane-open .main { display: block; } .sidebar { width: 100% !important; }
   .back { display: grid; } .msg { max-width: min(88%, var(--msg-max, 88%)); } .info { position: absolute; inset: 0; width: auto; z-index: 20; } .hover-tools { display: none !important; }
   .overlay { place-items: end center; padding: 0; } .modal { border-radius: 24px 24px 0 0; max-width: none; animation: rise .18s ease-out; } .modal .grab { display: block; width: 38px; height: 4px; border-radius: 2px; background: var(--line); margin: -8px auto 12px; }
   @keyframes rise { from { transform: translateY(30px); opacity: 0; } }

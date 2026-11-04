@@ -17,7 +17,8 @@ void loadPhoto(); // a wallpaper photo of your own, if you added one
 
 createRoot(document.getElementById("root")!).render(<ErrorBoundary><Titlebar /><App /><Greeting /><UpdateToast /></ErrorBoundary>);
 // Problems that do not break the screen are written down too, and the desktop shell is told the page is alive (it restarts a page that goes silent).
-window.addEventListener("error", (e) => recordProblem("error", e.error ?? e.message));
+// (Chrome's "ResizeObserver loop completed with undelivered notifications" is not an error: it happens whenever a layout settles over two frames. It filled the logs.)
+window.addEventListener("error", (e) => { if (/ResizeObserver loop/.test(e.message ?? "")) return; recordProblem("error", e.error ?? e.message); });
 window.addEventListener("unhandledrejection", (e) => recordProblem("unhandled promise", e.reason));
 window.setInterval(() => window.pagerDesktop?.beat?.(), 5000);
 crumb("app", `started ${import.meta.env.VITE_APP_VERSION ?? ""}`);

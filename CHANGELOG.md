@@ -4,6 +4,14 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.14 (phone, desktop, web)
+
+- **Call button on merged pages (phone, web, desktop):** on a page that shows one person's chats on two networks together, the call button appeared or not depending on which of the chats was open (the one that spoke last decided, and a text-message chat has no way to call on its own). It now offers what all of the person's chats offer together. A contact with two numbers gets a dial option for each. On the phone, the contacts are read as they are now instead of as they were when the page first drew, and the phone's address book is asked for the chat's name directly.
+- **Small windows (desktop, web):** at the smallest window size (360 wide) the page list was wider than the window, so the menu button, the times and the unread counts were cut off. Fixed.
+- **Logs:** Chrome's harmless "ResizeObserver loop" notice was recorded as a problem in every session, in Settings > Advanced > Logs and in the desktop app's log file. It is now ignored.
+- **Send later (desktop, web):** it is for text only, so it is greyed out while files are attached; the tooltip now says so. Sending files always puts the message box back to normal, even if something goes wrong while sending, and the picture previews are let go of. (Reported once on Linux: it stayed off after sending media with text. I could not reproduce it; if it happens again, tell me what was attached.)
+- **For developers:** end-to-end tests for window sizes (every main screen at five sizes, in the browser and as the Linux desktop shell), the message box, and merged pages (`e2e/`).
+
 ## 0.6.13 (phone, desktop, web)
 
 - **Entering your recovery key on a new device (phone, web, desktop):** the "Restored N message keys" confirmation disappeared the moment the restore finished (the restore itself worked). The screen now stays until you close it.

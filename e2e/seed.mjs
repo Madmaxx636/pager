@@ -51,6 +51,8 @@ export async function seed() {
   await ghost("signal_8d1f2c4e-1111-2222-3333-444455556666", "Jordan Lee");
   await ghost("gmessages_15557778888", "+1 (555) 777-8888");
   await ghost("messenger_1000123456789", "Alex Kim");
+  await ghost("whatsapp_15554440000", "Dana Brooks (WA)");
+  await ghost("gmessages_15559990000", "Dana Brooks");
 
   // WhatsApp, one to one: a short back and forth, two unread.
   const wa = await chat({ network: "whatsapp", name: "Sam Carter", ghosts: ["whatsapp_15551234567"] });
@@ -74,6 +76,11 @@ export async function seed() {
   const ms = await chat({ network: "messenger", name: "Alex Kim", ghosts: ["messenger_1000123456789"] });
   const a1 = await say("messenger_1000123456789", ms, "lol did you see this");
   await read("alice", ms, a1);
+  // The same person on two networks (a contact with two numbers and two accounts): the app offers to show them as one page.
+  const dwa = await chat({ network: "whatsapp", name: "Dana Brooks", ghosts: ["whatsapp_15554440000"] });
+  await say("whatsapp_15554440000", dwa, "Dinner at 7?");
+  const dsms = await chat({ network: "gmessages", name: "Dana Brooks", ghosts: ["gmessages_15559990000"] });
+  await say("gmessages_15559990000", dsms, "Running a little late");
   // A WhatsApp group with two other people.
   const grp = await chat({ network: "whatsapp", name: "Weekend plans", group: true, ghosts: ["whatsapp_15551234567", "whatsapp_15553334444"] });
   await say("whatsapp_15551234567", grp, "Who's bringing what?");
@@ -89,5 +96,5 @@ export async function seed() {
   const t2 = await say("carol", team, "Looks good to me");
   await read("alice", team, t2);
   writeFileSync(marker, new Date().toISOString());
-  console.log("seeded: alice (pw-alice) has chats on WhatsApp, Signal, SMS, Messenger, a group, and a Pager team room");
+  console.log("seeded: alice (pw-alice) has chats on WhatsApp, Signal, SMS, Messenger, one person on two networks, a group, and a Pager team room");
 }

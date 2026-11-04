@@ -13,6 +13,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,13 +43,20 @@ object CallOut {
 
     private fun others(c: ChatState, me: String) = (c.heroes + c.joined).distinct().filter { it != me }
 
-    fun numberFor(c: ChatState, me: String, contacts: List<Pair<String, String>>): String {
-        for (u in others(c, me)) ghostNumber.find(u)?.let { return "+" + it.groupValues[1] }
+    /** The other person's number(s) in a one-to-one chat: from their bridge id; else the chat's name when it is a bare number; else every number the contacts list for that name (a contact can have two). */
+    fun numbersFor(c: ChatState, me: String, contacts: List<Pair<String, String>>): List<String> {
+        for (u in others(c, me)) ghostNumber.find(u)?.let { return listOf("+" + it.groupValues[1]) }
         val name = Names.stripTag(c.name).trim()
-        if (Names.isPhone(name)) return normalize(name)
-        val mine = contacts.firstOrNull { it.second.trim().equals(name, ignoreCase = true) }
-        return if (mine != null) normalize(mine.first) else ""
+        if (Names.isPhone(name)) return listOf(normalize(name)).filter { it.isNotEmpty() }
+        val seen = HashSet<String>(); val out = ArrayList<String>()
+        for ((num, n) in contacts) {
+            if (!n.trim().equals(name, ignoreCase = true)) continue
+            val v = normalize(num); val key = v.filter { it.isDigit() }.takeLast(10)
+            if (v.isNotEmpty() && seen.add(key)) out.add(v)
+        }
+        return out
     }
+    fun numberFor(c: ChatState, me: String, contacts: List<Pair<String, String>>): String = numbersFor(c, me, contacts).firstOrNull().orEmpty()
 
     fun messengerId(c: ChatState, me: String): String { for (u in others(c, me)) ghostMessenger.find(u)?.let { return it.groupValues[1] }; return "" }
 
@@ -57,14 +65,20 @@ object CallOut {
     /** The ways that need nothing from the phone's contacts. */
     fun options(c: ChatState, me: String, contacts: List<Pair<String, String>>): List<Option> {
         if (c.isGroup || c.network == "matrix") return emptyList()
-        val number = numberFor(c, me, contacts)
+        val numbers = numbersFor(c, me, contacts); val number = numbers.firstOrNull().orEmpty()
         val international = number.startsWith("+")
         val out = ArrayList<Option>()
         if (c.network == "whatsapp" && international) out.add(Option("whatsapp", "Open in WhatsApp (then tap the call button)") { view("https://wa.me/${number.drop(1)}") })
         if (c.network == "signal" && international) out.add(Option("signal", "Open in Signal (then tap the call button)") { view("https://signal.me/#p/$number") })
         if (c.network == "messenger") messengerId(c, me).takeIf { it.isNotEmpty() }?.let { id -> out.add(Option("messenger", "Open in Messenger (then tap the call button)") { view("https://www.messenger.com/t/$id") }) }
-        if (number.isNotEmpty()) out.add(Option("phone", "Call $number with your phone") { Intent(Intent.ACTION_DIAL, "tel:$number".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+        for (n in numbers) out.add(Option("phone-$n", "Call $n with your phone") { Intent(Intent.ACTION_DIAL, "tel:$n".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
         return out
+    }
+
+    /** One list for a person who has several chats (a merged page): what each of them offers, without repeats. */
+    fun optionsFor(chats: List<ChatState>, me: String, contacts: List<Pair<String, String>>): List<Option> {
+        val seen = HashSet<String>()
+        return chats.flatMap { options(it, me, contacts) }.filter { seen.add(it.id) }
     }
 
     /**
@@ -98,16 +112,21 @@ object CallOut {
     fun launch(context: Context, o: Option) { runCatching { context.startActivity(o.intent()) } }
 }
 
-/** The phone icon in a one-to-one chat's top bar; nothing when there is no way to call this person. */
+/** The phone icon in a one-to-one chat's top bar; nothing when there is no way to call this person. Merged pages offer what all of their chats offer. */
 @Composable
-fun CallButton(chat: ChatState, me: String) {
+fun CallButton(chats: List<ChatState>, me: String) {
     val context = LocalContext.current
-    val contacts = remember(chat.id) { Names.ownContacts() }
-    val plain = remember(chat) { CallOut.options(chat, me, contacts) }
-    var direct by remember(chat.id) { mutableStateOf(emptyList<CallOut.Option>()) }
-    LaunchedEffect(chat.id, plain.size) {
-        val number = CallOut.numberFor(chat, me, contacts)
-        direct = if (chat.network == "whatsapp" || chat.network == "signal") withContext(Dispatchers.IO) { CallOut.directCalls(context, number) } else emptyList()
+    val bookVersion by Names.version.collectAsState()
+    val ids = chats.map { it.id }
+    // The contacts as they are now (not as they were when this page first drew), plus any the phone lists under the chat's name that have not been read in yet.
+    var fromPhone by remember(ids) { mutableStateOf(emptyList<Pair<String, String>>()) }
+    LaunchedEffect(ids, bookVersion) { fromPhone = withContext(Dispatchers.IO) { chats.flatMap { c -> Names.numbersForName(context, Names.stripTag(c.name)).map { it to Names.stripTag(c.name) } } } }
+    val contacts = remember(ids, bookVersion, fromPhone) { Names.ownContacts() + fromPhone }
+    val plain = remember(chats, contacts) { CallOut.optionsFor(chats, me, contacts) }
+    var direct by remember(ids) { mutableStateOf(emptyList<CallOut.Option>()) }
+    LaunchedEffect(chats, contacts) {
+        val numbers = chats.filter { it.network == "whatsapp" || it.network == "signal" }.flatMap { CallOut.numbersFor(it, me, contacts) }.distinct()
+        direct = withContext(Dispatchers.IO) { numbers.flatMap { CallOut.directCalls(context, it) } }.distinctBy { it.id }
     }
     val all = direct + plain
     if (all.isEmpty()) return
