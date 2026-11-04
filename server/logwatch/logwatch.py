@@ -226,8 +226,10 @@ def encryption_check(w):
     try: dbs = [r[0] for r in psql(host, "postgres", "select datname from pg_database where datname not in ('postgres','template0','template1')")]
     except RuntimeError: host = "postgres"; dbs = [r[0] for r in psql(host, "postgres", "select datname from pg_database where datname not in ('postgres','template0','template1','synapse')")]
     for db in dbs:
-        try: known = [(u, d, k) for u, d, k in psql(host, db, "select user_id, device_id, identity_key from crypto_device where not deleted")]
-        except RuntimeError: continue            # this bridge keeps no encryption data
+        try:
+            if not psql(host, db, "select to_regclass('crypto_device')")[0][0]: continue   # this bridge keeps no encryption data (asked first, so the database does not log an error)
+            known = [(u, d, k) for u, d, k in psql(host, db, "select user_id, device_id, identity_key from crypto_device where not deleted")]
+        except (RuntimeError, IndexError): continue
         for u, d in key_mismatches(server, known):
             w.event("server", "error", "The %s bridge remembers different keys for device %s of %s than the device uploaded: messages from it stay locked on that device." % (db, d, u))
 
