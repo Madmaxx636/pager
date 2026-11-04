@@ -182,6 +182,7 @@ function updateTray() {
   ]));
 }
 
+const LOGIN_NAME = "Pager";
 const autostartFile = path.join(os.homedir(), ".config", "autostart", "pager.desktop");
 function setAutostart(on) {
   if (process.platform === "linux") {
@@ -189,10 +190,14 @@ function setAutostart(on) {
     const exec = process.env.APPIMAGE || process.execPath;
     fs.mkdirSync(path.dirname(autostartFile), { recursive: true });
     fs.writeFileSync(autostartFile, `[Desktop Entry]\nType=Application\nName=Pager\nExec="${exec}" --hidden\nIcon=pager\nX-GNOME-Autostart-enabled=true\n`);
-  } else app.setLoginItemSettings({ openAtLogin: on, args: ["--hidden"] });
+  } else {
+    // Windows: the entry has a name of its own so the uninstaller knows what to remove; an entry an older version made under the default name is switched off first.
+    app.setLoginItemSettings({ openAtLogin: false, args: ["--hidden"] });
+    app.setLoginItemSettings({ openAtLogin: on, args: ["--hidden"], name: LOGIN_NAME });
+  }
 }
 // (On Windows the entry is only found again when asked for with the same arguments it was made with; without them the switch showed "off" after a restart.)
-const getAutostart = () => (process.platform === "linux" ? fs.existsSync(autostartFile) : app.getLoginItemSettings({ args: ["--hidden"] }).openAtLogin);
+const getAutostart = () => (process.platform === "linux" ? fs.existsSync(autostartFile) : app.getLoginItemSettings({ args: ["--hidden"], name: LOGIN_NAME }).openAtLogin || app.getLoginItemSettings({ args: ["--hidden"] }).openAtLogin);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

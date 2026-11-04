@@ -57,6 +57,7 @@
       "icon": "build/icon.png"
     },
     "nsis": {
+      "include": "installer.nsh",
       "artifactName": "pager-desktop-setup-${version}.exe"
     }
   },
