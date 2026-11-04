@@ -234,7 +234,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
       )}
 
       {enc.ready && !enc.backupHere && !selecting && tab === "inbox" && (
-        <button className="banner" onClick={() => nav("settings/privacy")}><Lock size={18} /><span>{enc.backupOnServer ? "Enter your recovery key so this device's message keys are saved" : "Your message keys are not backed up. Set up the recovery key"}</span><b>{enc.backupOnServer ? "Enter" : "Set up"}</b></button>
+        <button className="banner" onClick={() => nav("settings/privacy")}><Lock size={18} /><span>{enc.backupOnServer ? "Enter your recovery key to read older messages and save this device's keys" : "Your message keys are not backed up. Set up the recovery key"}</span><b>{enc.backupOnServer ? "Enter" : "Set up"}</b></button>
       )}
 
       <div className="chat-scroll">

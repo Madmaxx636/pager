@@ -21,9 +21,14 @@ export function KeySetup() {
   // the key had been shown. Once the screen has opened for a new key it stays until the key has been saved.
   const needsNewKey = e.ready && !e.backupHere && !seen(key) && !(e.backupOnServer && !fresh) && !(e.keyChanged && !seen(`pager.keychanged.${user}.${e.deviceId}.${e.serverVersion ?? ""}`));
   const [keyShown, setKeyShown] = useState(false);
+  // The same for a new device on an existing account: entering the key makes this device "backed up", which used to remove the screen along with its "restored" message.
+  const needsRestore = !keyShown && e.ready && !e.backupHere && !seen(key) && e.backupOnServer && !fresh && !(e.keyChanged && !seen(`pager.keychanged.${user}.${e.deviceId}.${e.serverVersion ?? ""}`));
+  const [restoreShown, setRestoreShown] = useState(false);
   useEffect(() => { if (needsNewKey) setKeyShown(true); }, [needsNewKey]);
-  useEffect(() => { setKeyFlow(keyShown || needsNewKey); return () => setKeyFlow(false); }, [keyShown, needsNewKey]);
+  useEffect(() => { if (needsRestore) setRestoreShown(true); }, [needsRestore]);
+  useEffect(() => { setKeyFlow(keyShown || needsNewKey || restoreShown || needsRestore); return () => setKeyFlow(false); }, [keyShown, needsNewKey, restoreShown, needsRestore]);
   if (keyShown) return <RecoveryKeyDialog first onClose={() => { setKeyShown(false); mark(key); bump((n) => n + 1); }} />;
+  if (restoreShown) return <RestoreDialog first onClose={() => { setRestoreShown(false); mark(key); bump((n) => n + 1); }} onLost={() => { setRestoreShown(false); setFresh(true); }} />;
   // Another device made a new recovery key: this one still saves to the old one. Ask for the new key (once per new key; Settings → Encryption stays open).
   const changedKey = `pager.keychanged.${user}.${e.deviceId}.${e.serverVersion ?? ""}`;
   if (e.ready && e.keyChanged && !seen(changedKey)) return <RestoreDialog changed onClose={() => { mark(changedKey); bump((n) => n + 1); }} onLost={() => { mark(changedKey); bump((n) => n + 1); }} />;

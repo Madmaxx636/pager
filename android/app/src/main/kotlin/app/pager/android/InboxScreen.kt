@@ -271,7 +271,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Rounded.Lock, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                    Text(if (enc.backupOnServer) "Enter your recovery key so this phone's message keys are saved" else "Your message keys are not backed up. Set up the recovery key", Modifier.weight(1f).padding(horizontal = 10.dp), style = MaterialTheme.typography.bodyMedium)
+                    Text(if (enc.backupOnServer) "Enter your recovery key to read older messages and save this phone's keys" else "Your message keys are not backed up. Set up the recovery key", Modifier.weight(1f).padding(horizontal = 10.dp), style = MaterialTheme.typography.bodyMedium)
                     Text(if (enc.backupOnServer) "Enter" else "Set up", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
                 }
             }

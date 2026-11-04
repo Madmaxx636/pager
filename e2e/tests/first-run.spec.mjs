@@ -46,7 +46,7 @@ test("a device without the key is reminded, and signing out there warns first", 
   const skip = page.getByRole("button", { name: "Skip tour" });
   if (await skip.waitFor({ timeout: 8000 }).then(() => true, () => false)) await skip.click();
 
-  await expect(page.getByText("Enter your recovery key so this device", { exact: false })).toBeVisible();   // the bar
+  await expect(page.getByText("Enter your recovery key to read older messages", { exact: false })).toBeVisible();   // the bar
   await snap(page, "12-keys-bar");
 
   await page.getByLabel("Menu").click();

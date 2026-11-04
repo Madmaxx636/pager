@@ -1168,12 +1168,16 @@ fun KeySetupGate() {
     val needsNewKey = e.ready && !e.backupHere && !dismissed && !(e.backupOnServer && !fresh)
     var keyShown by remember(e.deviceId) { mutableStateOf(false) }
     LaunchedEffect(needsNewKey) { if (needsNewKey) keyShown = true }
-    androidx.compose.runtime.SideEffect { KeySetupState.open = keyShown || needsNewKey }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { KeySetupState.open = false } }
+    // The same for a new device on an existing account: entering the key makes this phone "backed up", which removed the screen along with its "restored" message.
+    val needsRestore = !keyShown && e.ready && !e.backupHere && !dismissed && e.backupOnServer && !fresh
+    var restoreShown by remember(e.deviceId) { mutableStateOf(false) }
+    LaunchedEffect(needsRestore) { if (needsRestore) restoreShown = true }
+    androidx.compose.runtime.SideEffect { KeySetupState.open = keyShown || needsNewKey || restoreShown || needsRestore }
     if (keyShown) { RecoveryKeyDialog(first = true, onDone = { keyShown = false; finish() }); return }
+    if (restoreShown) { RestoreKeyDialog(first = true, onDone = { restoreShown = false; finish() }, onFresh = { restoreShown = false; fresh = true }); return }
     if (!e.ready || e.backupHere || dismissed) return
-    // (A new account's own screen is the one above, which stays up; here only a new device on an existing account asks for its key.)
-    if (e.backupOnServer && !fresh) RestoreKeyDialog(first = true, onDone = finish, onFresh = { fresh = true })
+    // (Both screens, a new account's key and a new device's restore, are the ones above, which stay up until closed.)
 }
 
 /** Once, after sign-in: asks the phone to let Pager run in the background, so messages and notifications arrive on time. */

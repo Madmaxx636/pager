@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.13 (phone, desktop, web)
+
+- **Entering your recovery key on a new device (phone, web, desktop):** the "Restored N message keys" confirmation disappeared the moment the restore finished (the restore itself worked). The screen now stays until you close it.
+- **Reminder bar:** it now says "Enter your recovery key to read older messages and save this device's keys", since reading your history is what you want at that moment.
+- **For developers:** end-to-end tests for the key flows: a message read live, its key backed up, a second device that shows it locked, a wrong key refused, the right key unlocking it, and signing out and back in as a new device (`e2e/tests/keys.spec.mjs`).
+
 ## 0.6.12 (phone, desktop, web)
 
 - **Recovery key of a new account (phone, web, desktop):** the first-run screen made the account's recovery key and then closed itself at once, so the key was never shown. Making the key counts as "backed up", and that closed the screen. A new phone or computer could then not read the history, because nobody had the key. The screen now stays up, shows the key, and cannot be closed until you tick that you saved it; the welcome tour waits for it. **If you made your account on a version before this one and never saw a key, make a new one: Settings, Privacy, Encryption, Recovery key.** It replaces the hidden one, and from then on you hold the key.
