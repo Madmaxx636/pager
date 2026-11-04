@@ -62,6 +62,3 @@ fun PagerMascot(size: Dp = 120.dp, modifier: Modifier = Modifier, mood: MascotMo
     }
 }
 
-/** The Pager mark used on sign-in and in empty states. */
-@Composable
-fun PagerLogo(size: Dp = 56.dp, modifier: Modifier = Modifier) = PagerMascot(size, modifier)

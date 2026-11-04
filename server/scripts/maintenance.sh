@@ -99,6 +99,8 @@ job_backup() {
 }
 
 job_bridges() {
+  # The list of newer versions is looked up here when it is more than 6 days old (so the weekly cron entry of update-bridges.sh is not needed).
+  if [ ! -f data/versions.available ] || [ -n "$(find data/versions.available -mmin +8640 2>/dev/null)" ]; then ./scripts/update-bridges.sh >/dev/null 2>&1; fi
   local waiting; waiting=$(grep -vx synapse data/versions.available 2>/dev/null | tr '\n' ' ')
   [ -n "${waiting// /}" ] || { echo "nothing waiting"; return 0; }
   local h; h=$(hours_since_backup)

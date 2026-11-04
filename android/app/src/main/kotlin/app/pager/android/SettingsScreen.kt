@@ -113,11 +113,6 @@ fun SettingsPage(title: String, onBack: () -> Unit, content: @Composable () -> U
 }
 
 @Composable
-fun SectionHeader(text: String) {
-    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 4.dp))
-}
-
-@Composable
 fun SwitchRow(title: String, subtitle: String? = null, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().dpadFocus().clickable(enabled = enabled) { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
@@ -1231,31 +1226,6 @@ fun SyncSettingsDialog(onClose: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
     )
-}
-
-/** Swatches for a bubble colour: follow the theme, one of the accents, or a colour you make. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-@Composable
-private fun BubbleColourRow(title: String, subtitle: String, value: String, onChange: (String) -> Unit) {
-    var picking by remember { mutableStateOf(false) }
-    val current = parseHex(value)
-    if (picking) ColorPickerDialog(current ?: Color(0xFF0D9488), { picking = false }) { c -> onChange(c.toHex()); picking = false }
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Text(title); Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(10.dp))
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).dpadFocus().clickable { onChange("") }, contentAlignment = Alignment.Center) {
-                Icon(if (value.isEmpty()) Icons.Rounded.Check else Icons.Rounded.Palette, "Follow the theme", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-            }
-            ACCENTS.forEach { (name, c) ->
-                val on = current != null && current.toHex().equals(c[1].toHex(), true)
-                Box(Modifier.size(34.dp).clip(CircleShape).background(c[1]).dpadFocus().clickable { onChange(c[1].toHex()) }, contentAlignment = Alignment.Center) { if (on) Icon(Icons.Rounded.Check, name, tint = c[3], modifier = Modifier.size(18.dp)) }
-            }
-            Box(Modifier.size(34.dp).clip(CircleShape).background(Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red))).dpadFocus().clickable { picking = true }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Palette, "Make your own", tint = Color.White, modifier = Modifier.size(16.dp))
-            }
-        }
-    }
 }
 
 /** A sample message with the bubble look from the settings, so changes can be seen as you make them. */

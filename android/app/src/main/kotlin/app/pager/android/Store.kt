@@ -832,7 +832,6 @@ class Store(private val context: Context) {
         send(roomId, msg.body, msg.replyTo, msg.mentions)
     }
 
-    fun discard(roomId: String, msg: Msg) = update(roomId) { c -> c.copy(messages = c.messages.filter { it.id != msg.id }) }
 
     fun edit(roomId0: String, eventId: String, newText: String) {
         val roomId = roomFor(roomId0, eventId)
@@ -1443,7 +1442,6 @@ class Store(private val context: Context) {
         muteUntil.value.filterValues { it <= now }.keys.forEach { setMutedOne(it, false) }
     }
 
-    fun muteLeft(roomId: String): Long? = (listOf(roomId) + siblingsOf(roomId)).mapNotNull { muteUntil.value[it] }.minOrNull()?.let { it - System.currentTimeMillis() }
 
     // --- One contact, one set of notification settings ---
     private var contactCache: Triple<Map<String, ChatState>, List<List<String>>, Map<String, List<String>>>? = null

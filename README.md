@@ -49,8 +49,8 @@ Both clients share the same sync engine design (the web one is a port of the And
   Pager users; an alert, not a real call).
 - **Alerts for you:** a notification when an account (say Google Messages) loses its login; admins also hear when the weekly bridge update
   changes something.
-- **Admin:** accounts, bridges (restart, stop, log, settings, **restart on a timer**), signups. `server/scripts/update-bridges.sh` keeps every
-  bridge on the newest image, with rollback if one won't start (install the weekly job with `--install-cron`).
+- **Admin:** accounts, bridges (restart, stop, log, settings, **restart on a timer**), signups. The server keeps itself current: nightly
+  maintenance (`server/scripts/maintenance.sh --install`) installs newer bridge versions with rollback if one won't start, takes backups, and cleans up; see DEPLOY.md.
 - **Accounts:** sign-up and bridge login (QR codes, codes, forms) happen inside the app: no bot chats, no console. Start new chats by contact
   search or phone number.
 - **Settings (searchable):** theme (light/dark/AMOLED, 7 accents + Material You on Android), text size, bubble style, wallpapers, avatar

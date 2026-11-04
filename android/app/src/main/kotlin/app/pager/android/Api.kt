@@ -86,11 +86,6 @@ class PagerApi(private val http: Http) {
     }
 
     suspend fun isAdmin(): Boolean = http.request("GET", "/api/me")["admin"].let { (it as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true }
-    suspend fun adminUsers(): List<AdminUser> = http.request("GET", "/api/admin/users")["users"].arr().map {
-        val o = it.obj()
-        AdminUser(o["id"].str().orEmpty(), (o["admin"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true, (o["deactivated"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true,
-            (o["created"] as? kotlinx.serialization.json.JsonPrimitive)?.longOrNull ?: 0L, (o["you"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true)
-    }
     /** Everyone, with what each person has connected, in one call. */
     suspend fun adminOverview(): List<AdminPerson> = http.request("GET", "/api/admin/overview")["users"].arr().map {
         val o = it.obj()
@@ -125,10 +120,6 @@ class PagerApi(private val http: Http) {
     suspend fun adminSaveSchedule(id: String, every: String, atUtc: String) { http.request("PUT", "/api/admin/bridges/${enc(id)}/schedule", buildJsonObject { put("every", every); put("at", atUtc) }) }
     suspend fun adminBridgeAction(id: String, action: String) { http.request("POST", "/api/admin/bridges/${enc(id)}/$action", JsonObject(emptyMap())) }
     suspend fun adminBridgeLog(id: String): String = http.request("GET", "/api/admin/bridges/${enc(id)}/logs?tail=200")["log"].str().orEmpty()
-    suspend fun adminLogins(id: String): List<Network> = http.request("GET", "/api/admin/users/${enc(id)}/logins")["networks"].arr().map { n ->
-        val o = n.obj()
-        Network(o["id"].str().orEmpty(), o["name"].str().orEmpty(), o["logins"].arr().map { l -> l.obj().let { Login(it["id"].str().orEmpty(), it["name"].str() ?: it["profile"].obj()["name"].str() ?: it["id"].str().orEmpty(), it["state_event"].str() ?: "") } }, o["error"] != null)
-    }
     suspend fun adminLogout(id: String, net: String, login: String) { http.request("POST", "/api/admin/users/${enc(id)}/logout/${enc(net)}/${enc(login)}", JsonObject(emptyMap())) }
     suspend fun adminSetAdmin(id: String, admin: Boolean) { http.request("POST", "/api/admin/users/${enc(id)}/admin", buildJsonObject { put("admin", admin) }) }
     /** Recover an account: needs the admin's own password. Without a new password, a temporary one comes back (otherwise null). */
@@ -153,9 +144,6 @@ class PagerApi(private val http: Http) {
         if (signup != null) put("signup", signup)
         if (regenerateInvite) put("regenerateInvite", true)
     }))
-    suspend fun adminBridges(): List<Triple<String, String, Boolean>> = http.request("GET", "/api/admin/bridges")["bridges"].arr().map { b ->
-        val o = b.obj(); Triple(o["id"].str().orEmpty(), o["name"].str().orEmpty(), (o["up"] as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true)
-    }
 
     suspend fun config(): ServerConfig {
         val c = http.request("GET", "/api/config")

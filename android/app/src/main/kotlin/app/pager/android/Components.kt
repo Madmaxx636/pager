@@ -39,7 +39,6 @@ import androidx.compose.ui.unit.sp
 val LocalStore = staticCompositionLocalOf<Store> { error("Store not provided") }
 
 fun hueOf(s: String): Float = s.fold(7) { acc, c -> (acc * 31 + c.code) % 360 }.toFloat()
-fun hueColor(s: String): Color = Color.hsv(hueOf(s), 0.45f, 0.55f)
 
 /** Loads a Matrix image (thumbnail of [thumb] px; 0 = original). Returns null while loading or on failure. */
 @Composable

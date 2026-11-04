@@ -39,7 +39,6 @@ object Updater {
     /** What the last check or install said, in words ("You're up to date", "Couldn't reach the server"…). */
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
-    fun clearMessage() { _message.value = null }
     fun later() { _available.value = null }
 
     fun currentCode(ctx: Context): Long = androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(ctx.packageManager.getPackageInfo(ctx.packageName, 0))      // (the plain field only exists from Android 9)

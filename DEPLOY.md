@@ -72,17 +72,27 @@ Three layers, each optional and independent of the others.
    Postgres for the bridges only; Synapse's own data (accounts, rooms, and the appservice tokens in `data/synapse`) is not in it.
 
 ## Backups
-Everything lives in `server/data` (Synapse, Postgres, bridge logins and keys). Back it up regularly, and keep it private.
+Everything lives in `server/data` (Synapse, Postgres, bridge logins and keys). `pager backup` saves all of it in one file, locked with a **public key**: the server can make backups but cannot read them, so a stolen backup is useless without the private key.
 ```bash
-cd server && docker compose stop && tar czf ~/pager-backup-$(date +%F).tgz data .env && docker compose start
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out backup-private.pem   # on your own computer; keep this file safe, NOT on the server
+openssl pkey -in backup-private.pem -pubout -out backup-public.pem                     # copy this one to server/data/backup-public.pem
+cd server && ./scripts/backup-schedule.sh --install        # a backup every night around 04:30; the newest two are kept in data/backups
+./pager backup                                             # one now (to your home folder, locked with the same key)
+./pager verify FILE backup-private.pem                     # check that a backup can be opened
+PAGER_BACKUP_KEY=backup-private.pem ./pager restore FILE   # put one back
 ```
-(Rootless Podman: files are owned by sub-uids, so run the `tar` as `podman unshare tar czf …`.)
+`pager backup --passphrase` locks one with a passphrase instead; `--no-encrypt` leaves it unlocked (it holds your server's keys, so only do that on purpose). Copy backups off the machine now and then.
 
-## Updating
+## Updating and upkeep
+Three jobs keep the server current by themselves; each is installed once and logs to `server/data/`:
 ```bash
-git pull && (cd app && npm ci && npm run build)
-cd server && docker compose pull && docker compose up -d --build
+cd server
+./scripts/auto-update.sh --install     # every 5 minutes: new web app and API from GitHub (never touches Synapse, bridges or the database)
+./scripts/maintenance.sh --install     # every night ~05:15: restarts a stopped Pager service, backs up if the last backup is old, installs newer bridge
+                                       # versions (rolled back if one won't start) and Synapse patch releases, cleans old images and logs
+./scripts/logwatch.sh --install        # watches the logs; Admin > Logs shows errors, crashes and warnings from maintenance
 ```
+Bridges and Synapse are pinned to exact versions (`data/versions.lock`, and `SYNAPSE_IMAGE` in `.env`), so nothing changes by surprise. `./pager upgrade` installs newer bridge versions on demand; a new Synapse series (1.x to 1.y) is left for you, so read its release notes, then change the version in `docker-compose.yml` and remove `SYNAPSE_IMAGE` from `.env`. Anything else in an update (a changed `docker-compose.yml` or Caddyfile) is applied with `./pager update` when it suits you.
 
 ## Troubleshooting
 - Bridge shows "needs attention": tap Sign in next to the account and relink.
