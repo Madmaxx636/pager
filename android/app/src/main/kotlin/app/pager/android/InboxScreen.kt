@@ -64,6 +64,7 @@ import androidx.compose.material.icons.rounded.Snooze
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Unarchive
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -140,6 +141,7 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
     val all = remember(everything) { everything.filter { !it.stories } }
     val synced by store.synced.collectAsState()
     val bridges by store.bridges.collectAsState()
+    val enc by store.encryption.collectAsState()
     val labels by store.labels.collectAsState()
     val haptic = LocalHapticFeedback.current
     val me = session?.userId ?: ""
@@ -258,6 +260,19 @@ fun InboxScreen(onOpen: (String) -> Unit, onNewChat: () -> Unit, onSearch: () ->
                     Icon(Icons.Rounded.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
                     Text("${attention.joinToString()} needs you to sign in again", Modifier.weight(1f).padding(horizontal = 10.dp), style = MaterialTheme.typography.bodyMedium)
                     Text("Fix", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            // Keys that are on this phone only cannot be got back if the phone is lost, wiped or signed out: say so while there is still time.
+            if (enc.ready && !enc.backupHere && !selecting && tab == "inbox") {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.error.copy(alpha = 0.14f))
+                        .dpadFocus().clickable { onSettings("privacy") }.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.Lock, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                    Text(if (enc.backupOnServer) "Enter your recovery key so this phone's message keys are saved" else "Your message keys are not backed up. Set up the recovery key", Modifier.weight(1f).padding(horizontal = 10.dp), style = MaterialTheme.typography.bodyMedium)
+                    Text(if (enc.backupOnServer) "Enter" else "Set up", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
                 }
             }
 

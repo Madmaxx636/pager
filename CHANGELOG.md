@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.11 (phone, desktop, web)
+
+- **Signing out asks first (phone, web, desktop):** it says that signing out removes this device's message keys. If those keys are not backed up with a recovery key, it says so loudly: the messages in your encrypted pages would stay locked for good, even after you sign in again. Before, one tap signed you out and deleted the keys, with no warning.
+- **Keys kept when the server ends a sign-in (phone):** when the server stops accepting the phone's sign-in (the device was removed, say), the phone signs out but no longer deletes its encryption keys. They are the only copy for messages that were never backed up. Signing out yourself still removes them, after the warning above.
+- **A reminder about the recovery key (phone, web, desktop):** while this device's keys are not backed up, a bar at the top of the page list says so and takes you to the recovery key (or, when a backup already exists, asks you to enter it).
+
 ## 0.6.10 (phone, desktop, web)
 
 - **Starting up (phone):** the saved copy of your chats was read on the main thread while the app started. On a slow phone with a lot of chats that could hold the start up long enough for Android to stop the background service ("did not start in time") and close Pager. It is now read in the background, and syncing and saving wait for it.

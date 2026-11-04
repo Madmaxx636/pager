@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlarmClock, Archive, ArchiveRestore, BellOff, CheckCheck, CircleDot, Circle, CheckCircle2, Inbox, ListFilter, MailOpen, MessageSquareDot, MoreVertical, Pin,
-  PinOff, Trash2, Search, Settings as SettingsIcon, Hourglass, SquarePen, Star, Tag, TriangleAlert, Users, ArrowDownToLine, ChevronLeft, ChevronRight, UserRoundCog, X,
+  PinOff, Lock, Trash2, Search, Settings as SettingsIcon, Hourglass, SquarePen, Star, Tag, TriangleAlert, Users, ArrowDownToLine, ChevronLeft, ChevronRight, UserRoundCog, X,
 } from "lucide-react";
 import { ChatSummary } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import {
   useGlances, addLabel, markAllRead, markRead, markUnread, me, movePin, pin, remind, removeLabel, setLowPriority, setMuted, setTag, snooze, leave, useInbox, useLabels, useStore, useChatsRaw,
-  getState,
+  getState, useEncryption,
 } from "../core/store";
 import { RowAction, updateSettings, useSettings } from "../core/settings";
 import { Avatar, GroupAvatar, IconButton, Modal, TypingDots, WhenModal, EmptyState } from "./common";
@@ -62,6 +62,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
   const bridges = useStore((s) => s.bridges);
   const labels = useLabels();
   const [query, setQuery] = useState("");
+  const enc = useEncryption();
   const [tab, setTab] = useState(st.defaultTab === "unread" ? "unread" : "inbox");
   const [filters, setFilters] = useState<Filters>(noFilters);
   const [menu, setMenu] = useState(false);
@@ -230,6 +231,10 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
 
       {attention.length > 0 && !selecting && tab === "inbox" && (
         <button className="banner" onClick={() => nav("settings/bridges")}><TriangleAlert size={18} /><span>{attention.join(", ")} needs you to sign in again</span><b>Fix</b></button>
+      )}
+
+      {enc.ready && !enc.backupHere && !selecting && tab === "inbox" && (
+        <button className="banner" onClick={() => nav("settings/privacy")}><Lock size={18} /><span>{enc.backupOnServer ? "Enter your recovery key so this device's message keys are saved" : "Your message keys are not backed up. Set up the recovery key"}</span><b>{enc.backupOnServer ? "Enter" : "Set up"}</b></button>
       )}
 
       <div className="chat-scroll">
