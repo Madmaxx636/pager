@@ -92,17 +92,21 @@ bk_unlock() { # bk_unlock <in> <out> <private key>
 bk_is_keyed() { [ "$(head -c 8 "$1" 2>/dev/null)" = "$BK_MAGIC" ]; }
 
 cmd_backup() {
-  local auto=0 out="" pass="" noenc=0 a
-  for a in "$@"; do case "$a" in --auto) auto=1;; --no-encrypt) noenc=1;; *) out="$a";; esac; done
+  local auto=0 out="" pass="" noenc=0 usepass=0 keyed=0 a
+  for a in "$@"; do case "$a" in --auto) auto=1;; --no-encrypt) noenc=1;; --passphrase) usepass=1;; *) out="$a";; esac; done
   local dir="$HERE/data/backups" pub="${BACKUP_PUBKEY:-$HERE/data/backup-public.pem}" keep="${BACKUP_KEEP:-2}"
   if [ $auto = 1 ]; then
     [ -f "$pub" ] || die "No backup key at $pub (see scripts/backup-schedule.sh)"
     mkdir -p "$dir"; out="$dir/pager-backup-$(date +%Y%m%d-%H%M%S).tar.enc"
   else
-    out="${out:-$HOME/pager-backup-$(date +%Y%m%d-%H%M%S).tar.gz}"
-    if [ -t 0 ] && [ $noenc = 0 ]; then
-      read -r -s -p "Passphrase to lock this backup (empty = unencrypted): " pass; echo
-      if [ -n "$pass" ]; then local again; read -r -s -p "Again: " again; echo; [ "$pass" = "$again" ] || die "The passphrases don't match"; out="${out%.enc}.enc"; fi
+    # Locked with the backup key (the same one as the nightly backups) unless a passphrase is asked for; unencrypted only with --no-encrypt.
+    if [ $noenc = 0 ] && [ $usepass = 0 ] && [ -f "$pub" ]; then keyed=1; out="${out:-$HOME/pager-backup-$(date +%Y%m%d-%H%M%S).tar.enc}"
+    elif [ $noenc = 0 ]; then
+      [ -t 0 ] || die "No backup key at $pub and no terminal to ask for a passphrase. Set the key up (scripts/backup-schedule.sh) or use --no-encrypt on purpose."
+      out="${out:-$HOME/pager-backup-$(date +%Y%m%d-%H%M%S).tar.enc}"
+      read -r -s -p "Passphrase to lock this backup: " pass; echo; [ -n "$pass" ] || die "An empty passphrase would leave it unlocked. Use --no-encrypt if you mean that"
+      local again; read -r -s -p "Again: " again; echo; [ "$pass" = "$again" ] || die "The passphrases don't match"; out="${out%.enc}.enc"
+    else out="${out:-$HOME/pager-backup-$(date +%Y%m%d-%H%M%S).tar.gz}"
     fi
   fi
   local tmp; if [ $auto = 1 ]; then mkdir -p "$dir"; tmp="$(mktemp -d "$dir/.work.XXXXXX")"; else tmp="$(mktemp -d "${TMPDIR:-/var/tmp}/pager.XXXXXX")"; fi; TMPD="$tmp"
@@ -117,7 +121,7 @@ cmd_backup() {
   # (a file that changes while it is read gives tar a warning, exit code 1: the copy is still good)
   tar -C "$HERE" -czhf "$tmp/files.tar.gz" "${items[@]}" 2>/dev/null || [ $? = 1 ] || tar -C "$HERE" -czhf "$tmp/files.tar.gz" "${items[@]:0:3}"
   printf 'pager-backup 1\nversion %s\ndate %s\nbridge-db-host %s\n' "$(cat ../VERSION 2>/dev/null)" "$(date -u +%FT%TZ)" "$BRIDGE_DB" > "$tmp/MANIFEST"
-  if [ $auto = 1 ]; then (cd "$tmp" && tar -cf - MANIFEST files.tar.gz ./*.dump) | bk_lock - "$out.part" "$pub" && mv "$out.part" "$out"
+  if [ $auto = 1 ] || [ $keyed = 1 ]; then (cd "$tmp" && tar -cf - MANIFEST files.tar.gz ./*.dump) | bk_lock - "$out.part" "$pub" && mv "$out.part" "$out"
   elif [ -n "$pass" ]; then (cd "$tmp" && tar -cf all.tar MANIFEST files.tar.gz ./*.dump); PASS="$pass" openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PASS -in "$tmp/all.tar" -out "$out"; else (cd "$tmp" && tar -cf all.tar MANIFEST files.tar.gz ./*.dump); gzip -c "$tmp/all.tar" > "$out"; fi
   chmod 600 "$out"
   say "Backup saved: $out ($(du -h "$out" | cut -f1))"
@@ -126,7 +130,8 @@ cmd_backup() {
     ls -1t "$dir"/pager-backup-*.tar.enc 2>/dev/null | tail -n +$((keep + 1)) | xargs -r rm -f --
     say "Kept the newest $keep backups in $dir."
   else
-    [ -z "$pass" ] && say "It is NOT encrypted: it holds your server's keys and your chats' data. Keep it somewhere private."
+    if [ $keyed = 1 ]; then say "Locked with the backup key: only the private key can open it. Check it with: pager verify $out <private key>"
+    elif [ -z "$pass" ]; then say "It is NOT encrypted: it holds your server's keys and your chats' data. Keep it somewhere private."; fi
     say "Restore it with: pager restore $out"
   fi
 }
@@ -199,7 +204,7 @@ pager update              get the newest Pager and restart
 pager codes               show the invite and admin codes
 pager upgrade [bridge]    install newer bridge versions (one at a time; one that does not start is put back)
 pager doctor              checks that are safe to run any time; paste the output when asking for help
-pager backup [file]       save everything (asks for a passphrase to lock it)
+pager backup [file]       save everything, locked with the backup key (--passphrase asks for a passphrase instead; --no-encrypt leaves it unlocked)
 pager backup --auto       the scheduled kind: locked with the public key, kept in data/backups
 pager verify <file> [key] check that a backup opens and reads back
 pager restore <file>      put a backup back (replaces what is here)
