@@ -7,7 +7,7 @@ Versions before 0.5.84 are in the git history.
 ## 0.6.9 (phone, desktop, web)
 
 - **Call button:** a phone icon in the top bar of a one-to-one chat starts a call with that person in the app that has them. Bridges carry messages, not calls, so Pager hands over to the right app and you do not have to find the person again.
-  - WhatsApp and Signal: on the phone, a voice or video call starts at once when the person is in your phone's contacts (those apps add a call entry to the contact; Pager needs permission to read your contacts, which it asks for in Settings). Otherwise it opens their chat in the app, one tap from the call button. On the web and desktop it opens WhatsApp or Signal on their number.
+  - WhatsApp and Signal: on the phone, a voice or video call starts at once when the person is in your phone's contacts (those apps add a call entry to the contact; this needs the permission to read your contacts that Pager asks for when you use your phone's contacts on the New page screen). Otherwise it opens their chat in the app, one tap from the call button. On the web and desktop it opens WhatsApp or Signal on their number.
   - Messenger: opens their conversation in Messenger.
   - SMS, Google Voice and any chat with a known number: on a phone, "Call with your phone" opens the dialler.
   - Needs a number Pager can tell: from the bridge's id for the person, a chat named with a number, or one of your own contacts with the same name. Groups get no button.
