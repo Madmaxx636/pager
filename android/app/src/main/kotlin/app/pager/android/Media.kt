@@ -22,13 +22,25 @@ class MediaLoader(private val context: Context, private val http: Http) {
     private val dir = File(context.cacheDir, "media").apply { mkdirs() }
     private val locks = HashMap<String, Mutex>()
 
-    init {
-        // Downloaded pictures live on disk, not in memory, and go after six hours.
-        Thread {
+    init { Thread { sweep() }.start() }
+
+    private val lastSweep = java.util.concurrent.atomic.AtomicLong(0)
+    /**
+     * Downloaded pictures and files live on disk and go after six hours; the folder is also kept under 300 MB (the oldest go first). This used to run only
+     * when the app started, and the background service keeps it running for days, so the folder (decrypted copies of encrypted attachments included) only grew.
+     */
+    private fun sweep() {
+        lastSweep.set(System.currentTimeMillis())
+        runCatching {
             val cutoff = System.currentTimeMillis() - 6L * 3600_000
             dir.walkBottomUp().filter { it.isFile && it.lastModified() < cutoff }.forEach { it.delete() }
-        }.start()
+            val left = dir.walkBottomUp().filter { it.isFile }.sortedBy { it.lastModified() }.toMutableList()
+            var total = left.sumOf { it.length() }
+            while (total > 300L shl 20 && left.isNotEmpty()) { val f = left.removeAt(0); total -= f.length(); f.delete() }
+        }
     }
+    /** Hourly, from whatever is being downloaded. */
+    private fun sweepIfDue() { if (System.currentTimeMillis() - lastSweep.get() > 3600_000L && lastSweep.getAndSet(System.currentTimeMillis()) != 0L) Thread { sweep() }.start() }
 
     private fun mxcParts(mxc: String): Pair<String, String>? =
         Regex("^mxc://([^/]+)/(.+)$").find(mxc)?.destructured?.let { it.component1() to it.component2() }
@@ -59,25 +71,27 @@ class MediaLoader(private val context: Context, private val http: Http) {
             val name = "dec_" + mxc.replace(Regex("[^A-Za-z0-9._-]"), "_")
             val out = File(dir, name)
             if (out.exists() && out.length() > 0) return out
-            val raw = fetchRaw(mxc, 0) ?: run { failures[mxc] = "the server did not give the file"; return null }
+            val raw = fetchRaw(mxc, 0) ?: run { noteFailure(mxc, "the server did not give the file"); return null }
             return withContext(Dispatchers.IO) {
                 runCatching { MediaCrypt.decrypt(raw, out, enc); failures.remove(mxc); out }
-                    .onFailure { failures[mxc] = "could not unlock it (${it.javaClass.simpleName}: ${it.message})" }.getOrNull()
+                    .onFailure { noteFailure(mxc, "could not unlock it (${it.javaClass.simpleName}: ${it.message})") }.getOrNull()
             }
         }
-        return fetchRaw(mxc, thumb).also { if (it == null) failures[mxc] = "the server did not give the file" else failures.remove(mxc) }
+        return fetchRaw(mxc, thumb).also { if (it == null) noteFailure(mxc, "the server did not give the file") else failures.remove(mxc) }
     }
 
     /** Why a picture could not be shown, by mxc address (for a message in the bubble instead of a blank one). */
     val failures = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private fun noteFailure(mxc: String, why: String) { if (failures.size > 300) failures.clear(); failures[mxc] = why }
 
     private suspend fun fetchRaw(mxc: String, thumb: Int): File? {
         val (server, id) = mxcParts(mxc) ?: return null
         val name = "${server}_$id${if (thumb > 0) "_t$thumb" else ""}".replace(Regex("[^A-Za-z0-9._-]"), "_")
         val file = File(dir, name)
         if (file.exists() && file.length() > 0) return file
+        sweepIfDue()
         val lock = synchronized(locks) { locks.getOrPut(name) { Mutex() } }
-        return lock.withLock {
+        return try { lock.withLock {
             if (file.exists() && file.length() > 0) return@withLock file
             runCatching {
                 val path = if (thumb > 0) "/_matrix/client/v1/media/thumbnail/$server/$id?width=$thumb&height=$thumb&method=scale"
@@ -92,7 +106,7 @@ class MediaLoader(private val context: Context, private val http: Http) {
                 }
                 file
             }.getOrNull()
-        }
+        } } finally { synchronized(locks) { locks.remove(name) } }
     }
 
     /** Downloads the file and hands it to whichever app opens that type. */
