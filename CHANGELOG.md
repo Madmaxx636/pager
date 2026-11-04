@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## Server (no app update needed)
+
+- **Nightly maintenance:** `./scripts/maintenance.sh --install` sets up a job that runs every night around 05:15. It restarts a Pager timer or service that stopped, reports a container that is not running, makes a backup if the newest is more than 30 hours old, installs newer bridge versions (one at a time, after a backup less than 36 hours old; a bridge that does not start is put back), installs newer Synapse patch releases (after a backup less than 24 hours old; it goes back if Synapse does not become healthy; bigger steps are left for you), and cleans up old images, build cache and logs. Admin > Logs warns when a job failed or nothing has run for three days.
+- **Manual backups are locked:** `pager backup` now uses the same backup key as the nightly backups. A passphrase only with `--passphrase`, an unlocked file only with `--no-encrypt`. Before, a backup started without a terminal (over SSH) was silently left unlocked.
+- **Log watcher:** no longer makes the database log an error each time it checks a bridge that keeps no encryption data (Discord, Telegram).
+
 ## 0.6.5 (phone, desktop, web)
 
 - **Logs:** Settings > Advanced > Logs shows the problems this device ran into (crashes, sync that kept failing, encryption trouble), each with what the app was doing just before and just after, and the latest activity. A repeat is counted, not listed again. It can be copied or saved to a file. It stays on the device, nothing is sent anywhere, and message text, names, keys and tokens are never in it.

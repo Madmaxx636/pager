@@ -22,7 +22,7 @@ services:
     networks: [pager]
 
   synapse:
-    image: docker.io/matrixdotorg/synapse:latest@sha256:1909bcc07d4180945464712a7f4d4bb6f644c4c1774d026d77cdadc196b91eb8   # 1.164.2: change on purpose, see scripts/update-bridges.sh
+    image: ${SYNAPSE_IMAGE:-docker.io/matrixdotorg/synapse:latest@sha256:1909bcc07d4180945464712a7f4d4bb6f644c4c1774d026d77cdadc196b91eb8}   # 1.164.2 for a new install; scripts/maintenance.sh moves a running one up through SYNAPSE_IMAGE in .env (patch releases only)
     restart: unless-stopped
     environment:
       # Rootless Podman maps the container's root to your user, so run as root there; Docker keeps the image's default user.

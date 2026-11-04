@@ -8,7 +8,7 @@ listed again. Warnings are only counted (they are hidden unless asked for). Secr
 The incidents are written to data/api/logs/incidents.json, which the Pager API serves to the apps (Admin > Logs).
 Needs only Python 3 and Docker. Install it with scripts/logwatch.sh --install.
 """
-import collections, hashlib, json, os, re, shutil, subprocess, sys, threading, time
+import collections, datetime, hashlib, json, os, re, shutil, subprocess, sys, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SERVER = os.path.dirname(HERE)
@@ -240,6 +240,16 @@ def waiting_versions(path):
     except OSError:
         return []
 
+def maintenance_problems(path, now):
+    """What to warn about from data/api/maintenance.json (written by scripts/maintenance.sh): failed jobs, or a night that did not run. [] when fine or not installed."""
+    try:
+        with open(path, encoding="utf-8") as f: doc = json.load(f)
+        at = datetime.datetime.fromisoformat(doc["at"]).timestamp()
+    except (OSError, ValueError, KeyError): return []
+    out = ["Nightly maintenance: %s did not work (%s)." % (t["name"], t.get("note") or "no details") for t in doc.get("tasks", []) if not t.get("ok")]
+    if now - at > 3 * 86400: out.append("Nightly maintenance has not run for %d days." % int((now - at) / 86400))
+    return out
+
 def checks(w):
     """Every minute: the server itself (disk, backups)."""
     while True:
@@ -257,6 +267,7 @@ def checks(w):
             age = (time.time() - newest) / 86400 if newest else None
             if age is None: w.event("server", "attention", "There is no backup of the server yet.")
             elif age > 1.5: w.event("server", "attention", "The newest backup is %d days old." % int(age))
+            for msg in maintenance_problems(os.path.join(SERVER, "data", "api", "maintenance.json"), time.time()): w.event("server", "attention", msg)
             names = waiting_versions(os.path.join(SERVER, "data", "versions.available"))
             if names: w.event("server", "attention", "Newer versions are ready for: %s. Install them with: pager upgrade (Synapse by hand)." % ", ".join(names))
         except Exception as e:

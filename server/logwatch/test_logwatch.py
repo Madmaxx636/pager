@@ -1,4 +1,4 @@
-import json, os, tempfile, time, unittest
+import datetime, json, os, tempfile, time, unittest
 
 _tmp = tempfile.mkdtemp()
 os.environ["PAGER_LOGS_DIR"] = _tmp
@@ -136,6 +136,17 @@ class Incidents(unittest.TestCase):
 
 
 class Versions(unittest.TestCase):
+    def test_maintenance_problems(self):
+        p = os.path.join(_tmp, "maintenance.json")
+        self.assertEqual(lw.maintenance_problems(p, time.time()), [])           # not installed
+        def write(ok, age_days=0):
+            at = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=age_days)).isoformat()
+            json.dump({"at": at, "ok": ok, "tasks": [{"name": "units", "ok": True, "note": ""}, {"name": "synapse", "ok": ok, "note": "did not become healthy"}]}, open(p, "w"))
+        write(True); self.assertEqual(lw.maintenance_problems(p, time.time()), [])
+        write(False); self.assertEqual(lw.maintenance_problems(p, time.time()), ["Nightly maintenance: synapse did not work (did not become healthy)."])
+        write(True, 4); self.assertEqual(lw.maintenance_problems(p, time.time()), ["Nightly maintenance has not run for 4 days."])
+        open(p, "w").write("not json"); self.assertEqual(lw.maintenance_problems(p, time.time()), [])
+
     def test_waiting_versions(self):
         p = os.path.join(_tmp, "versions.available")
         self.assertEqual(lw.waiting_versions(p), [])
