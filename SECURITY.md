@@ -16,11 +16,13 @@ issue. Include what you did, what happened, and the version (Settings → About)
   talks to whom (Synapse's database is not in the vault). Protect the machine, keep it updated, and keep `/etc/pager/vault.key` backed up.
 - **Updates:** the desktop apps (Linux and Windows) only install updates whose version information is signed with the project's release
   key. Android only installs updates signed with the same key as the installed app, and each download is also checked against its checksum.
-- **Verifying the Android app:** release builds are signed with a key whose certificate fingerprint (SHA-256) is
-  `23:F7:19:7A:79:72:6D:E6:97:72:1D:B8:81:D1:4E:98:6A:91:61:1E:12:1E:34:FD:5B:A5:15:E8:02:5E:F7:CE`. Check with
-  `apksigner verify --print-certs pager-android-*.apk`. Earlier 0.5.x builds used a development key and have a different fingerprint.
+- **Verifying the Android app:** the published Android builds are currently signed with the standard Android *debug* key (certificate SHA-256
+  `09:BF:62:A3:48:AF:DA:14:C4:6C:26:09:8E:2C:C1:C3:C1:3C:67:74:EE:68:84:32:56:52:77:A3:67:04:F6:F8`; check with
+  `apksigner verify --print-certs pager-android-*.apk`). That key is public knowledge, so it does not prove who made the app: check the SHA-256
+  checksum in the GitHub release text instead. A real release key exists and will be used from 1.0 (see `docs/1.0-checklist.md`, B1).
 
 ## What is not protected or not done yet
+- Phone keys and the sign-in token are kept in the app's private storage without an extra passphrase of their own (Android encrypts that storage and other apps cannot read it, but a rooted or unlocked phone can).
 - No device verification or cross-signing: a new device is trusted through the recovery key, not by comparing codes.
 - No protection against a compromised device, malware, or someone who knows your recovery key.
 - Unofficial bridges can break or leak if the other service changes how it works.
