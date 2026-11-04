@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.7 (desktop, web)
+
+- **Dropping a file (desktop, web):** a file dropped anywhere except an open chat (the page list, settings) made Pager open that file in place of the app. It is now ignored there. In a chat, the "drop to add" hint no longer sticks after you drag out of the window, and no longer appears when you drag text or reorder pins.
+- **Location (desktop):** the Linux app has no location service, so it now says so and points to the phone, instead of "couldn't get your location". Elsewhere the message says where to allow location.
+- **Window (desktop):** the window only ever shows Pager's own page; nothing else can replace it.
+
 ## 0.6.6 (desktop, web)
 
 - **Window (desktop):** Windows could save a minimised window's position as off-screen and then open Pager where you could not see it; the window now reopens where it was, on a screen that is still connected, and remembers when it was maximised.

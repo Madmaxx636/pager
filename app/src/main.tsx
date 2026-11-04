@@ -10,6 +10,7 @@ import { loadCustomSound } from "./core/customsound";
 import { ErrorBoundary, recordProblem } from "./ui/ErrorBoundary";
 import { UpdateToast } from "./ui/UpdateToast";
 import { crumb, flushLog } from "./core/applog";
+import { installDropGuard } from "./core/dragfiles";
 
 void loadCustomSound(); // a sound of your own for alerts, if you added one
 void loadPhoto(); // a wallpaper photo of your own, if you added one
@@ -23,6 +24,7 @@ crumb("app", `started ${import.meta.env.VITE_APP_VERSION ?? ""}`);
 window.addEventListener("online", () => crumb("network", "online")); window.addEventListener("offline", () => crumb("network", "offline"));
 document.addEventListener("visibilitychange", () => { crumb("app", document.hidden ? "in the background" : "in front"); if (document.hidden) flushLog(); });
 window.addEventListener("pagehide", flushLog);
+installDropGuard();
 
 // Everything that moves stops while the window is in the background or minimised: no point drawing what nobody can see.
 installPresence();

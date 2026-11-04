@@ -105,7 +105,9 @@ function createWindow() {
 
   // Links in messages open in the real browser, never inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:|^mailto:|^geo:/.test(url)) shell.openExternal(url); return { action: "deny" }; });
-  win.webContents.on("will-navigate", (e, url) => { if (!url.startsWith("file:")) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); } });
+  // The window only ever shows the app's own page. Anything else (a link, or a file dropped on the window, which would otherwise open in its place) is stopped.
+  const appPage = require("node:url").pathToFileURL(path.join(__dirname, "app-dist", "index.html")).href;
+  win.webContents.on("will-navigate", (e, url) => { if (url.split("#")[0] === appPage) return; e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); });
 
   // Spell check with suggestions, plus the usual edit menu, in a right-click menu.
   win.webContents.on("context-menu", (_e, p) => {

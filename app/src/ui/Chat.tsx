@@ -1,5 +1,6 @@
 import { attended, onAttended } from "../core/presence";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { hasFiles } from "../core/dragfiles";
 import type { Gif } from "../core/gifs";
 import { setInfoPanelOpen } from "../core/layout";
 import {
@@ -83,6 +84,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const [replyTo, setReplyTo] = useState<Msg>();
   const [editing, setEditing] = useState<Msg>();
   const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);   // enters minus leaves: a drag over a child fires a leave on the section, which must not hide the hint
   const [confirmDel, setConfirmDel] = useState<Msg>();
 
   const messages = chat?.messages ?? [];
@@ -250,7 +252,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const clearStaged = () => setStaged([]);
 
   return (
-    <section className={"chat" + (infoOpen ? " with-info" : "")} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); attachFiles(e.dataTransfer.files); }}>
+    <section className={"chat" + (infoOpen ? " with-info" : "")} onDragEnter={(e) => { if (!hasFiles(e)) return; dragDepth.current++; setDragging(true); }} onDragOver={(e) => { if (hasFiles(e)) e.preventDefault(); }} onDragLeave={(e) => { if (!hasFiles(e)) return; dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false); }} onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragging(false); attachFiles(e.dataTransfer.files); }}>
       <div className="chat-col">
         <Effects key={chat.id} messages={messages} />
         <header className="chat-head">
@@ -492,7 +494,9 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
   };
   const pttUp = () => { const h = hold.current; if (!h) return; if (!recorder.current) { h.released = true; return; } pttUpNow(h); };
 
-  const where = () => navigator.geolocation?.getCurrentPosition((p) => sendLocation(target, p.coords.latitude, p.coords.longitude), () => setError("Couldn't get your location."), { timeout: 10000 });
+  // The Linux desktop app has no location service of its own (it would need a key from Google), so say that instead of a bare "couldn't".
+  const noLocation = () => setError(window.pagerDesktop?.platform === "linux" ? "This computer can't tell Pager where it is. Share a location from your phone instead." : "Couldn't get your location. Check that location is allowed for Pager in your system settings.");
+  const where = () => navigator.geolocation ? navigator.geolocation.getCurrentPosition((p) => sendLocation(target, p.coords.latitude, p.coords.longitude), noLocation, { timeout: 10000 }) : noLocation();
   const pick = (k: AttachKind) => {
     setAttach(false);
     if (k === "viewonce") { once.current = true; photos.current?.click(); }
