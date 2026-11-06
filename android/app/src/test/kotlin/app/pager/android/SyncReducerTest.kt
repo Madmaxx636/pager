@@ -215,4 +215,13 @@ class SyncReducerTest {
         SyncReducer.clock = { t0a + 3 * 86_400_000 }
         assertTrue(SyncReducer.apply(alertKnown(), alertRoom(alertMsg("b", "@wa_mom:pager.test", t0a + 1_000, "Waiting 3 days")), me, initial = false).incoming.isEmpty())
     }
+
+    @Test fun aPageOfOlderMessagesFitsOnlyWhileTheChatStillEndsWhereItDid() {
+        fun m(id: String) = Msg(id, "@a:x", 1, "m.text", "hi")
+        val chat = ChatState("!r:x", messages = listOf(m("\$a"), m("\$b")), prevBatch = "p1")
+        assertTrue(SyncReducer.historyFits(chat, "p1", "\$a"))
+        assertFalse(SyncReducer.historyFits(chat.copy(messages = listOf(m("\$b"))), "p1", "\$a")) // older messages were let go meanwhile
+        assertFalse(SyncReducer.historyFits(chat.copy(messages = emptyList(), prevBatch = "p9"), "p1", "\$a")) // a catch-up reset the chat
+        assertTrue(SyncReducer.historyFits(ChatState("!r:x"), null, null))
+    }
 }

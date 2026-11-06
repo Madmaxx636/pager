@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.16 (phone, desktop, web)
+
+- **Missing stretches of a conversation (desktop, web, phone):** scrolling up could reach a gap where half a day, or several days, were simply not there. When you scrolled up while the app was catching up after being away, or while it was letting go of old messages to save memory, a page of older messages that was already on its way was attached to the wrong end of the conversation, leaving a hole that nothing ever filled. A page that no longer fits is now dropped and asked for again.
+- **Snap-scrolling (desktop, web):** when your own message was the newest in a conversation, any update to it (a delivery mark, a reaction, a sync) pulled the page back down to the bottom while you were reading above. And when older messages loaded, the page could be moved twice, once by the browser and once by Pager, so it jumped. Now the page follows only when you are at the bottom or have just sent something, and only Pager adjusts the position when older messages are added.
+- **For developers:** an end-to-end test for reading above while your message is newest and for sending taking you to it (`e2e/tests/scroll.spec.mjs`). It passed before the fix too, because the test server doesn't send the delivery marks that trigger the snap, so it guards against regressions rather than proving this fix.
+
 ## 0.6.15 (phone, desktop, web)
 
 - **Master password (phone, web, desktop):** lock a copy of your recovery key with a password you choose (Settings, Privacy, Encryption, Master password). From then on any device can get the key back with that password. On a new device the sign-in screen asks for the master password instead of the key, and your history comes back. A signed-in device can also show the key to copy or save (Settings, Privacy, Encryption, Show recovery key), asking for the master password first when one is set. Only a locked copy is stored on your server; the password must be at least 10 characters, and a long one (four or more random words) keeps it safe if someone ever copies that data. Making a new recovery key removes the master password, since it opened the old key.

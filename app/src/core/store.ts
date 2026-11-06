@@ -11,7 +11,7 @@ import { groupFaces } from "./faces";
 import { Links, buildMerged, contactIndex, groupOf, mergeSummaries } from "./links";
 import { shrinkImage } from "./shrink";
 import { forgetTranscripts } from "./transcribe";
-import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity, textOfClear } from "./reducer";
+import { WAITING_TEXT, applyHistory, historyFits, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity, textOfClear } from "./reducer";
 import { toOggOpus, voiceInfo } from "./voice";
 import { movedIds } from "./pins";
 import { Crypto, isEncryptedType, parseRecoveryKey } from "./crypto";
@@ -964,7 +964,8 @@ export function loadOlder(roomId: string, pages = 0) {
   if (!c || c.reachedStart || loading.has(roomId)) return;
   const token = c.prevBatch ?? since; if (!token) return;
   loading.add(roomId);
-  matrix.messages(roomId, token).then(async ({ chunk, end, state: st }) => { const clear = await decryptEvents(roomId, chunk); deepAt.set(roomId, Date.now()); patchChat(roomId, (x) => applyHistory(x, clear, end, st ?? [], state.session?.userId ?? "")); }).catch(() => {}).finally(() => {
+  const asked = { prev: c.prevBatch, first: c.messages[0]?.id };
+  matrix.messages(roomId, token).then(async ({ chunk, end, state: st }) => { const clear = await decryptEvents(roomId, chunk); deepAt.set(roomId, Date.now()); patchChat(roomId, (x) => historyFits(x, asked) ? applyHistory(x, clear, end, st ?? [], state.session?.userId ?? "") : x); }).catch(() => {}).finally(() => {
     loading.delete(roomId);
     // A page can be all bookkeeping (people joining, send statuses) and add nothing to show. The list then doesn't change, so nothing
     // would ask for the next page and the history would sit there until something else (like sending a message) woke it up.
@@ -1079,12 +1080,15 @@ export async function loadWholeHistory(roomId: string, onProgress?: (loaded: num
   for (let i = 0; i < 600 && !signal?.aborted; i++) {
     const c = state.chats[roomId]; if (!c || c.reachedStart) break;
     const token = c.prevBatch ?? since; if (!token) break;
+    const asked = { prev: c.prevBatch, first: c.messages[0]?.id };
+    let dropped = false;
     try {
       const { chunk, end, state: st } = await matrix.messages(roomId, token);
       const clear = await decryptEvents(roomId, chunk);
-      patchChat(roomId, (x) => applyHistory(x, clear, end, st ?? [], state.session?.userId ?? ""));
+      patchChat(roomId, (x) => { if (!historyFits(x, asked)) { dropped = true; return x; } return applyHistory(x, clear, end, st ?? [], state.session?.userId ?? ""); });
     } catch { break; }
     const n = state.chats[roomId]; onProgress?.(n?.messages.length ?? 0);
+    if (dropped) continue; // the chat was reset while we waited: ask again from where it is now
     if (n && (n.prevBatch ?? since) === token) break;
   }
   return !!state.chats[roomId]?.reachedStart;

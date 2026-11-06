@@ -267,3 +267,14 @@ describe("alerts for messages that could not be read yet", () => {
     expect(textOfClear({ event_id: "$e", type: "m.room.message", sender: "@sam:x", origin_server_ts: 1, content: { msgtype: "m.text", body: "see you at 8" } })).toBe("see you at 8");
   });
 });
+
+describe("a page of older messages", () => {
+  it("fits only while the chat still ends where it did when the page was asked for", async () => {
+    const { historyFits } = await import("./reducer");
+    const chat = { prevBatch: "p1", messages: [{ id: "$a" }, { id: "$b" }] };
+    expect(historyFits(chat, { prev: "p1", first: "$a" })).toBe(true);
+    expect(historyFits({ ...chat, messages: [{ id: "$b" }] }, { prev: "p1", first: "$a" })).toBe(false);   // older messages were let go meanwhile
+    expect(historyFits({ prevBatch: "p9", messages: [] }, { prev: "p1", first: "$a" })).toBe(false);       // a catch-up reset the chat
+    expect(historyFits({ prevBatch: null, messages: [] }, { prev: null, first: undefined })).toBe(true);
+  });
+});

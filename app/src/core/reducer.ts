@@ -115,6 +115,12 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
   return { chats, incoming, invites, muted, userStickers, accountData };
 }
 
+/**
+ * A page of older messages fits only if the chat still ends where it did when the page was asked for. If it was reset meanwhile (a catch-up after
+ * being away, or older messages let go to save memory), gluing the page on would leave a hole between it and the newer messages, and nothing
+ * would ever fill it.
+ */
+export const historyFits = (x: { prevBatch?: string | null; messages: { id: string }[] }, asked: { prev?: string | null; first?: string }) => (x.prevBatch ?? null) === (asked.prev ?? null) && x.messages[0]?.id === asked.first;
 /** Merges a page of older events (as returned by /messages, newest first). */
 export function applyHistory(chat: ChatState, chunk: J[], end: string | undefined, state: J[] = [], me = ""): ChatState {
   for (const s of state) if (obj(s).type === "m.room.member") chat = applyState(chat, obj(s));

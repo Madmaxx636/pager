@@ -136,19 +136,22 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     for (const ms of [60, 250, 800]) window.setTimeout(() => { if (stick.current) toBottom(); }, ms);
     requestAnimationFrame(() => { if (stick.current) toBottom(); });
   }, [toBottom]);
-  const prevTop = useRef<{ first?: string; height: number }>({ height: 0 });
+  const prevTop = useRef<{ first?: string; last?: string; height: number }>({ height: 0 });
   useLayoutEffect(() => {
     const el = scroller.current; if (!el || !chat) return;
+    const first = messages[0]?.id, last = messages[messages.length - 1]?.id, prev = prevTop.current;
     if (opened.current !== roomId) {
       opened.current = roomId;
       const div = st.openAtUnread ? el.querySelector("#unread-divider") : null;
       if (div) { (div as HTMLElement).scrollIntoView({ block: "center" }); stick.current = false; } else { stick.current = true; settle(); }
-    } else if (prevTop.current.first && messages[0]?.id !== prevTop.current.first && !stick.current) {
-      el.scrollTop += el.scrollHeight - prevTop.current.height; // older messages were prepended
-    } else if (stick.current || messages[messages.length - 1]?.sender === user) {
+    } else if (prev.first && first !== prev.first && messages.findIndex((m) => m.id === prev.first) > 0) {
+      // Older messages were put above the ones that were showing: keep what you are reading where it is (browser scroll anchoring is off for this list).
+      if (!stick.current) el.scrollTop += el.scrollHeight - prev.height; else settle();
+    } else if (stick.current || (last !== prev.last && messages[messages.length - 1]?.sender === user)) {
+      // At the bottom, or you just sent something: follow. (Not on every change while the last message happens to be yours, which pulled you down while reading.)
       stick.current = true; settle();
     }
-    prevTop.current = { first: messages[0]?.id, height: el.scrollHeight };
+    prevTop.current = { first, last, height: el.scrollHeight };
   }, [roomId, messages, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { opened.current = ""; stick.current = true; setReplyTo(undefined); setEditing(undefined); }, [roomId]);
   useEffect(() => { warmUp(sendRoom); }, [sendRoom, chat?.encrypted]);

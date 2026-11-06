@@ -126,6 +126,9 @@ object SyncReducer {
         return SyncResult(chats, incoming, invites, muted, userStickers, accountData)
     }
 
+    /** A page of older messages fits only while the chat still ends where it did when the page was asked for. */
+    fun historyFits(chat: ChatState, askedPrev: String?, askedFirst: String?) = chat.prevBatch == askedPrev && chat.messages.firstOrNull()?.id == askedFirst
+
     /** Merges a page of older events (as returned by /messages, newest first) into a chat. */
     fun applyHistory(chat: ChatState, chunk: List<JsonObject>, end: String?, state: List<JsonObject> = emptyList(), me: String = ""): ChatState {
         var base = chat

@@ -1216,12 +1216,15 @@ class Store(private val context: Context) {
         // After a restart the saved token may be gone; paginate back from the last sync point instead.
         val token = chat.prevBatch ?: since ?: return
         if (!synchronized(loadingOlder) { loadingOlder.add(roomId) }) return
+        val askedPrev = chat.prevBatch; val askedFirst = chat.messages.firstOrNull()?.id
         scope.launch {
             try {
                 val (rawEvents, end, state) = matrix.messages(roomId, token)
                 val events = decryptEvents(roomId, rawEvents)
                 deepAt[roomId] = System.currentTimeMillis()
-                update(roomId) { SyncReducer.applyHistory(it, events, end, state, me) }
+                // Only if the chat still ends where it did when the page was asked for. If it was reset meanwhile (a catch-up after being away, or older
+                // messages let go to save memory), gluing the page on would leave a hole before the newer messages that nothing would ever fill.
+                update(roomId) { if (SyncReducer.historyFits(it, askedPrev, askedFirst)) SyncReducer.applyHistory(it, events, end, state, me) else it }
             } catch (_: Exception) {
             } finally {
                 synchronized(loadingOlder) { loadingOlder.remove(roomId) }
