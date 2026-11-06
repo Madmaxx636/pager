@@ -65,6 +65,12 @@ libs() { unzip -l "$1" | awk '/lib\/[a-z0-9_-]+\//{split($4,a,"/"); print a[2]}'
 echo "   normal APK native code: $(libs "$OUT/pager-android-$V.apk")"; echo "   32-bit APK native code: $(libs "$OUT/pager-android-$V-32bit.apk")"
 libs "$OUT/pager-android-$V-32bit.apk" | grep -q "arm64" && { echo "The 32-bit APK contains 64-bit code" >&2; exit 1; }
 libs "$OUT/pager-android-$V-32bit.apk" | grep -q "armeabi-v7a" || { echo "The 32-bit APK has no 32-bit code" >&2; exit 1; }
+# Once the signing-key switch has been prepared (scripts/android-rotate-key.sh --make-lineage) the phone apps are signed with the release key plus the lineage
+# that proves it follows the old key, so nobody has to reinstall. Without that file nothing changes here.
+if [ -f "$HOME/.config/pager/signing-lineage" ]; then
+  echo "== Re-signing the phone apps with the release key (key switch)"
+  for f in "$OUT/pager-android-$V.apk" "$OUT/pager-android-$V-32bit.apk"; do scripts/android-rotate-key.sh --sign "$f" "$f.rotated" && mv "$f.rotated" "$f"; done
+fi
 fi
 if [ "$KEEP_DEB" = 0 ]; then echo "== Desktop"; (cd desktop && npm test --silent && npm run dist >/dev/null)
 cp "desktop/release/pager-desktop_${V}_amd64.deb" "$OUT/"
@@ -79,8 +85,11 @@ fi
 CODE=$(awk -F. '{print $1*10000+$2*100+$3}' <<<"$V")
 # The key the Android app is signed with: phones refuse an update signed by any other key, so the apps compare this before downloading.
 SIGNER=""; [ "$KEEP_ANDROID" = 1 ] || SIGNER=$("$(ls -d $HOME/android-sdk/build-tools/*/ | sort -V | tail -1)apksigner" verify --print-certs "$OUT/pager-android-$V.apk" 2>/dev/null | awk '/certificate SHA-256 digest/ {print $NF; exit}')
+# Keys the app used to be signed with that installed phones still carry (written by android-rotate-key.sh --make-lineage): the apps accept an update signed by the new key only if it is listed here.
+SIGNER_HISTORY=""; [ -f "$HOME/.config/pager/signer-history" ] && SIGNER_HISTORY="$(tr -s ' \n' ',' < "$HOME/.config/pager/signer-history" | sed 's/,$//')"
+if [ -n "$SIGNER_HISTORY" ] && [ "$KEEP_ANDROID" != 1 ]; then case ",$SIGNER_HISTORY," in *",$SIGNER,"*) echo "The phone app is still signed with the old key although a key switch is prepared" >&2; exit 1;; esac; fi
 # PREV (read above) also carries the native apps' entries, which are released separately (release-native.sh) and must survive this one.
-KEEPA="$KEEP_ANDROID" KEEPD="$KEEP_DEB" KEEPW="$KEEP_WINDOWS" SIGNER="$SIGNER" node -e '
+KEEPA="$KEEP_ANDROID" KEEPD="$KEEP_DEB" KEEPW="$KEEP_WINDOWS" SIGNER="$SIGNER" SIGNER_HISTORY="$SIGNER_HISTORY" node -e '
 const fs=require("fs"),c=require("crypto");const [v,code,notes]=process.argv.slice(1);
 const has=f=>fs.existsSync("release-out/"+f);
 const sha=f=>c.createHash("sha256").update(fs.readFileSync("release-out/"+f)).digest("hex");
@@ -89,7 +98,7 @@ const E=(f,more={})=>({version:v,...more,file:f,sha256:sha(f),notes,commit});
 const out={released:new Date().toISOString()};
 // What was not rebuilt keeps its last entry as it was (its own version and commit): those apps are not offered an update.
 if(process.env.KEEPA==="1"){for(const k of ["android","android32"])if(prev[k])out[k]=prev[k];}
-else{const a=`pager-android-${v}.apk`,a32=`pager-android-${v}-32bit.apk`;out.android=E(a,{code:+code,signer:process.env.SIGNER});if(has(a32))out.android32=E(a32,{code:+code,signer:process.env.SIGNER});}
+else{const a=`pager-android-${v}.apk`,a32=`pager-android-${v}-32bit.apk`;const hist=process.env.SIGNER_HISTORY?{signerHistory:process.env.SIGNER_HISTORY.split(",")}:{};out.android=E(a,{code:+code,signer:process.env.SIGNER,...hist});if(has(a32))out.android32=E(a32,{code:+code,signer:process.env.SIGNER,...hist});}
 if(process.env.KEEPD==="1"){if(prev.desktop)out.desktop=prev.desktop;}else out.desktop=E(`pager-desktop_${v}_amd64.deb`);
 if(process.env.KEEPW==="1"){for(const k of ["windows","windows32"])if(prev[k])out[k]=prev[k];}
 else{out.windows=E(`pager-desktop-setup-${v}.exe`);const w32=`pager-desktop-setup-${v}-32bit.exe`;if(has(w32))out.windows32=E(w32);}
