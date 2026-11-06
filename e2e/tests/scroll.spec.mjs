@@ -35,3 +35,31 @@ test("sending a message takes you to it", async () => {
   await expect(page.locator(".timeline").getByText("one more")).toBeVisible({ timeout: 20_000 });
   await expect.poll(fromBottom, { timeout: 10_000 }).toBeLessThan(5);
 });
+
+test("typing a long message keeps the newest message in view, at the bottom", async () => {
+  await page.waitForTimeout(1500);
+  await expect.poll(fromBottom).toBeLessThan(5);
+  const lines = Array.from({ length: 9 }, (_, i) => `a long message, line ${i + 1}, long enough to wrap onto a second line when the window is narrow`).join("\n");
+  await box().click();
+  for (let i = 0; i < 9; i++) { await box().pressSequentially(`typing line ${i + 1} of a long message that keeps growing`); await box().press("Shift+Enter"); await page.waitForTimeout(120); }
+  await page.waitForTimeout(400);
+  await snap(page, "41-scroll-typing");
+  const last = page.locator(".timeline .msg").last();
+  const box1 = await last.boundingBox(), tl = await page.locator(".timeline").boundingBox();
+  expect(box1.y + box1.height).toBeLessThanOrEqual(tl.y + tl.height + 1);          // the newest message is above the bottom edge of the list, not under the message box
+  expect(await fromBottom()).toBeLessThan(5);
+});
+
+test("scrolling down to the bottom and then typing does not move the page", async () => {
+  await page.locator(".timeline").evaluate((el) => { el.scrollTop = el.scrollHeight - 700; });
+  await page.mouse.move(600, 300); await page.mouse.wheel(0, 100); await page.waitForTimeout(300);
+  await page.mouse.wheel(0, 3000); await page.waitForTimeout(500);
+  expect(await fromBottom()).toBeLessThan(5);
+  await box().fill("");
+  await box().click();
+  const before = await top();
+  await box().pressSequentially("hello there, I am typing");
+  await page.waitForTimeout(500);
+  expect(Math.abs((await top()) - before)).toBeLessThan(5);
+  expect(await fromBottom()).toBeLessThan(5);
+});

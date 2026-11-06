@@ -4,6 +4,11 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.17 (desktop, web)
+
+- **Typing a long message (desktop, web):** as the message box grew with what you typed, the page above it was left behind and the newest message ended up under the box. The page took the resize for you scrolling up, and stopped following the bottom. Now only a scroll you cause (wheel, touch, keys, dragging the scroll bar) can turn that off, so growing the box, pictures loading and similar changes keep you at the bottom. The same reason made the page jump when you scrolled down and began typing.
+- **For developers:** two end-to-end tests: a nine-line message typed at the bottom keeps the newest message in view (it failed before this fix, by 108 pixels), and typing after scrolling down does not move the page.
+
 ## 0.6.16 (phone, desktop, web)
 
 - **Missing stretches of a conversation (desktop, web, phone):** scrolling up could reach a gap where half a day, or several days, were simply not there. When you scrolled up while the app was catching up after being away, or while it was letting go of old messages to save memory, a page of older messages that was already on its way was attached to the wrong end of the conversation, leaving a hole that nothing ever filled. A page that no longer fits is now dropped and asked for again.

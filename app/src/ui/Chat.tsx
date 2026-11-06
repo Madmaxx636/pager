@@ -196,7 +196,8 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const onScroll = () => {
     const el = scroller.current; if (!el) return;
     if (Math.abs(el.scrollTop - ours.current) < 2) return; // our own scroll, not yours
-    if (Date.now() - openedAt.current < 4000 && Date.now() - lastInput.current > 800) { if (stick.current) toBottom(); return; }
+    // A scroll you did not cause (the page changed height: pictures loading, the message box growing as you type) must not count as you scrolling up.
+    if (Date.now() - lastInput.current > (Date.now() - openedAt.current < 4000 ? 800 : 1200)) { if (stick.current) toBottom(); return; }
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (stick.current && st.markReadMode === "scrolled") markRead(roomId);
     groupIds.forEach((id) => readingOlder(id, !stick.current));
@@ -276,7 +277,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
         </header>
 
         <LinkedBar chat={chat} nav={nav} roomId={roomId} merged={!!merged} />
-        <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll} onMouseMove={rowHover} onMouseLeave={rowLeave} onWheel={touched} onTouchStart={touched} onPointerDown={touched} onKeyDown={touched}>
+        <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll} onMouseMove={rowHover} onMouseLeave={rowLeave} onWheel={touched} onTouchStart={touched} onTouchMove={touched} onPointerDown={touched} onPointerMove={(e) => { if (e.buttons) touched(); }} onKeyDown={touched}>
           {items.map((it) => it.kind === "day" ? <div key={it.key} className="day"><span>{it.label}</span></div>
             : it.kind === "unread" ? <div key={it.key} id="unread-divider" className="unread-divider"><span>New messages</span></div>
             : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} last={it.last} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} delivered={it.index <= deliveredIndex} latestMine={it.msg.id === latestMine} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}
