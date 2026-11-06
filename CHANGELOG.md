@@ -4,6 +4,13 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## Server (no app update needed), 6 November
+
+- **Updates every night, by themselves:** the nightly maintenance now looks for newer bridge builds every night (it was weekly), so a fix from a bridge project is installed the next night. It also updates the web server (Caddy) and the database (Postgres, same major version) when their image has a newer build, each put back if it does not come up healthy, the database only after a backup less than 24 hours old. A new Synapse series (1.164 to 1.165) is installed once its build is 3 days old; a new major version is still left for you. `./scripts/maintenance.sh --dry-run` shows what it would do without changing anything.
+- **The computer's own security updates were not running:** the updater was installed but its setting was 0, so 67 security updates had piled up. The nightly report now reads the real setting and warns in Admin > Logs when it is off. Switch it on with `sudo ./scripts/system-updates.sh --on` (on the server; it needs your password).
+- **Signal photos:** Signal changed what its servers require when a bridge uploads an attachment (4 November), which made every photo fail with a 400. The Signal bridge was updated to the build with the fix.
+- **Scripts for keeping your keys safe:** `scripts/keys-bundle.sh` puts the project's private keys in one passphrase-locked file to copy somewhere else; `scripts/pull-backups.sh` copies the server's newest backups to your computer (daily with `--install-timer`).
+
 ## 0.6.14 (phone, desktop, web)
 
 - **Call button on merged pages (phone, web, desktop):** on a page that shows one person's chats on two networks together, the call button appeared or not depending on which of the chats was open (the one that spoke last decided, and a text-message chat has no way to call on its own). It now offers what all of the person's chats offer together. A contact with two numbers gets a dial option for each. On the phone, the contacts are read as they are now instead of as they were when the page first drew, and the phone's address book is asked for the chat's name directly.

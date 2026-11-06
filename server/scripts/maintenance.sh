@@ -189,11 +189,12 @@ t=sys.argv[1]; print(' '.join(k for k,v in json.load(sys.stdin)['services'].item
 }
 
 job_system() {
-  local ua sec reboot=""; ua=$(systemctl is-enabled unattended-upgrades 2>/dev/null || echo "not installed")
+  # Switched on means the updater is told to run (APT::Periodic::Unattended-Upgrade is 1 or more): the service being enabled is not enough, it stays idle when that is 0.
+  local on sec reboot=""; on=$(apt-config dump 2>/dev/null | sed -n 's/^APT::Periodic::Unattended-Upgrade "\([0-9]*\)";/\1/p' | head -1)
   sec=$(apt list --upgradable 2>/dev/null | grep -ci security)
   [ -f /var/run/reboot-required ] && reboot="; the computer needs a restart (a kernel or core library update): restart it when it suits you"
-  echo "automatic security updates: $ua; $sec waiting$reboot"
-  [ "$ua" = enabled ]
+  if [ "${on:-0}" -ge 1 ]; then echo "automatic security updates: on; $sec waiting$reboot"
+  else echo "automatic security updates are OFF (APT::Periodic::Unattended-Upgrade is 0), $sec waiting: turn on with scripts/system-updates.sh$reboot"; return 1; fi
 }
 
 job_cleanup() {
