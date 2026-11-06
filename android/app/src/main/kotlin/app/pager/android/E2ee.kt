@@ -202,6 +202,13 @@ class E2ee private constructor(
 
     suspend fun backupOn(): Boolean = withContext(Dispatchers.IO) { machine.backupEnabled() }
 
+    /** The recovery key this phone is saving to, as the text people keep (null when it has none). */
+    suspend fun currentRecoveryKey(): String? = try { withContext(Dispatchers.IO) { machine.getBackupKeys()?.recoveryKey()?.toBase58() }?.let(::spaced) } catch (_: Exception) { null }
+
+    // The master password's locked copy of the recovery key lives in the account (see KeyVault.kt). Clearing it writes an empty one: Matrix has no delete for account data.
+    suspend fun getVault(): JsonObject? = try { tx("GET", "/_matrix/client/v3/user/${enc(userId)}/account_data/${KeyVault.TYPE}", null) } catch (_: Exception) { null }
+    suspend fun putVault(v: JsonObject) { tx("PUT", "/_matrix/client/v3/user/${enc(userId)}/account_data/${KeyVault.TYPE}", v) }
+
     /** The backup version this phone is saving to (null when unknown). It differs from the server's when another device made a new recovery key. */
     suspend fun localBackupVersion(): String? = try { withContext(Dispatchers.IO) { machine.getBackupKeys()?.backupVersion() } } catch (_: Exception) { null }
 

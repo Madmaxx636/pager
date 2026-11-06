@@ -920,11 +920,14 @@ private fun EncryptionGroup() {
         ) { if (e.ready) dialog = if (e.backupOnServer && !e.backupHere) "restore" else "create" }
         if (e.keyChanged) { GroupDivider(); NavRow("Your recovery key was changed", "Another device made a new one. Enter it here so this phone can read the new backup and keep saving to it", Icons.Rounded.VpnKey, Color(0xFFF59E0B)) { dialog = "restore" } }
         if (e.ready && e.backupOnServer && e.backupHere) { GroupDivider(); NavRow("Enter recovery key", "Use the recovery key you saved, for example after it was changed on another device", Icons.Rounded.VpnKey) { dialog = "restore" } }
+        if (e.ready && e.backupHere) { GroupDivider(); NavRow("Show recovery key", if (e.vault) "Asks for your master password, then shows the key to copy or save" else "See the key to copy it or enter it on another device", Icons.Rounded.VpnKey) { dialog = "show" } }
+        if (e.ready && e.backupHere) { GroupDivider(); NavRow("Master password", if (e.vault) "On: any device with this password can read your recovery key back. Tap to change" else "Lock a copy of your recovery key with a password, so you can get it back from any device", Icons.Rounded.Lock) { dialog = "master" } }
+        if (e.ready && e.vault) { GroupDivider(); NavRow("Remove master password", null, Icons.Rounded.Refresh, Color(0xFFEF4444)) { dialog = "unmaster" } }
         if (e.ready && e.backupOnServer && e.backupHere) { GroupDivider(); NavRow("Reset recovery key everywhere", "Wipes the old saved keys and makes a new key. Your other devices will ask for it", Icons.Rounded.Refresh, Color(0xFFEF4444)) { dialog = "reset" } }
         if (e.backupOnServer && !e.backupHere) { GroupDivider(); NavRow("Make a new recovery key instead", null, Icons.Rounded.Refresh) { dialog = "create" } }
         if (e.ready) {
             GroupDivider()
-            NavRow("Lost your recovery key?", if (e.backupHere) "This phone still has your keys: choose Recovery key above and replace it" else "Use a key file below, or make a new key. Without either, older encrypted messages can't be read here", Icons.AutoMirrored.Rounded.Help) {}
+            NavRow("Lost your recovery key?", if (e.backupHere) "This phone still has your keys: choose Show recovery key above, or replace it with Recovery key" else "Use your master password, a key file below, or a signed-in device's Show recovery key. Without any, older encrypted messages can't be read here", Icons.AutoMirrored.Rounded.Help) {}
             GroupDivider(); NavRow("Encrypt all my pages", "Turns on encryption for every page that can take it. Older messages stay readable on your server", Icons.Rounded.Lock) { dialog = "all" }
             GroupDivider(); NavRow("Advanced: save keys to a file", "Not your recovery key. A separate file you protect with a passphrase you choose", Icons.Rounded.Save) { dialog = "export" }
             GroupDivider(); NavRow("Advanced: restore keys from a file", "Only for a file made with the row above. Asks for that file's passphrase", Icons.Rounded.FileOpen) { dialog = "import" }
@@ -1047,6 +1050,9 @@ private fun EncryptionGroup() {
         )
     }
     if (dialog == "create") RecoveryKeyDialog(first = false, onDone = { dialog = null })
+    if (dialog == "show") ShowKeyDialog(onDone = { dialog = null })
+    if (dialog == "master") MasterPasswordDialog(onDone = { dialog = null })
+    if (dialog == "unmaster") RemoveMasterPasswordDialog(onDone = { dialog = null })
     if (dialog == "reset") RecoveryKeyDialog(first = false, reset = true, onDone = { dialog = null })
     if (dialog == "restore") RestoreKeyDialog(first = false, onDone = { dialog = null }, onFresh = { dialog = "create" })
 }
@@ -1103,37 +1109,162 @@ fun RecoveryKeyDialog(first: Boolean, onDone: () -> Unit, reset: Boolean = false
     )
 }
 
-/** Enters the recovery key to read older messages on this device. [first] is the welcome-back screen of a new device. */
+/**
+ * Opens the history on this phone. Three ways in: the master password, the recovery key (typed, pasted, or the text file it was saved in), or a
+ * key file made with a passphrase. Only the first two switch the recovery backup on, so new messages keep arriving. [first] is the welcome-back screen of a new device.
+ */
 @Composable
 fun RestoreKeyDialog(first: Boolean, onDone: () -> Unit, onFresh: () -> Unit, changed: Boolean = false) {
     val store = LocalStore.current
     val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val hasPassword = store.encryption.collectAsState().value.vault
+    var byPassword by remember { mutableStateOf(hasPassword) }
     var text by remember { mutableStateOf("") }
+    var pass by remember { mutableStateOf("") }
     var err by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var done by remember { mutableStateOf<Int?>(null) }
+    var done by remember { mutableStateOf<Pair<Int, Boolean>?>(null) }
+    val isFile = text.contains("BEGIN MEGOLM SESSION DATA")
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) runCatching { ctx.contentResolver.openInputStream(uri)!!.use { String(it.readBytes()) } }.onSuccess { text = it; err = "" }.onFailure { err = "Couldn't read that file" }
+    }
+    val ready = if (byPassword || isFile) pass.isNotEmpty() else text.isNotBlank()
     AlertDialog(
-        onDismissRequest = onDone, title = { Text(if (changed) "Your recovery key was changed" else if (first) "Welcome back. Enter your recovery key" else "Enter your recovery key") },
+        onDismissRequest = onDone, title = { Text(if (changed) "Your recovery key was changed" else if (hasPassword) "Open your history" else if (first) "Welcome back. Enter your recovery key" else "Enter your recovery key") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                if (done != null) Text("Restored $done message keys. Older messages in your encrypted pages can be read now.")
-                else {
+                if (done != null) {
+                    Text("Restored ${done!!.first} message keys. Older messages in your encrypted pages can be read now.")
+                    if (done!!.second) Text("A key file holds only the keys that existed when it was saved, and it doesn't switch your recovery backup on. For messages since then, and so new ones keep working on this phone, also enter your recovery key${if (hasPassword) " (or master password)" else ""}: Settings, Privacy & security, Encryption.", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                } else {
                     if (changed) Text("A new recovery key was made on another device. Enter the new key so this phone can read the new backup and keep saving to it.", modifier = Modifier.padding(bottom = 8.dp))
-                    androidx.compose.material3.OutlinedTextField(text, { text = it }, placeholder = { Text("EsTc 4xYz …") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-                    if (!changed) Text("Lost it? A key file (Restore keys from a file) or another signed-in device can still get your history back. If you have neither, you can start fresh with a new key: new messages work, but older encrypted ones stay unreadable.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-                    if (!changed) TextButton(onClick = onFresh) { Text("Start fresh with a new key") }
+                    if (byPassword) {
+                        Text("Enter the master password you chose. Your recovery key is unlocked with it.", modifier = Modifier.padding(bottom = 8.dp))
+                        androidx.compose.material3.OutlinedTextField(pass, { pass = it }, placeholder = { Text("Master password") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                    } else {
+                        androidx.compose.material3.OutlinedTextField(text, { text = it }, placeholder = { Text("EsTc 4xYz …") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                        TextButton(onClick = { pick.launch(arrayOf("text/plain", "*/*")) }) { Text("Open a file instead") }
+                        if (isFile) {
+                            Text("That is a key file, not a recovery key. Enter the passphrase you chose when you saved it.", style = MaterialTheme.typography.bodySmall)
+                            androidx.compose.material3.OutlinedTextField(pass, { pass = it }, placeholder = { Text("Key file passphrase") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                        }
+                    }
                     if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+                    if (hasPassword) TextButton(onClick = { byPassword = !byPassword; err = ""; pass = "" }) { Text(if (byPassword) "Use the recovery key or a file instead" else "Use my master password instead") }
+                    if (!changed) {
+                        Text("Lost everything? Another signed-in device can show your recovery key (Settings, Privacy & security, Encryption, Show recovery key). If you have no way back, you can start fresh with a new key: new messages work, but older encrypted ones stay unreadable.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                        TextButton(onClick = onFresh) { Text("Start fresh with a new key") }
+                    }
                 }
             }
         },
         confirmButton = {
             if (done != null) TextButton(onClick = onDone) { Text("Close") }
-            else TextButton(enabled = !busy && text.isNotBlank(), onClick = {
+            else TextButton(enabled = !busy && ready, onClick = {
                 busy = true; err = ""
-                scope.launch { runCatching { store.restoreWithRecoveryKey(text) }.onSuccess { done = it }.onFailure { err = it.message ?: "That didn't work" }; busy = false }
-            }) { Text(if (busy) "Restoring…" else "Restore") }
+                scope.launch {
+                    runCatching {
+                        if (byPassword) store.restoreWithMasterPassword(pass) to false
+                        else if (isFile) store.importKeyFile(text, pass) to true
+                        else store.restoreWithRecoveryKey(text) to false
+                    }.onSuccess { done = it }.onFailure { err = it.message ?: "That didn't work" }
+                    busy = false
+                }
+            }) { Text(if (busy) (if (byPassword) "Unlocking…" else "Restoring…") else "Restore") }
         },
         dismissButton = { if (done == null) TextButton(onClick = onDone) { Text(if (changed) "Later" else if (first) "Not now" else "Cancel") } },
+    )
+}
+
+/** Sets or changes the master password: a copy of the recovery key locked with it, kept in your account. */
+@Composable
+fun MasterPasswordDialog(onDone: () -> Unit) {
+    val store = LocalStore.current
+    val scope = rememberCoroutineScope()
+    var pass by remember { mutableStateOf("") }
+    var again by remember { mutableStateOf("") }
+    var err by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) }
+    val problem = if (pass.isEmpty()) null else KeyVault.problem(pass)
+    AlertDialog(
+        onDismissRequest = onDone, title = { Text("Master password") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (done) Text("Done. On any device you sign in to, this password now brings back your recovery key and your history.")
+                else {
+                    Text("Choose a password that unlocks your recovery key. Then you can see, copy or use the key from any device without having kept the file.")
+                    Text("A locked copy of the key is kept on your server. Pager can't read it, but anyone who could copy it could keep guessing the password, so make it long: four or more random words is good. Don't reuse your account password.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                    androidx.compose.material3.OutlinedTextField(pass, { pass = it }, placeholder = { Text("Master password") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                    androidx.compose.material3.OutlinedTextField(again, { again = it }, placeholder = { Text("Again") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                    problem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp)) }
+                    if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+        },
+        confirmButton = {
+            if (done) TextButton(onClick = onDone) { Text("Close") }
+            else TextButton(enabled = !busy && pass.isNotEmpty() && problem == null && pass == again, onClick = {
+                busy = true; err = ""
+                scope.launch { runCatching { store.setMasterPassword(pass) }.onSuccess { done = true }.onFailure { err = it.message ?: "That didn't work" }; busy = false }
+            }) { Text(if (busy) "Locking…" else "Set password") }
+        },
+        dismissButton = { if (!done) TextButton(onClick = onDone) { Text("Cancel") } },
+    )
+}
+
+/** Takes the master password off after a clear warning. */
+@Composable
+fun RemoveMasterPasswordDialog(onDone: () -> Unit) {
+    val store = LocalStore.current
+    val scope = rememberCoroutineScope()
+    var err by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDone, title = { Text("Remove the master password?") },
+        text = { Column { Text("The locked copy of your recovery key is deleted from your server. Your recovery key itself and your history are not changed, but a new device will need the key you saved."); if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp)) } },
+        confirmButton = { TextButton(enabled = !busy, onClick = { busy = true; scope.launch { runCatching { store.removeMasterPassword() }.onSuccess { onDone() }.onFailure { err = it.message ?: "That didn't work"; busy = false } } }) { Text("Remove", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = onDone) { Text("Cancel") } },
+    )
+}
+
+/** Shows this account's recovery key to copy or save. With a master password set, the password is asked for first. */
+@Composable
+fun ShowKeyDialog(onDone: () -> Unit) {
+    val store = LocalStore.current
+    val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+    val needsPassword = store.encryption.collectAsState().value.vault
+    var pass by remember { mutableStateOf("") }
+    var key by remember { mutableStateOf<String?>(null) }
+    var err by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var copied by remember { mutableStateOf(false) }
+    val open = { busy = true; err = ""; scope.launch { runCatching { store.showRecoveryKey(pass) }.onSuccess { key = it }.onFailure { err = it.message ?: "That didn't work" }; busy = false }; Unit }
+    LaunchedEffect(Unit) { if (!needsPassword) open() }
+    AlertDialog(
+        onDismissRequest = onDone, title = { Text("Your recovery key") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                when {
+                    key != null -> {
+                        Text("Anyone with this can read your history. Enter it on a new device, or keep it in a password manager.")
+                        androidx.compose.foundation.text.selection.SelectionContainer { Text(key!!, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp)) }
+                        TextButton(onClick = { clipboard.setText(AnnotatedString(key!!)); copied = true }) { Text(if (copied) "Copied" else "Copy") }
+                    }
+                    needsPassword -> {
+                        Text("Enter your master password to show the key.", modifier = Modifier.padding(bottom = 8.dp))
+                        androidx.compose.material3.OutlinedTextField(pass, { pass = it }, placeholder = { Text("Master password") }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                        if (err.isNotEmpty()) Text(err, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+                    }
+                    err.isNotEmpty() -> Text(err, color = MaterialTheme.colorScheme.error)
+                    else -> Text("Reading your key…")
+                }
+            }
+        },
+        confirmButton = { if (key == null && needsPassword) TextButton(enabled = !busy && pass.isNotEmpty(), onClick = { open() }) { Text(if (busy) "Unlocking…" else "Show key") } else TextButton(onClick = onDone) { Text("Close") } },
+        dismissButton = { if (key == null && needsPassword) TextButton(onClick = onDone) { Text("Cancel") } },
     )
 }
 

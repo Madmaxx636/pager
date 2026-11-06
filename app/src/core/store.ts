@@ -14,7 +14,8 @@ import { forgetTranscripts } from "./transcribe";
 import { WAITING_TEXT, applyHistory, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity, textOfClear } from "./reducer";
 import { toOggOpus, voiceInfo } from "./voice";
 import { movedIds } from "./pins";
-import { Crypto, isEncryptedType } from "./crypto";
+import { Crypto, isEncryptedType, parseRecoveryKey } from "./crypto";
+import { findRecoveryKey, openRecoveryKey, sealRecoveryKey } from "./keyvault";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
 import { playSound } from "./sounds";
@@ -313,7 +314,7 @@ async function roomMembers(roomId: string): Promise<string[]> {
 }
 
 // What the settings screen shows about encryption on this device.
-export interface EncryptionStatus { ready: boolean; backupHere: boolean; backupOnServer: boolean; deviceId: string; fingerprint: string; /** The server holds a different key for this device than we do. */ mismatch?: boolean; /** The server's newest recovery backup (undefined when none). */ serverVersion?: string; /** Another device made a new recovery key: this one still saves to the old one and cannot read the new one until its key is entered. */ keyChanged?: boolean; /** Why encryption could not start, if it could not. */ error?: string; /** Why some messages are still locked (empty when none are). */ whyLocked?: string }
+export interface EncryptionStatus { ready: boolean; backupHere: boolean; backupOnServer: boolean; deviceId: string; fingerprint: string; /** The server holds a different key for this device than we do. */ mismatch?: boolean; /** The server's newest recovery backup (undefined when none). */ serverVersion?: string; /** Another device made a new recovery key: this one still saves to the old one and cannot read the new one until its key is entered. */ keyChanged?: boolean; /** A master password is set and unlocks the current recovery key. */ vault?: boolean; /** Why encryption could not start, if it could not. */ error?: string; /** Why some messages are still locked (empty when none are). */ whyLocked?: string }
 let encStatus: EncryptionStatus = { ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "" };
 const encListeners = new Set<() => void>();
 function setEncStatus(s: EncryptionStatus) {
@@ -342,8 +343,8 @@ export async function encryptionReport(): Promise<string> {
 }
 export async function refreshEncryptionStatus() {
   if (!e2ee) { setEncStatus({ ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "", error: startError }); return; }
-  const [backupHere, ver, mine] = await Promise.all([e2ee.backupOn(), e2ee.backupVersion(), e2ee.localBackupVersion()]);
-  setEncStatus({ ready: true, backupHere, backupOnServer: !!ver, deviceId: e2ee.deviceId, fingerprint: e2ee.machine.identityKeys.ed25519.toBase64(), mismatch: keyMismatch, serverVersion: ver?.version, keyChanged: !!ver && backupHere && !!mine && mine !== ver.version, whyLocked: e2ee.whyLocked() });
+  const [backupHere, ver, mine, vault] = await Promise.all([e2ee.backupOn(), e2ee.backupVersion(), e2ee.localBackupVersion(), e2ee.getVault()]);
+  setEncStatus({ ready: true, backupHere, backupOnServer: !!ver, vault: !!vault && !!ver && vault.backup === ver.version, deviceId: e2ee.deviceId, fingerprint: e2ee.machine.identityKeys.ed25519.toBase64(), mismatch: keyMismatch, serverVersion: ver?.version, keyChanged: !!ver && backupHere && !!mine && mine !== ver.version, whyLocked: e2ee.whyLocked() });
 }
 // One fixed function: a new one on every render would make React subscribe again each time, and each subscribe asks the server.
 const subscribeEncryption = (l: () => void) => { encListeners.add(l); void refreshEncryptionStatus(); return () => { encListeners.delete(l); }; };
@@ -353,19 +354,21 @@ export function useEncryption(): EncryptionStatus {
 /** Starts the recovery backup and returns the recovery key to show once. */
 export async function createRecoveryKey(): Promise<string> {
   if (!e2ee) throw new Error("Encryption is not ready yet");
-  const key = await e2ee.createBackup(); await refreshEncryptionStatus(); return key;
+  const key = await e2ee.createBackup(); await e2ee.putVault({}).catch(() => {}); await refreshEncryptionStatus(); return key; // a master password opened the old key
 }
 /** Deletes the old recovery backup and starts a new one: every other device is then asked for the new key. Returns the new recovery key to show once. */
 export async function resetRecoveryKey(): Promise<string> {
   if (!e2ee) throw new Error("Encryption is not ready yet");
-  const key = await e2ee.resetBackup(); await refreshEncryptionStatus();
+  const key = await e2ee.resetBackup(); await e2ee.putVault({}).catch(() => {}); await refreshEncryptionStatus();
   void resyncFromServer();   // read everything again under the new key
   return key;
 }
-/** Reads the backup with a recovery key; returns how many message keys were restored. */
+/** Reads the backup with a recovery key (or the text file Pager saved it in); returns how many message keys were restored. */
 export async function restoreWithRecoveryKey(key: string): Promise<number> {
   if (!e2ee) throw new Error("Encryption is not ready yet");
-  const n = await e2ee.restoreBackup(key); await refreshEncryptionStatus();
+  const found = findRecoveryKey(key, parseRecoveryKey);
+  if (!found) throw new Error("That isn't a recovery key. It starts with letters and numbers in groups of four, like EsTc 4xYz …");
+  const n = await e2ee.restoreBackup(found); await refreshEncryptionStatus();
   // With the key changed, read everything from the server again so no message is left behind from before the keys matched.
   void resyncFromServer().then(() => retryWaiting());
   return n;
@@ -401,6 +404,36 @@ export async function enableEncryptionForAll(onProgress?: (done: number, total: 
     onProgress?.(i + 1, todo.length);
   }
   return { done, failed };
+}
+
+/** Locks this device's recovery key with a master password and keeps the locked copy in the account. */
+export async function setMasterPassword(password: string): Promise<void> {
+  if (!e2ee) throw new Error("Encryption is not ready yet");
+  const [key, ver, mine] = await Promise.all([e2ee.currentRecoveryKey(), e2ee.backupVersion(), e2ee.localBackupVersion()]);
+  if (!key || !ver || mine !== ver.version) throw new Error("This device doesn't hold your current recovery key. Enter the recovery key here first, or use a device that does");
+  await e2ee.putVault(await sealRecoveryKey(key, password, ver.version));
+  await refreshEncryptionStatus();
+}
+/** Takes the master password off the account. The recovery key itself is unchanged. */
+export async function removeMasterPassword(): Promise<void> {
+  if (!e2ee) throw new Error("Encryption is not ready yet");
+  await e2ee.putVault({}); await refreshEncryptionStatus();
+}
+/** The recovery key to show, copy or save. With a master password set, the right password is needed. */
+export async function showRecoveryKey(password?: string): Promise<string> {
+  if (!e2ee) throw new Error("Encryption is not ready yet");
+  const vault = encStatus.vault ? await e2ee.getVault() : undefined;
+  if (vault) { if (!password) throw new Error("Enter your master password"); return openRecoveryKey(vault, password); }
+  const key = await e2ee.currentRecoveryKey();
+  if (!key) throw new Error("This device doesn't hold the recovery key");
+  return key;
+}
+/** A new device: opens the recovery key with the master password and restores the history with it. Returns how many message keys came back. */
+export async function restoreWithMasterPassword(password: string): Promise<number> {
+  if (!e2ee) throw new Error("Encryption is not ready yet");
+  const vault = await e2ee.getVault();
+  if (!vault) throw new Error("No master password is set on this account");
+  return restoreWithRecoveryKey(await openRecoveryKey(vault, password));
 }
 
 /** Every message key on this device, scrambled with a passphrase, as text for a file. */

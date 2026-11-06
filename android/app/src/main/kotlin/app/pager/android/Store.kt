@@ -387,7 +387,7 @@ class Store(private val context: Context) {
     // --- End-to-end encryption -----------------------------------------------------
 
     /** [error] says why encryption could not start, if it could not. */
-    data class EncryptionStatus(val ready: Boolean = false, val backupHere: Boolean = false, val backupOnServer: Boolean = false, val deviceId: String = "", val fingerprint: String = "", val error: String? = null, val mismatch: Boolean = false, val missing: Boolean = false, val serverVersion: String? = null, /** Another device made a new recovery key: this phone still saves to the old one and cannot read the new one until its key is entered. */ val keyChanged: Boolean = false, val whyLocked: String = "")
+    data class EncryptionStatus(val ready: Boolean = false, val backupHere: Boolean = false, val backupOnServer: Boolean = false, val deviceId: String = "", val fingerprint: String = "", val error: String? = null, val mismatch: Boolean = false, val missing: Boolean = false, val serverVersion: String? = null, /** Another device made a new recovery key: this phone still saves to the old one and cannot read the new one until its key is entered. */ val keyChanged: Boolean = false, val whyLocked: String = "", /** A master password is set and unlocks the current recovery key. */ val vault: Boolean = false)
     private var startError: String? = null
     private var keyMismatch = false
     private var keyMissing = false
@@ -454,27 +454,29 @@ class Store(private val context: Context) {
 
     suspend fun refreshEncryptionStatus() {
         val e = e2ee ?: run { _encryption.value = EncryptionStatus(error = startError); return }
-        val here = e.backupOn(); val server = e.backupVersion(); val mine = e.localBackupVersion()
+        val here = e.backupOn(); val server = e.backupVersion(); val mine = e.localBackupVersion(); val vault = KeyVault.backupOf(e.getVault())
         _encryption.value = EncryptionStatus(true, here, server != null, e.deviceId, e.fingerprint(), mismatch = keyMismatch, missing = keyMissing,
-            serverVersion = server?.first, keyChanged = server != null && here && mine != null && mine != server.first, whyLocked = e.whyLocked())
+            serverVersion = server?.first, keyChanged = server != null && here && mine != null && mine != server.first, whyLocked = e.whyLocked(), vault = vault != null && vault == server?.first)
     }
 
     /** Deletes the old recovery backup and starts a new one: every other device is then asked for the new key. Returns the new key to show once. */
     suspend fun resetRecoveryKey(): String {
         val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
-        return e.resetBackup().also { refreshEncryptionStatus(); resyncFromServer() }   // read everything again under the new key
+        return e.resetBackup().also { runCatching { e.putVault(JsonObject(emptyMap())) }; refreshEncryptionStatus(); resyncFromServer() }   // read everything again under the new key
     }
 
     /** Starts the recovery backup and returns the recovery key to show once. */
     suspend fun createRecoveryKey(): String {
         val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
-        return e.createBackup().also { refreshEncryptionStatus() }
+        return e.createBackup().also { runCatching { e.putVault(JsonObject(emptyMap())) }; refreshEncryptionStatus() } // a master password opened the old key
     }
 
     /** Reads the backup with a recovery key; returns how many message keys were restored. */
     suspend fun restoreWithRecoveryKey(key: String): Int {
         val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
-        return e.restoreBackup(key).also {
+        val found = KeyVault.find(key) { runCatching { org.matrix.rustcomponents.sdk.crypto.BackupRecoveryKey.fromBase58(it.filterNot { c -> c.isWhitespace() }) }.isSuccess }
+            ?: throw java.io.IOException("That isn't a recovery key. It starts with letters and numbers in groups of four, like EsTc 4xYz …")
+        return e.restoreBackup(found).also {
             refreshEncryptionStatus()
             // With the key changed, read everything from the server again so no message is left behind from before the keys matched.
             resyncFromServer(); scope.launch { delay(5_000); retryWaiting() }
@@ -511,6 +513,36 @@ class Store(private val context: Context) {
             onProgress(i + 1, todo.size)
         }
         return done to failed
+    }
+
+    /** Locks this phone's recovery key with a master password and keeps the locked copy in the account. */
+    suspend fun setMasterPassword(password: String) {
+        val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
+        val key = e.currentRecoveryKey(); val server = e.backupVersion(); val mine = e.localBackupVersion()
+        if (key == null || server == null || mine != server.first) throw java.io.IOException("This phone doesn't hold your current recovery key. Enter the recovery key here first, or use a device that does")
+        e.putVault(KeyVault.seal(key, password, server.first))
+        refreshEncryptionStatus()
+    }
+
+    /** Takes the master password off the account. The recovery key itself is unchanged. */
+    suspend fun removeMasterPassword() {
+        val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
+        e.putVault(JsonObject(emptyMap())); refreshEncryptionStatus()
+    }
+
+    /** The recovery key to show, copy or save. With a master password set, the right password is needed. */
+    suspend fun showRecoveryKey(password: String): String {
+        val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
+        val vault = if (_encryption.value.vault) e.getVault() else null
+        if (vault != null && KeyVault.backupOf(vault) != null) { if (password.isEmpty()) throw java.io.IOException("Enter your master password"); return KeyVault.open(vault, password) }
+        return e.currentRecoveryKey() ?: throw java.io.IOException("This phone doesn't hold the recovery key")
+    }
+
+    /** A new device: opens the recovery key with the master password and restores the history with it. Returns how many message keys came back. */
+    suspend fun restoreWithMasterPassword(password: String): Int {
+        val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
+        val vault = e.getVault()?.takeIf { KeyVault.backupOf(it) != null } ?: throw java.io.IOException("No master password is set on this account")
+        return restoreWithRecoveryKey(KeyVault.open(vault, password))
     }
 
     /** Every message key on this device, scrambled with a passphrase, as text for a file. */

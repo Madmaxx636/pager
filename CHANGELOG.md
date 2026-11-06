@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.15 (phone, desktop, web)
+
+- **Master password (phone, web, desktop):** lock a copy of your recovery key with a password you choose (Settings, Privacy, Encryption, Master password). From then on any device can get the key back with that password. On a new device the sign-in screen asks for the master password instead of the key, and your history comes back. A signed-in device can also show the key to copy or save (Settings, Privacy, Encryption, Show recovery key), asking for the master password first when one is set. Only a locked copy is stored on your server; the password must be at least 10 characters, and a long one (four or more random words) keeps it safe if someone ever copies that data. Making a new recovery key removes the master password, since it opened the old key.
+- **Restoring from a file on a new device (phone, web, desktop):** the screen that asks for the recovery key now accepts the text file Pager saved the key in (pasted whole or picked as a file), and a key file made with "save keys to a file" plus its passphrase. Before, a key file restored the older messages but left this screen asking for the key without saying why: a key file switches the recovery backup on for nothing, so new messages never reach the device. The screen now says that, and tells you where to enter the key.
+- **For developers:** the master password has the same format on every platform (PBKDF2-SHA256, 600,000 rounds, AES-256-GCM); a test checks that the phone opens a copy made by the web app. End-to-end tests for setting it, showing the key, a wrong password and a new device.
+
 ## Server (no app update needed), 6 November
 
 - **Updates every night, by themselves:** the nightly maintenance now looks for newer bridge builds every night (it was weekly), so a fix from a bridge project is installed the next night. It also updates the web server (Caddy) and the database (Postgres, same major version) when their image has a newer build, each put back if it does not come up healthy, the database only after a backup less than 24 hours old. A new Synapse series (1.164 to 1.165) is installed once its build is 3 days old; a new major version is still left for you. `./scripts/maintenance.sh --dry-run` shows what it would do without changing anything.

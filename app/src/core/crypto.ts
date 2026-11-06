@@ -3,6 +3,7 @@
 // and encrypts outgoing ones. It knows nothing about the rest of the app, so two instances can be tested against each other.
 import * as sdk from "@matrix-org/matrix-sdk-crypto-wasm";
 import { crumb } from "./applog";
+import { asVault, VAULT_TYPE, type Vault } from "./keyvault";
 
 type J = Record<string, any>;
 /** How to talk to the homeserver. The app passes its HTTP client; tests pass a fake server. */
@@ -187,6 +188,17 @@ export class Crypto {
   async localBackupVersion(): Promise<string | undefined> {
     try { const k = await this.machine.getBackupKeys(); return k?.backupVersion ? String(k.backupVersion) : undefined; } catch { return undefined; }
   }
+
+  /** The recovery key this device is saving to, as the text people keep (undefined when the device has none). */
+  async currentRecoveryKey(): Promise<string | undefined> {
+    try { const k = await this.machine.getBackupKeys(); return k?.decryptionKey ? formatRecoveryKey(base64ToBytes(k.decryptionKey.toBase64())) : undefined; } catch { return undefined; }
+  }
+
+  // The master password's locked copy of the recovery key lives in the account (see keyvault.ts). Clearing it writes an empty one: Matrix has no delete for account data.
+  async getVault(): Promise<Vault | undefined> {
+    try { return asVault(await this.tx("GET", `/_matrix/client/v3/user/${enc(this.userId)}/account_data/${VAULT_TYPE}`)); } catch { return undefined; }
+  }
+  async putVault(v: Vault | Record<string, never>): Promise<void> { await this.tx("PUT", `/_matrix/client/v3/user/${enc(this.userId)}/account_data/${VAULT_TYPE}`, v); }
 
   /** True when this device is saving its keys to the backup. */
   async backupOn(): Promise<boolean> { return this.machine.isBackupEnabled(); }

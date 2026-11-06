@@ -119,5 +119,87 @@ test("signing out and in again (a new device) and entering the key brings the hi
   await openRoom(deviceB);
   await expect(deviceB.locator(".timeline").getByText(SECRET)).toBeVisible({ timeout: 60_000 });
   await snap(deviceB, "24-keys-after-signout");
+});
+
+// The master password: a copy of the recovery key locked with a password, so any device can show it and a new device can open the history with it.
+const MASTER = "tulip river lantern 88";
+const encryptionSettings = async (page) => {
+  await page.getByLabel("Menu").click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByText(/Privacy/).first().click();
+};
+const dialogWith = (page, text) => page.locator(".modal, [role=dialog]").filter({ hasText: text });
+
+test("a master password can be set from a device that has the key", async () => {
+  await encryptionSettings(deviceB);
+  await deviceB.getByText("Master password", { exact: true }).first().click();
+  const dialog = dialogWith(deviceB, "Master password").filter({ has: deviceB.getByRole("button", { name: /Set password|Close/ }) });
+  await expect(dialog).toBeVisible();
+  await dialog.getByPlaceholder("Master password").fill("short");
+  await expect(dialog.getByText(/At least 10 characters/)).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Set password" })).toBeDisabled();
+  await dialog.getByPlaceholder("Master password").fill(MASTER);
+  await dialog.getByPlaceholder("Again").fill(MASTER + "x");
+  await expect(dialog.getByRole("button", { name: "Set password" })).toBeDisabled();   // the two must match
+  await dialog.getByPlaceholder("Again").fill(MASTER);
+  await dialog.getByRole("button", { name: "Set password" }).click();
+  await expect(dialog.getByText(/Done\. On any device/)).toBeVisible({ timeout: 60_000 });
+  await snap(deviceB, "25-master-set");
+  await dialog.locator("button.link", { hasText: "Close" }).click();
+});
+
+test("showing the recovery key asks for the master password, and refuses a wrong one", async () => {
+  await deviceB.getByText("Show recovery key", { exact: true }).first().click();
+  const dialog = dialogWith(deviceB, "Your recovery key");
+  await expect(dialog).toBeVisible();
+  await dialog.getByPlaceholder("Master password").fill(MASTER + "!");
+  await dialog.getByRole("button", { name: "Show key" }).click();
+  await expect(dialog.locator(".error")).toContainText("isn't right", { timeout: 60_000 });
+  await expect(dialog.locator("pre.recovery-key")).toHaveCount(0);
+  await dialog.getByPlaceholder("Master password").fill(MASTER);
+  await dialog.getByRole("button", { name: "Show key" }).click();
+  await expect(dialog.locator("pre.recovery-key")).toHaveText(frankKey, { timeout: 60_000 });
+  await snap(deviceB, "26-master-show");
+  await dialog.locator("button.link", { hasText: "Close" }).first().click();
+});
+
+test("a brand-new device opens the history with just the master password", async ({ browser }) => {
   await deviceB.context.close();
+  const deviceC = await open(browser);
+  await deviceC.goto("/");
+  await deviceC.getByLabel("Username").fill("frank");
+  await deviceC.locator('input[type="password"]').fill("pw-frank");
+  await deviceC.getByRole("button", { name: "Sign in" }).click();
+  const welcome = dialogWith(deviceC, "Open your history");
+  await expect(welcome).toBeVisible({ timeout: 30_000 });
+  await snap(deviceC, "27-master-new-device");
+  await welcome.getByPlaceholder("Master password").fill("not the password");
+  await welcome.getByRole("button", { name: "Restore" }).click();
+  await expect(welcome.locator(".error")).toContainText("isn't right", { timeout: 60_000 });
+  await welcome.getByPlaceholder("Master password").fill(MASTER);
+  await welcome.getByRole("button", { name: "Restore" }).click();
+  await expect(welcome.getByText(/Restored \d+ message keys/)).toBeVisible({ timeout: 60_000 });
+  await welcome.locator("button.link", { hasText: "Close" }).click();
+  await skipTour(deviceC);
+  await openRoom(deviceC);
+  await expect(deviceC.locator(".timeline").getByText(SECRET)).toBeVisible({ timeout: 60_000 });
+  // The backup is switched on, so this device now saves new keys too: nothing nags for the key again.
+  await expect(dialogWith(deviceC, "recovery key")).toHaveCount(0);
+  await deviceC.context.close();
+});
+
+test("pasting the whole saved recovery-key text file works, not just the key", async ({ browser }) => {
+  const d = await open(browser);
+  await d.goto("/");
+  await d.getByLabel("Username").fill("frank");
+  await d.locator('input[type="password"]').fill("pw-frank");
+  await d.getByRole("button", { name: "Sign in" }).click();
+  const welcome = dialogWith(d, "Open your history");
+  await expect(welcome).toBeVisible({ timeout: 30_000 });
+  await welcome.getByRole("button", { name: "Use the recovery key or a file instead" }).click();
+  // The text file Pager saves holds a heading, then the key: pasting all of it works
+  await welcome.locator("textarea").fill(`Pager recovery key\n\n${frankKey}\n`);
+  await welcome.getByRole("button", { name: "Restore" }).click();
+  await expect(welcome.getByText(/Restored \d+ message keys/)).toBeVisible({ timeout: 60_000 });
+  await d.context.close();
 });
