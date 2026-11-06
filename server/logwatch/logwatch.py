@@ -250,6 +250,13 @@ def maintenance_problems(path, now):
     if now - at > 3 * 86400: out.append("Nightly maintenance has not run for %d days." % int((now - at) / 86400))
     return out
 
+def maintenance_running(path, now):
+    """True when the nightly maintenance has run within the last 3 days (data/api/maintenance.json says when)."""
+    try:
+        with open(path, encoding="utf-8") as f: at = datetime.datetime.fromisoformat(json.load(f)["at"]).timestamp()
+    except (OSError, ValueError, KeyError): return False
+    return now - at <= 3 * 86400
+
 def checks(w):
     """Every minute: the server itself (disk, backups)."""
     while True:
@@ -269,7 +276,9 @@ def checks(w):
             elif age > 1.5: w.event("server", "attention", "The newest backup is %d days old." % int(age))
             for msg in maintenance_problems(os.path.join(SERVER, "data", "api", "maintenance.json"), time.time()): w.event("server", "attention", msg)
             names = waiting_versions(os.path.join(SERVER, "data", "versions.available"))
-            if names: w.event("server", "attention", "Newer versions are ready for: %s. Install them with: pager upgrade (Synapse by hand)." % ", ".join(names))
+            # The nightly maintenance installs these by itself; only say so when it is not doing that (never installed, or stopped for days).
+            if names and not maintenance_running(os.path.join(SERVER, "data", "api", "maintenance.json"), time.time()):
+                w.event("server", "attention", "Newer versions are ready for: %s, and the nightly maintenance is not installing them. Install them with: pager upgrade (Synapse by hand), or switch maintenance on: scripts/maintenance.sh --install." % ", ".join(names))
         except Exception as e:
             w.event("logwatch", "error", "a check failed: %s" % e)
         time.sleep(60)

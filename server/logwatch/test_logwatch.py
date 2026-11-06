@@ -147,6 +147,15 @@ class Versions(unittest.TestCase):
         write(True, 4); self.assertEqual(lw.maintenance_problems(p, time.time()), ["Nightly maintenance has not run for 4 days."])
         open(p, "w").write("not json"); self.assertEqual(lw.maintenance_problems(p, time.time()), [])
 
+    def test_maintenance_running(self):
+        p = os.path.join(_tmp, "m2.json")
+        self.assertFalse(lw.maintenance_running(p, time.time()))                 # never installed
+        def write(days):
+            at = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)).isoformat()
+            json.dump({"at": at, "ok": True, "tasks": []}, open(p, "w"))
+        write(0.5); self.assertTrue(lw.maintenance_running(p, time.time()))
+        write(5); self.assertFalse(lw.maintenance_running(p, time.time()))      # stopped for days
+
     def test_waiting_versions(self):
         p = os.path.join(_tmp, "versions.available")
         self.assertEqual(lw.waiting_versions(p), [])
