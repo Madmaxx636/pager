@@ -30,7 +30,13 @@ import java.security.MessageDigest
  * installed app, so a swapped file cannot replace Pager.
  */
 object Updater {
-    data class Info(val version: String, val code: Long, val url: String, val sha256: String, val notes: String, val signer: String? = null)
+    /**
+     * [signer] is the key the new APK is signed with; [signerHistory] the keys it replaced (a key rotation: Android lets an APK signed with a new key and a proof of the
+     * old one update an app signed with the old key). The installed app's key may be any of them.
+     */
+    data class Info(val version: String, val code: Long, val url: String, val sha256: String, val notes: String, val signer: String? = null, val signerHistory: Set<String> = emptySet()) {
+        val accepted: Set<String> get() = (listOfNotNull(signer) + signerHistory).toSet()
+    }
     enum class Stage { IDLE, CHECKING, DOWNLOADING, INSTALLING }
 
     private val _available = MutableStateFlow<Info?>(null)
@@ -60,7 +66,7 @@ object Updater {
             val info = withContext(Dispatchers.IO) { fetch(server) }
             prefs.edit().putLong("checked", System.currentTimeMillis()).apply()
             // An update signed with a different key than this app can't be installed over it: don't offer it (say why only when asked).
-            if (info != null && info.signer != null && !sameSigner(signers(ctx), setOf(info.signer))) { if (force && info.code > currentCode(ctx)) _message.value = wrongKey(info) else if (force) _message.value = "You're up to date (${currentName(ctx)})" }
+            if (info != null && info.signer != null && !sameSigner(signers(ctx), info.accepted)) { if (force && info.code > currentCode(ctx)) _message.value = wrongKey(info) else if (force) _message.value = "You're up to date (${currentName(ctx)})" }
             else if (info != null && info.code > currentCode(ctx)) { if (force || shouldOffer(prefs.getLong("declinedCode", 0), prefs.getLong("declinedAt", 0), info.code, System.currentTimeMillis())) _available.value = info }
             else if (force) _message.value = "You're up to date (${currentName(ctx)})"
         } catch (e: Exception) { if (force) _message.value = "Couldn't check for updates: ${e.message ?: "server unreachable"}" }
@@ -80,7 +86,9 @@ object Updater {
         val code = (a["code"] as? JsonPrimitive)?.longOrNull ?: return null
         val file = s("file") ?: return null
         if (file.contains('/') || file.contains("..")) return null
-        return Info(s("version") ?: code.toString(), code, (base ?: (server.trimEnd('/') + "/updates/")) + file, (s("sha256") ?: return null).lowercase(), s("notes") ?: "", s("signer")?.lowercase()?.replace(":", ""))
+        val fp = { v: String? -> v?.lowercase()?.replace(":", "") }
+        val history = (a["signerHistory"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { fp((it as? JsonPrimitive)?.contentOrNull) }?.toSet().orEmpty()
+        return Info(s("version") ?: code.toString(), code, (base ?: (server.trimEnd('/') + "/updates/")) + file, (s("sha256") ?: return null).lowercase(), s("notes") ?: "", fp(s("signer")), history)
     }
 
     /** Asks GitHub and the server, and takes whichever has the newer version. Only fails when neither could be reached. */
@@ -131,7 +139,7 @@ object Updater {
     suspend fun install(ctx: Context, info: Info) {
         if (_stage.value != Stage.IDLE) return
         // If the update is signed with a different key (the move from the trial key to the release key), say so before downloading anything.
-        if (info.signer != null && !sameSigner(signers(ctx), setOf(info.signer))) { _message.value = wrongKey(info); return }
+        if (info.signer != null && !sameSigner(signers(ctx), info.accepted)) { _message.value = wrongKey(info); return }
         _stage.value = Stage.DOWNLOADING
         try {
             val file = withContext(Dispatchers.IO) {

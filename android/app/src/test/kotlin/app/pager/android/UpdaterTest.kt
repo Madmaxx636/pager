@@ -52,4 +52,14 @@ class UpdaterTest {
         assertTrue(Updater.shouldOffer(60700, 1_000, 60800, 1_000 + 3600_000L))    // a newer version: yes
         assertTrue(Updater.shouldOffer(0, 0, 60700, 5_000))                         // nothing declined before
     }
+
+    @Test fun aKeyRotationIsAcceptedWhenTheHistoryNamesTheInstalledKey() {
+        val rotated = """{"android":{"version":"0.7.0","code":700,"file":"pager-android-0.7.0.apk","sha256":"${"a".repeat(64)}","notes":"","signer":"AA:BB","signerHistory":["CC:DD","aa:bb"]}}"""
+        val info = Updater.parse(rotated, "https://s")!!
+        assertEquals("aabb", info.signer)
+        assertEquals(setOf("aabb", "ccdd"), info.accepted)
+        assertTrue(Updater.sameSigner(setOf("ccdd"), info.accepted))      // an app still signed with the old key may take it
+        assertFalse(Updater.sameSigner(setOf("eeff"), info.accepted))     // an unrelated key may not
+        assertEquals(setOf("aabb"), Updater.parse(rotated.replace(""","signerHistory":["CC:DD","aa:bb"]""", ""), "https://s")!!.accepted)   // no history: only the new key, as before
+    }
 }

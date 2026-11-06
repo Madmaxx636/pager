@@ -3,17 +3,20 @@
 #   units       a Pager timer or service that is installed but stopped is started again
 #   containers  reports a container that is not running (never starts one: you may have stopped it on purpose)
 #   backup      makes a backup if the newest is older than 30 hours (needs the backup key, see backup-schedule.sh)
-#   bridges     installs newer bridge versions one at a time (a bridge that does not start is put back), but only after a backup less than 36 hours old
-#   synapse     installs a newer Synapse PATCH release (same 1.x series) after a backup less than 24 hours old, and goes back if it does not become healthy.
-#               A bigger step (a new series) is left for you: read its release notes, then `pager upgrade` / edit docker-compose.yml.
+#   bridges     looks every night for newer bridge versions and installs them one at a time (a bridge that does not start is put back), after a backup less than 36 hours old
+#   synapse     installs a newer Synapse release after a backup less than 24 hours old, and goes back if it does not become healthy. A patch release (1.164.1 to 1.164.2)
+#               goes in at once; a new series (1.164 to 1.165) once its build is 3 days old, so a bad one has been noticed first; a new major (2.x) is always left for you.
+#   images      the web server (Caddy) and the database (Postgres, same major version) when their image has a newer build; the database only after a backup less than 24 hours old
+#   system      says whether the computer's own security updates are switched on, how many are waiting, and whether it needs a restart (it never restarts by itself)
 #   cleanup     old container images and build cache, old journal entries, long log files; warns when the disk is nearly full
+# (The Pager web app and API update themselves every 5 minutes: scripts/auto-update.sh.)
 # The result of the last run is in data/api/maintenance.json (Admin > Logs warns when a job failed or nothing ran for 3 days); the log is data/maintenance.log.
-# Install: ./scripts/maintenance.sh --install    Remove: --remove    Run now: --now    Look: --status
+# Install: ./scripts/maintenance.sh --install    Remove: --remove    Run now: --now    Only look, change nothing: --dry-run    Show the last run: --status
 set -uo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"; UNIT_DIR="$HOME/.config/systemd/user"
 LOG="$ROOT/data/maintenance.log"; STATUS="$ROOT/data/api/maintenance.json"
-SYNAPSE_REPO="docker.io/matrixdotorg/synapse:latest"
+SYNAPSE_REPO="docker.io/matrixdotorg/synapse:latest"; DRY="${DRY:-}"
 
 case "${1:-}" in
   --install)
@@ -51,7 +54,8 @@ UNITEOF
   --status|"")
     systemctl --user list-timers pager-maintenance.timer --no-pager 2>/dev/null; tail -n 25 "$LOG" 2>/dev/null || echo "It has not run yet."; exit 0;;
   --now) ;;
-  *) echo "Usage: $0 [--install|--remove|--now|--status]" >&2; exit 1;;
+  --dry-run) DRY=1;;
+  *) echo "Usage: $0 [--install|--remove|--now|--dry-run|--status]" >&2; exit 1;;
 esac
 
 mkdir -p data/api
@@ -99,10 +103,11 @@ job_backup() {
 }
 
 job_bridges() {
-  # The list of newer versions is looked up here when it is more than 6 days old (so the weekly cron entry of update-bridges.sh is not needed).
-  if [ ! -f data/versions.available ] || [ -n "$(find data/versions.available -mmin +8640 2>/dev/null)" ]; then ./scripts/update-bridges.sh >/dev/null 2>&1; fi
+  # Newer versions are looked for every night (when the list is more than 20 hours old), so a fix the bridge project publishes is here the next night.
+  if [ ! -f data/versions.available ] || [ -n "$(find data/versions.available -mmin +1200 2>/dev/null)" ]; then ./scripts/update-bridges.sh >/dev/null 2>&1; fi
   local waiting; waiting=$(grep -vx synapse data/versions.available 2>/dev/null | tr '\n' ' ')
   [ -n "${waiting// /}" ] || { echo "nothing waiting"; return 0; }
+  [ -z "$DRY" ] || { echo "would install: $waiting"; return 0; }
   local h; h=$(hours_since_backup)
   [ "$h" -le 36 ] || { echo "waiting ($waiting) but the newest backup is $h hours old, so not now"; return 0; }
   local out; out=$(./scripts/update-bridges.sh --apply 2>&1); echo "$out" >> "$LOG"
@@ -127,9 +132,15 @@ job_synapse() {
   have=$(docker compose exec -T synapse python -c 'import synapse;print(synapse.__version__)' 2>/dev/null)
   newv=$(synapse_version "$ref")
   [ -n "$have" ] && [ -n "$newv" ] || { echo "could not read the versions"; return 1; }
-  if [ "${have%.*}" != "${newv%.*}" ]; then echo "$newv is a bigger step than $have: left for you (read the release notes first)"; return 0; fi
+  # Same series (a patch): at once. A new series (1.164 to 1.165): once its build is 3 days old. A new major version: never by itself.
+  if [ "${have%%.*}" != "${newv%%.*}" ]; then echo "$newv is a new major version ($have now): left for you (read the release notes first)"; return 0; fi
+  if [ "${have%.*}" != "${newv%.*}" ]; then
+    local built age; built=$(docker image inspect --format '{{.Created}}' "$SYNAPSE_REPO" 2>/dev/null); age=$(( ($(date +%s) - $(date -d "${built:-now}" +%s)) / 3600 ))
+    [ "$age" -ge 72 ] || { echo "$newv is a new series but its build is only $age hours old: waiting until it is 3 days old"; return 0; }
+  fi
   local h; h=$(hours_since_backup)
   [ "$h" -le 24 ] || { echo "$newv is ready but the newest backup is $h hours old, so not now"; return 0; }
+  [ -z "$DRY" ] || { echo "would update $have to $newv"; return 0; }
   set_env SYNAPSE_IMAGE "$ref"
   docker compose up -d --no-deps synapse >/dev/null 2>&1
   local i s
@@ -138,6 +149,51 @@ job_synapse() {
   set_env SYNAPSE_IMAGE "${cur}"
   docker compose up -d --no-deps synapse >/dev/null 2>&1
   echo "$newv did not become healthy: went back to $have"; return 1
+}
+
+# Services that run an image by a floating tag (the web server, the database): pulled every night; a service whose image changed is recreated, and put back on the old
+# image if it does not come up healthy. The database stays on its major version (postgres:16), which is only changed on purpose.
+IMAGE_TAGS=("caddy:2-alpine" "postgres:16-alpine")
+job_images() {
+  local tag svcs svc ref have new notes="" bad=0 i ok h
+  for tag in "${IMAGE_TAGS[@]}"; do
+    ref=$(docker compose config --format json | python3 -c "
+import json,sys
+t=sys.argv[1]
+for k,v in json.load(sys.stdin)['services'].items():
+    if v.get('image','').split('@')[0].endswith(t): print(v['image']); break" "$tag")
+    svcs=$(docker compose config --format json | python3 -c "
+import json,sys
+t=sys.argv[1]; print(' '.join(k for k,v in json.load(sys.stdin)['services'].items() if v.get('image','').split('@')[0].endswith(t)))" "$tag")
+    [ -n "$ref" ] && [ -n "$svcs" ] || continue
+    svc=${svcs%% *}; have=$(docker inspect --format '{{.Image}}' "$(docker compose ps -q "$svc" | head -1)" 2>/dev/null)
+    docker pull -q "$ref" >/dev/null 2>&1 || { notes="$notes $tag: could not look;"; bad=1; continue; }
+    new=$(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null)
+    [ -n "$new" ] && [ "$new" != "$have" ] || { notes="$notes $tag current;"; continue; }
+    case "$tag" in postgres*) h=$(hours_since_backup); [ "$h" -le 24 ] || { notes="$notes $tag newer but the newest backup is $h hours old, so not now;"; continue; };; esac
+    [ -z "$DRY" ] || { notes="$notes $tag would be updated ($svcs);"; continue; }
+    # shellcheck disable=SC2086
+    docker compose up -d --no-deps $svcs >/dev/null 2>&1
+    ok=0
+    for i in $(seq 1 36); do
+      ok=1
+      for svc in $svcs; do
+        case "$(docker inspect --format '{{.State.Running}} {{if .State.Health}}{{.State.Health.Status}}{{else}}-{{end}}' "$(docker compose ps -q "$svc" | head -1)" 2>/dev/null)" in "true healthy"|"true -") ;; *) ok=0;; esac
+      done
+      [ $ok = 1 ] && break; sleep 5
+    done
+    if [ $ok = 1 ]; then notes="$notes $tag updated;"
+    else docker tag "$have" "$ref" 2>/dev/null; docker compose up -d --no-deps $svcs >/dev/null 2>&1; notes="$notes $tag did not come up healthy: put back;"; bad=1; fi
+  done
+  echo "${notes:-nothing to do}"; return $bad
+}
+
+job_system() {
+  local ua sec reboot=""; ua=$(systemctl is-enabled unattended-upgrades 2>/dev/null || echo "not installed")
+  sec=$(apt list --upgradable 2>/dev/null | grep -ci security)
+  [ -f /var/run/reboot-required ] && reboot="; the computer needs a restart (a kernel or core library update): restart it when it suits you"
+  echo "automatic security updates: $ua; $sec waiting$reboot"
+  [ "$ua" = enabled ]
 }
 
 job_cleanup() {
@@ -150,14 +206,18 @@ job_cleanup() {
   echo "disk $pct% full"
 }
 
+[ -z "$DRY" ] || log "(dry run: nothing is changed)"
 log "== maintenance started"
 run units job_units
 run containers job_containers
 run backup job_backup
 run bridges job_bridges
 run synapse job_synapse
+run images job_images
+run system job_system
 run cleanup job_cleanup
 
+[ -n "$DRY" ] && { log "== dry run done"; exit 0; }
 python3 - "$RESULTS" "$STATUS" <<'PY'
 import json, sys, datetime
 tasks = []
