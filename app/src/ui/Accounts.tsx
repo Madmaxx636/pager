@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { Login, LoginFlow, LoginStep, Network, pager, parseCookies } from "../core/api";
 import { networkMeta } from "../core/emoji";
@@ -6,7 +6,7 @@ import { refreshBridges, setTag, useStore } from "../core/store";
 import { advance, currentImport, fraction, importBusy, linked, setImport, stuck, useImport } from "../core/importjob";
 import { updateSettings, useSettings } from "../core/settings";
 import { Eye, EyeOff, MoreVertical } from "lucide-react";
-import { IconButton, Modal } from "./common";
+import { IconButton, Modal, useEscape } from "./common";
 import { isArchived } from "../core/types";
 
 export const needsAttention = (state?: string) => state === "BAD_CREDENTIALS" || state === "LOGGED_OUT" || state === "UNKNOWN_ERROR";
@@ -327,6 +327,8 @@ export function BridgesPage() {
   const [adding, setAdding] = useState(false);
   const job = useImport();
   const [menuFor, setMenuFor] = useState("");
+  const closeRowMenu = useCallback(() => setMenuFor(""), []);
+  useEscape(!!menuFor, closeRowMenu);
   useEffect(() => { void refreshBridges(); }, []);
   return (
     <>

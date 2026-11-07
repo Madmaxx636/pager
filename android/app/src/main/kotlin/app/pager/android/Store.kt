@@ -454,7 +454,7 @@ class Store(private val context: Context) {
 
     suspend fun refreshEncryptionStatus() {
         val e = e2ee ?: run { _encryption.value = EncryptionStatus(error = startError); return }
-        val here = e.backupOn(); val server = e.backupVersion(); val mine = e.localBackupVersion(); val vault = KeyVault.backupOf(e.getVault())
+        val here = e.backupOn(); val server = e.backupVersion(); val mine = e.localBackupVersion(); val vault = if (server != null) KeyVault.backupOf(e.getVault()) else null
         _encryption.value = EncryptionStatus(true, here, server != null, e.deviceId, e.fingerprint(), mismatch = keyMismatch, missing = keyMissing,
             serverVersion = server?.first, keyChanged = server != null && here && mine != null && mine != server.first, whyLocked = e.whyLocked(), vault = vault != null && vault == server?.first)
     }
@@ -533,7 +533,7 @@ class Store(private val context: Context) {
     /** The recovery key to show, copy or save. With a master password set, the right password is needed. */
     suspend fun showRecoveryKey(password: String): String {
         val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
-        val vault = if (_encryption.value.vault) e.getVault() else null
+        val vault = if (_encryption.value.vault) e.getVault(fresh = true) else null
         if (vault != null && KeyVault.backupOf(vault) != null) { if (password.isEmpty()) throw java.io.IOException("Enter your master password"); return KeyVault.open(vault, password) }
         return e.currentRecoveryKey() ?: throw java.io.IOException("This phone doesn't hold the recovery key")
     }
@@ -541,7 +541,7 @@ class Store(private val context: Context) {
     /** A new device: opens the recovery key with the master password and restores the history with it. Returns how many message keys came back. */
     suspend fun restoreWithMasterPassword(password: String): Int {
         val e = e2ee ?: throw java.io.IOException("Encryption is not ready yet")
-        val vault = e.getVault()?.takeIf { KeyVault.backupOf(it) != null } ?: throw java.io.IOException("No master password is set on this account")
+        val vault = e.getVault(fresh = true)?.takeIf { KeyVault.backupOf(it) != null } ?: throw java.io.IOException("No master password is set on this account")
         return restoreWithRecoveryKey(KeyVault.open(vault, password))
     }
 

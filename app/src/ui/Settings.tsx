@@ -147,7 +147,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
           <Select title="Density" value={s.density} options={[["comfortable", "Comfortable"], ["compact", "Compact"]]} onChange={(v) => u({ density: v })} />
           <Select title="Hover action 1" hint="Quick button when you point at a page" value={s.rowAction1} options={ROW_ACTIONS} onChange={(v) => u({ rowAction1: v })} />
           <Select title="Hover action 2" value={s.rowAction2} options={ROW_ACTIONS} onChange={(v) => u({ rowAction2: v })} />
-          <Row title="Sidebar width" hint={`${s.sidebarWidth}px`}><input type="range" min="240" max="640" step="10" value={s.sidebarWidth} onChange={(e) => u({ sidebarWidth: Number(e.target.value) })} /></Row>
+          <Row title="Sidebar width" hint={`${s.sidebarWidth}px`}><input type="range" aria-label="Sidebar width"  min="240" max="640" step="10" value={s.sidebarWidth} onChange={(e) => u({ sidebarWidth: Number(e.target.value) })} /></Row>
           <SwitchRow title="Show avatars" checked={s.showAvatars} onChange={(v) => u({ showAvatars: v })} />
           <SwitchRow title="Show network badges" hint="The small WhatsApp / Signal icon on avatars" checked={s.showNetworkBadges} onChange={(v) => u({ showNetworkBadges: v })} />
           <SwitchRow title="Show network name" hint="Under each page name" checked={s.showNetworkNameInRows} onChange={(v) => u({ showNetworkNameInRows: v })} />
@@ -281,7 +281,7 @@ function Appearance() {
       <Group title="Text & messages">
         <Select title="Reactions" value={s.reactionStyle} options={[["filled", "Filled"], ["outline", "Outline"]]} onChange={(v) => updateSettings({ reactionStyle: v })} />
         <SwitchRow title="Delete on the other network too" hint="When you delete a chat in Pager, also delete it on Signal, WhatsApp or Google Messages. It can't be undone, so you are asked each time" checked={s.deleteAtSource} onChange={(v) => updateSettings({ deleteAtSource: v })} />
-        <Row title="Text size" hint={`${Math.round(s.fontScale * 100)}%`}><input type="range" min="0.85" max="1.4" step="0.05" value={s.fontScale} onChange={(e) => updateSettings({ fontScale: Number(e.target.value) })} /></Row>
+        <Row title="Text size" hint={`${Math.round(s.fontScale * 100)}%`}><input type="range" aria-label="Text size"  min="0.85" max="1.4" step="0.05" value={s.fontScale} onChange={(e) => updateSettings({ fontScale: Number(e.target.value) })} /></Row>
         <Select title="Avatar shape" value={s.avatarShape} options={[["circle", "Circle"], ["squircle", "Rounded square"]]} onChange={(v) => updateSettings({ avatarShape: v })} />
         <SwitchRow title="Color sender names in groups" checked={s.colorSenderNames} onChange={(v) => updateSettings({ colorSenderNames: v })} />
         <SwitchRow title="Large emoji" hint="Emoji-only messages are shown big" checked={s.largeEmoji} onChange={(v) => updateSettings({ largeEmoji: v })} />
@@ -341,10 +341,10 @@ function Notifications() {
         <Select title="Send sound" value={s.sendSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ sendSound: v }); playSound(v, s.convoSoundVolume); }} />
         <Select title="Reaction sound" value={s.reactionSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ reactionSound: v }); playSound(v, s.convoSoundVolume); }} />
         <Select title="Receive sound" value={s.receiveSound} disabled={!s.convoSounds} options={SOUNDS} onChange={(v) => { updateSettings({ receiveSound: v }); playSound(v, s.convoSoundVolume); }} />
-        <Row title="Page sound volume" hint={`${Math.round(s.convoSoundVolume * 100)}%`}><input type="range" min="0" max="1" step="0.05" value={s.convoSoundVolume} disabled={!s.convoSounds} onChange={(e) => updateSettings({ convoSoundVolume: Number(e.target.value) })} /></Row>
+        <Row title="Page sound volume" hint={`${Math.round(s.convoSoundVolume * 100)}%`}><input type="range" aria-label="Page sound volume"  min="0" max="1" step="0.05" value={s.convoSoundVolume} disabled={!s.convoSounds} onChange={(e) => updateSettings({ convoSoundVolume: Number(e.target.value) })} /></Row>
         <Select title="Alert sound" value={s.notifSoundId} disabled={off} options={SOUNDS} onChange={(v) => { updateSettings({ notifSoundId: v }); playSound(v, s.notifSoundVolume); }} />
         <CustomSoundRow />
-        <Row title="Volume" hint={`${Math.round(s.notifSoundVolume * 100)}%`}><input type="range" min="0" max="1" step="0.05" value={s.notifSoundVolume} disabled={off} onChange={(e) => updateSettings({ notifSoundVolume: Number(e.target.value) })} onMouseUp={() => playSound(s.notifSoundId, s.notifSoundVolume)} /></Row>
+        <Row title="Volume" hint={`${Math.round(s.notifSoundVolume * 100)}%`}><input type="range" aria-label="Volume"  min="0" max="1" step="0.05" value={s.notifSoundVolume} disabled={off} onChange={(e) => updateSettings({ notifSoundVolume: Number(e.target.value) })} onMouseUp={() => playSound(s.notifSoundId, s.notifSoundVolume)} /></Row>
         <AppSounds off={off} />
       </Group>
       <Group title="Quiet hours" footer="Messages still arrive, silently.">
@@ -915,7 +915,7 @@ function WallpaperGroup() {
         {has && <button className="link danger" onClick={async () => { await removePhoto(); setHas(false); if (s.wallpaper === "custom") updateSettings({ wallpaper: "none" }); }}>Remove</button>}
       </Row>
       {err && <p className="error pad">{err}</p>}
-      <Row title="Darken" hint={s.wallpaperDim ? `${s.wallpaperDim}%` : "Off"}><input type="range" min="0" max="70" step="5" value={s.wallpaperDim} onChange={(e) => updateSettings({ wallpaperDim: Number(e.target.value) })} /></Row>
+      <Row title="Darken" hint={s.wallpaperDim ? `${s.wallpaperDim}%` : "Off"}><input type="range" aria-label="Darken"  min="0" max="70" step="5" value={s.wallpaperDim} onChange={(e) => updateSettings({ wallpaperDim: Number(e.target.value) })} /></Row>
     </Group>
   );
 }

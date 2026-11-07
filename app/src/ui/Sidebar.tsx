@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlarmClock, Archive, ArchiveRestore, BellOff, CheckCheck, CircleDot, Circle, CheckCircle2, Inbox, ListFilter, MailOpen, MessageSquareDot, MoreVertical, Pin,
   PinOff, Lock, Trash2, Search, Settings as SettingsIcon, Hourglass, SquarePen, Star, Tag, TriangleAlert, Users, ArrowDownToLine, ChevronLeft, ChevronRight, UserRoundCog, X,
@@ -10,7 +10,7 @@ import {
   getState, useEncryption,
 } from "../core/store";
 import { RowAction, updateSettings, useSettings } from "../core/settings";
-import { Avatar, GroupAvatar, IconButton, Modal, TypingDots, WhenModal, EmptyState } from "./common";
+import { Avatar, GroupAvatar, IconButton, Modal, TypingDots, WhenModal, EmptyState, useEscape } from "./common";
 import { needsAttention } from "./Accounts";
 import { Mascot } from "./Mascot";
 
@@ -66,6 +66,8 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
   const [tab, setTab] = useState(st.defaultTab === "unread" ? "unread" : "inbox");
   const [filters, setFilters] = useState<Filters>(noFilters);
   const [menu, setMenu] = useState(false);
+  const closeAccountMenu = useCallback(() => setMenu(false), []);
+  useEscape(menu, closeAccountMenu);
   // Desktop: the menu stays open until you click somewhere else.
   useEffect(() => {
     if (!menu || !window.pagerDesktop) return;
@@ -346,6 +348,7 @@ export function Sidebar({ selected, onSelect, nav, onAccounts }: { selected: str
 }
 
 function ChatMenu({ c, x, y, pins, close, onMute, onLabels, onWhen, onSelect, onDelete }: { c: ChatSummary; x: number; y: number; pins: ChatSummary[]; close: () => void; onMute: () => void; onLabels: () => void; onWhen: (k: "snooze" | "remind") => void; onSelect: () => void; onDelete: () => void }) {
+  useEscape(true, close);
   const unread = c.unread > 0 || c.markedUnread;
   const at = pins.findIndex((p) => p.id === c.id);
   const run = (f: () => void) => () => { f(); close(); };

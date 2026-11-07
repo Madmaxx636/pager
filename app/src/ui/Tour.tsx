@@ -50,7 +50,8 @@ export function Tour({ nav, forceOpen, onClose }: { nav: (to: string) => void; f
     setMs(0);
     if (!open) return;
     if (st.reduceMotion || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { setMs(1e9); return; }
-    const t0 = performance.now(); const id = window.setInterval(() => setMs(performance.now() - t0), 30);
+    const t0 = performance.now(), total = (step?.text.length ?? 0) * 22 + 60;
+    const id = window.setInterval(() => { const t = performance.now() - t0; setMs(t); if (t > total) window.clearInterval(id); }, 30);   // (stops once all the words are showing)
     return () => window.clearInterval(id);
   }, [open, step?.id, st.reduceMotion]);
 

@@ -60,6 +60,16 @@ export function IconButton({ icon: Icon, label, onClick, active, size = 20, clas
   return <button type="button" className={"icon" + (active ? " active" : "") + (className ? " " + className : "")} onClick={onClick} title={label} aria-label={label}><Icon size={size} /></button>;
 }
 
+/** Escape closes a pop-up menu (and only that: the key is not passed on to whatever is under it). */
+export function useEscape(active: boolean, close: () => void) {
+  useEffect(() => {
+    if (!active) return;
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+    window.addEventListener("keydown", h, true);
+    return () => window.removeEventListener("keydown", h, true);
+  }, [active, close]);
+}
+
 /** A dialog that is a bottom sheet on phones and a centered card on desktop. */
 export function Modal({ title, onClose, children, wide }: { title?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
@@ -86,8 +96,8 @@ export function SheetItem({ icon: Icon, label, hint, danger, onClick }: { icon: 
   return <button className={"sheet-item" + (danger ? " danger" : "")} onClick={onClick}><Icon size={20} /><div><span>{label}</span>{hint && <small>{hint}</small>}</div></button>;
 }
 
-export function Switch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return <button role="switch" aria-checked={checked} disabled={disabled} className={"switch" + (checked ? " on" : "")} onClick={() => onChange(!checked)}><i /></button>;
+export function Switch({ checked, onChange, disabled, label }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; label?: string }) {
+  return <button role="switch" aria-checked={checked} aria-label={label} disabled={disabled} className={"switch" + (checked ? " on" : "")} onClick={() => onChange(!checked)}><i /></button>;
 }
 
 /** iOS-style inset group of settings rows. */
@@ -114,7 +124,7 @@ export function Row({ title, hint, children, onClick, icon, tint, chevron }: { t
 }
 
 export function SwitchRow({ title, hint, checked, onChange, disabled }: { title: string; hint?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return <Row title={title} hint={hint} onClick={disabled ? undefined : () => onChange(!checked)}><Switch checked={checked} onChange={onChange} disabled={disabled} /></Row>;
+  return <Row title={title} hint={hint} onClick={disabled ? undefined : () => onChange(!checked)}><Switch checked={checked} onChange={onChange} disabled={disabled} label={title} /></Row>;
 }
 
 export function Select<T extends string>({ title, hint, value, options, onChange, disabled }: { title: string; hint?: string; value: T; options: [T, string][]; onChange: (v: T) => void; disabled?: boolean }) {

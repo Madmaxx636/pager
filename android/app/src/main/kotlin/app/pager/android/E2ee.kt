@@ -206,8 +206,14 @@ class E2ee private constructor(
     suspend fun currentRecoveryKey(): String? = try { withContext(Dispatchers.IO) { machine.getBackupKeys()?.recoveryKey()?.toBase58() }?.let(::spaced) } catch (_: Exception) { null }
 
     // The master password's locked copy of the recovery key lives in the account (see KeyVault.kt). Clearing it writes an empty one: Matrix has no delete for account data.
-    suspend fun getVault(): JsonObject? = try { tx("GET", "/_matrix/client/v3/user/${enc(userId)}/account_data/${KeyVault.TYPE}", null) } catch (_: Exception) { null }
-    suspend fun putVault(v: JsonObject) { tx("PUT", "/_matrix/client/v3/user/${enc(userId)}/account_data/${KeyVault.TYPE}", v) }
+    // (Asked for at most once a minute: the status screen refreshes often, and an account without a master password answers 404 every time.)
+    private var vaultSeen: Pair<Long, JsonObject?>? = null
+    suspend fun getVault(fresh: Boolean = false): JsonObject? {
+        vaultSeen?.let { (at, v) -> if (!fresh && System.currentTimeMillis() - at < 60_000) return v }
+        val v = try { tx("GET", "/_matrix/client/v3/user/${enc(userId)}/account_data/${KeyVault.TYPE}", null) } catch (_: Exception) { null }
+        vaultSeen = System.currentTimeMillis() to v; return v
+    }
+    suspend fun putVault(v: JsonObject) { tx("PUT", "/_matrix/client/v3/user/${enc(userId)}/account_data/${KeyVault.TYPE}", v); vaultSeen = System.currentTimeMillis() to v }
 
     /** The backup version this phone is saving to (null when unknown). It differs from the server's when another device made a new recovery key. */
     suspend fun localBackupVersion(): String? = try { withContext(Dispatchers.IO) { machine.getBackupKeys()?.backupVersion() } } catch (_: Exception) { null }

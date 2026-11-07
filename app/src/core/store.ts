@@ -343,7 +343,8 @@ export async function encryptionReport(): Promise<string> {
 }
 export async function refreshEncryptionStatus() {
   if (!e2ee) { setEncStatus({ ready: false, backupHere: false, backupOnServer: false, deviceId: "", fingerprint: "", error: startError }); return; }
-  const [backupHere, ver, mine, vault] = await Promise.all([e2ee.backupOn(), e2ee.backupVersion(), e2ee.localBackupVersion(), e2ee.getVault()]);
+  const [backupHere, ver, mine] = await Promise.all([e2ee.backupOn(), e2ee.backupVersion(), e2ee.localBackupVersion()]);
+  const vault = ver ? await e2ee.getVault() : undefined;   // a master password only means something once a recovery backup exists
   setEncStatus({ ready: true, backupHere, backupOnServer: !!ver, vault: !!vault && !!ver && vault.backup === ver.version, deviceId: e2ee.deviceId, fingerprint: e2ee.machine.identityKeys.ed25519.toBase64(), mismatch: keyMismatch, serverVersion: ver?.version, keyChanged: !!ver && backupHere && !!mine && mine !== ver.version, whyLocked: e2ee.whyLocked() });
 }
 // One fixed function: a new one on every render would make React subscribe again each time, and each subscribe asks the server.
@@ -422,7 +423,7 @@ export async function removeMasterPassword(): Promise<void> {
 /** The recovery key to show, copy or save. With a master password set, the right password is needed. */
 export async function showRecoveryKey(password?: string): Promise<string> {
   if (!e2ee) throw new Error("Encryption is not ready yet");
-  const vault = encStatus.vault ? await e2ee.getVault() : undefined;
+  const vault = encStatus.vault ? await e2ee.getVault(true) : undefined;
   if (vault) { if (!password) throw new Error("Enter your master password"); return openRecoveryKey(vault, password); }
   const key = await e2ee.currentRecoveryKey();
   if (!key) throw new Error("This device doesn't hold the recovery key");
@@ -431,7 +432,7 @@ export async function showRecoveryKey(password?: string): Promise<string> {
 /** A new device: opens the recovery key with the master password and restores the history with it. Returns how many message keys came back. */
 export async function restoreWithMasterPassword(password: string): Promise<number> {
   if (!e2ee) throw new Error("Encryption is not ready yet");
-  const vault = await e2ee.getVault();
+  const vault = await e2ee.getVault(true);
   if (!vault) throw new Error("No master password is set on this account");
   return restoreWithRecoveryKey(await openRecoveryKey(vault, password));
 }

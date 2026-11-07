@@ -195,10 +195,15 @@ export class Crypto {
   }
 
   // The master password's locked copy of the recovery key lives in the account (see keyvault.ts). Clearing it writes an empty one: Matrix has no delete for account data.
-  async getVault(): Promise<Vault | undefined> {
-    try { return asVault(await this.tx("GET", `/_matrix/client/v3/user/${enc(this.userId)}/account_data/${VAULT_TYPE}`)); } catch { return undefined; }
+  // (Asked for at most once a minute: the status screen refreshes often, and an account without a master password answers 404 every time.)
+  private vaultSeen?: { at: number; vault?: Vault };
+  async getVault(fresh = false): Promise<Vault | undefined> {
+    if (!fresh && this.vaultSeen && Date.now() - this.vaultSeen.at < 60_000) return this.vaultSeen.vault;
+    let vault: Vault | undefined;
+    try { vault = asVault(await this.tx("GET", `/_matrix/client/v3/user/${enc(this.userId)}/account_data/${VAULT_TYPE}`)); } catch { /* none set */ }
+    this.vaultSeen = { at: Date.now(), vault }; return vault;
   }
-  async putVault(v: Vault | Record<string, never>): Promise<void> { await this.tx("PUT", `/_matrix/client/v3/user/${enc(this.userId)}/account_data/${VAULT_TYPE}`, v); }
+  async putVault(v: Vault | Record<string, never>): Promise<void> { await this.tx("PUT", `/_matrix/client/v3/user/${enc(this.userId)}/account_data/${VAULT_TYPE}`, v); this.vaultSeen = { at: Date.now(), vault: asVault(v) }; }
 
   /** True when this device is saving its keys to the backup. */
   async backupOn(): Promise<boolean> { return this.machine.isBackupEnabled(); }

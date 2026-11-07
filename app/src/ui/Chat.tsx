@@ -20,7 +20,7 @@ import { addLink, buildMerged, groupOf, suggestLinks, unlink } from "../core/lin
 import { aliasOf, receiptIndex } from "../core/types";
 import { groupFaces } from "../core/faces";
 import { SOUNDS, playSound } from "../core/sounds";
-import { Avatar, GroupAvatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useMxc } from "./common";
+import { Avatar, GroupAvatar, EmojiPicker, TypingDots, IconButton, Modal, Select, SheetItem, Switch, WhenModal, humanSize, useEscape, useMxc } from "./common";
 import { MessageRow } from "./Message";
 import { Effects } from "./Effects";
 import { AttachKind, AttachMenu, AttentionModal, ContactModal, GifModal, PollModal, StickerModal } from "./Attach";
@@ -79,6 +79,8 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   }, [dsk, infoOpen]);
   useEffect(() => { setInfoPanelOpen(infoOpen); return () => setInfoPanelOpen(false); }, [infoOpen]);
   const [menu, setMenu] = useState<{ msg: Msg; x: number; y: number }>();
+  const closeMenu = useCallback(() => setMenu(undefined), []);
+  useEscape(!!menu, closeMenu);
   const [viewer, setViewer] = useState<string>();
   const [picker, setPicker] = useState<Msg>();
   const [who, setWho] = useState<{ msg: Msg; key: string }>();
@@ -163,6 +165,9 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const ro = new ResizeObserver(pin); if (el.firstElementChild) ro.observe(el.firstElementChild); ro.observe(el);
     return () => { el.removeEventListener("load", pin, true); el.removeEventListener("loadedmetadata", pin, true); ro.disconnect(); };
   }, [roomId, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The message box measures itself by collapsing for an instant, which trims the list's scroll position without any lasting change of size, so the size watcher above
+  // never sees it. The box says when it has settled; if you were at the bottom, go back there before anything is drawn (this was the little up-and-down twitch).
+  useEffect(() => { const f = () => { if (stick.current) toBottom(); }; window.addEventListener("pager:composer-resize", f); return () => window.removeEventListener("pager:composer-resize", f); }, [toBottom]);
   // Back from the tray or behind another window: show the newest message again.
   useEffect(() => { const w = () => { if (stick.current) settle(); }; window.addEventListener("pager:wake", w); return () => window.removeEventListener("pager:wake", w); }, [settle]);
   // A message only counts as read while you can see it: the window is in front and focused. Otherwise a message that arrives while Pager sits
@@ -381,7 +386,7 @@ function MenuItems({ roomId, m, mine, starred, dev, close, onReply, onEdit, onFo
       {["m.text", "m.notice", "m.emote"].includes(m.type) && <Item icon={Copy} label="Copy text" f={() => void navigator.clipboard.writeText(m.body)} />}
       <Item icon={Star} label={starred ? "Remove star" : "Star"} f={() => toggleStar(roomId, m)} />
       {m.mxc && !["m.text", "m.notice", "m.emote"].includes(m.type) && <Item icon={Download} label="Save" f={() => void download(m)} />}
-      {m.mxc && m.type !== "m.file" && <Item icon={ExternalLink} label="Open in new tab" f={() => void openInTab(m)} />}
+      {m.mxc && m.type !== "m.file" && !window.pagerDesktop && <Item icon={ExternalLink} label="Open in new tab" f={() => void openInTab(m)} />}
       {m.type === "m.image" && m.mxc && <Item icon={Copy} label="Copy image" f={() => void copyImage(m)} />}
       {typeof navigator.share === "function" && ["m.text", "m.notice", "m.emote"].includes(m.type) && <Item icon={Share2} label="Share text" f={() => void navigator.share({ text: m.body }).catch(() => {})} />}
       {m.type === "m.image" && m.mxc && <Item icon={Smile} label="Save as sticker" f={() => void saveAsSticker(m)} />}
@@ -434,10 +439,17 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
     const t = setTimeout(() => { if (!editing) setDraft(roomId, text); }, 500);
     return () => clearTimeout(t);
   }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => { typing(roomId, false); }, [roomId]);
+  // The draft is saved half a second after you stop typing; leaving the page (or the chat closing) inside that half second used to throw it away. Save it on the way out.
+  const live = useRef({ text, editing }); live.current = { text, editing };
+  useEffect(() => () => { typing(roomId, false); if (!live.current.editing) setDraft(roomId, live.current.text); }, [roomId]);
   // The box grows with what you type. It is measured again when its width changes (opening a page, adding an attachment), because a box
   // measured before it has its width wraps even the placeholder and comes out tall.
-  const fitBox = useCallback(() => { const el = ta.current; if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight + 2, 168)}px`; } }, []);
+  const fitBox = useCallback(() => {
+    const el = ta.current; if (!el) return;
+    el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight + 2, 168)}px`;
+    // (Every time, not only when the height changed: the collapse in between trims the list's scroll position even when the box ends up the same height.)
+    window.dispatchEvent(new Event("pager:composer-resize"));
+  }, []);
   useLayoutEffect(fitBox, [text, staged.length, roomId, fitBox]);
   useEffect(() => { const el = ta.current; if (!el || typeof ResizeObserver === "undefined") return; const ro = new ResizeObserver(fitBox); ro.observe(el); return () => ro.disconnect(); }, [fitBox, roomId]);
 

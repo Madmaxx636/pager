@@ -4,6 +4,18 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.18 (phone, desktop, web)
+
+- **Scroll twitch while typing (desktop, web):** each keystroke the message box measures itself by collapsing for an instant, which trimmed the page's scroll position by a few pixels without any lasting change of size, so nothing put it back. Growing from one line to two (or the first character you type) left the page a little off the bottom, with the newest message partly behind the box. The box now tells the page when it has settled, and the page goes back to the bottom before anything is drawn. Checked frame by frame: typing, wrapping, deleting, the reply bar, the attachment tray, sending, resizing the window, a message from someone else and the "typing" dots. While you are reading higher up, nothing moves at all.
+- **Escape closes menus (desktop, web):** the menu on a message, the right-click menu on a page, and the account menus ignored Escape and could only be closed with the mouse.
+- **Drafts (desktop, web):** a message you had typed was only saved half a second after your last key. Switching to another page inside that half second lost it. It is now saved the moment you leave. (The phone already did this.)
+- **Open in new tab (desktop):** the message menu offered it for pictures but nothing happened, because the app only lets web, mail and map links out. It is hidden in the desktop app; Save is still there.
+- **Clicking a notification after closing the window for good (desktop):** the window opened but not the page the notification was about, because the request was sent before the app had loaded. It now waits.
+- **Welcome tour (desktop, web):** the typing effect kept redrawing the screen about 30 times a second after the words were all there. It stops now.
+- **Fewer failed requests (phone, desktop, web):** the status check for the master password asked your server every time, and an account without one gets a "not found" each time. It now asks only when a recovery backup exists, and at most once a minute.
+- **Screen readers (desktop, web):** the on/off switches and sliders in Settings had no names. They have now.
+- **For developers:** end-to-end tests for everyday flows (formatted and awkward text, reply, edit, react, star, delete, drafts, search, shortcuts, pin, mute, archive, forward, several files, pasting a picture, dark mode) and a frame-by-frame check that the list never leaves the bottom or moves while you read (`e2e/tests/workflows*.spec.mjs`, `twitch.spec.mjs`). An exploratory walk that clicks everything on every screen is there too (`EXPLORE=1`, about 7 minutes).
+
 ## 0.6.17 (desktop, web)
 
 - **Typing a long message (desktop, web):** as the message box grew with what you typed, the page above it was left behind and the newest message ended up under the box. The page took the resize for you scrolling up, and stopped following the bottom. Now only a scroll you cause (wheel, touch, keys, dragging the scroll bar) can turn that off, so growing the box, pictures loading and similar changes keep you at the bottom. The same reason made the page jump when you scrolled down and began typing.

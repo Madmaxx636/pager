@@ -262,7 +262,13 @@ if (!app.requestSingleInstanceLock()) {
     const n = new Notification({ title: String(o.title ?? "Pager"), body: String(o.body ?? ""), silent: !!o.silent, icon: path.join(__dirname, "build", "icon.png") });
     // Held until it is gone: a notification nothing refers to can be cleaned up before you click it, and the click then does nothing.
     shownNotifications.add(n); const forget = () => shownNotifications.delete(n);
-    n.on("click", () => { forget(); showWindow(); if (o.roomId && win) win.webContents.send("open-room", String(o.roomId)); });
+    n.on("click", () => {
+      forget(); const fresh = !win; showWindow();
+      if (!(o.roomId && win)) return;
+      const send = () => { if (win && !win.isDestroyed()) win.webContents.send("open-room", String(o.roomId)); };
+      // A window that was closed for good is made again by showWindow: the page is not there yet to be told which chat to open.
+      if (fresh || win.webContents.isLoading()) win.webContents.once("did-finish-load", () => setTimeout(send, 800)); else send();
+    });
     n.on("close", forget); n.on("failed", forget);
     n.show();
   });
