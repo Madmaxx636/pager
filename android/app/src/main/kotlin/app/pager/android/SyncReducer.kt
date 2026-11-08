@@ -148,6 +148,7 @@ object SyncReducer {
         val votes = start.pollVotes.mapValues { (_, v) -> v.toMutableMap() }.toMutableMap()
         val ended = start.pollEnded.toMutableSet()
         val deliveredTo = start.deliveredTo.toMutableMap()
+        val sendFailed = start.sendFailed.toMutableMap()
         var statusSeen = start.statusSeen
         val eventTs = start.eventTs.toMutableMap()
 
@@ -213,6 +214,9 @@ object SyncReducer {
                     statusSeen = true
                     val who = (content["delivered_to_users"] ?: content["delivered_to"]).arr().mapNotNull { it.str() }
                     if (who.isNotEmpty()) deliveredTo[target] = who
+                    // The other network refused it (a file type it does not take, say): keep the bridge's reason, so the message does not sit on "Sent" for ever.
+                    val verdict = content["status"].str().orEmpty()
+                    if (verdict.startsWith("FAIL")) sendFailed[target] = content["message"].str() ?: content["reason"].str() ?: "the other network refused it" else if (verdict == "SUCCESS") sendFailed.remove(target)
                 }
                 "m.room.redaction" -> {
                     val target = e["redacts"].str() ?: content["redacts"].str() ?: continue
@@ -234,6 +238,7 @@ object SyncReducer {
             pollVotes = votes.mapValues { (_, v) -> v.toMap() },
             pollEnded = ended,
             deliveredTo = deliveredTo,
+            sendFailed = sendFailed,
             statusSeen = statusSeen,
         )
     }

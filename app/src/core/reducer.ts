@@ -141,6 +141,7 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
   const ended = new Set(start.pollEnded);
   const deliveredTo: Record<string, string[]> = { ...(start.deliveredTo ?? {}) };
   let statusSeen = !!start.statusSeen;
+  const sendFailed: Record<string, string> = { ...(start.sendFailed ?? {}) };
   const eventTs: Record<string, number> = { ...(start.eventTs ?? {}) };
 
   for (const e of events) {
@@ -208,6 +209,9 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
         statusSeen = true;
         const who = arr(content.delivered_to_users ?? content.delivered_to).filter((u): u is string => typeof u === "string");
         if (who.length) deliveredTo[target] = who;
+        // The other network refused it (a file type it does not take, say): keep the bridge's reason, so the message does not sit on "Sent" for ever.
+        const verdict = str(content.status) ?? "";
+        if (verdict.startsWith("FAIL")) sendFailed[target] = str(content.message) ?? str(content.reason) ?? "the other network refused it"; else if (verdict === "SUCCESS") delete sendFailed[target];
         break;
       }
       case "m.room.redaction": {
@@ -235,7 +239,7 @@ function process(start: ChatState, events: J[], applyStates: boolean, onNew?: (m
   // keep the times of the newest few hundred events (enough for receipts), not of everything ever seen
   const keys = Object.keys(eventTs);
   if (keys.length > 600) { keys.sort((a, b) => eventTs[b] - eventTs[a]); for (const k of keys.slice(500)) delete eventTs[k]; }
-  return { ...chat, messages: msgs, reactions: cleaned, reactionRefs: refs, pollVotes: votes, pollEnded: [...ended], deliveredTo, statusSeen, eventTs };
+  return { ...chat, messages: msgs, reactions: cleaned, reactionRefs: refs, pollVotes: votes, pollEnded: [...ended], deliveredTo, sendFailed, statusSeen, eventTs };
 }
 
 function applyEdit(msgs: Msg[], e: J): Msg[] {

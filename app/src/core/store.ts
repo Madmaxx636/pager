@@ -15,6 +15,7 @@ import { WAITING_TEXT, applyHistory, historyFits, applySync, relabelUnreadable, 
 import { toOggOpus, voiceInfo } from "./voice";
 import { movedIds } from "./pins";
 import { Crypto, isEncryptedType, parseRecoveryKey } from "./crypto";
+import { mediaKind } from "./mediatype";
 import { findRecoveryKey, openRecoveryKey, sealRecoveryKey } from "./keyvault";
 import { decryptAttachment, encryptAttachment, encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { Decision, decide } from "./notifypolicy";
@@ -806,8 +807,8 @@ export function sendAttention(roomId: string, kind: AttentionKind) {
     .then((id) => setStatus(roomId, localId, STATUS_SENT, id)).catch(() => setStatus(roomId, localId, STATUS_FAILED));
 }
 export function sendFile(roomId: string, file: File | Blob, name = (file as File).name || "file", extra: Partial<Msg> & { viewOnce?: boolean; caption?: string } = {}) {
-  const mime = file.type || "application/octet-stream";
-  const type = mime.startsWith("image/") ? "m.image" : mime.startsWith("video/") ? "m.video" : mime.startsWith("audio/") ? "m.audio" : "m.file";
+  // A voice message keeps its own kind (the bridge turns it into a voice note); everything else goes as a kind the other network accepts.
+  const { type, mime } = extra.voice ? { type: "m.audio" as const, mime: file.type || "audio/ogg" } : mediaKind(file.type, (state.chats[roomId]?.network ?? "matrix") !== "matrix");
   const txn = uuid(), localId = `local-${txn}`;
   addLocal(roomId, localMsg(localId, type, name, { mime, size: file.size, txn, ...extra, viewOnce: undefined, caption: extra.caption?.trim() || undefined } as Partial<Msg>));
   void (async () => {

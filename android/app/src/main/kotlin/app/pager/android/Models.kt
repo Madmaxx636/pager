@@ -90,6 +90,8 @@ data class ChatState(
     val eventTs: Map<String, Long> = emptyMap(),
     /** Message event id -> who it was delivered to, as the bridge reports it (the second tick in the other app). */
     val deliveredTo: Map<String, List<String>> = emptyMap(),
+    /** Message event id -> why the other network refused it, as the bridge reports it. */
+    val sendFailed: Map<String, String> = emptyMap(),
     /** The bridge sends delivery reports in this chat, so its own receipt only means "sent". */
     val statusSeen: Boolean = false,
     val tags: Set<String> = emptySet(),

@@ -399,6 +399,9 @@ fun MessageRow(
             }
         }
         if (msg.status == STATUS_FAILED) Text("Not sent · tap to retry", style = MaterialTheme.typography.labelMedium, color = scheme.error, modifier = Modifier.padding(horizontal = 8.dp))
+        chat?.sendFailed?.get(msg.id)?.takeIf { msg.sender == me && msg.status == STATUS_SENT }?.let { why ->
+            Text("Didn't reach ${networkMeta(chat.network).label}: ${MediaKind.niceReason(why)}", style = MaterialTheme.typography.labelMedium, color = scheme.error, modifier = Modifier.padding(horizontal = 8.dp))
+        }
         val reactions = chat?.reactions?.get(msg.id).orEmpty()
         if (reactions.isNotEmpty()) {
             FlowRow(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

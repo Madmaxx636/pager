@@ -1046,10 +1046,11 @@ class Store(private val context: Context) {
 
     private fun sendOriginal(roomId: String, uri: Uri, p: Picked, viewOnce: Boolean = false, caption: String? = null, attention: String? = null, replyTo: String? = null) {
         val me = _session.value?.userId ?: return
-        val type = when { p.mime.startsWith("image/") -> "m.image"; p.mime.startsWith("video/") -> "m.video"; p.mime.startsWith("audio/") -> "m.audio"; else -> "m.file" }
+        // Sent as a kind the other network accepts (a bridge turns back, say, a .m4a labelled audio/x-m4a, and the message then sits on "Sent").
+        val (type, sendMime) = MediaKind.of(p.mime, (_chats.value[roomId]?.network ?: "matrix") != "matrix")
         val txn = UUID.randomUUID().toString()
         val localId = "local-$txn"
-        addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), type, p.name, mxc = null, mime = p.mime, size = p.size, w = p.w, h = p.h, txn = txn, status = STATUS_SENDING, caption = caption?.trim()?.ifEmpty { null }, replyTo = replyTo))
+        addLocal(roomId, Msg(localId, me, System.currentTimeMillis(), type, p.name, mxc = null, mime = sendMime, size = p.size, w = p.w, h = p.h, txn = txn, status = STATUS_SENDING, caption = caption?.trim()?.ifEmpty { null }, replyTo = replyTo))
         scope.launch {
             runCatching {
                 val (mxc, enc) = uploadFor(roomId, p.name, p.mime, p.size) { context.contentResolver.openInputStream(uri)!! }
@@ -1059,7 +1060,7 @@ class Store(private val context: Context) {
                     if (viewOnce && (type == "m.image" || type == "m.video")) putJsonObject("com.beeper.view_limited") { put("type", "count"); put("count", 1) }
                     if (attention != null) putJsonObject(Attention.FIELD) { put("kind", attention) }
                     putJsonObject("info") {
-                        put("mimetype", p.mime); put("size", p.size)
+                        put("mimetype", sendMime); put("size", p.size)
                         p.w?.let { put("w", it) }; p.h?.let { put("h", it) }
                     }
                 })

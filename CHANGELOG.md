@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.19 (phone, desktop, web)
+
+- **Audio files to Signal (phone, desktop, web):** an audio file from a computer or phone (a `.m4a`, for instance, which browsers call `audio/x-m4a`) was turned back by the Signal bridge with "unsupported media type", and the message sat on "Sent" for ever. Signal takes only AAC, MP3, FLAC, MP4 and WAV audio. Pager now puts the usual alternative names right (`audio/x-m4a` goes as `audio/mp4`) and sends anything a network does not take as a plain file, which every network accepts. The same goes for pictures (HEIC, SVG) and videos (iPhone `.mov`) that the networks refuse. Voice messages are not affected, and a page that is only on Pager sends files as they were.
+- **When a network turns a message back (phone, desktop, web):** the bridge says so, but Pager ignored it, so the message looked sent. It now shows "Didn't reach Signal: it doesn't accept that kind of file" under the message (the reason is the bridge's own, in plain words), and the note goes away if the network accepts it later.
+- **For developers:** the same rules on every platform, with tests on each (`mediatype.ts`, `MediaKind.kt`), and an end-to-end test of the files and the note (`e2e/tests/media.spec.mjs`).
+
 ## 0.6.18 (phone, desktop, web)
 
 - **Scroll twitch while typing (desktop, web):** each keystroke the message box measures itself by collapsing for an instant, which trimmed the page's scroll position by a few pixels without any lasting change of size, so nothing put it back. Growing from one line to two (or the first character you type) left the page a little off the bottom, with the newest message partly behind the box. The box now tells the page when it has settled, and the page goes back to the bottom before anything is drawn. Checked frame by frame: typing, wrapping, deleting, the reply bar, the attachment tray, sending, resizing the window, a message from someone else and the "typing" dots. While you are reading higher up, nothing moves at all.

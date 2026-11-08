@@ -5,6 +5,7 @@ import { ChatState, Msg, STATUS_FAILED, STATUS_SENDING, STATUS_SENT, nameOf, pre
 import { isEmojiOnly } from "../core/format";
 import { AppSettings, bubbleColorsFor, bubbleLook } from "../core/settings";
 import { networkMeta } from "../core/emoji";
+import { niceReason } from "../core/mediatype";
 import { LinkPreview } from "../core/api";
 import { me, mediaUrl, preview, retry } from "../core/store";
 import { Avatar, humanSize, useMxc } from "./common";
@@ -122,6 +123,7 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
       </div>
       {st.look === "imessage" && mine && latestMine && msg.status === STATUS_SENT && st.showReadTicks && <div className="im-status">{read ? `Read${chat.receiptTs ? "" : ""}` : delivered ? "Delivered" : "Sent"}</div>}
       {msg.status === STATUS_FAILED && <div className="failed-note">Not sent · click the message to retry</div>}
+      {mine && msg.status === STATUS_SENT && chat.sendFailed?.[msg.id] && <div className="failed-note">Didn't reach {networkMeta(chat.network).label}: {niceReason(chat.sendFailed[msg.id])}</div>}
       {Object.keys(reactions).length > 0 && (
         <div className="reactions">
           {Object.entries(reactions).map(([key, users]) => (
