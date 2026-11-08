@@ -63,6 +63,11 @@ export interface ChatState {
   joined: string[];
   heroes: string[];
   prevBatch?: string | null;
+  /**
+   * Events are missing between the messages we had and the newest ones (a sync that carried too much to hold it all): `token` is where to read backwards from
+   * to fill it, `oldTs` is the time of the newest message from before the hole. Filled in the background; see fillGap in store.ts.
+   */
+  gap?: { token: string; oldTs: number; pages?: number };
   reachedStart: boolean;
   /** target event id -> reaction key -> senders */
   reactions: Record<string, Record<string, string[]>>;

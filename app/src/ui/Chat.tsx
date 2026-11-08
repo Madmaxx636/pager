@@ -112,14 +112,26 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const latestMine = useMemo(() => { for (let i = messages.length - 1; i >= 0; i--) if (messages[i].sender === user && messages[i].status === STATUS_SENT) return messages[i].id; return undefined; }, [messages, user]);
   const group = chat ? isGroup(chat) || new Set(messages.map((m) => m.sender)).size > 2 : false;
 
-  // Where the unread messages begin; computed once when the chat opens.
+  // Where the unread messages begin. Once it is known it stays (new messages arriving must not move the line). It is only known when the first unread message is really loaded:
+  // with more unread than loaded the line used to be put before the oldest loaded message, and the page opened there, a long way from where the unread messages start.
+  const unreadFixed = useRef<{ room: string; id: string } | null>(null);
+  // How things stood when the chat opened: opening it marks it read at once, so the count and the read marker are gone by the time older messages have loaded.
+  const openSnap = useRef<{ room: string; unread: number; read?: string } | null>(null);
+  if (chat && openSnap.current?.room !== roomId) openSnap.current = { room: roomId, unread: chat.unread, read: chat.receipts[user] };
   const unreadBefore = useMemo(() => {
-    if (!chat) return undefined;
-    const read = chat.receipts[user];
-    const i = read ? chat.messages.findIndex((m) => m.id === read) : -1;
-    const fresh = i >= 0 ? chat.messages.slice(i + 1) : chat.unread > 0 ? chat.messages.slice(-chat.unread) : [];
-    return fresh.find((m) => m.sender !== user)?.id;
-  }, [roomId, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
+    const snap = openSnap.current;
+    if (!chat || !snap) return undefined;
+    if (unreadFixed.current?.room === roomId) return unreadFixed.current.id;
+    const i = snap.read ? chat.messages.findIndex((m) => m.id === snap.read) : -1;
+    const fresh = i >= 0 ? chat.messages.slice(i + 1) : snap.unread > 0 && snap.unread <= chat.messages.length ? chat.messages.slice(-snap.unread) : [];
+    const id = fresh.find((m) => m.sender !== user)?.id;
+    if (id) unreadFixed.current = { room: roomId, id };
+    return id;
+  }, [roomId, chat != null, chat?.messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // More unread than we have loaded: read further back (a few hundred at most) so the line can be drawn where it belongs.
+  const unreadUnknown = !!chat && !!openSnap.current && !unreadFixed.current?.id && openSnap.current.unread > chat.messages.length && openSnap.current.unread <= 600;
+  const wantMore = useRef(false); wantMore.current = unreadUnknown;
+  useEffect(() => { if (unreadUnknown) groupIds.forEach((id) => loadOlder(id, 0, () => wantMore.current)); }, [unreadUnknown, messages.length, groupIds.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const items = useMemo(() => buildItems(messages, unreadBefore, st.groupGapMin * 60_000), [messages, unreadBefore, st.groupGapMin]);
 
   // Scroll: open at the unread divider (or bottom), stick to bottom for new messages, keep position when older ones load.
@@ -138,33 +150,49 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     for (const ms of [60, 250, 800]) window.setTimeout(() => { if (stick.current) toBottom(); }, ms);
     requestAnimationFrame(() => { if (stick.current) toBottom(); });
   }, [toBottom]);
-  const prevTop = useRef<{ first?: string; last?: string; height: number }>({ height: 0 });
+  // What you are reading: the first message at the top of the list and how far down it sits. Whatever changes above it (older messages arriving, a hole being filled, a picture
+  // finishing loading) moves it; it is put back where it was, so the words under your eyes stay still. (The browser's own version of this is off for the list: it does not work
+  // at the very top, which is where older messages are asked for.)
+  const prevLast = useRef<string | undefined>(undefined);
+  const anchor = useRef<{ id: string; y: number } | null>(null);
+  const topMsg = (el: HTMLElement) => {
+    // the first message that reaches into the visible part, found by halving the list (it can hold thousands of messages)
+    const kids = el.children, top = el.getBoundingClientRect().top; let lo = 0, hi = kids.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if ((kids[mid] as HTMLElement).getBoundingClientRect().bottom > top + 1) hi = mid; else lo = mid + 1; }
+    for (let i = lo; i < Math.min(kids.length, lo + 6); i++) { const k = kids[i] as HTMLElement; if (k.dataset.id) return { id: k.dataset.id, y: k.getBoundingClientRect().top - top }; }
+    return null;
+  };
+  const remember = useCallback(() => { const el = scroller.current; anchor.current = el ? topMsg(el) : null; }, []);
+  const hold = useCallback(() => {
+    const el = scroller.current, a = anchor.current; if (!el || !a) return;
+    const m = el.querySelector<HTMLElement>(`[data-id="${CSS.escape(a.id)}"]`); if (!m) { remember(); return; }
+    const d = m.getBoundingClientRect().top - el.getBoundingClientRect().top - a.y;
+    if (Math.abs(d) >= 1) { el.scrollTop += d; ours.current = el.scrollTop; }
+    remember();
+  }, [remember]);
   useLayoutEffect(() => {
     const el = scroller.current; if (!el || !chat) return;
-    const first = messages[0]?.id, last = messages[messages.length - 1]?.id, prev = prevTop.current;
+    const last = messages[messages.length - 1]?.id, prev = prevLast.current;
     if (opened.current !== roomId) {
       opened.current = roomId;
       const div = st.openAtUnread ? el.querySelector("#unread-divider") : null;
       if (div) { (div as HTMLElement).scrollIntoView({ block: "center" }); stick.current = false; } else { stick.current = true; settle(); }
-    } else if (prev.first && first !== prev.first && messages.findIndex((m) => m.id === prev.first) > 0) {
-      // Older messages were put above the ones that were showing: keep what you are reading where it is (browser scroll anchoring is off for this list).
-      if (!stick.current) el.scrollTop += el.scrollHeight - prev.height; else settle();
-    } else if (stick.current || (last !== prev.last && messages[messages.length - 1]?.sender === user)) {
+    } else if (stick.current || (last !== prev && messages[messages.length - 1]?.sender === user)) {
       // At the bottom, or you just sent something: follow. (Not on every change while the last message happens to be yours, which pulled you down while reading.)
       stick.current = true; settle();
-    }
-    prevTop.current = { first, last, height: el.scrollHeight };
+    } else hold();
+    prevLast.current = last; remember();
   }, [roomId, messages, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { opened.current = ""; stick.current = true; setReplyTo(undefined); setEditing(undefined); }, [roomId]);
   useEffect(() => { warmUp(sendRoom); }, [sendRoom, chat?.encrypted]);
   // Pictures and videos change the chat's height as they load: stay at the newest message while you haven't scrolled up.
   useEffect(() => {
     const el = scroller.current; if (!el) return;
-    const pin = () => { if (stick.current) toBottom(); };
+    const pin = () => { if (stick.current) toBottom(); else hold(); };
     el.addEventListener("load", pin, true); el.addEventListener("loadedmetadata", pin, true);
     const ro = new ResizeObserver(pin); if (el.firstElementChild) ro.observe(el.firstElementChild); ro.observe(el);
     return () => { el.removeEventListener("load", pin, true); el.removeEventListener("loadedmetadata", pin, true); ro.disconnect(); };
-  }, [roomId, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [roomId, chat != null, hold]); // eslint-disable-line react-hooks/exhaustive-deps
   // The message box measures itself by collapsing for an instant, which trims the list's scroll position without any lasting change of size, so the size watcher above
   // never sees it. The box says when it has settled; if you were at the bottom, go back there before anything is drawn (this was the little up-and-down twitch).
   useEffect(() => { const f = () => { if (stick.current) toBottom(); }; window.addEventListener("pager:composer-resize", f); return () => window.removeEventListener("pager:composer-resize", f); }, [toBottom]);
@@ -200,9 +228,10 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const rowLeave = () => { cancelAnimationFrame(hoverRaf.current); hoverRow.current?.classList.remove("hovered"); hoverRow.current = null; };
   const onScroll = () => {
     const el = scroller.current; if (!el) return;
-    if (Math.abs(el.scrollTop - ours.current) < 2) return; // our own scroll, not yours
+    if (Math.abs(el.scrollTop - ours.current) < 2) { remember(); return; } // our own scroll, not yours
     // A scroll you did not cause (the page changed height: pictures loading, the message box growing as you type) must not count as you scrolling up.
-    if (Date.now() - lastInput.current > (Date.now() - openedAt.current < 4000 ? 800 : 1200)) { if (stick.current) toBottom(); return; }
+    if (Date.now() - lastInput.current > (Date.now() - openedAt.current < 4000 ? 800 : 1200)) { if (stick.current) toBottom(); else remember(); return; }
+    remember();
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (stick.current && st.markReadMode === "scrolled") markRead(roomId);
     groupIds.forEach((id) => readingOlder(id, !stick.current));
@@ -296,7 +325,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
             </div>
           )}
         </div>
-        {showJump && <button className="jump" onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: st.reduceMotion ? "auto" : "smooth" })} aria-label="Jump to latest"><ChevronDown size={20} /></button>}
+        {showJump && <button className="jump" onClick={() => { stick.current = true; touched(); scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: st.reduceMotion ? "auto" : "smooth" }); }} aria-label="Jump to latest"><ChevronDown size={20} /></button>}
 
         {merged && <ViaPick ids={groupIds} current={sendRoom} onPick={setVia} />}
         <Composer roomId={roomId} sendTo={sendRoom} chat={chat} replyTo={replyTo} editing={editing} st={st} group={group} nav={nav} onClearReply={() => setReplyTo(undefined)} onClearEdit={() => setEditing(undefined)} onFiles={attachFiles} staged={staged} onUnstage={unstage} onSent={clearStaged} />

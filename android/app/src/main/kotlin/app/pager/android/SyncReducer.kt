@@ -84,8 +84,13 @@ object SyncReducer {
             val tl = room["timeline"].obj()
             val limited = (tl["limited"] as? JsonPrimitive)?.booleanOrNull == true
             val prev = tl["prev_batch"].str()
-            // A gap means older loaded messages are no longer contiguous with the new ones; start over from here.
-            if (limited && chat.messages.isNotEmpty() && !initial) chat = chat.copy(messages = emptyList(), prevBatch = prev, reachedStart = false)
+            // Too much happened since the last update to send it all (the phone slept, a bridge delivered a burst): the newest events came, and a hole is left between
+            // them and what we had. Keep what we had (the reader may be a long way back in it) and fill the hole in the background. If a hole is already being
+            // filled, or there is no way to read backwards, start that chat over instead.
+            if (limited && chat.messages.isNotEmpty() && !initial) {
+                chat = if (chat.gap != null || prev == null) chat.copy(messages = emptyList(), gap = null, prevBatch = prev, reachedStart = false)
+                else chat.copy(gap = Gap(prev, newestKnown, 0))
+            }
             else if (chat.prevBatch == null && chat.messages.isEmpty() && prev != null) chat = chat.copy(prevBatch = prev)
 
             val pre = chat
@@ -135,6 +140,26 @@ object SyncReducer {
         for (s in state) if (s["type"].str() == "m.room.member") base = applyState(base, s)
         val chronological = claimOwn(chunk.asReversed(), if (me.isEmpty()) emptySet() else ownGhosts(base, me), me)
         return process(base, chronological, applyStates = false, onNew = null).copy(prevBatch = end, reachedStart = end == null)
+    }
+
+    const val GAP_PAGES = 40
+
+    /**
+     * Merges a page read backwards from a hole (see [ChatState.gap]): the events go in where they belong, and the hole is closed when the page reaches a message we
+     * already had, or the start of the room. A hole too big to be worth filling (about 1,600 events) is given up: what came before it is let go and read again
+     * from the hole when the reader scrolls up, the way a chat is started over.
+     */
+    fun applyGap(chat: ChatState, chunk: List<JsonObject>, end: String?, state: List<JsonObject> = emptyList(), me: String = ""): ChatState {
+        val gap = chat.gap ?: return chat
+        var base = chat
+        for (s in state) if (s["type"].str() == "m.room.member") base = applyState(base, s)
+        val known = base.messages.mapTo(HashSet()) { it.id }
+        val joined = chunk.any { it["event_id"].str() in known }
+        val next = process(base, claimOwn(chunk.asReversed(), if (me.isEmpty()) emptySet() else ownGhosts(base, me), me), applyStates = false, onNew = null)
+        if (joined || end == null) return next.copy(gap = null)
+        val pages = gap.pages + 1
+        if (pages >= GAP_PAGES) return next.copy(messages = next.messages.filter { it.ts > gap.oldTs }, gap = null, prevBatch = end, reachedStart = false)
+        return next.copy(gap = gap.copy(token = end, pages = pages))
     }
 
     /** The core event loop shared by sync and history. */

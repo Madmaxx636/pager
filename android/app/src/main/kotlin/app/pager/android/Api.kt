@@ -278,6 +278,10 @@ class MatrixApi(private val http: Http) {
     }
 
     /** One page of older events. Returns (events newest-first, next token or null at the start of the room). */
+    /** A place to read backwards from that sits just before one event, so a chat that kept only its newest messages carries on from exactly there. */
+    suspend fun tokenBefore(roomId: String, eventId: String): String? =
+        http.request("GET", "/_matrix/client/v3/rooms/${enc(roomId)}/context/${enc(eventId)}?limit=0")["start"].str()
+
     suspend fun messages(roomId: String, from: String): Triple<List<JsonObject>, String?, List<JsonObject>> {
         val filter = enc("""{"lazy_load_members":true}""")
         val r = http.request("GET", "/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=40&from=${enc(from)}&filter=$filter")

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 afterEach(() => { vi.useRealTimers(); });
-import { STUCK_TEXT, WAITING_TEXT, applyHistory, applySync, parseMuted, relabelUnreadable, stripReplyFallback, textOfClear } from "./reducer";
+import { GAP_PAGES, STUCK_TEXT, WAITING_TEXT, applyGap, applyHistory, applySync, parseMuted, relabelUnreadable, stripReplyFallback, textOfClear } from "./reducer";
 import { encryptedInfo, registerAllEncrypted } from "./mediacrypt";
 import { ChatState, STATUS_SENDING, displayName, emptyChat, isBotRoom, previewOf } from "./types";
 import { inQuietHours, DEFAULTS } from "./settings";
@@ -144,9 +144,31 @@ describe("applySync", () => {
     const r = applySync(withLocal, join([{ type: "m.room.message", event_id: "$real", sender: me, origin_server_ts: 3001, unsigned: { transaction_id: "t1" }, content: { msgtype: "m.text", body: "hi" } }]), me, false);
     expect(r.chats["!a:x"].messages.map((m) => m.id)).toEqual(["$1", "$2", "$real"]);
   });
-  it("starts the timeline over on a gap", () => {
+  it("keeps the timeline on a sync with too much in it, and remembers the hole", () => {
     const c = applySync(base(), join([text("$9", mom, 9000, "after gap")], { limited: true, prev_batch: "gap1" }), me, false).chats["!a:x"];
-    expect(c.messages.map((m) => m.body)).toEqual(["after gap"]); expect(c.prevBatch).toBe("gap1");
+    expect(c.messages.map((m) => m.body)).toEqual(["Coming Sunday?", "Yes!", "after gap"]);       // nothing thrown away
+    expect(c.gap?.token).toBe("gap1"); expect(c.gap?.oldTs).toBe(2000);                          // the newest message from before the hole
+  });
+  it("fills the hole in place by reading backwards, and closes it at a message it already had", () => {
+    const held = applySync(base(), join([text("$9", mom, 9000, "new one")], { limited: true, prev_batch: "gap1" }), me, false).chats["!a:x"];
+    const page = [text("$8", mom, 8000, "eight"), text("$5", mom, 5000, "five"), text("$2", me, 2000, "Yes!")];       // newest first, ending at one we had
+    const filled = applyGap(held, page, "p5", [], me);
+    expect(filled.messages.map((m) => m.id)).toEqual(["$1", "$2", "$5", "$8", "$9"]);
+    expect(filled.gap).toBeUndefined();
+    const more = applyGap(held, [text("$8", mom, 8000, "eight")], "p7", [], me);                 // did not reach one: stays open, further back
+    expect(more.gap?.token).toBe("p7"); expect(more.gap?.pages).toBe(1);
+  });
+  it("starts the chat over when a second too-big sync arrives while a hole is still open", () => {
+    const once = applySync(base(), join([text("$9", mom, 9000, "a")], { limited: true, prev_batch: "gap1" }), me, false).chats;
+    const twice = applySync(once, join([text("$10", mom, 10000, "b")], { limited: true, prev_batch: "gap2" }), me, false).chats["!a:x"];
+    expect(twice.messages.map((m) => m.id)).toEqual(["$10"]); expect(twice.prevBatch).toBe("gap2"); expect(twice.gap).toBeUndefined();
+  });
+  it("gives up on a hole that never closes, letting go of what came before it", () => {
+    let c = applySync(base(), join([text("$9", mom, 9000, "new one")], { limited: true, prev_batch: "gap1" }), me, false).chats["!a:x"];
+    for (let n = 1; n < GAP_PAGES; n++) c = applyGap(c, [text(`$g${n}`, mom, 8000 - n, `g${n}`)], `t${n}`, [], me);
+    expect(c.gap?.pages).toBe(GAP_PAGES - 1);
+    c = applyGap(c, [text("$last", mom, 7000, "x")], "tlast", [], me);
+    expect(c.gap).toBeUndefined(); expect(c.prevBatch).toBe("tlast"); expect(c.messages.every((m) => m.ts > 2000)).toBe(true);
   });
   it("reads tags, marked-unread, receipts, typing and muted rooms", () => {
     const sync = { rooms: { join: { "!a:x": {

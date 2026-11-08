@@ -160,10 +160,10 @@ class SyncReducerTest {
         assertTrue(SyncReducer.applyHistory(more, emptyList(), null).reachedStart)
     }
 
-    @Test fun limitedSyncStartsTheTimelineOver() {
+    @Test fun limitedSyncKeepsTheTimelineAndMarksTheHole() {
         val r = SyncReducer.apply(base, joinWith(msg("${'$'}9", mom, 9000, "after gap"), ""","limited":true,"prev_batch":"gap1""""), me, false).chats.getValue("!a:x")
-        assertEquals(listOf("after gap"), r.messages.map { it.body })
-        assertEquals("gap1", r.prevBatch)
+        assertEquals(listOf("Coming Sunday?", "Yes!", "after gap"), r.messages.map { it.body })
+        assertEquals("gap1", r.gap?.token)
     }
 
     @Test fun tagsMarkedUnreadReceiptsTypingAndMuting() {
@@ -223,5 +223,45 @@ class SyncReducerTest {
         assertFalse(SyncReducer.historyFits(chat.copy(messages = listOf(m("\$b"))), "p1", "\$a")) // older messages were let go meanwhile
         assertFalse(SyncReducer.historyFits(chat.copy(messages = emptyList(), prevBatch = "p9"), "p1", "\$a")) // a catch-up reset the chat
         assertTrue(SyncReducer.historyFits(ChatState("!r:x"), null, null))
+    }
+
+    private fun limited(events: String, prev: String = "p9") = parse(
+        """{"rooms":{"join":{"!a:x":{"timeline":{"limited":true,"prev_batch":"$prev","events":[$events]}}}}}""",
+    )
+
+    @Test fun aSyncWithTooMuchInItKeepsWhatWeHadAndRemembersTheHole() {
+        val before = base
+        assertEquals(2, before["!a:x"]!!.messages.size)
+        val after = SyncReducer.apply(before, limited(msg("${'$'}9", mom, 9000, "new one")), me, initial = false).chats["!a:x"]!!
+        assertEquals(listOf("${'$'}1", "${'$'}2", "${'$'}9"), after.messages.map { it.id })      // nothing thrown away
+        assertEquals("p9", after.gap?.token)
+        assertEquals(2000L, after.gap?.oldTs)                                                   // the newest message from before the hole
+    }
+
+    @Test fun readingBackwardsFromTheHoleFillsItInPlaceAndClosesItAtAMessageWeHad() {
+        val held = SyncReducer.apply(base, limited(msg("${'$'}9", mom, 9000, "new one")), me, initial = false).chats["!a:x"]!!
+        // a page read backwards (newest first): two new ones, then the message we already had
+        val page = listOf(msg("${'$'}8", mom, 8000, "eight"), msg("${'$'}5", mom, 5000, "five"), msg("${'$'}2", me, 2000, "Yes!")).map { parse(it) }
+        val filled = SyncReducer.applyGap(held, page, "p5", emptyList(), me)
+        assertEquals(listOf("${'$'}1", "${'$'}2", "${'$'}5", "${'$'}8", "${'$'}9"), filled.messages.map { it.id })
+        assertEquals(null, filled.gap)                                                          // it reached a message we had: closed
+        // a page that does not reach one keeps the hole open, further back
+        val more = SyncReducer.applyGap(held, listOf(parse(msg("${'$'}8", mom, 8000, "eight"))), "p7", emptyList(), me)
+        assertEquals("p7", more.gap?.token); assertEquals(1, more.gap?.pages)
+    }
+
+    @Test fun aSecondTooBigSyncWhileAHoleIsOpenStartsTheChatOver() {
+        val once = SyncReducer.apply(base, limited(msg("${'$'}9", mom, 9000, "a")), me, initial = false).chats
+        val twice = SyncReducer.apply(once, limited(msg("${'$'}10", mom, 10000, "b"), "p10"), me, initial = false).chats["!a:x"]!!
+        assertEquals(listOf("${'$'}10"), twice.messages.map { it.id }); assertEquals("p10", twice.prevBatch); assertEquals(null, twice.gap)
+    }
+
+    @Test fun aHoleThatNeverClosesIsGivenUp() {
+        var c = SyncReducer.apply(base, limited(msg("${'$'}9", mom, 9000, "new one")), me, initial = false).chats["!a:x"]!!
+        for (n in 1 until SyncReducer.GAP_PAGES) c = SyncReducer.applyGap(c, listOf(parse(msg("${'$'}g$n", mom, 8000L - n, "g$n"))), "t$n", emptyList(), me)
+        assertEquals(SyncReducer.GAP_PAGES - 1, c.gap?.pages)
+        c = SyncReducer.applyGap(c, listOf(parse(msg("${'$'}last", mom, 7000, "x"))), "tlast", emptyList(), me)
+        assertEquals(null, c.gap); assertEquals("tlast", c.prevBatch)
+        assertTrue(c.messages.all { it.ts > 2000 })                                              // what came before the hole is let go
     }
 }

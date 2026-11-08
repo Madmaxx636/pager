@@ -65,6 +65,9 @@ data class Msg(
 data class ReactionRef(val target: String, val key: String, val sender: String)
 
 @Serializable
+data class Gap(val token: String, val oldTs: Long, val pages: Int = 0)
+
+@Serializable
 data class ChatState(
     val id: String,
     val name: String = "",
@@ -77,6 +80,11 @@ data class ChatState(
     val heroes: List<String> = emptyList(),
     /** Pagination token for loading older history; null once the start of the room is reached. */
     val prevBatch: String? = null,
+    /**
+     * Events are missing between the messages we had and the newest ones (a sync that carried too much to hold it all): [Gap.token] is where to read backwards
+     * from to fill it, [Gap.oldTs] is the time of the newest message from before the hole. Filled in the background (Store.fillGap).
+     */
+    val gap: Gap? = null,
     /** True once pagination has reached the first message of the room. */
     val reachedStart: Boolean = false,
     /** target event id -> reaction key -> senders */

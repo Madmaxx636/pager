@@ -71,7 +71,13 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
       const tl = obj(room.timeline);
       const limited = tl.limited === true;
       const prev = str(tl.prev_batch);
-      if (limited && chat.messages.length && !initial) chat = { ...chat, messages: [], prevBatch: prev, reachedStart: false };
+      // Too much happened since the last update to send it all (the computer slept, a bridge delivered a burst): the newest events came, and a hole is left between
+      // them and what we had. Keep what we had (the reader may be a long way back in it) and fill the hole in the background. If a hole is already being filled,
+      // or there is no way to read backwards, start that chat over instead.
+      if (limited && chat.messages.length && !initial) {
+        if (chat.gap || !prev) chat = { ...chat, messages: [], gap: undefined, prevBatch: prev, reachedStart: false };
+        else chat = { ...chat, gap: { token: prev, oldTs: newestKnown, pages: 0 } };
+      }
       else if (chat.prevBatch == null && chat.messages.length === 0 && prev != null) chat = { ...chat, prevBatch: prev };
 
       const pre = chat;
@@ -121,6 +127,24 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
  * would ever fill it.
  */
 export const historyFits = (x: { prevBatch?: string | null; messages: { id: string }[] }, asked: { prev?: string | null; first?: string }) => (x.prevBatch ?? null) === (asked.prev ?? null) && x.messages[0]?.id === asked.first;
+/**
+ * Merges a page read backwards from a hole (see ChatState.gap): the events go in where they belong, and the hole is closed when the page reaches a message we
+ * already had, or the start of the room. A hole too big to be worth filling (about 1,600 events) is given up: what came before it is let go and read again
+ * from the hole when the reader scrolls up, the way a chat is started over.
+ */
+export const GAP_PAGES = 40;
+export function applyGap(chat: ChatState, chunk: J[], end: string | undefined, state: J[] = [], me = ""): ChatState {
+  const gap = chat.gap; if (!gap) return chat;
+  for (const s of state) if (obj(s).type === "m.room.member") chat = applyState(chat, obj(s));
+  const known = new Set(chat.messages.map((m) => m.id));
+  const joined = chunk.some((e) => typeof obj(e).event_id === "string" && known.has(obj(e).event_id as string));
+  const next = process(chat, claimOwn([...chunk].reverse(), me ? ownGhosts(chat, me) : new Set(), me), false, undefined);
+  if (joined || end == null) return { ...next, gap: undefined };
+  const pages = (gap.pages ?? 0) + 1;
+  if (pages >= GAP_PAGES) return { ...next, messages: next.messages.filter((m) => m.ts > gap.oldTs), gap: undefined, prevBatch: end, reachedStart: false };
+  return { ...next, gap: { ...gap, token: end, pages } };
+}
+
 /** Merges a page of older events (as returned by /messages, newest first). */
 export function applyHistory(chat: ChatState, chunk: J[], end: string | undefined, state: J[] = [], me = ""): ChatState {
   for (const s of state) if (obj(s).type === "m.room.member") chat = applyState(chat, obj(s));

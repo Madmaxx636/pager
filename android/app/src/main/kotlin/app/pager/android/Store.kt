@@ -373,7 +373,7 @@ class Store(private val context: Context) {
                     // Keep the file small: recent messages only, nothing still in flight.
                     val trimmed = chats.mapValues { (_, c) ->
                         val sent = c.messages.filter { it.status == STATUS_SENT }
-                        if (sent.size <= keepMessages()) c.copy(messages = sent) else c.copy(messages = sent.takeLast(keepMessages()), prevBatch = null, reachedStart = false)
+                        if (sent.size <= keepMessages()) c.copy(messages = sent) else sliceNewest(c.copy(messages = sent), keepMessages())
                     }
                     // Written straight to a file (then moved into place), not built as one giant text first.
                     val tmp = File(cacheFile.path + ".tmp")
@@ -747,6 +747,7 @@ class Store(private val context: Context) {
                     Notifier.clearRead(context, r.chats.values.filter { c -> before[c.id]?.let { it.unread > 0 || it.markedUnread } == true && c.unread == 0 && !c.markedUnread }.map { it.id })
                 }
                 lastSyncOk = System.currentTimeMillis()
+                for (c in r.chats.values) if (c.gap != null) fillGap(c.id)   // (also picks up a hole saved by an earlier session)
                 try {
                     r.muted?.let { _muted.value = it }
                     // Pages whose newest events were all bookkeeping arrive with no messages: fetch a few older messages for the first of them now,
@@ -1207,33 +1208,82 @@ class Store(private val context: Context) {
     fun trimPulledHistory(now: Long = System.currentTimeMillis()) {
         for (c in _chats.value.values) {
             if (c.messages.size <= keepMessages() || c.id in deepNow || now - (deepAt[c.id] ?: 0L) < poolClearMs(c.messages.size)) continue
-            update(c.id) { it.copy(messages = it.messages.takeLast(keepMessages()), prevBatch = null, reachedStart = false) }
+            update(c.id) { sliceNewest(it, keepMessages()) }
         }
     }
 
-    fun loadOlder(roomId: String, pages: Int = 0) {
+    /** [more]: keep reading further back, one page after another, for as long as it says yes (up to about 800 messages). */
+    fun loadOlder(roomId: String, pages: Int = 0, more: (() -> Boolean)? = null) {
         val chat = _chats.value[roomId] ?: return
         if (chat.reachedStart) return
-        // After a restart the saved token may be gone; paginate back from the last sync point instead.
-        val token = chat.prevBatch ?: since ?: return
         if (!synchronized(loadingOlder) { loadingOlder.add(roomId) }) return
-        val askedPrev = chat.prevBatch; val askedFirst = chat.messages.firstOrNull()?.id
+        val askedPrev = chat.prevBatch; val askedFirst = chat.messages.firstOrNull()?.id; val before = chat.messages.size
         scope.launch {
+            var token: String? = null
             try {
-                val (rawEvents, end, state) = matrix.messages(roomId, token)
-                val events = decryptEvents(roomId, rawEvents)
-                deepAt[roomId] = System.currentTimeMillis()
-                // Only if the chat still ends where it did when the page was asked for. If it was reset meanwhile (a catch-up after being away, or older
-                // messages let go to save memory), gluing the page on would leave a hole before the newer messages that nothing would ever fill.
-                update(roomId) { if (SyncReducer.historyFits(it, askedPrev, askedFirst)) SyncReducer.applyHistory(it, events, end, state, me) else it }
+                token = resumeToken(chat)
+                val t = token
+                if (t != null) {
+                    val (rawEvents, end, state) = matrix.messages(roomId, t)
+                    val events = decryptEvents(roomId, rawEvents)
+                    deepAt[roomId] = System.currentTimeMillis()
+                    // Only if the chat still ends where it did when the page was asked for. If it was reset meanwhile (a catch-up after being away, or older
+                    // messages let go to save memory), gluing the page on would leave a hole before the newer messages that nothing would ever fill.
+                    update(roomId) { if (SyncReducer.historyFits(it, askedPrev, askedFirst)) SyncReducer.applyHistory(it, events, end, state, me) else it }
+                }
             } catch (_: Exception) {
             } finally {
                 synchronized(loadingOlder) { loadingOlder.remove(roomId) }
             }
-            // A page can be all bookkeeping (people joining, send statuses) and add nothing to show. The list then doesn't change, so nothing
+            // A page can be all bookkeeping (people joining, send statuses) or messages already showing, and add nothing to see. The list then doesn't change, so nothing
             // would ask for the next page and the history would sit there until something else (like sending a message) woke it up.
             val now = _chats.value[roomId]
-            if (now != null && !now.reachedStart && pages < 8 && now.messages.size < FILL_MESSAGES && (now.prevBatch ?: since) != token) loadOlder(roomId, pages + 1)
+            if (now != null && !now.reachedStart && (pages < 8 || (more != null && pages < 20)) && token != null && (now.messages.size < FILL_MESSAGES || now.messages.size == before || (more?.invoke() == true && pages < 20)) && (now.prevBatch ?: since) != token) loadOlder(roomId, pages + 1, more)
+        }
+    }
+
+    /**
+     * Where to read backwards from to get the messages before the oldest one showing. Normally the token the last page ended with. A chat that was cut back to its
+     * newest messages (to save memory, or saved for the next start) has no such token: the server is asked for the place just before its oldest message, so
+     * reading carries on from exactly there instead of from "now" (which read the same newest pages over again before getting anywhere).
+     */
+    private suspend fun resumeToken(chat: ChatState): String? {
+        chat.prevBatch?.let { return it }
+        chat.messages.firstOrNull { it.id.startsWith("$") }?.let { oldest -> runCatching { matrix.tokenBefore(chat.id, oldest.id) }.getOrNull()?.let { return it } }
+        return since
+    }
+
+    /** Keeps a chat's newest [keep] messages. A hole still being filled stays (while any message from before it is kept); the way back to older history is read again from the oldest one kept. */
+    private fun sliceNewest(c: ChatState, keep: Int): ChatState {
+        val kept = c.messages.takeLast(keep)
+        val gap = c.gap?.takeIf { g -> kept.any { it.ts <= g.oldTs } }
+        return c.copy(messages = kept, gap = gap, prevBatch = null, reachedStart = false)
+    }
+
+    private val gapBusy = HashSet<String>()
+    private val gapTries = HashMap<String, Int>()
+    /**
+     * Fills the hole a sync left ([ChatState.gap]) by reading backwards from it. The reader keeps what they were looking at; the missing messages appear in place.
+     * Tries again a few times if the server does not answer.
+     */
+    fun fillGap(roomId: String) {
+        val me = _session.value?.userId ?: return
+        val chat = _chats.value[roomId] ?: return
+        val g = chat.gap ?: return
+        if (!synchronized(gapBusy) { gapBusy.add(roomId) }) return
+        scope.launch {
+            try {
+                val (raw, end, state) = matrix.messages(roomId, g.token)
+                val events = decryptEvents(roomId, raw)
+                update(roomId) { if (it.gap?.token == g.token) SyncReducer.applyGap(it, events, end, state, me) else it }
+                synchronized(gapTries) { gapTries.remove(roomId) }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                synchronized(gapTries) { gapTries[roomId] = (gapTries[roomId] ?: 0) + 1 }
+            } finally {
+                synchronized(gapBusy) { gapBusy.remove(roomId) }
+            }
+            val tries = synchronized(gapTries) { gapTries[roomId] ?: 0 }
+            if (_chats.value[roomId]?.gap != null && tries < 6) { if (tries > 0) delay(2000L * tries); fillGap(roomId) }
         }
     }
 

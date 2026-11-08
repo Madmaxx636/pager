@@ -11,7 +11,7 @@ import { groupFaces } from "./faces";
 import { Links, buildMerged, contactIndex, groupOf, mergeSummaries } from "./links";
 import { shrinkImage } from "./shrink";
 import { forgetTranscripts } from "./transcribe";
-import { WAITING_TEXT, applyHistory, historyFits, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity, textOfClear } from "./reducer";
+import { WAITING_TEXT, applyGap, applyHistory, historyFits, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity, textOfClear } from "./reducer";
 import { toOggOpus, voiceInfo } from "./voice";
 import { movedIds } from "./pins";
 import { Crypto, isEncryptedType, parseRecoveryKey } from "./crypto";
@@ -147,6 +147,13 @@ async function dbSet(key: string, value: unknown) {
 }
 async function dbDel(key: string) { try { const db = await openDb(); db.transaction("kv", "readwrite").objectStore("kv").delete(key); } catch { /* ignore */ } }
 
+
+/** Keeps a chat's newest [keep] messages. A hole still being filled stays (while any message from before it is kept); the way back to older history is read again from the oldest one kept. */
+const sliceNewest = (c: ChatState, keep: number): ChatState => {
+  const messages = c.messages.slice(-keep), gap = c.gap && messages.some((m) => m.ts <= c.gap!.oldTs) ? c.gap : undefined;
+  return { ...c, messages, gap, prevBatch: null, reachedStart: false };
+};
+
 let saveTimer: number | undefined;
 function scheduleSave() {
   window.clearTimeout(saveTimer);
@@ -154,7 +161,7 @@ function scheduleSave() {
     const s = state.session; if (!s) return;
     const chats = Object.fromEntries(Object.entries(state.chats).map(([id, c]) => {
       const sent = c.messages.filter((m) => m.status === STATUS_SENT);
-      return [id, sent.length <= keepMessages() ? { ...c, messages: sent, typing: [] } : { ...c, messages: sent.slice(-keepMessages()), prevBatch: null, reachedStart: false, typing: [] }];
+      return [id, sent.length <= keepMessages() ? { ...c, messages: sent, typing: [] } : { ...sliceNewest({ ...c, messages: sent }, keepMessages()), typing: [] }];
     }));
     void dbSet("cache", { userId: s.userId, since, chats });
   }, 3000);
@@ -526,6 +533,7 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       // this device read the same update again forever (that left it out of step with your other devices).
       since = typeof res.next_batch === "string" ? res.next_batch : since;
       lastSyncAt = Date.now();
+      for (const c of Object.values(r.chats)) if (c.gap) fillGap(c.id);   // (also picks up a hole saved by an earlier session)
       try {
         // Pages whose newest events were all bookkeeping arrive with no messages: fetch a few older messages for the first of them now, so
         // the list shows something to read instead of "No messages yet" until each one is opened.
@@ -935,7 +943,7 @@ export function trimPulledHistory(now = Date.now()) {
   for (const c of Object.values(state.chats)) {
     if (c.messages.length <= keepMessages() || deepNow.has(c.id) || now - (deepAt.get(c.id) ?? 0) < poolClearMs(c.messages.length)) continue;
     chats ??= { ...state.chats };
-    chats[c.id] = { ...c, messages: c.messages.slice(-keepMessages()), prevBatch: null, reachedStart: false };
+    chats[c.id] = sliceNewest(c, keepMessages());
   }
   if (chats) set({ chats });
 }
@@ -955,24 +963,58 @@ export function squeezeMemory(level: MemoryLevel) {
     const keep = c.id === openRoom ? openKeep : idleKeep;
     if (c.messages.length <= keep) continue;
     chats ??= { ...state.chats };
-    chats[c.id] = { ...c, messages: c.messages.slice(-keep), prevBatch: null, reachedStart: false };
+    chats[c.id] = sliceNewest(c, keep);
     deepAt.delete(c.id);
   }
   if (chats) set({ chats });
 }
 window.pagerDesktop?.onMemory?.((level) => squeezeMemory(level as MemoryLevel));
-export function loadOlder(roomId: string, pages = 0) {
+/**
+ * Where to read backwards from to get the messages before the oldest one showing. Normally the token the last page ended with. A chat that was cut back to its
+ * newest messages (to save memory, or saved for the next start) has no such token: the server is asked for the place just before its oldest message, so
+ * reading carries on from exactly there instead of from "now" (which read the same newest pages over again before getting anywhere).
+ */
+async function resumeToken(c: ChatState): Promise<string | undefined> {
+  if (c.prevBatch) return c.prevBatch;
+  const oldest = c.messages.find((m) => m.id.startsWith("$"));
+  if (oldest) { try { const t = await matrix.tokenBefore(c.id, oldest.id); if (t) return t; } catch { /* fall back to reading from now */ } }
+  return since;
+}
+/** [more]: keep reading further back, one page after another, for as long as it says yes (up to about 800 messages). */
+export function loadOlder(roomId: string, pages = 0, more?: () => boolean) {
   const c = state.chats[roomId];
   if (!c || c.reachedStart || loading.has(roomId)) return;
-  const token = c.prevBatch ?? since; if (!token) return;
   loading.add(roomId);
-  const asked = { prev: c.prevBatch, first: c.messages[0]?.id };
-  matrix.messages(roomId, token).then(async ({ chunk, end, state: st }) => { const clear = await decryptEvents(roomId, chunk); deepAt.set(roomId, Date.now()); patchChat(roomId, (x) => historyFits(x, asked) ? applyHistory(x, clear, end, st ?? [], state.session?.userId ?? "") : x); }).catch(() => {}).finally(() => {
+  const asked = { prev: c.prevBatch, first: c.messages[0]?.id }, before = c.messages.length;
+  let token: string | undefined;
+  resumeToken(c).then((t) => {
+    token = t; if (!t) return;
+    return matrix.messages(roomId, t).then(async ({ chunk, end, state: st }) => { const clear = await decryptEvents(roomId, chunk); deepAt.set(roomId, Date.now()); patchChat(roomId, (x) => historyFits(x, asked) ? applyHistory(x, clear, end, st ?? [], state.session?.userId ?? "") : x); });
+  }).catch(() => {}).finally(() => {
     loading.delete(roomId);
-    // A page can be all bookkeeping (people joining, send statuses) and add nothing to show. The list then doesn't change, so nothing
+    // A page can be all bookkeeping (people joining, send statuses) or messages already showing, and add nothing to see. The list then doesn't change, so nothing
     // would ask for the next page and the history would sit there until something else (like sending a message) woke it up.
     const n = state.chats[roomId];
-    if (n && !n.reachedStart && pages < 8 && n.messages.length < fillTarget() && (n.prevBatch ?? since) !== token) loadOlder(roomId, pages + 1);
+    if (n && !n.reachedStart && (pages < 8 || (more && pages < 20)) && token && (n.messages.length < fillTarget() || n.messages.length === before || (more?.() && pages < 20)) && (n.prevBatch ?? since) !== token) loadOlder(roomId, pages + 1, more);
+  });
+}
+
+/**
+ * Fills the hole a sync left (ChatState.gap) by reading backwards from it. The reader keeps what they were looking at; the missing messages appear in place.
+ * Tries again a few times if the server does not answer.
+ */
+const gapBusy = new Set<string>(), gapTries = new Map<string, number>();
+export function fillGap(roomId: string) {
+  const c = state.chats[roomId];
+  if (!c?.gap || gapBusy.has(roomId)) return;
+  const token = c.gap.token; gapBusy.add(roomId);
+  matrix.messages(roomId, token).then(async ({ chunk, end, state: st }) => {
+    const clear = await decryptEvents(roomId, chunk); gapTries.delete(roomId);
+    patchChat(roomId, (x) => x.gap?.token === token ? applyGap(x, clear, end, st ?? [], state.session?.userId ?? "") : x);
+  }).catch(() => { gapTries.set(roomId, (gapTries.get(roomId) ?? 0) + 1); }).finally(() => {
+    gapBusy.delete(roomId);
+    const n = state.chats[roomId], tries = gapTries.get(roomId) ?? 0;
+    if (n?.gap && tries < 6) window.setTimeout(() => fillGap(roomId), tries ? 2000 * tries : 0);
   });
 }
 export function setTag(roomId: string, tag: string, on: boolean, order?: number) {

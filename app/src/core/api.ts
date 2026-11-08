@@ -168,6 +168,9 @@ export const matrix = {
   },
   messages: async (roomId: string, from: string): Promise<{ chunk: any[]; end?: string; state?: any[] }> =>
     call("GET", `/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=40&from=${enc(from)}&filter=${enc('{"lazy_load_members":true}')}`),
+  /** A place to read backwards from that sits just before one event, so a chat that kept only its newest messages carries on from exactly there. */
+  tokenBefore: async (roomId: string, eventId: string): Promise<string | undefined> =>
+    (await call<{ start?: string }>("GET", `/_matrix/client/v3/rooms/${enc(roomId)}/context/${enc(eventId)}?limit=0`)).start,
   join: (roomId: string) => call("POST", `/_matrix/client/v3/join/${enc(roomId)}`, {}),
   leave: async (roomId: string) => { await call("POST", `/_matrix/client/v3/rooms/${enc(roomId)}/leave`, {}); await call("POST", `/_matrix/client/v3/rooms/${enc(roomId)}/forget`, {}).catch(() => {}); },
   send: async (roomId: string, type: string, txn: string, content: unknown) => {

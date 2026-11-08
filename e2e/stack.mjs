@@ -42,10 +42,14 @@ function makeConfig() {
   const { uid, gid } = userInfo();
   docker("run", "--rm", ...ns, "-u", `${uid}:${gid}`, "-v", `${data}:/data`, "-e", `SYNAPSE_SERVER_NAME=${DOMAIN}`, "-e", "SYNAPSE_REPORT_STATS=no", IMAGE, "generate");
   // Test settings: no rate limits (the tests log in and send a lot), registration by the shared secret only.
+  // An application service (what a bridge is): lets the history generator (history.mjs) send messages with dates in the past.
+  writeFileSync(resolve(data, "e2e-appservice.yaml"), `id: e2ehistory\nurl: null\nas_token: e2e_as_token\nhs_token: e2e_hs_token\nsender_localpart: e2ehistory\nrate_limited: false\nnamespaces:\n  users:\n    - exclusive: false\n      regex: "@.*:${DOMAIN}"\n`);
   appendFileSync(resolve(data, "homeserver.yaml"), `
+app_service_config_files: ["/data/e2e-appservice.yaml"]
 registration_shared_secret: "${SECRET}"
 suppress_key_server_warning: true
 rc_message: { per_second: 1000, burst_count: 1000 }
+rc_room_creation: { per_second: 1000, burst_count: 1000 }
 rc_registration: { per_second: 1000, burst_count: 1000 }
 rc_login: { address: { per_second: 1000, burst_count: 1000 }, account: { per_second: 1000, burst_count: 1000 }, failed_attempts: { per_second: 1000, burst_count: 1000 } }
 rc_joins: { local: { per_second: 1000, burst_count: 1000 }, remote: { per_second: 1000, burst_count: 1000 } }
@@ -80,7 +84,7 @@ async function status() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const cmd = process.argv[2];
-  const run = { up, down, reset, status, seed: async () => (await import("./seed.mjs")).seed() }[cmd];
-  if (!run) { console.error("usage: node e2e/stack.mjs up|seed|status|down|reset"); process.exit(1); }
+  const run = { up, down, reset, status, seed: async () => (await import("./seed.mjs")).seed(), history: async () => (await import("./history.mjs")).history() }[cmd];
+  if (!run) { console.error("usage: node e2e/stack.mjs up|seed|history|status|down|reset"); process.exit(1); }
   await run();
 }

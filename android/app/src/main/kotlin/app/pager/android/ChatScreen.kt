@@ -183,14 +183,24 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     val group = remember(messages, chat?.memberCount, chat?.roomType) { (chat?.isGroup ?: false) || messages.map { it.sender }.toSet().size > 2 }
     val images = remember(messages) { messages.filter { it.type == "m.image" && it.mxc != null && !it.sticker } }
 
-    // Where the unread messages begin; computed once when the chat opens.
-    val unreadBefore = remember(roomId, chat != null) {
-        val c = chat ?: return@remember null
-        val read = c.receipts[me]
-        val i = if (read != null) c.messages.indexOfFirst { it.id == read } else -1
-        val fresh = if (i >= 0) c.messages.drop(i + 1) else if (c.unread > 0) c.messages.takeLast(c.unread) else emptyList()
-        fresh.firstOrNull { it.sender != me }?.id
+    // Where the unread messages begin. Once it is known it stays (new messages arriving must not move the line). It is only known when the first unread message is really
+    // loaded: with more unread than loaded the line used to be put before the oldest loaded message, and the page opened there, a long way from where the unread begin.
+    var unreadFixed by remember(roomId) { mutableStateOf<String?>(null) }
+    // How things stood when the chat opened: opening it marks it read at once, so the count and the read marker are gone by the time older messages have loaded.
+    val openSnap = remember(roomId, chat != null) { chat?.let { c -> Triple(c.unread, c.receipts[me], c.messages.size) } }
+    val unreadBefore = remember(roomId, chat != null, chat?.messages?.size) {
+        unreadFixed ?: run {
+            val c = chat ?: return@run null
+            val snap = openSnap ?: return@run null
+            val i = if (snap.second != null) c.messages.indexOfFirst { it.id == snap.second } else -1
+            val fresh = if (i >= 0) c.messages.drop(i + 1) else if (snap.first in 1..c.messages.size) c.messages.takeLast(snap.first) else emptyList()
+            fresh.firstOrNull { it.sender != me }?.id?.also { unreadFixed = it }
+        }
     }
+    // More unread than we have loaded: read further back (a few hundred at most) so the line can be drawn where it belongs.
+    val unreadUnknown = chat != null && openSnap != null && unreadFixed == null && openSnap.first > (chat?.messages?.size ?: 0) && openSnap.first <= 600
+    val wantMore = rememberUpdatedState(unreadUnknown)
+    LaunchedEffect(unreadUnknown, chat?.messages?.size) { if (unreadUnknown) groupIds.forEach { id -> store.loadOlder(id, 0) { wantMore.value } } }
     val items = remember(messages, unreadBefore, s.groupGapMin) { buildItems(messages, unreadBefore, s.groupGapMin * 60_000L) }
     // Tapping the quote on a reply takes you to the message it answers, loading older messages first when it is further back.
     var flashId by remember { mutableStateOf<String?>(null) }
