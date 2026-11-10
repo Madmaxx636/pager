@@ -4,6 +4,14 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.24 (desktop, web; phone gets the first change with its next build)
+
+From the first log the jump recorder produced (thank you): at 17:38:30 the list "shrank by 6,871 pixels at the bottom", which is about a hundred messages vanishing from the page at once, preceded by history loading above you.
+
+- **A second too-big update no longer throws away what you are looking at (desktop, web, phone):** when a lot arrives at once, the app keeps your history and fills the stretch in between in the background (0.6.20). If a *second* big update arrived before that was done, which a connection that keeps dropping makes likely (your log has 80 such drops), the page was started over, replacing everything on screen with only the newest few messages. It now keeps what came after the first stretch (what you were looking at) and lets go only of the older history, which is read again when you scroll up.
+- **The log now says why history was let go (desktop, web):** whenever a page loses 20 or more loaded messages, Settings, Advanced, Logs says how many and why: memory ("memory high/critical", with "the page on screen" if it was the open one), "left alone for a while", or "an update started a page over". The jump line now also records the real size of the view and the list (it said "undefined" in the first log).
+- **For developers:** tests for the second-update rule on both platforms (the phone's could not be run on the computer used for this release).
+
 ## 0.6.23 (desktop, web; phone gets these with its next build)
 
 - **Mark as read when you reply or type (desktop, web, phone):** replying, clicking in the message box, or typing in it now marks the page as read, even if you have not scrolled to the newest message (before, with "Mark as read when" set to "I reach the newest message", a page you answered could stay unread). Keyboard focus alone does not count, only a click or typing, so opening a page does not mark it by itself. Switch it off in Settings, Pages: "Mark as read when I reply or type". (The phone does the same on tap, typing and sending; it could not be built or tried on the computer used for this release, and is checked when the next phone version is built.)

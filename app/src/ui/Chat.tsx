@@ -169,13 +169,13 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const recent = useRef({ at: 0, what: "" });      // what the page changed just now
   const jumpLog = useRef({ at: 0, n: 0 });
   const lastNote = useRef({ at: 0, px: 0 });
-  const noteJump = useCallback((what: string, px: number) => {
+  const noteJump = useCallback((what: string, px: number, size?: { v: number; c: number }) => {
     const now = Date.now(), j = jumpLog.current; if (now - j.at > 10_000) { j.at = now; j.n = 0; }
     if (now - lastNote.current.at < 400 && Math.abs(lastNote.current.px - px) < 3) return;        // the same one, seen by a second way
     lastNote.current = { at: now, px };
     if (++j.n > 6) return;
     const el = scroller.current, r = recent.current;
-    const line = `list ${what} by ${Math.round(Math.abs(px))}px (view ${el?.clientHeight}, content ${el?.scrollHeight}, ${stick.current ? "at the bottom" : "reading higher up"}; ${now - r.at < 400 ? r.what : "the page had not changed just before"})`;
+    const line = `list ${what} by ${Math.round(Math.abs(px))}px (view ${size?.v ?? el?.clientHeight ?? "?"}, content ${size?.c ?? el?.scrollHeight ?? "?"}, ${stick.current ? "at the bottom" : "reading higher up"}; ${now - r.at < 400 ? r.what : "the page had not changed just before"})`;
     if (Math.abs(px) >= 40) recordIncident("scroll jump", line); else crumb("scroll", line);
   }, []);
   const describeChange = (rs: MutationRecord[]) => {
@@ -210,7 +210,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     } else hold();
     // The page may have got shorter in this very update (a message taken away, an edit): that is noted too, a moment later so the page's own change report is in.
     const max = el.scrollHeight - el.clientHeight;
-    if (wasOpen && stick.current && lastMax.current > 0 && lastMax.current - max >= 20) { const px = lastMax.current - max; queueMicrotask(() => noteJump("shrank under you at the bottom", px)); }
+    if (wasOpen && stick.current && lastMax.current > 0 && lastMax.current - max >= 20) { const px = lastMax.current - max, size = { v: el.clientHeight, c: el.scrollHeight }; queueMicrotask(() => noteJump("shrank under you at the bottom", px, size)); }
     prevLast.current = last; remember();
   }, [roomId, messages, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { opened.current = ""; stick.current = true; setReplyTo(undefined); setEditing(undefined); }, [roomId]);

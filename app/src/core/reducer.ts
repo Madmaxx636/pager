@@ -75,7 +75,13 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
       // them and what we had. Keep what we had (the reader may be a long way back in it) and fill the hole in the background. If a hole is already being filled,
       // or there is no way to read backwards, start that chat over instead.
       if (limited && chat.messages.length && !initial) {
-        if (chat.gap || !prev) chat = { ...chat, messages: [], gap: undefined, prevBatch: prev, reachedStart: false };
+        if (!prev) chat = { ...chat, messages: [], gap: undefined, prevBatch: prev, reachedStart: false };
+        else if (chat.gap) {
+          // Another too-big update before the first hole was filled (a bad connection does this): what was before the first hole is let go (it is read again from there when scrolled
+          // up to), but what came after it stays, so what you are looking at does not vanish. The new hole is filled as usual.
+          const first = chat.gap;
+          chat = { ...chat, messages: chat.messages.filter((m) => m.ts > first.oldTs), prevBatch: first.token, reachedStart: false, gap: { token: prev, oldTs: newestKnown, pages: 0 } };
+        }
         else chat = { ...chat, gap: { token: prev, oldTs: newestKnown, pages: 0 } };
       }
       else if (chat.prevBatch == null && chat.messages.length === 0 && prev != null) chat = { ...chat, prevBatch: prev };

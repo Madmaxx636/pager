@@ -250,10 +250,12 @@ class SyncReducerTest {
         assertEquals("p7", more.gap?.token); assertEquals(1, more.gap?.pages)
     }
 
-    @Test fun aSecondTooBigSyncWhileAHoleIsOpenStartsTheChatOver() {
+    @Test fun aSecondTooBigSyncBeforeTheFirstHoleWasFilledKeepsWhatCameAfterIt() {
         val once = SyncReducer.apply(base, limited(msg("${'$'}9", mom, 9000, "a")), me, initial = false).chats
         val twice = SyncReducer.apply(once, limited(msg("${'$'}10", mom, 10000, "b"), "p10"), me, initial = false).chats["!a:x"]!!
-        assertEquals(listOf("${'$'}10"), twice.messages.map { it.id }); assertEquals("p10", twice.prevBatch); assertEquals(null, twice.gap)
+        assertEquals(listOf("${'$'}9", "${'$'}10"), twice.messages.map { it.id })     // what was being looked at stays
+        assertEquals("p9", twice.prevBatch)                                              // what came before the first hole is read again from there
+        assertEquals("p10", twice.gap?.token); assertEquals(9000L, twice.gap?.oldTs)
     }
 
     @Test fun aHoleThatNeverClosesIsGivenUp() {

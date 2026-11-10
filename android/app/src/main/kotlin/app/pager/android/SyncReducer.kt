@@ -88,8 +88,14 @@ object SyncReducer {
             // them and what we had. Keep what we had (the reader may be a long way back in it) and fill the hole in the background. If a hole is already being
             // filled, or there is no way to read backwards, start that chat over instead.
             if (limited && chat.messages.isNotEmpty() && !initial) {
-                chat = if (chat.gap != null || prev == null) chat.copy(messages = emptyList(), gap = null, prevBatch = prev, reachedStart = false)
-                else chat.copy(gap = Gap(prev, newestKnown, 0))
+                val first = chat.gap
+                chat = when {
+                    prev == null -> chat.copy(messages = emptyList(), gap = null, prevBatch = null, reachedStart = false)
+                    // Another too-big update before the first hole was filled (a bad connection does this): what was before the first hole is let go (it is read again from there
+                    // when scrolled up to), but what came after it stays, so what is being looked at does not vanish. The new hole is filled as usual.
+                    first != null -> chat.copy(messages = chat.messages.filter { it.ts > first.oldTs }, prevBatch = first.token, reachedStart = false, gap = Gap(prev, newestKnown, 0))
+                    else -> chat.copy(gap = Gap(prev, newestKnown, 0))
+                }
             }
             else if (chat.prevBatch == null && chat.messages.isEmpty() && prev != null) chat = chat.copy(prevBatch = prev)
 

@@ -149,7 +149,8 @@ async function dbDel(key: string) { try { const db = await openDb(); db.transact
 
 
 /** Keeps a chat's newest [keep] messages. A hole still being filled stays (while any message from before it is kept); the way back to older history is read again from the oldest one kept. */
-const sliceNewest = (c: ChatState, keep: number): ChatState => {
+const sliceNewest = (c: ChatState, keep: number, why = ""): ChatState => {
+  if (why && c.messages.length - keep >= 20) crumb("history", `let go of ${c.messages.length - keep} older messages of a page (${why}); kept ${keep}`);
   const messages = c.messages.slice(-keep), gap = c.gap && messages.some((m) => m.ts <= c.gap!.oldTs) ? c.gap : undefined;
   return { ...c, messages, gap, prevBatch: null, reachedStart: false };
 };
@@ -528,6 +529,8 @@ async function syncLoop(s: Session, signal: AbortSignal) {
       try { await decryptSync(res); } catch (e) { console.warn("problem decrypting an update", e); recordIncident("decrypting an update", String((e as Error)?.message ?? e), (e as Error)?.stack); }
       const initial = since === undefined;
       const r = applySync(state.chats, res, s.userId, initial);
+      // An update that starts a page over throws its loaded history away: say so in the log (the reader sees it as a jump).
+      for (const [id, c] of Object.entries(r.chats)) { const was = state.chats[id]; if (was && !initial && was.messages.length - c.messages.length >= 20) crumb("history", `an update started a page over: ${was.messages.length} messages became ${c.messages.length}${was.gap ? " (a hole was still being filled)" : ""}`); }
       set({ chats: r.chats, synced: true, ...(r.muted ? { muted: r.muted } : {}), ...(r.userStickers ? { userStickers: r.userStickers } : {}) });
       // The update is in: move on to the next one now, whatever the notifications and bookkeeping below do. One failure there must never make
       // this device read the same update again forever (that left it out of step with your other devices).
@@ -943,7 +946,7 @@ export function trimPulledHistory(now = Date.now()) {
   for (const c of Object.values(state.chats)) {
     if (c.messages.length <= keepMessages() || deepNow.has(c.id) || now - (deepAt.get(c.id) ?? 0) < poolClearMs(c.messages.length)) continue;
     chats ??= { ...state.chats };
-    chats[c.id] = sliceNewest(c, keepMessages());
+    chats[c.id] = sliceNewest(c, keepMessages(), "left alone for a while");
   }
   if (chats) set({ chats });
 }
@@ -963,7 +966,7 @@ export function squeezeMemory(level: MemoryLevel) {
     const keep = c.id === openRoom ? openKeep : idleKeep;
     if (c.messages.length <= keep) continue;
     chats ??= { ...state.chats };
-    chats[c.id] = sliceNewest(c, keep);
+    chats[c.id] = sliceNewest(c, keep, `memory ${level}${c.id === openRoom ? ", the page on screen" : ""}`);
     deepAt.delete(c.id);
   }
   if (chats) set({ chats });

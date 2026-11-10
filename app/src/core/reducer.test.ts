@@ -158,10 +158,12 @@ describe("applySync", () => {
     const more = applyGap(held, [text("$8", mom, 8000, "eight")], "p7", [], me);                 // did not reach one: stays open, further back
     expect(more.gap?.token).toBe("p7"); expect(more.gap?.pages).toBe(1);
   });
-  it("starts the chat over when a second too-big sync arrives while a hole is still open", () => {
+  it("keeps what came after the first hole when a second too-big sync arrives before it was filled", () => {
     const once = applySync(base(), join([text("$9", mom, 9000, "a")], { limited: true, prev_batch: "gap1" }), me, false).chats;
     const twice = applySync(once, join([text("$10", mom, 10000, "b")], { limited: true, prev_batch: "gap2" }), me, false).chats["!a:x"];
-    expect(twice.messages.map((m) => m.id)).toEqual(["$10"]); expect(twice.prevBatch).toBe("gap2"); expect(twice.gap).toBeUndefined();
+    expect(twice.messages.map((m) => m.id)).toEqual(["$9", "$10"]);              // what was being looked at stays; only what came before the first hole is let go
+    expect(twice.prevBatch).toBe("gap1");                                          // and is read again from there when scrolling up
+    expect(twice.gap?.token).toBe("gap2"); expect(twice.gap?.oldTs).toBe(9000);   // the new hole is filled in the usual way
   });
   it("gives up on a hole that never closes, letting go of what came before it", () => {
     let c = applySync(base(), join([text("$9", mom, 9000, "new one")], { limited: true, prev_batch: "gap1" }), me, false).chats["!a:x"];
