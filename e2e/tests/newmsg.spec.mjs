@@ -94,3 +94,18 @@ test("a video, with or without a size, is a proper box from the start and keeps 
     expect(Math.abs(h1 - h0), `the video changed size (${sized ? "size given" : "no size"}: ${h0}px to ${h1}px)`).toBeLessThanOrEqual(3);
   }
 });
+
+test("the jump recorder notes a page that gets shorter under you at the bottom, without any message text", async () => {
+  await toBottom();
+  const secret = "a long private message nobody else should ever see in a log\nwith several\nlines\nof text";
+  const id = (await send({ msgtype: "m.text", body: secret })).event_id;
+  await expect(page.locator(".timeline .msg", { hasText: "nobody else should ever see" }).last()).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(800);
+  await api(bob, "PUT", `/rooms/${encodeURIComponent(room)}/redact/${id}/r${Date.now()}`, {});         // it is taken away: the page gets about 100px shorter
+  await expect(page.locator(".timeline .msg", { hasText: "nobody else should ever see" })).toHaveCount(0, { timeout: 15_000 });
+  await page.waitForTimeout(3000);                                                                       // (the log is written out a couple of seconds later)
+  const log = await page.evaluate(() => (localStorage.getItem("pager.applog.incidents") ?? "") + (localStorage.getItem("pager.applog.crumbs") ?? ""));
+  expect(log, "a shrink while at the bottom is recorded").toMatch(/list shrank under you at the bottom by \d+px/);
+  expect(log, "what the page changed is described").toMatch(/the page changed: \+\d+ -\d+/);
+  expect(log, "no message text in the log").not.toContain("nobody else should ever see");
+});

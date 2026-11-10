@@ -9,10 +9,12 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { bridgeSim } from "./bridge-sim.mjs";
 
+const ENCRYPTED = process.env.BENCH_ENCRYPTED === "1";      // an encrypted chat instead of the plain one (run it through tsx, see encrypted-sim.mjs)
+
 process.env.PLAYWRIGHT_HOST_PLATFORM_OVERRIDE ??= "ubuntu24.04-x64";
 const root = resolve(import.meta.dirname, ".."), desktop = resolve(root, "desktop");
-const hist = JSON.parse(readFileSync(resolve(import.meta.dirname, ".state/history.json")));
-const NAME = process.env.BENCH_CHAT ?? "Taylor Brooks", room = hist.find((c) => c.name === NAME).room;
+const hist = ENCRYPTED ? [] : JSON.parse(readFileSync(resolve(import.meta.dirname, ".state/history.json")));
+const NAME = ENCRYPTED ? "Secure Sam" : process.env.BENCH_CHAT ?? "Taylor Brooks", room = ENCRYPTED ? "" : hist.find((c) => c.name === NAME).room;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---- the app: the current web build, in the desktop shell, with a profile of its own ----
@@ -35,9 +37,19 @@ for (let i = 0; i < 6; i++) {
   if (await page.getByRole("button", { name: "Skip tour" }).isVisible().catch(() => false)) { await page.getByRole("button", { name: "Skip tour" }).click().catch(() => {}); continue; }
   break;
 }
+let sim;
+if (ENCRYPTED) {
+  const { encryptedSim } = await import("./encrypted-sim.mjs");
+  const es = await encryptedSim(NAME);
+  // what an encrypted bridge cannot do here is stubbed by a plain text message of the same shape
+  sim = { ...es, video: () => es.text("[a video]"), music: () => es.text("[a song]"), file: () => es.text("[a file]"), location: () => es.text("[a location]"), redact: () => es.text("[deleted]"), status: () => es.text("[status]"), profile: () => es.text("[new name]") };
+  await page.locator(".chat-row", { hasText: NAME }).first().waitFor({ timeout: 30_000 });
+  for (let i = 1; i <= 40; i++) await es.text(`earlier message ${i}, so there is a page to scroll`);
+  await page.waitForTimeout(2000);
+}
 await page.locator(".chat-row", { hasText: NAME }).first().click();
 await page.waitForTimeout(2500);
-const sim = await bridgeSim(room);
+if (!ENCRYPTED) sim = await bridgeSim(room);
 
 // ---- the recorder: one sample per painted frame, with the changes the page made in that frame ----
 await page.evaluate(() => {

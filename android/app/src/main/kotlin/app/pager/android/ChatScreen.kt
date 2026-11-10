@@ -86,6 +86,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.border
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.Key
@@ -317,9 +318,12 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     LaunchedEffect(roomId, interacting, s.markReadMode) { if (interacting && store.appInForeground && (s.markReadMode == "open" || (s.markReadMode == "scrolled" && list.firstVisibleItemIndex <= 2))) store.markRead(roomId) }
     val showJump by remember { derivedStateOf { list.firstVisibleItemIndex > 3 } }
 
+    // You are plainly looking at this page when you reply, tap in the message box or type in it: it counts as read (when the setting is on), even if you have not reached the newest message.
+    fun readOnUse() { if (s.markReadOnReply) store.markRead(roomId) }
     fun send() {
         val body = text.trim()
         if (body.isEmpty() && (staged.isEmpty() || editing != null)) return
+        readOnUse()
         if (staged.isNotEmpty() && editing == null) {
             // The words go with the first item; the rest follow on their own.
             staged.toList().forEachIndexed { i, x ->
@@ -502,9 +506,9 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                             Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
                                 if (text.isEmpty()) Text(if (staged.isNotEmpty() && editing == null) "Add a message…" else chat?.let { "Message ${SyncReducer.displayName(it, me).substringBefore(' ')} · ${networkMeta(it.network).label}" } ?: "Message", color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 BasicTextField(
-                                    text, { text = it }, maxLines = 6, textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface), cursorBrush = SolidColor(scheme.primary),
+                                    text, { text = it; if (it.isNotEmpty()) readOnUse() }, maxLines = 6, textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface), cursorBrush = SolidColor(scheme.primary),
                                     keyboardOptions = KeyboardOptions(imeAction = if (s.enterSends) ImeAction.Send else ImeAction.Default), keyboardActions = KeyboardActions(onSend = { send() }),
-                                    modifier = Modifier.fillMaxWidth().focusRequester(composerFocus)
+                                    modifier = Modifier.fillMaxWidth().focusRequester(composerFocus).onFocusChanged { if (it.isFocused) readOnUse() }
                                         // Pictures, GIFs and other files pasted or sent from the keyboard wait in the message box too.
                                         .contentReceiver(object : androidx.compose.foundation.content.ReceiveContentListener {
                                             override fun onReceive(transferableContent: androidx.compose.foundation.content.TransferableContent): androidx.compose.foundation.content.TransferableContent? =

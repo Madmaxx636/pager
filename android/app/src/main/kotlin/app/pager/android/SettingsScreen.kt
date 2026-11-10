@@ -323,6 +323,7 @@ fun SettingsScreen(page: String, navigate: (String) -> Unit, onBack: () -> Unit)
             }
             SettingsGroup("Reading") {
                 ChoiceRow("Mark as read when", listOf("open" to "I open the page", "scrolled" to "I reach the newest message", "manual" to "I do it myself"), s.markReadMode) { v -> set { copy(markReadMode = v) } }; GroupDivider()
+                SwitchRow("Mark as read when I reply or type", "Sending a message, tapping in the message box or typing in it marks the page as read, even if you have not reached the newest message", s.markReadOnReply) { v -> set { copy(markReadOnReply = v) } }
                 SwitchRow("Open at the new-messages line", "Off: chats open at the newest message. On: they open at the 'New messages' line", s.openAtUnread) { v -> set { copy(openAtUnread = v) } }; GroupDivider()
                 ChoiceRow("Message grouping", listOf("1" to "Within 1 minute", "5" to "Within 5 minutes", "15" to "Within 15 minutes", "60" to "Within an hour"), s.groupGapMin.toString()) { v -> set { copy(groupGapMin = v.toInt()) } }; GroupDivider()
             }

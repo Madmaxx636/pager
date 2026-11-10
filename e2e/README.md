@@ -33,3 +33,5 @@ Phases: `basics` (text), `media` (pictures, videos, voice, music, files, locatio
 minimised, behind another window), `reconnect` (connection drops while messages wait), `mixed` (bursts), `reading` (nothing may move while you read higher up),
 `probe` (dumps one video message's structure). Needs the Electron binary (`node desktop/node_modules/electron/install.js`) and a display.
 
+**An encrypted chat:** `BENCH_ENCRYPTED=1 node --import ../api/node_modules/tsx/dist/loader.mjs bench.mjs` makes a chat whose other side is a real encrypting device (`encrypted-sim.mjs`, using the app's own encryption code), so the app has to decrypt what arrives, with the keys delivered separately.
+

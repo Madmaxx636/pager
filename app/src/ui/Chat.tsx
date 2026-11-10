@@ -9,6 +9,7 @@ import {
   AlarmClock, ArrowLeft, Bell, BellOff, Check, ChevronDown, ChevronLeft, Clock, ChevronRight, Copy, Download, FileText, Forward, Info, Link2, LogOut, Mic, Pencil, Pin, Plus,
   Reply, ExternalLink, Lock, Share2, Search, Send, Smile, Hourglass, Star, Tag, Trash2, X, Code2, Video, Phone,
 } from "lucide-react";
+import { crumb, recordIncident } from "../core/applog";
 import { ChatState, Msg, STATUS_FAILED, STATUS_SENT, displayName, isArchived, isGroup, isLowPriority, isPinned, labelsOf, nameOf, peopleCount, previewOf, readersOf, isBridgeBot, isBotRoom, realPeople } from "../core/types";
 import { networkMeta } from "../core/emoji";
 import { useSettings, AppSettings, ChatNotifPrefs } from "../core/settings";
@@ -162,19 +163,43 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     for (let i = lo; i < Math.min(kids.length, lo + 6); i++) { const k = kids[i] as HTMLElement; if (k.dataset.id) return { id: k.dataset.id, y: k.getBoundingClientRect().top - top }; }
     return null;
   };
+  // The jump recorder: when the list moves by itself, or gets shorter under you while you are at the bottom, a line goes to Settings > Advanced > Logs saying by how much and what the
+  // page had just changed (kinds of elements only, never message text, names or keys), so a jump that happens on a real computer can be looked at afterwards.
+  const lastMax = useRef(0);                       // how far the list could be scrolled when it was last looked at
+  const recent = useRef({ at: 0, what: "" });      // what the page changed just now
+  const jumpLog = useRef({ at: 0, n: 0 });
+  const lastNote = useRef({ at: 0, px: 0 });
+  const noteJump = useCallback((what: string, px: number) => {
+    const now = Date.now(), j = jumpLog.current; if (now - j.at > 10_000) { j.at = now; j.n = 0; }
+    if (now - lastNote.current.at < 400 && Math.abs(lastNote.current.px - px) < 3) return;        // the same one, seen by a second way
+    lastNote.current = { at: now, px };
+    if (++j.n > 6) return;
+    const el = scroller.current, r = recent.current;
+    const line = `list ${what} by ${Math.round(Math.abs(px))}px (view ${el?.clientHeight}, content ${el?.scrollHeight}, ${stick.current ? "at the bottom" : "reading higher up"}; ${now - r.at < 400 ? r.what : "the page had not changed just before"})`;
+    if (Math.abs(px) >= 40) recordIncident("scroll jump", line); else crumb("scroll", line);
+  }, []);
+  const describeChange = (rs: MutationRecord[]) => {
+    let add = 0, rem = 0; const kinds = new Set<string>();
+    for (const r of rs) {
+      add += r.addedNodes.length; rem += r.removedNodes.length;
+      for (const n of [...r.addedNodes, ...r.removedNodes]) if (n instanceof HTMLElement) kinds.add(String(n.className || n.tagName).split(" ")[0] || n.tagName.toLowerCase());
+      if (r.type === "attributes" && r.target instanceof HTMLElement) kinds.add(`${String(r.target.className || r.target.tagName).split(" ")[0]}[${r.attributeName}]`);
+    }
+    return `the page changed: +${add} -${rem} ${[...kinds].slice(0, 5).join(" ")}`.trim();
+  };
   const seenTop = useRef(0);          // where the list was scrolled to when the message being read was last noted
-  const remember = useCallback(() => { const el = scroller.current; anchor.current = el ? topMsg(el) : null; seenTop.current = el?.scrollTop ?? 0; }, []);
+  const remember = useCallback(() => { const el = scroller.current; anchor.current = el ? topMsg(el) : null; seenTop.current = el?.scrollTop ?? 0; if (el) lastMax.current = el.scrollHeight - el.clientHeight; }, []);
   const hold = useCallback(() => {
     const el = scroller.current, a = anchor.current; if (!el || !a) return;
     if (Math.abs(el.scrollTop - seenTop.current) > 0.5) { remember(); return; }       // you have scrolled since: that is where you are now, not something to undo
     const m = el.querySelector<HTMLElement>(`[data-id="${CSS.escape(a.id)}"]`); if (!m) { remember(); return; }
     const d = m.getBoundingClientRect().top - el.getBoundingClientRect().top - a.y;
-    if (Math.abs(d) >= 1) { el.scrollTop += d; ours.current = el.scrollTop; }
+    if (Math.abs(d) >= 1) { el.scrollTop += d; ours.current = el.scrollTop; if (Math.abs(d) >= 20) crumb("scroll", `kept your place: the page above you changed by ${Math.round(Math.abs(d))}px (${recent.current.what || "no element change"})`); }
     remember();
   }, [remember]);
   useLayoutEffect(() => {
     const el = scroller.current; if (!el || !chat) return;
-    const last = messages[messages.length - 1]?.id, prev = prevLast.current;
+    const last = messages[messages.length - 1]?.id, prev = prevLast.current, wasOpen = opened.current === roomId;
     if (opened.current !== roomId) {
       opened.current = roomId;
       const div = st.openAtUnread ? el.querySelector("#unread-divider") : null;
@@ -183,6 +208,9 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
       // At the bottom, or you just sent something: follow. (Not on every change while the last message happens to be yours, which pulled you down while reading.)
       stick.current = true; settle();
     } else hold();
+    // The page may have got shorter in this very update (a message taken away, an edit): that is noted too, a moment later so the page's own change report is in.
+    const max = el.scrollHeight - el.clientHeight;
+    if (wasOpen && stick.current && lastMax.current > 0 && lastMax.current - max >= 20) { const px = lastMax.current - max; queueMicrotask(() => noteJump("shrank under you at the bottom", px)); }
     prevLast.current = last; remember();
   }, [roomId, messages, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { opened.current = ""; stick.current = true; setReplyTo(undefined); setEditing(undefined); }, [roomId]);
@@ -190,7 +218,12 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   // Pictures and videos change the chat's height as they load: stay at the newest message while you haven't scrolled up.
   useEffect(() => {
     const el = scroller.current; if (!el) return;
-    const pin = () => { if (stick.current) toBottom(); else hold(); };
+    const pin = (arg?: unknown) => {
+      if (Array.isArray(arg) && arg[0] instanceof MutationRecord) recent.current = { at: Date.now(), what: describeChange(arg as MutationRecord[]) };
+      const max = el.scrollHeight - el.clientHeight;      // (reading it makes the page lay out, so a shrink shows here)
+      if (stick.current) { if (lastMax.current > 0 && lastMax.current - max >= 20) noteJump("shrank under you at the bottom", lastMax.current - max); toBottom(); } else hold();
+      lastMax.current = max;
+    };
     el.addEventListener("load", pin, true); el.addEventListener("loadedmetadata", pin, true);
     const ro = new ResizeObserver(pin); if (el.firstElementChild) ro.observe(el.firstElementChild); ro.observe(el);
     // Anything that changes inside the list (a placeholder turning into a player, an edit, a reaction, a message taken away) is dealt with straight away, before the next frame is
@@ -237,7 +270,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const el = scroller.current; if (!el) return;
     if (Math.abs(el.scrollTop - ours.current) < 2) { remember(); return; } // our own scroll, not yours
     // A scroll you did not cause (the page changed height: pictures loading, the message box growing as you type) must not count as you scrolling up.
-    if (Date.now() - lastInput.current > (Date.now() - openedAt.current < 4000 ? 800 : 1200)) { if (stick.current) toBottom(); else remember(); return; }
+    if (Date.now() - lastInput.current > (Date.now() - openedAt.current < 4000 ? 800 : 1200)) { const d = el.scrollTop - seenTop.current; if (Math.abs(d) >= 20) noteJump(d < 0 ? "moved up on its own" : "moved down on its own", d); if (stick.current) toBottom(); else remember(); return; }
     remember();
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (stick.current && st.markReadMode === "scrolled") markRead(roomId);
@@ -479,8 +512,11 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
   const token = st.mentionSuggestions && group ? /(?:^|\s)@([^\s@]*)$/.exec(text)?.[1] : undefined;
   const people = token === undefined ? [] : Object.entries(chat.members).filter(([id, n]) => id !== user && n.toLowerCase().includes(token.toLowerCase())).slice(0, 8);
 
+  // You are plainly looking at this page when you reply, click in the message box or type in it: it counts as read (when the setting is on), even if you have not scrolled to the newest message.
+  const readOnUse = () => { if (st.markReadOnReply) markRead(roomId); };
   function submit() {
     const body = text.trim(); if (!body && !staged.length) return;
+    readOnUse();
     if (!editing && staged.length) {
       // The words go with the first item; the rest follow on their own.
       // However the sending goes, the composer must come back to its normal state: files left staged keep "Send later" switched off.
@@ -587,7 +623,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
               </div>
             )}
             <div className="field-row">
-            <textarea ref={ta} rows={1} placeholder={staged.length && !editing ? "Add a message…" : `Message ${placeholderName(chat)}`} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={sendKey} spellCheck
+            <textarea ref={ta} rows={1} placeholder={staged.length && !editing ? "Add a message…" : `Message ${placeholderName(chat)}`} value={text} onMouseDown={readOnUse} onChange={(e) => { setText(e.target.value); if (e.target.value) readOnUse(); }} onKeyDown={sendKey} spellCheck
               onPaste={(e) => { const fs = Array.from(e.clipboardData.files); if (fs.length) { e.preventDefault(); onFiles(fs); } }} />
             <IconButton icon={Smile} label="Emoji" onClick={() => setEmoji(true)} />
             </div>

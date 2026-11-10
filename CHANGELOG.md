@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.23 (desktop, web; phone gets these with its next build)
+
+- **Mark as read when you reply or type (desktop, web, phone):** replying, clicking in the message box, or typing in it now marks the page as read, even if you have not scrolled to the newest message (before, with "Mark as read when" set to "I reach the newest message", a page you answered could stay unread). Keyboard focus alone does not count, only a click or typing, so opening a page does not mark it by itself. Switch it off in Settings, Pages: "Mark as read when I reply or type". (The phone does the same on tap, typing and sending; it could not be built or tried on the computer used for this release, and is checked when the next phone version is built.)
+- **A recorder for jumps (desktop, web):** if the message list moves by itself, or gets shorter under you while you are at the bottom, a line is added to Settings, Advanced, Logs: by how many pixels, how big the view and the list were, whether you were at the bottom, and what kinds of elements the page had just added or removed. It never contains message text, names or keys. If the page still jumps for you, copy the log (Settings, Advanced, Logs, Copy) right after it happens and send it: it shows what the page did. The desktop shell also writes which display server (Wayland or X11) and desktop it runs under at start-up.
+- **For developers:** the test bench can send through a real encrypting device (`BENCH_ENCRYPTED=1`, see `e2e/README.md`); all 37 situations are clean in an encrypted chat too, and the messages are really decrypted. Tests for marking as read and for the recorder.
+
 ## 0.6.22 (desktop, web)
 
 Found with a new test bench: the real desktop app running against a test server, with a stand-in for a bridge sending every kind of traffic (all message kinds, replies, edits, deletions, reactions, typing, receipts, connection drops, the window going to the tray) while every painted frame of the message list is recorded.

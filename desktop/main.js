@@ -20,6 +20,8 @@ function note(line) {
   } catch { /* the log is a convenience */ }
 }
 let lastBeat = Date.now();
+// How this run was set up, for the problem log (the display server matters for how the window draws).
+note(`started: Pager ${app.getVersion()}, Electron ${process.versions.electron}, ${process.platform}, session ${process.env.XDG_SESSION_TYPE ?? "?"}, desktop ${process.env.XDG_CURRENT_DESKTOP ?? "?"}${process.env.WAYLAND_DISPLAY ? ", Wayland" : ""}`);
 ipcMain.on("log", (_e, line) => note(`page: ${line}`));
 ipcMain.on("beat", () => { lastBeat = Date.now(); });
 app.on("child-process-gone", (_e, d) => note(`${d.type} process gone: ${d.reason} (exit ${d.exitCode})`));

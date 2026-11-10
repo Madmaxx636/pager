@@ -168,6 +168,7 @@ function Page({ page, nav }: { page: string; nav: Nav }) {
         </Group>
         <Group title="Reading">
           <Select title="Mark as read when" value={s.markReadMode} options={[["open", "I open the page"], ["scrolled", "I reach the newest message"], ["manual", "I do it myself"]]} onChange={(v) => u({ markReadMode: v })} />
+          <SwitchRow title="Mark as read when I reply or type" hint="Sending a message, clicking in the message box or typing in it marks the page as read, even if you have not reached the newest message" checked={s.markReadOnReply} onChange={(v) => u({ markReadOnReply: v })} />
           <SwitchRow title="Open at first unread" hint="Jump to the 'New messages' line" checked={s.openAtUnread} onChange={(v) => u({ openAtUnread: v })} />
           <Select title="Message grouping" value={String(s.groupGapMin)} options={[["1", "Within 1 minute"], ["5", "Within 5 minutes"], ["15", "Within 15 minutes"], ["60", "Within an hour"]]} onChange={(v) => u({ groupGapMin: Number(v) })} />
         </Group>

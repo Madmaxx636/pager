@@ -133,6 +133,8 @@ data class AppSettings(
     val greetings: Boolean = true,            // a silly pager message when the app opens
     val groupGapMin: Int = 5,
     val markReadMode: String = "scrolled",     // open | scrolled | manual
+    /** Replying, tapping in the message box or typing in it marks the page as read, whatever [markReadMode] says. */
+    val markReadOnReply: Boolean = true,
     /** Open a chat at its 'New messages' line instead of at the newest message. */
     val openAtUnread: Boolean = false,
     val gifProvider: String = "giphy",         // giphy | tenor
@@ -239,7 +241,7 @@ class SettingsStore(context: Context) {
             Group("notifications", "Notifications", "What alerts you, quiet hours, previews", listOf("notifEnabled", "accountAlerts", "updateAlerts", "notifPreview", "notifSound", "notifScope", "notifGroupMentionsOnly", "notifMutedNetworks", "notifNetworkMode", "notifKeywords", "notifQuietDays", "notifQuietBreakThrough", "notifDelaySec", "notifDirectMode", "notifGroupMode", "quietHoursEnabled", "quietStartMin", "quietEndMin", "notifVibrate", "notifLockScreen", "notifAlertOnce", "notifActions")),
             Group("sounds", "Sounds", "Send, receive and reaction sounds", listOf("convoSounds", "inAppPopups", "sendSound", "receiveSound", "reactionSound")),
             Group("gifs", "GIF search keys", "Your GIPHY and KLIPY keys (kept on your own server)", listOf("gifKeys")),
-            Group("behaviour", "Chat behaviour", "Read marks, typing, downloads, link previews, confirmations", listOf("lowData", "lowEnd", "markReadMode", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider", "enterSends", "imageQuality")),
+            Group("behaviour", "Chat behaviour", "Read marks, typing, downloads, link previews, confirmations", listOf("lowData", "lowEnd", "markReadMode", "markReadOnReply", "groupGapMin", "unarchiveOnMessage", "linkPreviews", "autoDownload", "autoPlayGifs", "sendReadReceipts", "sendTyping", "openAtUnread", "confirmDelete", "markdown", "mentionSuggestions", "greetings", "deleteAtSource", "autoTranscribe", "gifProvider", "enterSends", "imageQuality")),
         )
     }
     private fun keysOf(ids: List<String>) = GROUPS.filter { it.id in ids }.flatMap { it.keys }
