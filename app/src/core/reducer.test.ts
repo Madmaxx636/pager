@@ -170,6 +170,12 @@ describe("applySync", () => {
     c = applyGap(c, [text("$last", mom, 7000, "x")], "tlast", [], me);
     expect(c.gap).toBeUndefined(); expect(c.prevBatch).toBe("tlast"); expect(c.messages.every((m) => m.ts > 2000)).toBe(true);
   });
+  it("takes someone's typing dots away when their message arrives", () => {
+    const typing = applySync(base(), { rooms: { join: { "!a:x": { ephemeral: { events: [{ type: "m.typing", content: { user_ids: [mom] } }] } } } } }, me, false).chats;
+    expect(typing["!a:x"].typing).toEqual([mom]);
+    const after = applySync(typing, join([text("$9", mom, 9000, "here it is")]), me, false).chats["!a:x"];
+    expect(after.typing).toEqual([]);                                                         // gone with the message, not a report later
+  });
   it("reads tags, marked-unread, receipts, typing and muted rooms", () => {
     const sync = { rooms: { join: { "!a:x": {
       ephemeral: { events: [{ type: "m.typing", content: { user_ids: [mom, me] } }, { type: "m.receipt", content: { "$2": { "m.read": { [mom]: { ts: 1 } } } } }] },

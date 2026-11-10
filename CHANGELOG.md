@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.21 (desktop, web; phone gets the typing change with its next build)
+
+- **The page snapping up when a new message arrives (desktop, web):** a picture that arrives without a size (common from bridges) has no height until the browser has decoded it, so while it loaded its message collapsed to nothing and the page dropped about 200 pixels with it, then grew again: a snap up and back with every picture. A picture now keeps a box of the size it will take (worked out from its size when the message gives one, a 4 to 3 guess otherwise) until it has really loaded, and when it takes its real size the page goes back to the bottom before anything is drawn. Checked frame by frame: at the bottom the page now only moves down and never leaves the bottom; reading higher up, nothing moves at all.
+- **Typing dots (desktop, web, phone):** someone's dots stayed for a moment after their message arrived and then vanished, pulling the page up with them. They now go with the message.
+- **For developers:** `e2e/tests/newmsg.spec.mjs` checks every painted frame when a picture (with or without a size) or a typing person's message arrives, at the bottom and while reading higher up. It fails on 0.6.20 with "the page snapped up".
+
 ## 0.6.20 (phone, desktop, web)
 
 Found by building a test server with months of chat history (about 7,000 messages in three chats, with pictures, videos, voice messages and music) and driving the desktop app through it.

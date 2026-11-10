@@ -193,9 +193,10 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const ro = new ResizeObserver(pin); if (el.firstElementChild) ro.observe(el.firstElementChild); ro.observe(el);
     return () => { el.removeEventListener("load", pin, true); el.removeEventListener("loadedmetadata", pin, true); ro.disconnect(); };
   }, [roomId, chat != null, hold]); // eslint-disable-line react-hooks/exhaustive-deps
-  // The message box measures itself by collapsing for an instant, which trims the list's scroll position without any lasting change of size, so the size watcher above
-  // never sees it. The box says when it has settled; if you were at the bottom, go back there before anything is drawn (this was the little up-and-down twitch).
-  useEffect(() => { const f = () => { if (stick.current) toBottom(); }; window.addEventListener("pager:composer-resize", f); return () => window.removeEventListener("pager:composer-resize", f); }, [toBottom]);
+  // Something changed the list's height before the next frame is drawn, and says so (the message box measuring itself, a picture taking its real size). If you were at the
+  // bottom, go back there before anything is drawn. The message box measures itself by collapsing for an instant, which trims the scroll position without any lasting change of
+  // size, so the size watcher above never sees it (this was the little up-and-down twitch).
+  useEffect(() => { const f = () => { if (stick.current) toBottom(); }; window.addEventListener("pager:layout", f); return () => window.removeEventListener("pager:layout", f); }, [toBottom]);
   // Back from the tray or behind another window: show the newest message again.
   useEffect(() => { const w = () => { if (stick.current) settle(); }; window.addEventListener("pager:wake", w); return () => window.removeEventListener("pager:wake", w); }, [settle]);
   // A message only counts as read while you can see it: the window is in front and focused. Otherwise a message that arrives while Pager sits
@@ -477,7 +478,7 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
     const el = ta.current; if (!el) return;
     el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight + 2, 168)}px`;
     // (Every time, not only when the height changed: the collapse in between trims the list's scroll position even when the box ends up the same height.)
-    window.dispatchEvent(new Event("pager:composer-resize"));
+    window.dispatchEvent(new Event("pager:layout"));
   }, []);
   useLayoutEffect(fitBox, [text, staged.length, roomId, fitBox]);
   useEffect(() => { const el = ta.current; if (!el || typeof ResizeObserver === "undefined") return; const ro = new ResizeObserver(fitBox); ro.observe(el); return () => ro.disconnect(); }, [fitBox, roomId]);

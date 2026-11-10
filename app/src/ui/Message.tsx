@@ -72,6 +72,13 @@ function Ticks({ read, failed, children }: { read: boolean; failed: boolean; chi
   return <span ref={ref} data-tone={tone} className={"ticks" + (read ? " read" : "") + (failed ? " failed" : "")}>{children}</span>;
 }
 
+/** The room a picture takes once shown (see .media in styles.css: at most 320 wide and 380 tall), so the box held for it is the same size. Unknown size: a 4 to 3 guess. */
+export function fitBox(w: number | undefined, h: number | undefined, maxW = 320): { w: number; h: number } {
+  if (!w || !h) return { w: 270, h: 203 };
+  const k = Math.min(1, maxW / w, 380 / h);
+  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+}
+
 export function MessageRow({ chat, msg, first, last, group, mine, read, delivered, latestMine, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply, onVote, onEndPoll, onJump }: {
   chat: ChatState; msg: Msg; first: boolean; last: boolean; group: boolean; mine: boolean; read: boolean; delivered?: boolean; latestMine?: boolean; reply?: Msg; st: AppSettings; starred: boolean;
   onMenu: (x: number, y: number) => void; onOpen: () => void; onWho: (key: string) => void; onReact: (key: string) => void; onReply: () => void; onVote: (ids: string[]) => void; onEndPoll: () => void; onJump?: (id: string) => void;
@@ -138,18 +145,22 @@ export function MessageRow({ chat, msg, first, last, group, mine, read, delivere
 function Content({ msg, chat, st, big, onOpen, onVote, onEndPoll }: { msg: Msg; chat: ChatState; st: AppSettings; big: boolean; onOpen: () => void; onVote: (ids: string[]) => void; onEndPoll: () => void }) {
   const auto = st.autoDownload === "always";
   const [tapped, setTapped] = useState(false);
+  const [imgReady, setImgReady] = useState(false);     // the picture has really loaded: until then its box keeps the room it will take (see fitBox)
+  useLayoutEffect(() => { if (imgReady) window.dispatchEvent(new Event("pager:layout")); }, [imgReady]);   // it took its real size: the list goes back to the bottom before this is drawn
   const allowed = auto || tapped || msg.status !== STATUS_SENT;
   const isGif = msg.mime === "image/gif" || msg.body.toLowerCase().endsWith(".gif");
   // GIFs animate only from the original file; thumbnails are still frames.
   const img = useMxc(msg.type === "m.image" ? msg.mxc : undefined, isGif && st.autoPlayGifs ? 0 : msg.sticker ? 320 : 640, allowed);
   const media = useMxc(msg.type === "m.audio" ? msg.mxc : undefined, 0, allowed);
-  const ratio = msg.w && msg.h ? Math.min(2, Math.max(0.5, msg.w / msg.h)) : 4 / 3;
 
   const main = ((): React.ReactNode => { switch (msg.type) {
     case "m.poll": return <PollCard msg={msg} chat={chat} onVote={onVote} onEnd={onEndPoll} />;
-    case "m.image":
-      return img ? <div className="img-wrap"><img className={"media" + (msg.sticker ? " sticker" : "")} src={img} alt={msg.body} onClick={onOpen} loading="lazy" decoding="async" />{isGif && !st.autoPlayGifs && <span className="gif-tag">GIF</span>}</div>
-        : <div className="media placeholder" style={{ aspectRatio: String(ratio) }} onClick={() => setTapped(true)}>{msg.status === STATUS_SENDING ? "Sending…" : !allowed ? `Click to load${msg.size ? ` · ${humanSize(msg.size)}` : ""}` : ""}</div>;
+    case "m.image": {
+      const box = fitBox(msg.w, msg.h, msg.sticker ? 160 : 320);
+      // A picture that has just been given an address has no height until it is decoded: without a box of its own the message would collapse for a moment, and the page with it.
+      return img ? <div className={"img-wrap" + (imgReady ? "" : " pending")} style={imgReady ? undefined : { width: box.w, aspectRatio: `${box.w} / ${box.h}` }}><img className={"media" + (msg.sticker ? " sticker" : "")} src={img} alt={msg.body} onClick={onOpen} onLoad={() => setImgReady(true)} onError={() => setImgReady(true)} loading="lazy" decoding="async" />{isGif && !st.autoPlayGifs && <span className="gif-tag">GIF</span>}</div>
+        : <div className="media placeholder" style={{ width: box.w, aspectRatio: `${box.w} / ${box.h}` }} onClick={() => setTapped(true)}>{msg.status === STATUS_SENDING ? "Sending…" : !allowed ? `Click to load${msg.size ? ` · ${humanSize(msg.size)}` : ""}` : ""}</div>;
+    }
     case "m.video":
       return <VideoPlayer msg={msg} st={st} allowed={allowed} onLoad={() => setTapped(true)} />;
     case "m.audio":

@@ -108,6 +108,9 @@ object SyncReducer {
 
             for (e in room["ephemeral"].obj()["events"].arr()) chat = applyEphemeral(chat, e.obj(), me)
             for (e in room["account_data"].obj()["events"].arr()) chat = applyRoomAccountData(chat, e.obj())
+            // Someone whose message has just arrived has stopped typing, whatever the next typing report says: their dots leave with their message instead of a moment later.
+            val wrote = tl["events"].arr().map { it.obj() }.filter { it["type"].str() == "m.room.message" }.mapNotNull { it["sender"].str() }.toSet()
+            if (wrote.isNotEmpty() && chat.typing.any { it in wrote }) chat = chat.copy(typing = chat.typing - wrote)
 
             room["summary"].obj()["m.heroes"].arr().mapNotNull { it.str() }.takeIf { it.isNotEmpty() }?.let { chat = chat.copy(heroes = it) }
             room["summary"].obj()["m.joined_member_count"].int()?.let { chat = chat.copy(memberCount = it) }

@@ -97,6 +97,9 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
 
       for (const e of arr(obj(room.ephemeral).events)) chat = applyEphemeral(chat, obj(e), me);
       for (const e of arr(obj(room.account_data).events)) chat = applyRoomAccountData(chat, obj(e));
+      // Someone whose message has just arrived has stopped typing, whatever the next typing report says: their dots leave with their message instead of a moment later (which pulled the page up).
+      const wrote = new Set(arr(tl.events).filter((e) => str(obj(e).type) === "m.room.message").map((e) => str(obj(e).sender)));
+      if (wrote.size && chat.typing.some((u) => wrote.has(u))) chat = { ...chat, typing: chat.typing.filter((u) => !wrote.has(u)) };
 
       const heroes = arr(obj(room.summary)["m.heroes"]).filter((h) => typeof h === "string");
       if (heroes.length) chat = { ...chat, heroes };

@@ -854,3 +854,6 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 .log-detail pre { margin: 0; padding: 6px 8px; font: 0.72rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .log-ctx { color: var(--muted); background: var(--panel-2); } .log-hit { font-weight: 700; background: color-mix(in srgb, #f97316 18%, transparent); }
 .log-hit.crash { background: color-mix(in srgb, #dc2626 20%, transparent); }
+/* A picture waiting to be decoded keeps the room it will take (see fitBox in Message.tsx), so the message does not collapse and the page with it. */
+.img-wrap.pending { position: relative; max-width: 100%; border-radius: 14px; background: color-mix(in srgb, currentColor 12%, transparent); }
+.img-wrap.pending > img.media { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; opacity: 0; }

@@ -12,7 +12,7 @@ export async function fakeDesktop(context, platform = "linux", server = "http://
       getSpell: async () => ({ enabled: true, languages: ["en-US"], available: ["en-US", "en-GB", "de"] }),
       cookieLogin: async () => null, onMemory: (cb) => { window.__memory = cb; }, memory: async () => ({ total: 182, parts: [{ type: "Page", mb: 121 }, { type: "Browser", mb: 61 }] }),
       repaint: none, onUpdateProgress: none, log: none, beat: none, readLog: async () => "2026-11-04T00:00:00.000Z page process gone: crashed (exit 139)",
-      onWindowActive: none, onOpenRoom: none,
+      onWindowActive: (cb) => { window.__active = cb; }, onOpenRoom: none,
     };
   }, { platform, server });
 }

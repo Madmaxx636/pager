@@ -264,4 +264,11 @@ class SyncReducerTest {
         assertEquals(null, c.gap); assertEquals("tlast", c.prevBatch)
         assertTrue(c.messages.all { it.ts > 2000 })                                              // what came before the hole is let go
     }
+
+    @Test fun someonesTypingDotsGoWhenTheirMessageArrives() {
+        val typing = SyncReducer.apply(base, parse("""{"rooms":{"join":{"!a:x":{"ephemeral":{"events":[{"type":"m.typing","content":{"user_ids":["$mom"]}}]}}}}}"""), me, initial = false).chats
+        assertEquals(setOf(mom), typing.getValue("!a:x").typing)
+        val after = SyncReducer.apply(typing, joinWith(msg("${'$'}9", mom, 9000, "here it is")), me, initial = false).chats.getValue("!a:x")
+        assertEquals(emptySet<String>(), after.typing)
+    }
 }
