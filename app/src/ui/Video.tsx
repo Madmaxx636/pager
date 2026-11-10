@@ -1,3 +1,4 @@
+import { fitBox } from "../core/mediabox";
 import { useEffect, useRef, useState } from "react";
 import { Download, Maximize2, Play, Video as VideoIcon } from "lucide-react";
 import type { Msg } from "../core/types";
@@ -21,6 +22,8 @@ export function VideoPlayer({ msg, st, allowed, onLoad }: { msg: Msg; st: AppSet
   const box = useRef<HTMLDivElement>(null);
   const vid = useRef<HTMLVideoElement>(null);
   const ratio = msg.w && msg.h ? Math.min(2, Math.max(0.5, msg.w / msg.h)) : 16 / 9;
+  // A box of the size it will have, from the start: the message bubble sizes itself to its content, so without a width of its own a clip with no thumbnail yet was a thin strip.
+  const boxStyle = { aspectRatio: String(ratio), width: msg.w && msg.h ? fitBox(msg.w, msg.h).w : 270 };
 
   useEffect(() => {
     if (!gif || !box.current) return;
@@ -42,7 +45,7 @@ export function VideoPlayer({ msg, st, allowed, onLoad }: { msg: Msg; st: AppSet
   if (failed) {
     // Some clips (a phone's HEVC video, odd story formats) use a codec this browser doesn't have: say so and offer the file.
     return (
-      <div className="vid vid-failed" style={{ aspectRatio: String(ratio) }}>
+      <div className="vid vid-failed" style={boxStyle}>
         {poster && <img src={poster} alt="" />}
         <div className="vid-msg"><VideoIcon size={22} /><span>This video can't play here</span><button onClick={save}><Download size={14} /> Save it{msg.size ? ` · ${humanSize(msg.size)}` : ""}</button></div>
       </div>
@@ -50,7 +53,7 @@ export function VideoPlayer({ msg, st, allowed, onLoad }: { msg: Msg; st: AppSet
   }
   const showVideo = !!src && (playing || (gif && wantsAuto));
   return (
-    <div className={"vid" + (gif ? " vid-gif" : "")} ref={box} style={{ aspectRatio: String(ratio) }}>
+    <div className={"vid" + (gif ? " vid-gif" : "")} ref={box} style={boxStyle}>
       {showVideo
         ? <video ref={vid} src={src} poster={poster} playsInline preload="metadata" onError={() => setFailed(true)} onEnded={() => !gif && setPlaying(false)}
             {...(gif ? { muted: true, loop: true } : { controls: true, autoPlay: true, controlsList: "nodownload" })} />

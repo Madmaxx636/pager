@@ -6,6 +6,7 @@ import { isEmojiOnly } from "../core/format";
 import { AppSettings, bubbleColorsFor, bubbleLook } from "../core/settings";
 import { networkMeta } from "../core/emoji";
 import { niceReason } from "../core/mediatype";
+import { fitBox } from "../core/mediabox";
 import { LinkPreview } from "../core/api";
 import { me, mediaUrl, preview, retry } from "../core/store";
 import { Avatar, humanSize, useMxc } from "./common";
@@ -70,13 +71,6 @@ function Ticks({ read, failed, children }: { read: boolean; failed: boolean; chi
     setTone(lum < 0.55 ? "dark" : "light");
   });
   return <span ref={ref} data-tone={tone} className={"ticks" + (read ? " read" : "") + (failed ? " failed" : "")}>{children}</span>;
-}
-
-/** The room a picture takes once shown (see .media in styles.css: at most 320 wide and 380 tall), so the box held for it is the same size. Unknown size: a 4 to 3 guess. */
-export function fitBox(w: number | undefined, h: number | undefined, maxW = 320): { w: number; h: number } {
-  if (!w || !h) return { w: 270, h: 203 };
-  const k = Math.min(1, maxW / w, 380 / h);
-  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
 }
 
 export function MessageRow({ chat, msg, first, last, group, mine, read, delivered, latestMine, reply, st, starred, onMenu, onOpen, onWho, onReact, onReply, onVote, onEndPoll, onJump }: {

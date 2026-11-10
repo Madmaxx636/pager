@@ -162,9 +162,11 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     for (let i = lo; i < Math.min(kids.length, lo + 6); i++) { const k = kids[i] as HTMLElement; if (k.dataset.id) return { id: k.dataset.id, y: k.getBoundingClientRect().top - top }; }
     return null;
   };
-  const remember = useCallback(() => { const el = scroller.current; anchor.current = el ? topMsg(el) : null; }, []);
+  const seenTop = useRef(0);          // where the list was scrolled to when the message being read was last noted
+  const remember = useCallback(() => { const el = scroller.current; anchor.current = el ? topMsg(el) : null; seenTop.current = el?.scrollTop ?? 0; }, []);
   const hold = useCallback(() => {
     const el = scroller.current, a = anchor.current; if (!el || !a) return;
+    if (Math.abs(el.scrollTop - seenTop.current) > 0.5) { remember(); return; }       // you have scrolled since: that is where you are now, not something to undo
     const m = el.querySelector<HTMLElement>(`[data-id="${CSS.escape(a.id)}"]`); if (!m) { remember(); return; }
     const d = m.getBoundingClientRect().top - el.getBoundingClientRect().top - a.y;
     if (Math.abs(d) >= 1) { el.scrollTop += d; ours.current = el.scrollTop; }
@@ -191,7 +193,11 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     const pin = () => { if (stick.current) toBottom(); else hold(); };
     el.addEventListener("load", pin, true); el.addEventListener("loadedmetadata", pin, true);
     const ro = new ResizeObserver(pin); if (el.firstElementChild) ro.observe(el.firstElementChild); ro.observe(el);
-    return () => { el.removeEventListener("load", pin, true); el.removeEventListener("loadedmetadata", pin, true); ro.disconnect(); };
+    // Anything that changes inside the list (a placeholder turning into a player, an edit, a reaction, a message taken away) is dealt with straight away, before the next frame is
+    // drawn, not a frame later: at the bottom the list goes back to the bottom, and reading higher up the message being read stays where it was.
+    // (Plain class changes are left out: hovering a message toggles one, and a correction on every hover made the hover flicker. A change that matters to the layout comes with elements added or removed.)
+    const mo = new MutationObserver(pin); mo.observe(el, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["style", "src", "width", "height"] });
+    return () => { el.removeEventListener("load", pin, true); el.removeEventListener("loadedmetadata", pin, true); ro.disconnect(); mo.disconnect(); };
   }, [roomId, chat != null, hold]); // eslint-disable-line react-hooks/exhaustive-deps
   // Something changed the list's height before the next frame is drawn, and says so (the message box measuring itself, a picture taking its real size). If you were at the
   // bottom, go back there before anything is drawn. The message box measures itself by collapsing for an instant, which trims the scroll position without any lasting change of
@@ -265,12 +271,6 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     else if ((m.type === "m.file" || m.type === "m.video") && m.mxc) void download(m);
   }, []);
 
-  // When someone starts typing and you are at the bottom, bring the dots into view.
-  const typingCount = chat?.typing.length ?? 0;
-  useEffect(() => {
-    const el = scroller.current;
-    if (el && typingCount && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTo({ top: el.scrollHeight });
-  }, [typingCount]);
 
   // (All hooks stay above the early return below: a chat that disappears mid-update must not change how many hooks run.)
   // Pictures, videos, files and GIFs wait in the message box until you press send, so you can add more and write something with them.
@@ -287,7 +287,6 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   );
   const name = displayName(chat, user);
   const meta = networkMeta(chat.network);
-  const typingNames = chat.typing.map((u) => nameOf(chat, u));
   const attachFiles = (files: FileList | Array<File | Blob>, viewOnce = false, gif?: Gif) => setStaged((cur) => [...cur, ...Array.from(files).map((f) => stageOf(f, viewOnce, gif))]);
   const unstage = (id: string) => setStaged((cur) => { cur.filter((x) => x.id === id).forEach((x) => x.preview && URL.revokeObjectURL(x.preview)); return cur.filter((x) => x.id !== id); });
   const clearStaged = () => setStaged((cur) => { cur.forEach((x) => x.preview && URL.revokeObjectURL(x.preview)); return []; });   // (the previews were never let go of after a send)
@@ -319,12 +318,6 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
                 st={st} starred={stars.some((s) => s.eventId === it.msg.id)} onMenu={(x, y) => setMenu({ msg: it.msg, x, y })} onOpen={() => openMsg(it.msg)} onWho={(key) => setWho({ msg: it.msg, key })}
                 onReact={(key) => react(roomId, it.msg.id, key)} onReply={() => { setReplyTo(it.msg); setEditing(undefined); }}
                 onVote={(ids) => votePoll(roomId, it.msg.id, ids)} onEndPoll={() => endPoll(roomId, it.msg.id)} onJump={jumpTo} />)}
-          {typingNames.length > 0 && (
-            <div className="msg typing-row" aria-live="polite">
-              {group && <div className="msg-sender">{typingNames.join(", ")}</div>}
-              <div className="msg-line"><div className="bubble typing-bubble" aria-label={`${typingNames.join(", ")} typing`}><TypingDots /></div></div>
-            </div>
-          )}
         </div>
         {showJump && <button className="jump" onClick={() => { stick.current = true; touched(); scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: st.reduceMotion ? "auto" : "smooth" }); }} aria-label="Jump to latest"><ChevronDown size={20} /></button>}
 
@@ -565,6 +558,8 @@ function Composer({ roomId, sendTo, chat, replyTo, editing, st, group, nav, onCl
 
   return (
     <div className="composer-wrap">
+      {/* Who is typing floats just above the message box instead of sitting in the list: dots that take room in the list, and leave when the message arrives, pulled the page up each time. */}
+      {chat.typing.length > 0 && <div className="typing-float" aria-live="polite" aria-label={`${chat.typing.map((u) => nameOf(chat, u)).join(", ")} typing`}>{group && <b>{chat.typing.map((u) => nameOf(chat, u)).join(", ")}</b>}<TypingDots /></div>}
       {replyTo && <div className="banner-bar"><div><b>Replying to {nameOf(chat, replyTo.sender)}</b><span>{previewOf(replyTo)}</span></div><IconButton icon={X} label="Dismiss" onClick={onClearReply} /></div>}
       {editing && <div className="banner-bar"><div><b>Editing message</b><span>{editing.body}</span></div><IconButton icon={X} label="Dismiss" onClick={() => { onClearEdit(); setText(""); }} /></div>}
       {people.length > 0 && <div className="mentions">{people.map(([id, n]) => <button key={id} onClick={() => { setText(text.slice(0, text.length - token!.length - 1) + `@${n} `); mentionIds.current.set(n, id); ta.current?.focus(); }}><Avatar name={n} size={22} />@{n}</button>)}</div>}

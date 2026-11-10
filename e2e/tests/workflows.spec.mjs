@@ -17,7 +17,9 @@ const box = () => page.getByPlaceholder(/Message|Add a message/);
 const send = async (t) => { await box().fill(t); await box().press("Enter"); };
 const msgWith = (t) => page.locator(".timeline .msg", { hasText: t }).last();
 const hover = async (m) => { await m.hover(); };
-const more = async (m) => { await hover(m); await m.getByTitle("More").click(); };
+// (The buttons show only while the pointer is over the message, and the list can still be settling under a pointer that has not moved: hover again and retry, as a person would.)
+const tool = (m, title) => expect(async () => { await hover(m); await m.getByTitle(title).click({ timeout: 1500 }); }).toPass({ timeout: 15_000 });
+const more = (m) => tool(m, "More");
 
 test("plain, formatted and awkward text is sent and shown as written", async () => {
   await send("hello **bold** and _italic_ and `code`");
@@ -56,7 +58,7 @@ test("an empty or whitespace-only message is not sent", async () => {
 test("reply shows the quote, and the quote goes back to the message", async () => {
   await send("the original words");
   const m = msgWith("the original words"); await expect(m).toBeVisible({ timeout: 20_000 });
-  await hover(m); await m.getByTitle("Reply").click();
+  await tool(m, "Reply");
   await expect(page.locator(".banner-bar")).toContainText("Replying to");
   await send("my answer");
   const a = msgWith("my answer"); await expect(a.locator(".quote")).toContainText("the original words", { timeout: 20_000 });
@@ -74,7 +76,7 @@ test("a message can be edited and shows that it was", async () => {
 });
 
 test("reacting adds a chip, and clicking it takes the reaction off", async () => {
-  const m = msgWith("my better answer"); await hover(m); await m.getByTitle("React").click();
+  const m = msgWith("my better answer"); await tool(m, "React");
   const pick = page.locator('.quick button').first();
   await pick.click();
   const chip = msgWith("my better answer").locator(".reactions button").first();

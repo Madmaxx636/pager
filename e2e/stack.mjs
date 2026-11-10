@@ -84,7 +84,7 @@ async function status() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const cmd = process.argv[2];
-  const run = { up, down, reset, status, seed: async () => (await import("./seed.mjs")).seed(), history: async () => (await import("./history.mjs")).history() }[cmd];
+  const run = { up, down, reset, status, seed: async () => (await import("./seed.mjs")).seed(), history: async () => (await import("./history.mjs")).history({ scale: Number(process.env.HISTORY_SCALE ?? 1) }) }[cmd];
   if (!run) { console.error("usage: node e2e/stack.mjs up|seed|history|status|down|reset"); process.exit(1); }
   await run();
 }

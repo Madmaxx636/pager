@@ -21,7 +21,7 @@ const between = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 
 // ---- the media: real files made with ffmpeg (a few of each, used again and again) ----
 function ff(...args) { execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...args], { stdio: "inherit" }); }
-function makeMedia() {
+export function makeMedia() {
   mkdirSync(media, { recursive: true });
   const f = (n) => resolve(media, n);
   const sizes = [[640, 480], [480, 640], [800, 450], [320, 320], [1024, 768], [360, 640]];
@@ -34,15 +34,15 @@ function makeMedia() {
   return { sizes, vids: [[480, 270, 4], [270, 480, 3], [640, 360, 6]], voices: [2, 5, 9, 14, 31], songs: [["Evening Drive", 22], ["Slow Mornings", 31], ["Paper Planes", 18], ["Long Way Home", 40]], dir: media };
 }
 
-async function call(method, path, body, { token, user, ts, raw } = {}) {
+export async function call(method, path, body, { token, user, ts, raw } = {}) {
   const q = new URLSearchParams(); if (user) q.set("user_id", id(user)); if (ts) q.set("ts", String(ts));
   const res = await fetch(`${raw ? hs : v3}${path}${q.size ? (path.includes("?") ? "&" : "?") + q : ""}`, { method, headers: { authorization: `Bearer ${token ?? AS}`, ...(body && !(body instanceof Uint8Array) ? { "content-type": "application/json" } : {}) }, body: body instanceof Uint8Array ? body : body ? JSON.stringify(body) : undefined });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${JSON.stringify(json)}`);
   return json;
 }
-const login = async (u) => (await fetch(`${v3}/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "m.login.password", identifier: { type: "m.id.user", user: u }, password: `pw-${u}` }) }).then((r) => r.json())).access_token;
-async function upload(file, mime, alice) {
+export const login = async (u) => (await fetch(`${v3}/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "m.login.password", identifier: { type: "m.id.user", user: u }, password: `pw-${u}` }) }).then((r) => r.json())).access_token;
+export async function upload(file, mime, alice) {
   const bytes = new Uint8Array(readFileSync(file));
   const r = await fetch(`${hs}/_matrix/media/v3/upload?filename=${encodeURIComponent(file.split("/").pop())}`, { method: "POST", headers: { authorization: `Bearer ${alice}`, "content-type": mime }, body: bytes });
   return (await r.json()).content_uri;

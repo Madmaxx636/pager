@@ -26,6 +26,7 @@ test.beforeAll(async ({ browser }) => {
 test.afterAll(async () => { await page.context().close(); });
 
 const send = (content) => api(bob, "PUT", `/rooms/${encodeURIComponent(room)}/send/m.room.message/n${Date.now()}${n++}`, content);
+const video = (withSize) => send({ msgtype: "m.video", body: "clip.mp4", url: mxc, info: { mimetype: "video/mp4", duration: 3000, ...(withSize ? { w: 480, h: 270 } : {}) } });
 const picture = (withSize) => send({ msgtype: "m.image", body: "photo.png", url: mxc, info: { mimetype: "image/png", ...(withSize ? { w: 640, h: 480 } : {}) } });
 const toBottom = async () => { await page.mouse.move(600, 300); for (let i = 0; i < 8; i++) { await page.mouse.wheel(0, 4000); await page.waitForTimeout(100); } await page.waitForTimeout(500); };
 const up = async (px) => { await toBottom(); await page.mouse.wheel(0, -px); await page.waitForTimeout(600); };
@@ -60,12 +61,36 @@ test("a picture arriving while you read higher up: nothing moves", async () => {
   expect(Math.max(...f.map((x) => Math.abs(x.top - before)))).toBeLessThanOrEqual(1);
 });
 
-test("someone's typing dots go as their message arrives", async () => {
+test("someone typing does not move the list at all, and their dots go as their message arrives", async () => {
   await toBottom();
-  await api(bob, "PUT", `/rooms/${encodeURIComponent(room)}/typing/@bob:test.local`, { typing: true, timeout: 20000 });
-  await expect(page.locator(".typing-row")).toHaveCount(1, { timeout: 10_000 });
-  await send({ msgtype: "m.text", body: "words after the dots" });
-  await expect(page.locator(".timeline .msg", { hasText: "words after the dots" }).last()).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".typing-row")).toHaveCount(0, { timeout: 1500 });          // (the typing report that ends it comes later: the dots must not wait for it)
+  const f = await watch(async () => {
+    await api(bob, "PUT", `/rooms/${encodeURIComponent(room)}/typing/@bob:test.local`, { typing: true, timeout: 20000 });
+    await expect(page.locator(".typing-float")).toHaveCount(1, { timeout: 10_000 });          // the dots float above the message box, outside the list
+    await page.waitForTimeout(1200);
+  });
+  expect(Math.max(...f.map((x) => Math.abs(x.top - f[0].top))), "the dots moved the list").toBeLessThanOrEqual(1);
+  const g = await watch(async () => {
+    await send({ msgtype: "m.text", body: "words after the dots" });
+    await expect(page.locator(".timeline .msg", { hasText: "words after the dots" }).last()).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".typing-float")).toHaveCount(0, { timeout: 1500 });          // (the typing report that ends it comes later: the dots must not wait for it)
+  });
+  expect(wentUp(g), "the page snapped up").toBe(false); expect(Math.max(...g.map((x) => x.fb))).toBeLessThanOrEqual(1);
   await api(bob, "PUT", `/rooms/${encodeURIComponent(room)}/typing/@bob:test.local`, { typing: false });
+});
+
+test("a video, with or without a size, is a proper box from the start and keeps its size when the next message arrives", async () => {
+  await toBottom();
+  for (const sized of [false, true]) {
+    const before = await page.locator(".timeline .vid").count();
+    await video(sized);
+    await expect(page.locator(".timeline .vid")).toHaveCount(before + 1, { timeout: 15_000 });      // (the new one, not the previous video)
+    const box = page.locator(".timeline .vid").last();
+    const h0 = await box.evaluate((e) => e.offsetHeight);      // (layout height: the entrance animation scales the box a little while it plays)
+    expect(h0, "a thin strip instead of a video box").toBeGreaterThan(120);
+    await send({ msgtype: "m.text", body: "after the video" });
+    await expect(page.locator(".timeline .msg", { hasText: "after the video" }).last()).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(500);
+    const h1 = await box.evaluate((e) => e.offsetHeight);
+    expect(Math.abs(h1 - h0), `the video changed size (${sized ? "size given" : "no size"}: ${h0}px to ${h1}px)`).toBeLessThanOrEqual(3);
+  }
 });

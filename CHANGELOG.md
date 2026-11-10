@@ -4,6 +4,15 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.22 (desktop, web)
+
+Found with a new test bench: the real desktop app running against a test server, with a stand-in for a bridge sending every kind of traffic (all message kinds, replies, edits, deletions, reactions, typing, receipts, connection drops, the window going to the tray) while every painted frame of the message list is recorded.
+
+- **Typing dots no longer move the page (desktop, web):** the dots used to sit in the list, so they pushed the page up when they appeared and pulled it back by a different amount when the message replaced them (12 to 52 pixels, every time the other person typed before sending). They now float just above the message box, outside the list, so the list does not change at all while someone types. The list keeps a little room at the bottom for them.
+- **Videos with no thumbnail yet (desktop, web):** a video that arrived without a declared size, or before its thumbnail, was drawn as a thin 16 pixel strip, and jumped to full size (or shrank again when the next message arrived). It now has a proper box of its size from the start, like pictures do.
+- **Changes inside the list are dealt with before the next frame (desktop, web):** a file turning into a player, an edit, a reaction, a message taken away: the list goes back to the bottom (or, reading higher up, the message you are reading stays put) in the same moment instead of a frame later, which showed as a small jump.
+- **For developers:** the test bench (`e2e/bench.mjs`, see `e2e/README.md`), the bridge stand-in (`e2e/bridge-sim.mjs`), and tests for videos and typing in `e2e/tests/newmsg.spec.mjs`. Result of the bench on this version: 37 situations, none where a message you can see slides down; reading higher up, nothing moves.
+
 ## 0.6.21 (desktop, web; phone gets the typing change with its next build)
 
 - **The page snapping up when a new message arrives (desktop, web):** a picture that arrives without a size (common from bridges) has no height until the browser has decoded it, so while it loaded its message collapsed to nothing and the page dropped about 200 pixels with it, then grew again: a snap up and back with every picture. A picture now keeps a box of the size it will take (worked out from its size when the message gives one, a 4 to 3 guess otherwise) until it has really loaded, and when it takes its real size the page goes back to the bottom before anything is drawn. Checked frame by frame: at the bottom the page now only moves down and never leaves the bottom; reading higher up, nothing moves at all.

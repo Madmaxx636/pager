@@ -111,7 +111,7 @@ label { display: grid; gap: 6px; font-size: 0.87rem; font-weight: 600; color: va
 .chat-head { display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); min-height: 64px; }
 .head-id { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; text-align: left; padding: 4px 8px; border-radius: 12px; } .head-id:hover { background: var(--panel-2); } .chat-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-sub { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 6px; } .chat-sub i { width: 7px; height: 7px; border-radius: 50%; } .chat-sub.typing { color: var(--accent); }
-.timeline { overflow-anchor: none; flex: 1; overflow-y: auto; padding: 14px 20px; display: flex; flex-direction: column; } .timeline > * { flex: none; }
+.timeline { overflow-anchor: none; flex: 1; overflow-y: auto; padding: 14px 20px 38px; display: flex; flex-direction: column; } .timeline > * { flex: none; }
 .day { text-align: center; margin: 12px 0; } .day span { font-size: 0.75rem; font-weight: 500; color: var(--muted); background: var(--panel); padding: 4px 13px; border-radius: 999px; }
 .unread-divider { display: flex; align-items: center; gap: 10px; margin: 10px 0; color: var(--accent); font-size: 0.75rem; font-weight: 600; } .unread-divider::before, .unread-divider::after { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--accent) 45%, transparent); }
 .msg { display: flex; flex-direction: column; align-items: flex-start; max-width: var(--msg-max, 74%); margin-top: 2px; } .msg.first { margin-top: 10px; } .msg.mine { align-self: flex-end; align-items: flex-end; }
@@ -655,7 +655,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 @media (prefers-reduced-motion: reduce) { .pin-chip.shifting:not(.dragging) { transition: none; } }
 
 /* Videos: a picture with a play button; GIF-like clips play by themselves */
-.vid { position: relative; width: min(320px, 100%); max-height: 380px; border-radius: 14px; overflow: hidden; background: #000; line-height: 0; }
+.vid { position: relative; max-width: 100%; max-height: 380px; border-radius: 14px; overflow: hidden; background: #000; line-height: 0; }
 .vid video, .vid > img, .vid-blank { width: 100%; height: 100%; object-fit: contain; display: block; }
 .vid-blank { background: color-mix(in srgb, currentColor 14%, #000); }
 .vid-play { position: absolute; inset: 0; margin: auto; width: 58px; height: 58px; border-radius: 50%; border: 0; background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center; cursor: pointer; backdrop-filter: blur(4px); transition: transform .15s; }
@@ -716,7 +716,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-look="imessage"] .chat-head .avatar { width: 38px !important; height: 38px !important; }
 :root[data-look="imessage"] .chat-title { font-size: .78rem; font-weight: 500; } :root[data-look="imessage"] .chat-title::after { content: " ›"; color: var(--muted); }
 :root[data-look="imessage"] .chat-sub { font-size: .7rem; justify-content: center; }
-:root[data-look="imessage"] .timeline { padding: 12px 14px; overflow-x: hidden; }
+:root[data-look="imessage"] .timeline { padding: 12px 14px 38px; overflow-x: hidden; }
 :root[data-look="imessage"] .day span { background: none; color: var(--muted); font-weight: 600; font-size: .72rem; }
 :root[data-look="imessage"] .msg { max-width: var(--msg-max, 74%); } :root[data-look="imessage"] .msg.first { margin-top: 8px; } :root[data-look="imessage"] .msg { margin-top: 1.5px; }
 :root[data-look="imessage"] .bubble { padding: 7px 12px; font-size: 1.04rem; line-height: 1.28; box-shadow: none; }
@@ -766,7 +766,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-look="hangouts"] .chat-name { font-weight: 500; } :root[data-look="hangouts"] .unread { background: var(--accent); }
 :root[data-look="hangouts"] .pill-search { border-radius: 2px; background: var(--panel); border-bottom: 2px solid var(--line); height: 40px; margin: 2px 12px 8px; }
 :root[data-look="hangouts"] .tab { border-radius: 2px; background: transparent; border-bottom: 2px solid transparent; padding: 7px 12px; } :root[data-look="hangouts"] .tab.on { background: transparent; color: var(--accent); border-bottom-color: var(--accent); }
-:root[data-look="hangouts"] .timeline { padding: 12px 16px; }
+:root[data-look="hangouts"] .timeline { padding: 12px 16px 38px; }
 :root[data-look="hangouts"] .day { display: flex; align-items: center; gap: 10px; } :root[data-look="hangouts"] .day::before, :root[data-look="hangouts"] .day::after { content: ""; flex: 1; height: 1px; background: var(--line); } :root[data-look="hangouts"] .day span { background: none; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: .68rem; }
 :root[data-look="hangouts"] .msg { position: relative; } :root[data-look="hangouts"] .msg:not(.mine) { padding-left: 44px; } :root[data-look="hangouts"] .msg-sender { margin-left: 2px; font-weight: 500; }
 :root[data-look="hangouts"] .msg-avatar { display: block; position: absolute; left: 0; top: 2px; } :root[data-look="hangouts"] .msg-avatar .avatar { box-shadow: 0 1px 2px rgba(0, 0, 0, .3); border-radius: 50%; }
@@ -797,7 +797,7 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 :root[data-look="gmessages"] .chat-name { font-weight: 500; font-size: 1.02rem; } :root[data-look="gmessages"] .unread-name { font-weight: 700; } :root[data-look="gmessages"] .chat-preview { font-size: .88rem; }
 :root[data-look="gmessages"] .unread:not(.muted-badge) { font-size: 0; min-width: 12px; width: 12px; height: 12px; padding: 0; border-radius: 50%; }
 :root[data-look="gmessages"] .chat-head { background: var(--bg); border: 0; min-height: 68px; } :root[data-look="gmessages"] .chat-title { font-size: 1.12rem; font-weight: 500; } :root[data-look="gmessages"] .chat-sub { font-size: .76rem; }
-:root[data-look="gmessages"] .timeline { padding: 8px 14px 14px; }
+:root[data-look="gmessages"] .timeline { padding: 8px 14px 38px; }
 :root[data-look="gmessages"] .day span { background: none; font-size: .74rem; font-weight: 500; color: var(--muted); }
 :root[data-look="gmessages"] .msg { --tight: 4px; max-width: var(--msg-max, 78%); } :root[data-look="gmessages"] .msg.first { margin-top: 12px; } :root[data-look="gmessages"] .msg { margin-top: 2px; }
 :root[data-look="gmessages"] .bubble { padding: 9px 14px; font-size: 1rem; line-height: 1.35; box-shadow: none; }
@@ -857,3 +857,5 @@ body.resizing { cursor: col-resize; user-select: none; } body.resizing * { point
 /* A picture waiting to be decoded keeps the room it will take (see fitBox in Message.tsx), so the message does not collapse and the page with it. */
 .img-wrap.pending { position: relative; max-width: 100%; border-radius: 14px; background: color-mix(in srgb, currentColor 12%, transparent); }
 .img-wrap.pending > img.media { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; opacity: 0; }
+.typing-float { position: absolute; left: 20px; bottom: calc(100% + 6px); display: flex; align-items: center; gap: 8px; max-width: calc(100% - 40px); padding: 6px 12px; border-radius: 14px; background: var(--theirs); color: var(--muted); font-size: .75rem; box-shadow: 0 1px 2px rgba(16, 24, 40, .08); pointer-events: none; z-index: 2; }
+.typing-float b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

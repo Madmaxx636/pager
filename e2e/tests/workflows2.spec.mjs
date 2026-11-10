@@ -43,7 +43,7 @@ test("a message can be forwarded to another page", async () => {
   await openChat(page, "Pager team");
   await send("please forward me");
   const m = page.locator(".timeline .msg", { hasText: "please forward me" }).last(); await expect(m).toBeVisible({ timeout: 20_000 });
-  await m.hover(); await m.getByTitle("More").click();
+  await expect(async () => { await m.hover(); await m.getByTitle("More").click({ timeout: 1500 }); }).toPass({ timeout: 15_000 });      // (hover again and retry: the list may still be settling under the pointer)
   await page.locator(".msg-menu").getByRole("button", { name: "Forward", exact: true }).click();
   await expect(page.getByRole("main").getByPlaceholder("Search pages")).toBeVisible();
   await page.getByRole("main").getByPlaceholder("Search pages").fill("Weekend");

@@ -16,3 +16,20 @@ npm test                                   # fresh data, start the stack, seed, 
 - Needs docker or podman (the Synapse image is the pinned one from `server/docker-compose.yml`), and Node 22.
 - A test that opens a chat marks it read, so each run starts from fresh data; tests that count unread use chats no other test opens.
 - Not covered yet: the phone app (no emulator here), bridges themselves, calls, and the desktop shell (Electron).
+
+## The test bench (the real desktop app)
+
+`bench.mjs` runs the actual Electron app (a separate profile; a Pager window opens on this desktop for a few minutes) against a test server that has months of chats,
+while `bridge-sim.mjs` sends into the open chat what a bridge sends: every kind of message, replies, edits, deletions, reactions, typing, read receipts, delivery
+reports, connection drops and the window going to the tray. Every painted frame of the message list is recorded together with what the page changed in that frame, and a
+frame in which a message you can see slides down (the page "snaps up") is reported with its cause.
+
+```
+node stack.mjs up && HISTORY_SCALE=0.3 node stack.mjs history      # once: the test server with history (about a minute)
+node bench.mjs                                                     # everything; or a few: node bench.mjs basics,media,reconnect
+```
+
+Phases: `basics` (text), `media` (pictures, videos, voice, music, files, location), `extras` (reactions, edits, deletions, typing, receipts, replies), `window` (tray,
+minimised, behind another window), `reconnect` (connection drops while messages wait), `mixed` (bursts), `reading` (nothing may move while you read higher up),
+`probe` (dumps one video message's structure). Needs the Electron binary (`node desktop/node_modules/electron/install.js`) and a display.
+
