@@ -4,6 +4,15 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.25 (desktop; web unchanged)
+
+The cause of the page jumping, found in the log of 0.6.23 and 0.6.24 (thank you): every 20 seconds the log showed "list shrank under you at the bottom by about 1,000 pixels (-17 messages)", and 0.6.24 named the reason: "let go of 29 older messages of a page (memory hidden)".
+
+- **The page no longer jumps every 20 seconds (desktop, Linux with Wayland most of all):** the desktop shell checks the app's memory every 20 seconds, and it decided the window was "hidden" by asking the system whether the window was visible or minimised. On Wayland (KDE, GNOME) the system cannot say when a window is covered, so a window in plain use was called hidden, and each time the open page was cut down to its newest 20 messages to save memory. The page then noticed it had few messages, loaded its history again, and 20 seconds later it was cut again: messages vanished and came back, and the page jumped, over and over. The shell now only calls the window hidden when it was really sent to the tray or minimised (it follows those events itself), and the page never cuts a chat you used in the last ten minutes, or one you are reading higher up, whatever the shell says.
+- **Window in front (desktop):** whether the app counts as "in front" (which decides if messages are marked read as you read them, and whether you get a notification for them) used the same unreliable answer. It now follows the window's own hide, minimise and focus events.
+- **The log (desktop):** the shell's log now says when its memory reading changes ("memory level hidden (… MB, in the tray)").
+- **For developers:** `desktop/memorylevel.js` with tests, and `e2e/tests/memory.spec.mjs` (a window reported hidden while in use does not cut the page; a page really left alone is cut; one being read higher up is not). The first fails on 0.6.24 with the page cut from 92 messages to 60.
+
 ## 0.6.24 (desktop, web; phone gets the first change with its next build)
 
 From the first log the jump recorder produced (thank you): at 17:38:30 the list "shrank by 6,871 pixels at the bottom", which is about a hundred messages vanishing from the page at once, preceded by history loading above you.

@@ -7,6 +7,7 @@ const os = require("node:os");
 const { readSystemTheme, watchSystemTheme } = require("./system-theme.js");
 const { checkForUpdates } = require("./updater.js");
 const { startBounds } = require("./windowstate.js");
+const { memoryLevel } = require("./memorylevel.js");
 
 app.commandLine.appendSwitch("ozone-platform-hint", "auto"); // native Wayland when available
 
@@ -50,6 +51,7 @@ if (process.platform === "win32") app.setAppUserModelId("app.pager.desktop");
 app.commandLine.appendSwitch("renderer-process-limit", "1");
 
 const shownNotifications = new Set();
+let awayInTray = false, minimized = false;   // the window was hidden to the tray / minimised (from events: on Wayland the system's own answer to "is it visible" is not reliable)
 let win = null, tray = null, quitting = false, unread = 0, themeWatched = false, watchdogStarted = false, badgePng, crashes = [];
 const hidden = process.argv.includes("--hidden");
 
@@ -63,7 +65,9 @@ let lastLevel = "ok";
 function watchMemory() {
   if (!win || win.isDestroyed()) return;
   const { total } = memoryNow();
-  const level = !win.isVisible() || win.isMinimized() ? "hidden" : total > 400 ? "critical" : total > 300 ? "high" : "ok";
+  // (Not win.isVisible(): see memorylevel.js. Hidden means hidden or minimised by an event we saw.)
+  const level = memoryLevel({ hidden: awayInTray || minimized, total });
+  if (level !== lastLevel) note(`memory level ${level} (${total} MB${awayInTray ? ", in the tray" : minimized ? ", minimised" : ""})`);
   if (level !== "ok" || lastLevel !== "ok") win.webContents.send("memory", level);
   if (level !== "ok") win.webContents.executeJavaScript("typeof gc === 'function' && gc()").catch(() => {});
   lastLevel = level;
@@ -133,7 +137,9 @@ function createWindow() {
     prefs.bounds = win.getNormalBounds(); prefs.maximized = win.isMaximized(); savePrefs();
     if (!quitting && prefs.closeToTray && tray) { e.preventDefault(); win.hide(); }
   });
-  win.on("closed", () => { win = null; });
+  win.on("closed", () => { win = null; awayInTray = false; minimized = false; });
+  win.on("hide", () => { awayInTray = true; }); win.on("minimize", () => { minimized = true; });
+  for (const ev of ["show", "restore", "focus"]) win.on(ev, () => { awayInTray = false; minimized = false; });
   win.on("session-end", () => { quitting = true; });   // Windows: the user is logging off or shutting down
   // A page that died, or went blank, starts again by itself, and the reason is written down.
   // (At most three times a minute: a page that dies the moment it starts would otherwise reload for ever.)
@@ -153,14 +159,14 @@ function createWindow() {
   if (!watchdogStarted) {
     watchdogStarted = true;
     setInterval(() => {
-      if (!win || win.isDestroyed() || !win.isVisible() || win.isMinimized()) { lastBeat = Date.now(); return; }
+      if (!win || win.isDestroyed() || awayInTray || minimized) { lastBeat = Date.now(); return; }
       if (Date.now() - lastBeat > 45_000) { note("no sign of life from the page for 45 s: reloading it"); lastBeat = Date.now(); win.reload(); }
     }, 15_000).unref();
   }
   ipcMain.removeAllListeners("repaint");
   ipcMain.on("repaint", () => { if (win && !win.isDestroyed() && win.isVisible()) win.webContents.invalidate(); });
   // Whether the window is really in front of you: the page can't tell when another window sits on top of it (Wayland especially).
-  const sendActive = () => { if (win && !win.isDestroyed()) win.webContents.send("window-active", win.isVisible() && !win.isMinimized() && win.isFocused()); };
+  const sendActive = () => { if (win && !win.isDestroyed()) win.webContents.send("window-active", !awayInTray && !minimized && win.isFocused()); };
   for (const ev of ["focus", "blur", "show", "hide", "minimize", "restore"]) win.on(ev, sendActive);
   // Coming back from the tray, the taskbar or behind another window: the page may still show what it drew before it was hidden (Windows especially).
   for (const ev of ["show", "restore", "focus"]) win.on(ev, () => { if (win && !win.isDestroyed()) { win.webContents.invalidate(); setTimeout(() => { if (win && !win.isDestroyed()) win.webContents.invalidate(); }, 250); } });

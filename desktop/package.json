@@ -12,7 +12,7 @@
     "dist": "node scripts/check-files.mjs && npm run icons && npm run web && electron-builder --linux AppImage deb",
     "dist:mac": "npm run icons && npm run web && electron-builder --mac",
     "dist:win": "npm run icons && npm run web && electron-builder --win",
-    "test": "node --test updater.test.mjs windowstate.test.mjs"
+    "test": "node --test updater.test.mjs windowstate.test.mjs memorylevel.test.mjs"
   },
   "build": {
     "appId": "app.pager.desktop",
@@ -26,6 +26,7 @@
       "build/tray.png",
       "updater.js",
       "windowstate.js",
+      "memorylevel.js",
       "update-pubkey.pem"
     ],
     "directories": {

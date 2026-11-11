@@ -2,7 +2,9 @@
  * Whether you are really at the app: the window is in front and you have clicked, touched or typed in it since it came to the front.
  * A window that is only open behind another one doesn't count, so what arrives meanwhile stays unread and still raises a notification.
  */
-let lastInput = 0, windowActive = true;
+let lastInput = 0, windowActive = true, lastUsed = Date.now();
+/** How long ago the app was last used (a click, key, touch or scroll in it), whether or not its window is in front right now. Unlike the rest of this file it is not cleared when the window loses focus. */
+export const usedAgoMs = (): number => Date.now() - lastUsed;
 const IDLE_MS = 120_000;
 /** Real use of the window within the last two minutes, while it is in front. Sitting open behind another window never counts. */
 export const attended = (): boolean => windowActive && Date.now() - lastInput < IDLE_MS && document.hasFocus() && document.visibilityState === "visible";
@@ -12,6 +14,7 @@ export const onAttended = (f: () => void) => { listeners.add(f); return () => { 
 
 export function installPresence() {
   const touch = () => {
+    lastUsed = Date.now();
     if (!document.hasFocus()) return;
     const was = attended(); lastInput = Date.now();
     if (!was && attended()) listeners.forEach((f) => f());

@@ -1,6 +1,6 @@
 import { freshUpdates, lostText, newlyLost, updateText } from "./accountalerts";
 import { ATTENTION_FIELD, attentionText, isFresh, raise, type AttentionKind } from "./attention";
-import { attended } from "./presence";
+import { attended, usedAgoMs } from "./presence";
 import { crumb, recordIncident } from "./applog";
 import { badgePng } from "./badgeicon";
 import { KEEP_MESSAGES, LOW_END_KEEP, poolClearMs } from "./memory";
@@ -958,9 +958,12 @@ export type MemoryLevel = "ok" | "high" | "critical" | "hidden";
 const KEEP_IDLE = 40, KEEP_TIGHT = 20;
 export function squeezeMemory(level: MemoryLevel) {
   if (level === "ok") return;
+  // "Hidden" is the shell's report that the window went to the tray or was minimised. A page you used in the last ten minutes is never cut for it: the report can be wrong
+  // (a covered window on Wayland used to be called hidden every 20 seconds, which cut the open page to 20 messages over and over, and each cut was a jump).
+  if (level === "hidden" && usedAgoMs() < 10 * 60_000) return;
   const idleKeep = level === "high" ? KEEP_IDLE : KEEP_TIGHT;
   // The chat on screen keeps its messages unless memory is critical; someone scrolled up in it keeps up to 500 so the page doesn't jump.
-  const openKeep = level === "critical" ? (deepNow.has(openRoom ?? "") ? 500 : 150) : level === "hidden" ? idleKeep : KEEP_MESSAGES;
+  const openKeep = level === "critical" ? (deepNow.has(openRoom ?? "") ? 500 : 150) : level === "hidden" ? (deepNow.has(openRoom ?? "") ? 500 : idleKeep) : KEEP_MESSAGES;
   let chats: typeof state.chats | undefined;
   for (const c of Object.values(state.chats)) {
     const keep = c.id === openRoom ? openKeep : idleKeep;
