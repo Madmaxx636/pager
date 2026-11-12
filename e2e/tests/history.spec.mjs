@@ -135,3 +135,18 @@ test("reading slowly through pictures, videos, voice messages and music, the pag
   }
   expect(off, "moves of more than 6px beyond the scroll itself").toEqual([]);
 });
+
+test("while a hole is still being filled (a slow connection), the page says so between the old part and the new part, and nothing is missing afterwards", async ({ browser }) => {
+  await openApp(browser); await openChat();
+  await page.route("**/_matrix/client/v3/rooms/*/messages*", async (route) => { await new Promise((r) => setTimeout(r, 2500)); await route.continue(); });      // every page of older messages takes 2.5 seconds
+  await ctx.setOffline(true); await says(70, "while you were away"); await page.waitForTimeout(300); await ctx.setOffline(false);
+  await expect(page.locator(".hole-row"), "the page does not say that messages are still being fetched").toBeVisible({ timeout: 20_000 });
+  const marker = await page.evaluate(() => { const h = document.querySelector(".hole-row"); return { before: h.previousElementSibling?.className ?? "", after: h.nextElementSibling?.className ?? "" }; });
+  expect(marker.before, "the marker sits right after the old part of the chat").toContain("msg");
+  expect(marker.after, "and right before the new part").not.toBe("");
+  await expect(page.locator(".hole-row")).toHaveCount(0, { timeout: 60_000 });
+  await page.unroute("**/_matrix/client/v3/rooms/*/messages*");
+  const all = await truth(); await page.waitForTimeout(1500);
+  const m = missingIn(await shown(), all);
+  expect(m.missing).toBe(0); expect(m.newest).toBe(0);
+});

@@ -932,7 +932,7 @@ export const preview = (u: string) => { if (!previews.has(u)) previews.set(u, ma
 
 const loading = new Set<string>();
 /** How many messages a page should have before we stop fetching older ones by ourselves. */
-const FILL_MESSAGES = 30;
+const FILL_MESSAGES = 120;
 /** Low data fetches less history by itself; you can still scroll for more. */
 const fillTarget = () => (getSettings().lowData ? 15 : FILL_MESSAGES);
 /** When each chat was last being read above its newest messages, and whether it is right now. */
@@ -1014,7 +1014,7 @@ export function fillGap(roomId: string) {
   const c = state.chats[roomId];
   if (!c?.gap || gapBusy.has(roomId)) return;
   const token = c.gap.token; gapBusy.add(roomId);
-  matrix.messages(roomId, token).then(async ({ chunk, end, state: st }) => {
+  matrix.messages(roomId, token, 200).then(async ({ chunk, end, state: st }) => {      // (big pages: a hole after days away is thousands of events)
     const clear = await decryptEvents(roomId, chunk); gapTries.delete(roomId);
     patchChat(roomId, (x) => x.gap?.token === token ? applyGap(x, clear, end, st ?? [], state.session?.userId ?? "") : x);
   }).catch(() => { gapTries.set(roomId, (gapTries.get(roomId) ?? 0) + 1); }).finally(() => {

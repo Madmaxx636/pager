@@ -118,6 +118,7 @@ private sealed interface Item {
     val key: String
     data class Day(val label: String, val date: LocalDate) : Item { override val key get() = "day-$date" }
     object Unread : Item { override val key get() = "unread-divider" }
+    object Hole : Item { override val key get() = "hole" }
     data class M(val msg: Msg, val index: Int, val first: Boolean, val last: Boolean) : Item { override val key get() = msg.id }
 }
 
@@ -131,16 +132,18 @@ private fun dayLabel(d: LocalDate): String {
 }
 
 /** Newest-first list with day separators and an optional "new messages" divider, ready for a reversed LazyColumn. */
-private fun buildItems(messages: List<Msg>, unreadBefore: String?, gapMs: Long): List<Item> {
+private fun buildItems(messages: List<Msg>, unreadBefore: String?, gapMs: Long, holeAfter: Long? = null): List<Item> {
     val out = ArrayList<Item>(messages.size + 8)
     var lastDay: LocalDate? = null
     messages.forEachIndexed { i, m ->
         val day = Instant.ofEpochMilli(m.ts).atZone(ZoneId.systemDefault()).toLocalDate()
+        // Messages are still being fetched for the stretch between what was saved from before and what has just arrived: say so there, instead of the two parts meeting as if nothing were missing.
+        if (holeAfter != null && i > 0 && messages[i - 1].ts <= holeAfter && m.ts > holeAfter) out.add(Item.Hole)
         if (day != lastDay) { out.add(Item.Day(dayLabel(day), day)); lastDay = day }
         if (m.id == unreadBefore) out.add(Item.Unread)
         val prev = messages.getOrNull(i - 1)
         val next = messages.getOrNull(i + 1)
-        val first = prev == null || prev.sender != m.sender || prev.room != m.room || m.ts - prev.ts > gapMs || out.lastOrNull() is Item.Day || out.lastOrNull() is Item.Unread
+        val first = prev == null || prev.sender != m.sender || prev.room != m.room || m.ts - prev.ts > gapMs || out.lastOrNull() is Item.Day || out.lastOrNull() is Item.Unread || out.lastOrNull() is Item.Hole
         val nextDay = next?.let { Instant.ofEpochMilli(it.ts).atZone(ZoneId.systemDefault()).toLocalDate() }
         val last = next == null || next.sender != m.sender || next.room != m.room || next.ts - m.ts > gapMs || nextDay != day || next.id == unreadBefore
         out.add(Item.M(m, i, first, last))
@@ -202,7 +205,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     val unreadUnknown = chat != null && openSnap != null && unreadFixed == null && openSnap.first > (chat?.messages?.size ?: 0) && openSnap.first <= 600
     val wantMore = rememberUpdatedState(unreadUnknown)
     LaunchedEffect(unreadUnknown, chat?.messages?.size) { if (unreadUnknown) groupIds.forEach { id -> store.loadOlder(id, 0) { wantMore.value } } }
-    val items = remember(messages, unreadBefore, s.groupGapMin) { buildItems(messages, unreadBefore, s.groupGapMin * 60_000L) }
+    val holeAfter = chat?.gap?.oldTs
+    val items = remember(messages, unreadBefore, s.groupGapMin, holeAfter) { buildItems(messages, unreadBefore, s.groupGapMin * 60_000L, holeAfter) }
     // Tapping the quote on a reply takes you to the message it answers, loading older messages first when it is further back.
     var flashId by remember { mutableStateOf<String?>(null) }
     val itemsNow by androidx.compose.runtime.rememberUpdatedState(items)
@@ -305,12 +309,13 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     DisposableEffect(roomId) { onDispose { groupIds.forEach { id -> store.readingOlder(id, false) } } }
     LaunchedEffect(roomId, chat?.reachedStart) {
         snapshotFlow { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index to list.layoutInfo.totalItemsCount }.collect { (last, total) ->
-            if (last != null && total > 0 && last >= total - 6) groupIds.forEach { id -> store.loadOlder(id) }
+            // Older messages are asked for well before the top is reached (a good screenful of items away) and keep coming while near it.
+            if (last != null && total > 0 && last >= total - 30) groupIds.forEach { id -> store.loadOlder(id, 0) { (list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= list.layoutInfo.totalItemsCount - 30 } }
         }
     }
     // An empty or short chat never scrolls, so the "near the top" check above never fires and its history would stay blank until a message
     // arrived. Ask for older messages directly whenever there are few to show.
-    val fewMessages = chat?.let { !it.reachedStart && it.messages.size < 30 } == true
+    val fewMessages = chat?.let { !it.reachedStart && it.messages.size < 100 } == true
     LaunchedEffect(roomId, fewMessages, chat?.messages?.size) { if (fewMessages) groupIds.forEach { id -> store.loadOlder(id) } }
     LaunchedEffect(roomId, s.markReadMode) { if (s.markReadMode == "scrolled") snapshotFlow { list.firstVisibleItemIndex <= 1 }.collect { atEnd -> if (atEnd && store.attended) store.markRead(roomId) } }
     // Coming back to the phone after it sat idle: what arrived meanwhile is read now.
@@ -404,6 +409,9 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
                         when (item) {
                             is Item.Day -> Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
                                 Text(item.label, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant, modifier = Modifier.clip(CircleShape).background(scheme.surface.dim(0.9f)).padding(horizontal = 12.dp, vertical = 5.dp))
+                            }
+                            Item.Hole -> Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                Text("Loading the messages in between…", style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant, modifier = Modifier.clip(CircleShape).background(scheme.surface.dim(0.9f)).padding(horizontal = 12.dp, vertical = 4.dp))
                             }
                             Item.Unread -> Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.weight(1f).height(1.dp).background(scheme.primary.dim(0.4f)))

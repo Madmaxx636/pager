@@ -33,11 +33,13 @@ const dayLabel = (d: Date) => {
   return d.toDateString() === t.toDateString() ? "Today" : d.toDateString() === y.toDateString() ? "Yesterday" : d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric", year: d.getFullYear() === t.getFullYear() ? undefined : "numeric" });
 };
 
-type Item = { kind: "day"; key: string; label: string } | { kind: "unread"; key: string } | { kind: "msg"; key: string; msg: Msg; index: number; first: boolean; last: boolean };
-function buildItems(messages: Msg[], unreadBefore: string | undefined, gapMs: number): Item[] {
+type Item = { kind: "day"; key: string; label: string } | { kind: "unread"; key: string } | { kind: "hole"; key: string } | { kind: "msg"; key: string; msg: Msg; index: number; first: boolean; last: boolean };
+function buildItems(messages: Msg[], unreadBefore: string | undefined, gapMs: number, holeAfter?: number): Item[] {
   const out: Item[] = []; let lastDay = "";
   messages.forEach((m, i) => {
     const d = new Date(m.ts), k = d.toDateString();
+    // Messages are still being fetched for the stretch between what was saved from before and what has just arrived: say so there, instead of the two parts meeting as if nothing were missing.
+    if (holeAfter != null && i > 0 && messages[i - 1].ts <= holeAfter && m.ts > holeAfter) out.push({ kind: "hole", key: "hole" });
     if (k !== lastDay) { out.push({ kind: "day", key: `day-${k}`, label: dayLabel(d) }); lastDay = k; }
     if (m.id === unreadBefore) out.push({ kind: "unread", key: "unread" });
     const prev = messages[i - 1], next = messages[i + 1], before = out[out.length - 1];
@@ -133,7 +135,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   const unreadUnknown = !!chat && !!openSnap.current && !unreadFixed.current?.id && openSnap.current.unread > chat.messages.length && openSnap.current.unread <= 600;
   const wantMore = useRef(false); wantMore.current = unreadUnknown;
   useEffect(() => { if (unreadUnknown) groupIds.forEach((id) => loadOlder(id, 0, () => wantMore.current)); }, [unreadUnknown, messages.length, groupIds.length]); // eslint-disable-line react-hooks/exhaustive-deps
-  const items = useMemo(() => buildItems(messages, unreadBefore, st.groupGapMin * 60_000), [messages, unreadBefore, st.groupGapMin]);
+  const items = useMemo(() => buildItems(messages, unreadBefore, st.groupGapMin * 60_000, chat?.gap?.oldTs), [messages, unreadBefore, st.groupGapMin, chat?.gap?.oldTs]);
 
   // Scroll: open at the unread divider (or bottom), stick to bottom for new messages, keep position when older ones load.
   const opened = useRef<string>("");
@@ -213,7 +215,8 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     if (wasOpen && stick.current && lastMax.current > 0 && lastMax.current - max >= 20) { const px = lastMax.current - max, size = { v: el.clientHeight, c: el.scrollHeight }; queueMicrotask(() => noteJump("shrank under you at the bottom", px, size)); }
     prevLast.current = last; remember();
   }, [roomId, messages, chat != null]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { opened.current = ""; stick.current = true; setReplyTo(undefined); setEditing(undefined); }, [roomId]);
+  // (Not resetting `opened` here: the layout effect above already treats a different room as a new opening, and clearing it after the first draw made the NEXT update count as opening the page again.)
+  useEffect(() => { stick.current = true; setReplyTo(undefined); setEditing(undefined); }, [roomId]);
   useEffect(() => { warmUp(sendRoom); }, [sendRoom, chat?.encrypted]);
   // Pictures and videos change the chat's height as they load: stay at the newest message while you haven't scrolled up.
   useEffect(() => {
@@ -275,12 +278,14 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (stick.current && st.markReadMode === "scrolled") markRead(roomId);
     groupIds.forEach((id) => readingOlder(id, !stick.current));
-    if (el.scrollTop < 120) groupIds.forEach((id) => loadOlder(id));
+    // Older messages are asked for well before the top is reached (two screens away) and keep coming while you are near it, so scrolling up does not run into the edge of what is loaded.
+    const near = () => (scroller.current?.scrollTop ?? Infinity) < Math.max(600, (scroller.current?.clientHeight ?? 0) * 2);
+    if (near()) groupIds.forEach((id) => loadOlder(id, 0, near));
   };
   useEffect(() => () => groupIds.forEach((id) => readingOlder(id, false)), [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
   // An empty or short chat never scrolls, so the check above never fires and its history would stay blank until a message arrived:
   // ask for older messages directly whenever there are few to show.
-  useEffect(() => { const el = scroller.current; if (messages.length < 30 || (el && el.scrollHeight <= el.clientHeight + 40)) groupIds.forEach((id) => loadOlder(id)); }, [roomId, messages.length, groupIds.length]);
+  useEffect(() => { const el = scroller.current; if (messages.length < 100 || (el && el.scrollHeight <= el.clientHeight + 40)) groupIds.forEach((id) => loadOlder(id)); }, [roomId, messages.length, groupIds.length]);
   const [showJump, setShowJump] = useState(false);
   useEffect(() => { const el = scroller.current; if (!el) return; const f = () => setShowJump(el.scrollHeight - el.scrollTop - el.clientHeight > 400); el.addEventListener("scroll", f); return () => el.removeEventListener("scroll", f); }, [roomId]);
 
@@ -346,6 +351,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
         <LinkedBar chat={chat} nav={nav} roomId={roomId} merged={!!merged} />
         <div className={"timeline wp-" + st.wallpaper} ref={scroller} onScroll={onScroll} onMouseMove={rowHover} onMouseLeave={rowLeave} onWheel={touched} onTouchStart={touched} onTouchMove={touched} onPointerDown={touched} onPointerMove={(e) => { if (e.buttons) touched(); }} onKeyDown={touched}>
           {items.map((it) => it.kind === "day" ? <div key={it.key} className="day"><span>{it.label}</span></div>
+            : it.kind === "hole" ? <div key={it.key} className="hole-row" role="status"><span>Loading the messages in between…</span></div>
             : it.kind === "unread" ? <div key={it.key} id="unread-divider" className="unread-divider"><span>New messages</span></div>
             : <MessageRow key={it.key} chat={chat} msg={it.msg} first={it.first} last={it.last} group={group} mine={it.msg.sender === user} read={it.index <= readIndex} delivered={it.index <= deliveredIndex} latestMine={it.msg.id === latestMine} reply={it.msg.replyTo ? byId.get(it.msg.replyTo) : undefined}
                 st={st} starred={stars.some((s) => s.eventId === it.msg.id)} onMenu={(x, y) => setMenu({ msg: it.msg, x, y })} onOpen={() => openMsg(it.msg)} onWho={(key) => setWho({ msg: it.msg, key })}

@@ -166,8 +166,9 @@ export const matrix = {
     const filter = enc(JSON.stringify({ presence: { types: [] }, room: { rooms: [] }, account_data: { types: ["m.secret_storage.*", "m.cross_signing.*", "m.megolm_backup.v1", "m.org.matrix.custom.backup_disabled"] } }));
     return call("GET", `/_matrix/client/v3/sync?set_presence=offline&filter=${filter}${since ? `&since=${enc(since)}&timeout=5000` : "&timeout=0"}`, undefined, signal);
   },
-  messages: async (roomId: string, from: string): Promise<{ chunk: any[]; end?: string; state?: any[] }> =>
-    call("GET", `/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=40&from=${enc(from)}&filter=${enc('{"lazy_load_members":true}')}`),
+  /** A page of older events (newest first). 100 at a time: 40 was so small that reading back through a busy chat, or filling a hole after being away, took dozens of slow requests one after another. */
+  messages: async (roomId: string, from: string, limit = 100): Promise<{ chunk: any[]; end?: string; state?: any[] }> =>
+    call("GET", `/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=${limit}&from=${enc(from)}&filter=${enc('{"lazy_load_members":true}')}`),
   /** A place to read backwards from that sits just before one event, so a chat that kept only its newest messages carries on from exactly there. */
   tokenBefore: async (roomId: string, eventId: string): Promise<string | undefined> =>
     (await call<{ start?: string }>("GET", `/_matrix/client/v3/rooms/${enc(roomId)}/context/${enc(eventId)}?limit=0`)).start,

@@ -205,6 +205,25 @@ if (run("unread")) {
   await ctx.close();
 }
 
+if (run("away")) {
+  const N = Number(process.env.AWAY ?? 2500);
+  console.log(`\n== The app is closed, ${N} messages arrive (more than the app fills in by itself), the app is opened again, and you scroll up`);
+  const ctx = await browser.newContext({ viewport: { width: 1180, height: 760 } }); await fakeDesktop(ctx, "linux");
+  let page = await newApp(ctx); await openChat(page); await scrollUp(page, 40); await sleep(4500);    // lets the saved copy be written
+  await page.close();
+  const t = await login("taylor");
+  for (let i = 0; i < N; i += 25) await Promise.all(Array.from({ length: Math.min(25, N - i) }, (_, k) => fetch(`${HS}/rooms/${encodeURIComponent(room)}/send/m.room.message/aw${Date.now()}${i}${k}`, { method: "PUT", headers: { authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify({ msgtype: "m.text", body: `while closed ${i + k + 1}` }) })));
+  page = await newApp(ctx); await page.waitForTimeout(6000);
+  const all = await truth();
+  await openChat(page);
+  console.log("  opened:", JSON.stringify(await view(page)));
+  compare(await shown(page), all, "right after opening");
+  await page.waitForTimeout(8000); compare(await shown(page), all, "8 seconds later (the hole is being filled)");
+  await scrollUp(page, 60); compare(await shown(page), all, "after scrolling up a good way");
+  await scrollUp(page, 600); compare(await shown(page), all, "after scrolling to the very top");
+  await ctx.close();
+}
+
 if (run("send")) {
   console.log("\n== Open the chat, scroll around, send a message: where does the page go?");
   const ctx = await browser.newContext({ viewport: { width: 1180, height: 760 } }); await fakeDesktop(ctx, "linux");

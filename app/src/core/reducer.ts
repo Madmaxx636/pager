@@ -138,7 +138,7 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
 export const historyFits = (x: { prevBatch?: string | null; messages: { id: string }[] }, asked: { prev?: string | null; first?: string }) => (x.prevBatch ?? null) === (asked.prev ?? null) && x.messages[0]?.id === asked.first;
 /**
  * Merges a page read backwards from a hole (see ChatState.gap): the events go in where they belong, and the hole is closed when the page reaches a message we
- * already had, or the start of the room. A hole too big to be worth filling (about 1,600 events) is given up: what came before it is let go and read again
+ * already had, or the start of the room. A hole too big to be worth filling (about 8,000 events) is given up: what came before it is let go and read again
  * from the hole when the reader scrolls up, the way a chat is started over.
  */
 export const GAP_PAGES = 40;

@@ -155,7 +155,7 @@ object SyncReducer {
 
     /**
      * Merges a page read backwards from a hole (see [ChatState.gap]): the events go in where they belong, and the hole is closed when the page reaches a message we
-     * already had, or the start of the room. A hole too big to be worth filling (about 1,600 events) is given up: what came before it is let go and read again
+     * already had, or the start of the room. A hole too big to be worth filling (about 8,000 events) is given up: what came before it is let go and read again
      * from the hole when the reader scrolls up, the way a chat is started over.
      */
     fun applyGap(chat: ChatState, chunk: List<JsonObject>, end: String?, state: List<JsonObject> = emptyList(), me: String = ""): ChatState {

@@ -4,6 +4,17 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.26 (desktop, web, phone)
+
+For "scrolling up goes from 11-11 straight to 11-2 with a lot missing in between". The messages were on the server (your busiest chat has 100 to 300 on every one of those days); the app just did not have them yet. After the app has been closed for days, the stretch it missed is filled in by asking for older messages 40 events at a time, one request after another, which over a slow or dropping connection to your server takes a long time, and meanwhile the newest part and the old saved part (11-2) sat next to each other with nothing between and no sign that anything was still coming.
+
+- **Bigger pages (desktop, web, phone):** older messages are fetched 100 at a time (it was 40), and filling the stretch missed while the app was away 200 at a time, so the same amount takes a third or a fifth of the requests. A stretch is now filled for about 8,000 events before it is given up (it was 1,600), which covers a week of a busy chat.
+- **A marker where messages are still coming (desktop, web, phone):** while that stretch is being filled, the page shows "Loading the messages in between…" exactly where the newest part meets the old saved part, instead of letting them meet as if nothing were missing. It goes away when the stretch is filled.
+- **Keeping and saving more (desktop, web, phone):** each chat keeps 800 messages in memory and in the saved copy that opens instantly the next time (it was 300), and 120 are fetched when a page opens (it was 30). Low-end mode keeps its smaller numbers.
+- **Loading ahead while you scroll (desktop, web, phone):** older messages are asked for when you are two screens from the top, not when you reach it, and keep coming while you are near it, so scrolling up does not run into the edge of what has been loaded.
+- **Opening a page with "Open at first unread" on (desktop, web):** a leftover reset made the first batch of older messages count as opening the page a second time, which jumped to the "New messages" line wherever it had just been placed, thousands of pixels from the newest message. With bigger pages it showed; fixed.
+- **For developers:** an end-to-end test that slows every page of older messages to 2.5 seconds, lets a pile of messages arrive, and checks that the marker appears at the right place, goes away, and that nothing is missing afterwards (`e2e/tests/history.spec.mjs`); and a scenario for being away while thousands of messages arrive (`node e2e/scenarios.mjs away`).
+
 ## 0.6.25 (desktop; web unchanged)
 
 The cause of the page jumping, found in the log of 0.6.23 and 0.6.24 (thank you): every 20 seconds the log showed "list shrank under you at the bottom by about 1,000 pixels (-17 messages)", and 0.6.24 named the reason: "let go of 29 older messages of a page (memory hidden)".

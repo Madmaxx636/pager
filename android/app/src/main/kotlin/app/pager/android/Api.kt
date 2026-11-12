@@ -282,9 +282,10 @@ class MatrixApi(private val http: Http) {
     suspend fun tokenBefore(roomId: String, eventId: String): String? =
         http.request("GET", "/_matrix/client/v3/rooms/${enc(roomId)}/context/${enc(eventId)}?limit=0")["start"].str()
 
-    suspend fun messages(roomId: String, from: String): Triple<List<JsonObject>, String?, List<JsonObject>> {
+    /** A page of older events (newest first). 100 at a time: 40 was so small that reading back through a busy chat, or filling a hole after being away, took dozens of slow requests one after another. */
+    suspend fun messages(roomId: String, from: String, limit: Int = 100): Triple<List<JsonObject>, String?, List<JsonObject>> {
         val filter = enc("""{"lazy_load_members":true}""")
-        val r = http.request("GET", "/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=40&from=${enc(from)}&filter=$filter")
+        val r = http.request("GET", "/_matrix/client/v3/rooms/${enc(roomId)}/messages?dir=b&limit=$limit&from=${enc(from)}&filter=$filter")
         return Triple(r["chunk"].arr().map { it.obj() }, r["end"].str(), r["state"].arr().map { it.obj() })
     }
 

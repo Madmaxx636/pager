@@ -1186,9 +1186,9 @@ class Store(private val context: Context) {
     // --- History & chat management -----------------------------------------------
 
     /** How many messages a page should have before we stop fetching older ones by ourselves. */
-    private val FILL_MESSAGES = 30
+    private val FILL_MESSAGES = 120
     /** Messages kept per chat on this device; older ones are fetched from the server again when scrolling up. */
-    private val KEEP_MESSAGES = 300
+    private val KEEP_MESSAGES = 800
     /** Low-end device mode keeps fewer messages per chat. */
     private fun keepMessages() = if (settings.value.lowEnd) 120 else KEEP_MESSAGES
 
@@ -1273,7 +1273,7 @@ class Store(private val context: Context) {
         if (!synchronized(gapBusy) { gapBusy.add(roomId) }) return
         scope.launch {
             try {
-                val (raw, end, state) = matrix.messages(roomId, g.token)
+                val (raw, end, state) = matrix.messages(roomId, g.token, 200)      // big pages: a hole after days away is thousands of events
                 val events = decryptEvents(roomId, raw)
                 update(roomId) { if (it.gap?.token == g.token) SyncReducer.applyGap(it, events, end, state, me) else it }
                 synchronized(gapTries) { gapTries.remove(roomId) }
