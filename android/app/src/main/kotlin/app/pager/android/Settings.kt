@@ -89,6 +89,12 @@ data class AppSettings(
     /** A quick white flash that clears ghosting on e-ink: off | chats (when opening or leaving a chat) | timed. */
     val screenClean: String = "off",
     val screenCleanSec: Int = 20,
+    val einkBrightness: Int = 0,
+    val einkContrast: Int = 0,
+    val deepClean: String = "off",
+    val deepCleanChats: Int = 5,
+    val deepCleanMin: Int = 5,
+    val deepCleanOnWake: Boolean = false,
     val palette: String = "none",              // a ready-made look (see Palettes.kt), or none
     val fontFamily: String = "system",
     /** A whole messenger look (see Looks.kt): none | imessage | hangouts | gmessages. */

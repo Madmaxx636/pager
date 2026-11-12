@@ -448,6 +448,14 @@ private fun AppearancePage() {
             GroupDivider(); SliderRow("Detail", s.einkDetail.toFloat(), 0f..2f, listOf("Normal: the standard (slow) refresh mode", "Higher detail: for the middle refresh modes", "ULTRA detail: for the fastest mode, where detail drops a lot")[s.einkDetail.coerceIn(0, 2)]) { v -> set { copy(einkDetail = Math.round(v).coerceIn(0, 2)) } }
             GroupDivider(); ChoiceRow("Screen clean", listOf("off" to "Off", "chats" to "When opening or leaving a chat", "timed" to "Every few seconds"), s.screenClean) { v -> set { copy(screenClean = v) } }
             if (s.screenClean == "timed") { GroupDivider(); SliderRow("Every", s.screenCleanSec.toFloat(), 5f..120f, "${s.screenCleanSec} seconds") { v -> set { copy(screenCleanSec = (Math.round(v / 5f) * 5).coerceIn(5, 120)) } } }
+            GroupDivider(); ChoiceRow("Deep refresh", listOf("off" to "Off", "chats" to "Every few chats opened", "timed" to "Every few minutes"), s.deepClean) { v -> set { copy(deepClean = v) } }
+            if (s.deepClean == "chats") { GroupDivider(); SliderRow("Every", s.deepCleanChats.toFloat(), 2f..20f, "${s.deepCleanChats} chat changes") { v -> set { copy(deepCleanChats = Math.round(v).coerceIn(2, 20)) } } }
+            if (s.deepClean == "timed") { GroupDivider(); SliderRow("Every", s.deepCleanMin.toFloat(), 1f..30f, "${s.deepCleanMin} minutes") { v -> set { copy(deepCleanMin = Math.round(v).coerceIn(1, 30)) } } }
+            GroupDivider(); SwitchRow("Deep refresh on wake", "One black-then-white refresh when the screen turns on or you come back to the app", s.deepCleanOnWake) { v -> set { copy(deepCleanOnWake = v) } }
+            GroupDivider(); NavRow("Quick refresh now", "A white flash") { ScreenCleanTrigger.quickNow++ }
+            GroupDivider(); NavRow("Deep refresh now", "Black, then white, twice") { ScreenCleanTrigger.deepNow++ }
+            GroupDivider(); SliderRow("Brightness", s.einkBrightness.toFloat(), 0f..100f, if (s.einkBrightness == 0) "System setting" else "${s.einkBrightness}% (screen light, on devices that have one)") { v -> set { copy(einkBrightness = Math.round(v).coerceIn(0, 100)) } }
+            GroupDivider(); SliderRow("Contrast", s.einkContrast.toFloat(), 0f..100f, if (s.einkContrast == 0) "Normal" else "${s.einkContrast}%: grays pushed towards black and white") { v -> set { copy(einkContrast = Math.round(v).coerceIn(0, 100)) } }
         }
         GroupDivider()
         ChoiceRow("Display size", listOf("auto" to "Automatic (from this screen)", "small" to "Small", "medium" to "Medium", "large" to "Large", "manual" to "Custom"), s.scaleMode) { v -> set { copy(scaleMode = v) } }

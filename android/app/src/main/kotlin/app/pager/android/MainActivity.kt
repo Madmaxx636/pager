@@ -73,7 +73,7 @@ class MainActivity : FragmentActivity() {
         setContent {
             val settings by store.settings.state.collectAsState()
             PagerTheme(settings) {
-                Surface(Modifier.fillMaxSize().einkFilter(settings.eink), color = MaterialTheme.colorScheme.background) {
+                Surface(Modifier.fillMaxSize().einkContrast(if (settings.eink) settings.einkContrast else 0).einkFilter(settings.eink), color = MaterialTheme.colorScheme.background) {
                     Box(Modifier.safeDrawingPadding()) {
                         CompositionLocalProvider(LocalStore provides store) {
                             if (locked && settings.appLock) LockScreen(onUnlock = { unlock() }) else Root()
@@ -82,8 +82,12 @@ class MainActivity : FragmentActivity() {
                             InAppBanner(onOpen = { id -> openRoom = id })
                         }
                     }
-                    if (settings.eink && settings.screenClean != "off") ScreenCleanOverlay(settings.screenClean, settings.screenCleanSec)
+                    if (settings.eink && (settings.screenClean != "off" || settings.deepClean != "off" || settings.deepCleanOnWake)) ScreenCleanOverlay(settings)
                 }
+            }
+            LaunchedEffect(settings.eink, settings.einkBrightness) {
+                val b = if (settings.eink) windowBrightness(settings.einkBrightness) else null
+                window.attributes = window.attributes.also { it.screenBrightness = b ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
             }
             LaunchedEffect(settings.hideInRecents) {
                 if (settings.hideInRecents) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)

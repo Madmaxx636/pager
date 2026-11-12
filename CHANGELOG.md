@@ -4,6 +4,15 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.27 (phone)
+
+E-ink mode gets brightness and contrast, and a second, deeper kind of screen refresh. All of it is under Settings, Appearance, Display, once E-ink mode is on.
+
+- **Brightness:** a slider that sets the screen light for Pager only (0 hands it back to the system setting). It only does something on devices whose screen light the app is allowed to change.
+- **Contrast:** a slider that stretches every tone away from mid-gray, so light grays go white and dark grays go black. 0 is normal. It works on top of Darkness and Detail.
+- **Deep refresh:** the existing Screen clean is a quick white flash. Deep refresh is black, then white, twice, which clears the ghosting a white flash leaves behind. Run it every few chats you open, every few minutes, or when the screen wakes or you come back to the app.
+- **Refresh now:** two buttons, Quick refresh now and Deep refresh now, to clear the screen on demand.
+
 ## 0.6.26 (desktop, web, phone)
 
 For "scrolling up goes from 11-11 straight to 11-2 with a lot missing in between". The messages were on the server (your busiest chat has 100 to 300 on every one of those days); the app just did not have them yet. After the app has been closed for days, the stretch it missed is filled in by asking for older messages 40 events at a time, one request after another, which over a slow or dropping connection to your server takes a long time, and meanwhile the newest part and the old saved part (11-2) sat next to each other with nothing between and no sign that anything was still coming.
