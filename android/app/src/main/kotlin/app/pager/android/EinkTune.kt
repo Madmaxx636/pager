@@ -11,10 +11,13 @@ import androidx.compose.ui.draw.drawWithContent
 /** Screen-wide contrast for e-ink: 0 leaves the picture alone, 100 pushes every tone hard towards black or white. */
 fun contrastScale(level: Int): Float = 1f + level.coerceIn(0, 100) / 40f
 
-/** The 4x5 colour matrix for [contrastScale]: every channel is stretched around mid-gray. */
-fun contrastMatrixValues(level: Int): FloatArray {
-    val k = contrastScale(level)
-    val off = 255f * (0.5f - 0.5f * k)
+/** Picture brightness for e-ink: -100 darkens every tone, 0 leaves it, 100 lifts every tone (about half the range at the ends). */
+fun brightnessShift(level: Int): Float = level.coerceIn(-100, 100) / 100f * 0.5f * 255f
+
+/** The 4x5 colour matrix: contrast stretches each channel around mid-gray, brightness then shifts it. */
+fun toneMatrixValues(contrast: Int, brightness: Int): FloatArray {
+    val k = contrastScale(contrast)
+    val off = 255f * (0.5f - 0.5f * k) + brightnessShift(brightness)
     return floatArrayOf(
         k, 0f, 0f, 0f, off,
         0f, k, 0f, 0f, off,
@@ -23,12 +26,9 @@ fun contrastMatrixValues(level: Int): FloatArray {
     )
 }
 
-/** The window brightness to ask for: null means "leave it to the system". */
-fun windowBrightness(level: Int): Float? = if (level <= 0) null else level.coerceIn(1, 100) / 100f
-
-fun Modifier.einkContrast(level: Int): Modifier = if (level <= 0) this else drawWithContent {
+fun Modifier.einkTone(contrast: Int, brightness: Int): Modifier = if (contrast <= 0 && brightness == 0) this else drawWithContent {
     drawIntoCanvas { c ->
-        val p = Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(contrastMatrixValues(level))) }
+        val p = Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix(toneMatrixValues(contrast, brightness))) }
         c.saveLayer(Rect(0f, 0f, size.width, size.height), p)
         drawContent()
         c.restore()

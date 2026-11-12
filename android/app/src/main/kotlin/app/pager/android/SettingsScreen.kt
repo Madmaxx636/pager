@@ -454,7 +454,7 @@ private fun AppearancePage() {
             GroupDivider(); SwitchRow("Deep refresh on wake", "One black-then-white refresh when the screen turns on or you come back to the app", s.deepCleanOnWake) { v -> set { copy(deepCleanOnWake = v) } }
             GroupDivider(); NavRow("Quick refresh now", "A white flash") { ScreenCleanTrigger.quickNow++ }
             GroupDivider(); NavRow("Deep refresh now", "Black, then white, twice") { ScreenCleanTrigger.deepNow++ }
-            GroupDivider(); SliderRow("Brightness", s.einkBrightness.toFloat(), 0f..100f, if (s.einkBrightness == 0) "System setting" else "${s.einkBrightness}% (screen light, on devices that have one)") { v -> set { copy(einkBrightness = Math.round(v).coerceIn(0, 100)) } }
+            GroupDivider(); SliderRow("Brightness", s.einkTone.toFloat(), -100f..100f, if (s.einkTone == 0) "Normal" else if (s.einkTone > 0) "+${s.einkTone}: lighter picture" else "${s.einkTone}: darker picture") { v -> set { copy(einkTone = Math.round(v).coerceIn(-100, 100)) } }
             GroupDivider(); SliderRow("Contrast", s.einkContrast.toFloat(), 0f..100f, if (s.einkContrast == 0) "Normal" else "${s.einkContrast}%: grays pushed towards black and white") { v -> set { copy(einkContrast = Math.round(v).coerceIn(0, 100)) } }
         }
         GroupDivider()

@@ -4,11 +4,15 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.28 (phone)
+
+- **Brightness is now picture brightness, not the screen light:** the slider goes from -100 (darker) to +100 (lighter) and changes how light or dark the whole picture is, which is what you want on an e-ink screen with no light. It no longer touches the system screen light. Any brightness you set in 0.6.27 is reset to normal.
+
 ## 0.6.27 (phone)
 
 E-ink mode gets brightness and contrast, and a second, deeper kind of screen refresh. All of it is under Settings, Appearance, Display, once E-ink mode is on.
 
-- **Brightness:** a slider that sets the screen light for Pager only (0 hands it back to the system setting). It only does something on devices whose screen light the app is allowed to change.
+- **Brightness:** a slider, from darker to lighter, for the picture itself (not the screen light), so it works on any e-ink screen. 0 is normal.
 - **Contrast:** a slider that stretches every tone away from mid-gray, so light grays go white and dark grays go black. 0 is normal. It works on top of Darkness and Detail.
 - **Deep refresh:** the existing Screen clean is a quick white flash. Deep refresh is black, then white, twice, which clears the ghosting a white flash leaves behind. Run it every few chats you open, every few minutes, or when the screen wakes or you come back to the app.
 - **Refresh now:** two buttons, Quick refresh now and Deep refresh now, to clear the screen on demand.
