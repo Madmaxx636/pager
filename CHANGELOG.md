@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.30 (phone)
+
+Found by running the phone app in an emulator for the first time (sign-in, first-run recovery key, e-ink settings all worked).
+
+- **Fixed: "Quick refresh now" and "Deep refresh now" did nothing** unless a Screen clean or Deep refresh mode was also switched on. They now work whenever E-ink mode is on.
+
 ## 0.6.29 (phone)
 
 For the phone log full of "decrypting: Serialization: invalid type: map, expected a sequence" followed by "the key never arrived". The phone's encryption library was refusing a batch of incoming key messages, and because the batch is only sent once, every key in it was lost with the one it choked on.

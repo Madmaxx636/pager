@@ -82,7 +82,7 @@ class MainActivity : FragmentActivity() {
                             InAppBanner(onOpen = { id -> openRoom = id })
                         }
                     }
-                    if (settings.eink && (settings.screenClean != "off" || settings.deepClean != "off" || settings.deepCleanOnWake)) ScreenCleanOverlay(settings)
+                    if (settings.eink) ScreenCleanOverlay(settings) // always there on e-ink: the "refresh now" buttons need it too
                 }
             }
             LaunchedEffect(settings.hideInRecents) {
