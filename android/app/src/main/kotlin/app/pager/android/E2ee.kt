@@ -118,8 +118,31 @@ class E2ee private constructor(
         fun strings(e: JsonElement?) = (e as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList()
         val counts = (sync["device_one_time_keys_count"] as? JsonObject)?.mapValues { (it.value as? JsonPrimitive)?.intOrNull ?: 0 } ?: emptyMap()
         val fallback = strings(sync["device_unused_fallback_key_types"] ?: sync["org.matrix.msc2732.device_unused_fallback_key_types"]).takeIf { sync.containsKey("device_unused_fallback_key_types") || sync.containsKey("org.matrix.msc2732.device_unused_fallback_key_types") }
-        val changes = withContext(Dispatchers.IO) {
-            machine.receiveSyncChanges(toDevice.toString(), DeviceLists(strings(lists?.get("changed")), strings(lists?.get("left"))), counts, fallback, (sync["next_batch"] as? JsonPrimitive)?.contentOrNull ?: "", trust)
+        val batch = (sync["next_batch"] as? JsonPrimitive)?.contentOrNull ?: ""
+        val lists2 = DeviceLists(strings(lists?.get("changed")), strings(lists?.get("left")))
+        val changes = try {
+            withContext(Dispatchers.IO) { machine.receiveSyncChanges(toDevice.toString(), lists2, counts, fallback, batch, trust) }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) {
+            // One event the library cannot read must not hold back the rest (the keys in them are never sent again): give them over one at a time.
+            val events = (toDevice as? JsonArray) ?: throw e
+            if (events.size <= 1 && e !is org.matrix.rustcomponents.sdk.crypto.CryptoStoreException) throw e
+            val infos = ArrayList<org.matrix.rustcomponents.sdk.crypto.RoomKeyInfo>()
+            var bad = 0; var first = true
+            for (ev in events) {
+                try {
+                    val one = withContext(Dispatchers.IO) { machine.receiveSyncChanges(JsonArray(listOf(ev)).toString(), if (first) lists2 else DeviceLists(emptyList(), emptyList()), if (first) counts else emptyMap(), if (first) fallback else null, batch, trust) }
+                    infos += one.roomKeyInfos; first = false
+                } catch (x: kotlinx.coroutines.CancellationException) { throw x } catch (x: Exception) {
+                    bad++
+                    val t = ((ev as? JsonObject)?.get("type") as? JsonPrimitive)?.contentOrNull ?: "?"
+                    note("a key message the library cannot read was skipped: type $t, ${x::class.java.simpleName}: ${x.message.orEmpty().take(80)}")
+                }
+            }
+            if (bad == events.size && events.isNotEmpty() && first) { // nothing at all went in: report the original failure so the update is tried again
+                withContext(Dispatchers.IO) { runCatching { machine.receiveSyncChanges("[]", lists2, counts, fallback, batch, trust) } }
+                throw e
+            }
+            org.matrix.rustcomponents.sdk.crypto.SyncChangesResult(emptyList(), infos)
         }
         pump()
         val rooms = changes.roomKeyInfos.map { it.roomId }.distinct()

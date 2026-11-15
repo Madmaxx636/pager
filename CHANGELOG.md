@@ -4,6 +4,13 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.29 (phone)
+
+For the phone log full of "decrypting: Serialization: invalid type: map, expected a sequence" followed by "the key never arrived". The phone's encryption library was refusing a batch of incoming key messages, and because the batch is only sent once, every key in it was lost with the one it choked on.
+
+- **One unreadable key message no longer blocks the others:** if the library rejects a batch, the phone now hands the messages over one at a time, so the good keys still go in.
+- **The log names the culprit:** each skipped message is logged by type (never its content), so the next log shows what the library does not like.
+
 ## 0.6.28 (phone)
 
 - **Brightness is now picture brightness, not the screen light:** the slider goes from -100 (darker) to +100 (lighter) and changes how light or dark the whole picture is, which is what you want on an e-ink screen with no light. It no longer touches the system screen light. Any brightness you set in 0.6.27 is reset to normal.
