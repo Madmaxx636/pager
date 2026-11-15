@@ -18,6 +18,7 @@ fi
 if [ "${1:-}" = "--remove-cron" ]; then ( crontab -l 2>/dev/null | grep -v update-bridges.sh ) | crontab - && echo "Removed the weekly look for newer versions"; exit 0
 fi
 MODE=check; case "${1:-}" in --apply|--pin|--list) MODE="${1#--}"; shift;; esac
+[ "$MODE" = apply ] && "$(dirname "$0")/save-bridge-logs.sh" >/dev/null 2>&1   # keep the logs of the containers about to be replaced
 
 strip() { echo "${1%%@*}"; }                                         # name:tag without the digest
 lock_get() { awk -v r="$1" '$1==r {print $2}' "$LOCK" 2>/dev/null | head -1; }
