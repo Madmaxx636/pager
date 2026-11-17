@@ -268,7 +268,7 @@ class Store(private val context: Context) {
         chats.values.filter { !it.isBotRoom(me) && it.network !in st.hiddenNetworks }.map {
             val last = it.messages.lastOrNull()
             ChatSummary(
-                it.id, SyncReducer.displayName(it, me), it.network, it.avatarMxc, it.preview, it.lastTs, it.unread,
+                it.id, SyncReducer.displayName(it, me), it.network, it.avatarMxc, it.preview, it.lastTs, it.unread + it.reactionUnread,
                 it.markedUnread, it.pinned, it.archived, it.id in muted || (contacts()[it.id] ?: emptyList()).any { o -> o in muted }, it.isGroup, drafts[it.id]?.takeIf { d -> d.isNotBlank() },
                 lowPriority = it.lowPriority, labels = it.labels, pinOrder = it.pinOrder ?: Double.MAX_VALUE,
                 unanswered = last != null && last.sender != me, lastFromMe = last?.sender == me, typing = it.typing.isNotEmpty(), stories = it.isStories, faces = if (it.isGroup && it.avatarMxc == null) groupFaces(it, me) else emptyList(),
@@ -744,7 +744,7 @@ class Store(private val context: Context) {
                 synchronized(cacheLock) { _chats.value = r.chats; since = next; chatsSince = next }
                 // A page that was unread and now is not was read on another device (or app): take its alert down here too.
                 runCatching {
-                    Notifier.clearRead(context, r.chats.values.filter { c -> before[c.id]?.let { it.unread > 0 || it.markedUnread } == true && c.unread == 0 && !c.markedUnread }.map { it.id })
+                    Notifier.clearRead(context, r.chats.values.filter { c -> before[c.id]?.let { it.unread > 0 || it.reactionUnread > 0 || it.markedUnread } == true && c.unread == 0 && c.reactionUnread == 0 && !c.markedUnread }.map { it.id })
                 }
                 lastSyncOk = System.currentTimeMillis()
                 for (c in r.chats.values) if (c.gap != null) fillGap(c.id)   // (also picks up a hole saved by an earlier session)
@@ -980,8 +980,8 @@ class Store(private val context: Context) {
         val c = _chats.value[roomId] ?: return
         val last = c.messages.lastOrNull { it.status == STATUS_SENT } ?: return
         val me = _session.value?.userId ?: return
-        if (c.unread == 0 && !c.markedUnread) return
-        update(roomId) { it.copy(unread = 0, markedUnread = false) }
+        if (c.unread == 0 && c.reactionUnread == 0 && !c.markedUnread) return
+        update(roomId) { it.copy(unread = 0, reactionUnread = 0, markedUnread = false) }
         val private = !settings.value.sendReadReceipts
         scope.launch {
             runCatching { matrix.markRead(roomId, last.id, private) }
@@ -995,7 +995,7 @@ class Store(private val context: Context) {
         scope.launch { runCatching { matrix.setMarkedUnread(me, roomId, unread) } }
     }
 
-    fun markAllRead() { _chats.value.values.filter { it.unread > 0 || it.markedUnread }.forEach { markRead(it.id) } }
+    fun markAllRead() { _chats.value.values.filter { it.unread > 0 || it.reactionUnread > 0 || it.markedUnread }.forEach { markRead(it.id) } }
 
     // --- Media -------------------------------------------------------------------
 

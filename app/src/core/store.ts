@@ -108,7 +108,7 @@ function buildRows(s: State, st: AppSettings, user: string): ChatSummary[] {
     .map((c): ChatSummary => {
       const last = c.messages[c.messages.length - 1];
       return {
-        id: c.id, name: displayName(c, user), network: c.network, avatarMxc: c.avatarMxc, preview: lastPreview(c), ts: lastTs(c), unread: c.unread,
+        id: c.id, name: displayName(c, user), network: c.network, avatarMxc: c.avatarMxc, preview: lastPreview(c), ts: lastTs(c), unread: c.unread + (c.reactionUnread ?? 0),
         faces: isGroup(c) && !c.avatarMxc ? groupFaces(c, user) : undefined, markedUnread: c.markedUnread, pinned: isPinned(c), archived: isArchived(c), muted: s.muted.includes(c.id) || (contacts().get(c.id) ?? []).some((o) => s.muted.includes(o)), isGroup: isGroup(c), draft: s.drafts[c.id]?.trim() || undefined,
         lowPriority: isLowPriority(c), stories: isStoriesRoom(c) || undefined, labels: labelsOf(c), pinOrder: c.pinOrder ?? Number.MAX_VALUE,
         unanswered: !!last && last.sender !== user, lastFromMe: last?.sender === user, typing: c.typing.length > 0,
@@ -674,7 +674,7 @@ export function requestNotifications() { if (typeof Notification !== "undefined"
 
 function updateBadge() {
   const st = getSettings();
-  const n = st.notifBadge === "off" ? 0 : Object.values(state.chats).filter((c) => !isArchived(c) && (st.notifBadge === "all" || (!state.muted.includes(c.id) && !isLowPriority(c))) && !st.hiddenNetworks.includes(c.network) && (c.unread > 0 || c.markedUnread)).length;
+  const n = st.notifBadge === "off" ? 0 : Object.values(state.chats).filter((c) => !isArchived(c) && (st.notifBadge === "all" || (!state.muted.includes(c.id) && !isLowPriority(c))) && !st.hiddenNetworks.includes(c.network) && (c.unread > 0 || (c.reactionUnread ?? 0) > 0 || c.markedUnread)).length;
   document.title = n ? `(${n}) Pager` : "Pager";
   window.pagerDesktop?.setBadge(n, window.pagerDesktop.platform === "win32" ? badgePng(n) : undefined);
 }
@@ -801,14 +801,14 @@ export function markRead(roomId: string) {
 function markReadOne(roomId: string) {
   const c = state.chats[roomId]; if (!c) return;
   const last = [...c.messages].reverse().find((m) => m.status === STATUS_SENT);
-  if (!last || (c.unread === 0 && !c.markedUnread)) return;
-  patchChat(roomId, (x) => ({ ...x, unread: 0, markedUnread: false }));
+  if (!last || (c.unread === 0 && !c.reactionUnread && !c.markedUnread)) return;
+  patchChat(roomId, (x) => ({ ...x, unread: 0, reactionUnread: 0, markedUnread: false }));
   void matrix.receipt(roomId, last.id, !getSettings().sendReadReceipts).catch(() => {});
   if (c.markedUnread) void matrix.setMarkedUnread(me(), roomId, false).catch(() => {});
   updateBadge();
 }
 export function markUnread(roomId: string, unread: boolean) { patchChat(roomId, (c) => ({ ...c, markedUnread: unread })); void matrix.setMarkedUnread(me(), roomId, unread).catch(() => {}); updateBadge(); }
-export function markAllRead() { Object.values(state.chats).filter((c) => c.unread > 0 || c.markedUnread).forEach((c) => markRead(c.id)); }
+export function markAllRead() { Object.values(state.chats).filter((c) => c.unread > 0 || c.reactionUnread || c.markedUnread).forEach((c) => markRead(c.id)); }
 
 /** [viewOnce]: Signal shows the picture or video once and then it is gone (the bridge turns this into Signal's own view-once). */
 export function sendAttention(roomId: string, kind: AttentionKind) {

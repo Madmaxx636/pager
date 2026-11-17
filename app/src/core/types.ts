@@ -56,6 +56,10 @@ export interface ChatState {
   network: string;
   avatarMxc?: string;
   unread: number;
+  /** Reactions to your messages that you have not seen yet. They count as +1 each on the page in the list, on top of the server's own unread count. */
+  reactionUnread?: number;
+  /** When the newest of those reactions happened, so a read receipt of yours that is later clears them. */
+  reactionTs?: number;
   messages: Msg[];
   members: Record<string, string>;
   /** user id -> their picture (mxc://), when they have one */

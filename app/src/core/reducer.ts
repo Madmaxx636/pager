@@ -87,6 +87,7 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
       else if (chat.prevBatch == null && chat.messages.length === 0 && prev != null) chat = { ...chat, prevBatch: prev };
 
       const pre = chat;
+      let reactBump = 0, reactTs = 0;
       chat = process(chat, claimOwn(arr(tl.events).map(obj), ownGhosts(chat, me), me), true, (m, parentSender) => {
         if (!initial && m.sender !== me && worthAlert(m.ts, newestKnown)) {
           const mine = pre.members[me] ?? me.replace(/^@/, "").split(":")[0];
@@ -97,8 +98,10 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
         const rts = rts0 ?? Date.now();
         // Someone reacted to something you wrote: that is about you, so it alerts like a reply. In a one-to-one chat, or when the message is not loaded
         // to check, it counts too: bridged messages do not always say clearly that they are yours.
-        if (!initial && sender !== me && Date.now() - rts < ALERT_REACTION_AGE && (target?.sender === me || !target || !isGroup(pre)))
+        if (!initial && sender !== me && Date.now() - rts < ALERT_REACTION_AGE && (target?.sender === me || !target || !isGroup(pre))) {
+          reactBump++; reactTs = Math.max(reactTs, rts);
           incoming.push({ roomId, chat: displayName(pre, me), sender: nameOf(pre, sender), text: target ? `reacted ${key} to “${previewOf(target).slice(0, 60)}”` : `reacted ${key}`, network: pre.network, isGroup: isGroup(pre), mentioned: false, ts: rts, replyToMe: true, reaction: true });
+        }
       });
 
       for (const e of arr(obj(room.ephemeral).events)) chat = applyEphemeral(chat, obj(e), me);
@@ -112,7 +115,10 @@ export function applySync(old: Record<string, ChatState>, sync: J, me: string, i
       const joinedCount = num(obj(room.summary)["m.joined_member_count"]);
       if (joinedCount != null) chat = { ...chat, memberCount: joinedCount };
       const count = num(obj(room.unread_notifications).notification_count);
-      chats[roomId] = { ...chat, unread: count ?? chat.unread };
+      // Reactions to your messages add to the page's number until you read it (here or on another device: a read receipt of yours that is newer than the reaction).
+      let reactionUnread = (chat.reactionUnread ?? 0) + reactBump; const reactionTs = Math.max(chat.reactionTs ?? 0, reactTs);
+      if (reactionUnread > 0 && (chat.receiptTs?.[me] ?? 0) >= reactionTs) reactionUnread = 0;
+      chats[roomId] = { ...chat, unread: count ?? chat.unread, reactionUnread, reactionTs };
     } catch (e) { console.warn("could not read an update for", roomId, e); }
   }
 

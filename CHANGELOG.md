@@ -4,9 +4,10 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
-## Unreleased
+## 0.6.31 (desktop, web, phone)
 
-- **Google Messages sign-in instructions (web, and desktop from its next release):** the steps now say to use a private window and to close it without signing out of Google, since signing out ends the login that was just copied (a likely reason the connection kept dropping).
+- **A reaction counts as an unread (desktop, web, phone):** when someone reacts to a message of yours, that page now gets +1 on its number in the list and on its pin, the same as a new message would. In a one-to-one chat any reaction counts, and in a group only reactions to your own messages do (the same rule the reaction notification already uses). The number goes away when you read the page, here or on another device. It is kept apart from the server's own count, so the "new messages" line inside a chat stays where it was. Mark as read, Mark all as read, the Unread tab and the app badge all include reactions now.
+- **Google Messages sign-in steps:** they now say to use a private window and to close it without signing out of Google, since signing out ends the login that was just copied.
 
 ## 0.6.30 (phone)
 

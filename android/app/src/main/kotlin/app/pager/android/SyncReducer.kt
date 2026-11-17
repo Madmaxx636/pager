@@ -100,10 +100,13 @@ object SyncReducer {
             else if (chat.prevBatch == null && chat.messages.isEmpty() && prev != null) chat = chat.copy(prevBatch = prev)
 
             val pre = chat
+            var reactBump = 0; var reactTs = 0L
             chat = process(chat, claimOwn(tl["events"].arr().map { it.obj() }, ownGhosts(chat, me), me), applyStates = true, onReaction = { sender, key, target, rts ->
                 // Someone reacted to something you wrote: that is about you, so it alerts like a reply.
-                if (!initial && sender != me && clock() - rts < ALERT_REACTION_AGE && (target?.sender == me || target == null || !pre.isGroup))
+                if (!initial && sender != me && clock() - rts < ALERT_REACTION_AGE && (target?.sender == me || target == null || !pre.isGroup)) {
+                    reactBump++; reactTs = maxOf(reactTs, rts)
                     incoming.add(Incoming(roomId, displayName(pre, me), pre.nameOf(sender), (if (target != null) "reacted $key to “${previewOf(target).take(60)}”" else "reacted $key"), pre.network, pre.isGroup, false, rts, replyToMe = true, reaction = true))
+                }
             }, onNew = { m, parentSender ->
                 if (!initial && m.sender != me && worthAlert(m.ts, newestKnown)) {
                     val mine = pre.members[me] ?: me.removePrefix("@").substringBefore(':')
@@ -121,7 +124,10 @@ object SyncReducer {
             room["summary"].obj()["m.heroes"].arr().mapNotNull { it.str() }.takeIf { it.isNotEmpty() }?.let { chat = chat.copy(heroes = it) }
             room["summary"].obj()["m.joined_member_count"].int()?.let { chat = chat.copy(memberCount = it) }
             val count = room["unread_notifications"].obj()["notification_count"].int()
-            chats[roomId] = chat.copy(unread = count ?: chat.unread)
+            // Reactions to your messages add to the page's number until you read it (here or on another device: a read receipt of yours that is newer than the reaction).
+            var reactionUnread = chat.reactionUnread + reactBump; val reactionTs = maxOf(chat.reactionTs, reactTs)
+            if (reactionUnread > 0 && (chat.receiptTs[me] ?: 0L) >= reactionTs) reactionUnread = 0
+            chats[roomId] = chat.copy(unread = count ?: chat.unread, reactionUnread = reactionUnread, reactionTs = reactionTs)
           } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Throwable) { android.util.Log.w("Pager", "could not read an update for $roomId", e) }
         }
 

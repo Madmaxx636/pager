@@ -85,7 +85,7 @@ export function buildMerged(chats: Record<string, ChatState>, links: Links, room
   messages.sort((a, b) => a.ts - b.ts);
   const prim = chats[roomId];
   return {
-    ...prim, messages, unread: all.reduce((n, c) => n + c.unread, 0), markedUnread: all.some((c) => c.markedUnread),
+    ...prim, messages, unread: all.reduce((n, c) => n + c.unread, 0), reactionUnread: all.reduce((n, c) => n + (c.reactionUnread ?? 0), 0), reactionTs: Math.max(0, ...all.map((c) => c.reactionTs ?? 0)), markedUnread: all.some((c) => c.markedUnread),
     reactions: Object.assign({}, ...all.map((c) => c.reactions)), reactionRefs: Object.assign({}, ...all.map((c) => c.reactionRefs)),
     pollVotes: Object.assign({}, ...all.map((c) => c.pollVotes)), pollEnded: all.flatMap((c) => c.pollEnded),
     receipts: Object.assign({}, ...all.map((c) => c.receipts)), eventTs: Object.assign({}, ...all.map((c) => c.eventTs ?? {})), members: Object.assign({}, ...all.map((c) => c.members)),

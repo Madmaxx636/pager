@@ -74,6 +74,10 @@ data class ChatState(
     val network: String = "matrix",
     val avatarMxc: String? = null,
     val unread: Int = 0,
+    /** Reactions to your messages not seen yet: each counts +1 on the page in the list, on top of the server's own count. */
+    val reactionUnread: Int = 0,
+    /** When the newest of them happened, so a read receipt of yours that is later clears them. */
+    val reactionTs: Long = 0L,
     val messages: List<Msg> = emptyList(),
     val members: Map<String, String> = emptyMap(),
     val joined: Set<String> = emptySet(),

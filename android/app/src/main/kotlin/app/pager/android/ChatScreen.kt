@@ -316,6 +316,8 @@ fun ChatScreen(roomId: String, onBack: () -> Unit, onOpen: (String) -> Unit, onI
     // An empty or short chat never scrolls, so the "near the top" check above never fires and its history would stay blank until a message
     // arrived. Ask for older messages directly whenever there are few to show.
     val fewMessages = chat?.let { !it.reachedStart && it.messages.size < 100 } == true
+    // A reaction that arrives while you are looking at this page is seen: it should not add to the count behind you.
+    LaunchedEffect(chat?.reactionUnread) { if ((chat?.reactionUnread ?: 0) > 0 && store.attended && (s.markReadMode == "open" || (s.markReadMode == "scrolled" && list.firstVisibleItemIndex <= 2))) store.markRead(roomId) }
     LaunchedEffect(roomId, fewMessages, chat?.messages?.size) { if (fewMessages) groupIds.forEach { id -> store.loadOlder(id) } }
     LaunchedEffect(roomId, s.markReadMode) { if (s.markReadMode == "scrolled") snapshotFlow { list.firstVisibleItemIndex <= 1 }.collect { atEnd -> if (atEnd && store.attended) store.markRead(roomId) } }
     // Coming back to the phone after it sat idle: what arrived meanwhile is read now.

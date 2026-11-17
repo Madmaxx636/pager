@@ -245,7 +245,7 @@ export function Chat({ roomId, onBack, nav, onForward }: { roomId: string; onBac
   // in the tray (or behind another window) with this page open would be marked read at once, and the page list would never show it.
   const looking = () => attended();
   const mayMark = () => looking() && (st.markReadMode === "open" || (st.markReadMode === "scrolled" && stick.current));
-  useEffect(() => { if (mayMark()) markRead(roomId); }, [roomId, messages.length, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (mayMark()) markRead(roomId); }, [roomId, messages.length, chat?.reactionUnread ?? 0, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => onAttended(() => { if (mayMark()) markRead(roomId); }), [roomId, st.markReadMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Just after a chat opens, pictures, older messages and fonts keep moving the page; only a scroll that follows something you did (wheel, touch, keys, the scroll bar) may stop it following the newest message.

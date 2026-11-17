@@ -105,6 +105,18 @@ class SyncReducerTest {
     private val base get() = SyncReducer.apply(emptyMap(), firstSync, me, initial = true).chats
     private val mom = "@wa_mom:pager.test"
 
+    @Test fun aReactionToYouCountsAsOnePlusOneAndAnOwnReactionDoesNot() {
+        val r = SyncReducer.apply(base, joinWith(
+            """{"type":"m.reaction","event_id":"${'$'}r1","sender":"$mom","content":{"m.relates_to":{"rel_type":"m.annotation","event_id":"${'$'}2","key":"❤️"}}},
+               {"type":"m.reaction","event_id":"${'$'}r2","sender":"$mom","content":{"m.relates_to":{"rel_type":"m.annotation","event_id":"${'$'}1","key":"❤️"}}},
+               {"type":"m.reaction","event_id":"${'$'}r3","sender":"$me","content":{"m.relates_to":{"rel_type":"m.annotation","event_id":"${'$'}2","key":"❤️"}}}"""), me, false).chats
+        val c = r.getValue("!a:x")
+        assertEquals(2, c.reactionUnread)
+        assertEquals(1, c.unread)   // the server's own count is untouched, so the "new messages" line stays where it was
+        val read = SyncReducer.apply(r, parse("""{"rooms":{"join":{"!a:x":{"ephemeral":{"events":[{"type":"m.receipt","content":{"${'$'}r2":{"m.read":{"$me":{"ts":99999999999999}}}}}]}}}}}"""), me, false).chats.getValue("!a:x")
+        assertEquals(0, read.reactionUnread)
+    }
+
     @Test fun reactionsAggregateAndRedactionsRemoveThem() {
         val withReaction = SyncReducer.apply(base, joinWith(
             """{"type":"m.reaction","event_id":"${'$'}r1","sender":"$mom","content":{"m.relates_to":{"rel_type":"m.annotation","event_id":"${'$'}1","key":"👍"}}},

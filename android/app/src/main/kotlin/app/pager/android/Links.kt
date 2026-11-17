@@ -87,7 +87,7 @@ object Links {
         val seen = HashSet<String>()
         val messages = all.flatMap { c -> c.messages.map { it.copy(room = c.id) } }.filter { seen.add(it.id) }.sortedBy { it.ts }
         return prim.copy(
-            messages = messages, unread = all.sumOf { it.unread }, markedUnread = all.any { it.markedUnread },
+            messages = messages, unread = all.sumOf { it.unread }, reactionUnread = all.sumOf { it.reactionUnread }, reactionTs = all.maxOf { it.reactionTs }, markedUnread = all.any { it.markedUnread },
             reactions = all.fold(emptyMap()) { a, c -> a + c.reactions }, reactionRefs = all.fold(emptyMap()) { a, c -> a + c.reactionRefs },
             pollVotes = all.fold(emptyMap()) { a, c -> a + c.pollVotes }, pollEnded = all.flatMap { it.pollEnded }.toSet(),
             receipts = all.fold(emptyMap()) { a, c -> a + c.receipts }, eventTs = all.fold(emptyMap()) { a, c -> a + c.eventTs }, members = all.fold(emptyMap()) { a, c -> a + c.members },
