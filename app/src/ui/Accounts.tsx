@@ -67,7 +67,7 @@ function CookieStep({ step, busy, onValues, onError }: { step: LoginStep; busy: 
     return (
       <>
         <ol className="steps">
-          <li><a className="link" href={step.cookies?.url} target="_blank" rel="noreferrer">Open the Google sign-in page</a> in Chrome or Firefox and sign in until you see Google Messages.</li>
+          <li><a className="link" href={step.cookies?.url} target="_blank" rel="noreferrer">Open the Google sign-in page</a> in a <b>private (incognito) window</b> of Chrome or Firefox and sign in until you see Google Messages. When you are done, close that window <b>without signing out of Google</b>: signing out ends the login Pager just copied.</li>
           <li>Press <b>F12</b>, open the <b>Network</b> tab, then press <b>F5</b> to reload.</li>
           <li>Right-click the first request in the list (named <b>config</b> or <b>web</b>) → <b>Copy</b> → <b>Copy as cURL</b>.</li>
           <li>Paste it below.</li>

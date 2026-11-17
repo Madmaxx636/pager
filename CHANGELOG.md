@@ -4,6 +4,10 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## Unreleased
+
+- **Google Messages sign-in instructions (web, and desktop from its next release):** the steps now say to use a private window and to close it without signing out of Google, since signing out ends the login that was just copied (a likely reason the connection kept dropping).
+
 ## 0.6.30 (phone)
 
 Found by running the phone app in an emulator for the first time (sign-in, first-run recovery key, e-ink settings all worked).
