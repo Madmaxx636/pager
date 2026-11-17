@@ -61,12 +61,12 @@ function memoryNow() {
   return { total: parts.reduce((a, p) => a + p.mb, 0), parts };
 }
 let lastLevel = "ok";
-/** Over 300 MB the page gives back what it can; over 400 it gives back hard; in the tray it keeps next to nothing. */
+/** Over 700 MB the page gives back what it can; over 1000 it gives back hard; in the tray it keeps next to nothing. */
 function watchMemory() {
   if (!win || win.isDestroyed()) return;
   const { total } = memoryNow();
   // (Not win.isVisible(): see memorylevel.js. Hidden means hidden or minimised by an event we saw.)
-  const level = memoryLevel({ hidden: awayInTray || minimized, total });
+  const level = memoryLevel({ hidden: awayInTray || minimized, total, previous: lastLevel });
   if (level !== lastLevel) note(`memory level ${level} (${total} MB${awayInTray ? ", in the tray" : minimized ? ", minimised" : ""})`);
   if (level !== "ok" || lastLevel !== "ok") win.webContents.send("memory", level);
   if (level !== "ok") win.webContents.executeJavaScript("typeof gc === 'function' && gc()").catch(() => {});

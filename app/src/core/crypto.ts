@@ -119,7 +119,7 @@ export class Crypto {
       return { ...event, type: clear.type, content: clear.content, pagerEncrypted: true };
     } catch (e) {
       const x = e as { code?: unknown; maybe_withheld?: string; message?: string };
-      const why = x.maybe_withheld ? `the sender kept the key back (${x.maybe_withheld})` : /missing|room ?key|no session/i.test(`${x.code ?? ""} ${x.message ?? ""}`) ? "the key never arrived" : `${x.code ?? "error"}: ${String(x.message ?? "").slice(0, 60)}`;
+      const why = x.maybe_withheld ? `the sender kept the key back (${x.maybe_withheld})` : /missing|room ?key|no session/i.test(`${x.code ?? ""} ${x.message ?? ""}`) ? "the key never arrived" : (x.code === 6 && !String(x.message ?? "") && !(event.content as { session_id?: string } | undefined)?.session_id) ? "cannot be read: it has no key session, so it is not a normal encrypted message" : `${x.code ?? "error"}: ${String(x.message ?? "").slice(0, 60)}`;
       const id = String(event.event_id), old = this.locked.get(id), session = String((event.content as { session_id?: string } | undefined)?.session_id ?? "");
       this.locked.set(id, { room: roomId, session, why, since: old?.since ?? Date.now() });
       if (old?.why !== why) this.note(`${why}  event ${id.slice(0, 12)}  session ${session.slice(0, 10)}  room ${roomId.slice(0, 14)}`);

@@ -8,7 +8,7 @@ import { useMemo, useRef, useSyncExternalStore } from "react";
 import { http, matrix, matrixCall, pager, sendHook, ApiError, LinkPreview, Network, SearchHit, url } from "./api";
 import { BlobCache } from "./lru";
 import { groupFaces } from "./faces";
-import { Links, buildMerged, contactIndex, groupOf, mergeSummaries } from "./links";
+import { Links, buildMerged, contactIndex, groupOf, mergeSummaries, pageRooms } from "./links";
 import { shrinkImage } from "./shrink";
 import { forgetTranscripts } from "./transcribe";
 import { WAITING_TEXT, applyGap, applyHistory, historyFits, applySync, relabelUnreadable, replaceDecrypted, setOwnIdentity, textOfClear } from "./reducer";
@@ -943,8 +943,9 @@ export function readingOlder(roomId: string, up: boolean) { if (up) { deepNow.ad
 /** Drops the history pulled in by scrolling up once it has been left alone for a while, keeping only the newest messages. */
 export function trimPulledHistory(now = Date.now()) {
   let chats: typeof state.chats | undefined;
+  const readingDeep = new Set([...deepNow].flatMap((id) => pageRooms(state.links, state.solo, id)));
   for (const c of Object.values(state.chats)) {
-    if (c.messages.length <= keepMessages() || deepNow.has(c.id) || now - (deepAt.get(c.id) ?? 0) < poolClearMs(c.messages.length)) continue;
+    if (c.messages.length <= keepMessages() || readingDeep.has(c.id) || now - (deepAt.get(c.id) ?? 0) < poolClearMs(c.messages.length)) continue;
     chats ??= { ...state.chats };
     chats[c.id] = sliceNewest(c, keepMessages(), "left alone for a while");
   }
@@ -953,8 +954,13 @@ export function trimPulledHistory(now = Date.now()) {
 const keepMessages = () => (getSettings().lowEnd ? LOW_END_KEEP : KEEP_MESSAGES);
 window.setInterval(() => trimPulledHistory(), 30_000);
 
-/** The desktop app watches its own memory and says how tight it is: "high" over 300 MB, "critical" over 400, "hidden" while it sits in the tray. */
+/** The desktop app watches its own memory and says how tight it is: "high" over 700 MB, "critical" over 1000, "hidden" while it sits in the tray. */
 export type MemoryLevel = "ok" | "high" | "critical" | "hidden";
+/** The page on screen and the other chats shown merged into it: all of them are the page you are looking at (cutting a merged page's other chats to 40 messages made its history vanish under you). */
+function openIds(): Set<string> {
+  if (!openRoom) return new Set();
+  return new Set(pageRooms(state.links, state.solo, openRoom));
+}
 const KEEP_IDLE = 40, KEEP_TIGHT = 20;
 export function squeezeMemory(level: MemoryLevel) {
   if (level === "ok") return;
@@ -962,14 +968,15 @@ export function squeezeMemory(level: MemoryLevel) {
   // (a covered window on Wayland used to be called hidden every 20 seconds, which cut the open page to 20 messages over and over, and each cut was a jump).
   if (level === "hidden" && usedAgoMs() < 10 * 60_000) return;
   const idleKeep = level === "high" ? KEEP_IDLE : KEEP_TIGHT;
+  const onScreen = openIds();
   // The chat on screen keeps its messages unless memory is critical; someone scrolled up in it keeps up to 500 so the page doesn't jump.
   const openKeep = level === "critical" ? (deepNow.has(openRoom ?? "") ? 500 : 150) : level === "hidden" ? (deepNow.has(openRoom ?? "") ? 500 : idleKeep) : KEEP_MESSAGES;
   let chats: typeof state.chats | undefined;
   for (const c of Object.values(state.chats)) {
-    const keep = c.id === openRoom ? openKeep : idleKeep;
+    const keep = onScreen.has(c.id) ? openKeep : idleKeep;
     if (c.messages.length <= keep) continue;
     chats ??= { ...state.chats };
-    chats[c.id] = sliceNewest(c, keep, `memory ${level}${c.id === openRoom ? ", the page on screen" : ""}`);
+    chats[c.id] = sliceNewest(c, keep, `memory ${level}${onScreen.has(c.id) ? ", the page on screen" : ""}`);
     deepAt.delete(c.id);
   }
   if (chats) set({ chats });

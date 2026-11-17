@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addLink, buildMerged, groupOf, linkKey, mergeSummaries, suggestLinks, unlink } from "./links";
+import { addLink, buildMerged, groupOf, linkKey, mergeSummaries, pageRooms, suggestLinks, unlink } from "./links";
 import type { ChatSummary } from "./types";
 
 const sum = (id: string, network: string, ts: number, unread = 0, extra: Partial<ChatSummary> = {}): ChatSummary => ({
@@ -12,6 +12,12 @@ describe("one person on two networks", () => {
     expect(linkKey("+1 (555) 010-2030")).toBe(linkKey("5550102030"));
     expect(linkKey("Sam  Lee (WA)")).toBe(linkKey("sam lee"));
     expect(linkKey("")).toBe("");
+  });
+  it("a merged page is all of its chats, so letting go of old messages treats them all as the page on screen", () => {
+    const l = addLink([], "a", "b");
+    expect(pageRooms(l, [], "a").sort()).toEqual(["a", "b"]);
+    expect(pageRooms(l, ["a"], "a")).toEqual(["a"]);      // shown on its own
+    expect(pageRooms(l, [], "z")).toEqual(["z"]);          // not merged with anything
   });
   it("joins and splits groups", () => {
     let l = addLink([], "a", "b"); l = addLink(l, "b", "c");

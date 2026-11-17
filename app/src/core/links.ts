@@ -13,6 +13,8 @@ export function linkKey(name: string): string {
 }
 
 export const groupOf = (links: Links, id: string) => links.find((g) => g.includes(id));
+/** The chats that make up the page showing for [id]: itself, plus the chats merged into it unless it is shown on its own. */
+export const pageRooms = (links: Links, solo: string[], id: string): string[] => (!solo.includes(id) ? groupOf(links, id) ?? [id] : [id]);
 
 /** Joins two chats (and anything either was already joined with). */
 export function addLink(links: Links, a: string, b: string): Links {

@@ -4,6 +4,14 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.32 (desktop, web)
+
+From the Windows log you sent. The shell showed the app flipping between "ok" and "high" memory every minute or so, all day, and each time the page let go of old messages ("let go of 88 older messages ... memory high; kept 40") and then had to fetch them again.
+
+- **The memory limits were set below what the app holds when idle (desktop):** an idle Pager on Windows holds about 300 MB (the main process, the graphics process and the page), and "high" started at 300 MB, so it was crossed constantly. The limits are now 700 MB (give back what it can) and 1000 MB (give back hard), and a level is only left once memory is 80 MB below it, so a number hovering at a limit no longer flips it back and forth. A window in the tray still keeps next to nothing.
+- **Merged pages lost history under you (desktop):** when one person's chats on two networks are shown as one page, only one of the chats counted as "the page on screen". Memory squeezes cut the other to 40 messages while you were reading, so the page shrank by thousands of pixels in one go (the "list shrank under you ... by 10970px" lines). All the chats that make up the open page are now treated as on screen. The same goes for the page you are reading higher up.
+- **Clearer log line for messages that can never be read:** seven old messages show "6:" with no key session in the encryption log. They are not normal encrypted messages, so the line now says so instead of looking like a missing key.
+
 ## 0.6.31 (desktop, web, phone)
 
 - **A reaction counts as an unread (desktop, web, phone):** when someone reacts to a message of yours, that page now gets +1 on its number in the list and on its pin, the same as a new message would. In a one-to-one chat any reaction counts, and in a group only reactions to your own messages do (the same rule the reaction notification already uses). The number goes away when you read the page, here or on another device. It is kept apart from the server's own count, so the "new messages" line inside a chat stays where it was. Mark as read, Mark all as read, the Unread tab and the app badge all include reactions now.
