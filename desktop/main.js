@@ -266,7 +266,9 @@ if (!app.requestSingleInstanceLock()) {
   app.on("window-all-closed", () => { if (process.platform !== "darwin" && (quitting || !prefs.closeToTray || !tray)) app.quit(); });
 
   ipcMain.on("notify", (_e, o) => {
-    if (!o || typeof o !== "object" || !Notification.isSupported()) return;
+    if (!o || typeof o !== "object") return;
+    // Kept in the shell log (Settings > Advanced > Logs) so a missing pop-up can be traced: no message text, only what the system did with it.
+    if (!Notification.isSupported()) { note("notification: this system says it cannot show notifications"); return; }
     const n = new Notification({ title: String(o.title ?? "Pager"), body: String(o.body ?? ""), silent: !!o.silent, icon: path.join(__dirname, "build", "icon.png") });
     // Held until it is gone: a notification nothing refers to can be cleaned up before you click it, and the click then does nothing.
     shownNotifications.add(n); const forget = () => shownNotifications.delete(n);
@@ -277,7 +279,8 @@ if (!app.requestSingleInstanceLock()) {
       // A window that was closed for good is made again by showWindow: the page is not there yet to be told which chat to open.
       if (fresh || win.webContents.isLoading()) win.webContents.once("did-finish-load", () => setTimeout(send, 800)); else send();
     });
-    n.on("close", forget); n.on("failed", forget);
+    n.on("close", forget); n.on("failed", (_e, err) => { note(`notification failed: ${String(err).slice(0, 120)}`); forget(); });
+    n.on("show", () => note("notification shown"));
     n.show();
   });
   // The icon colour you picked in Settings: a PNG from the page, for the window and the tray. An empty one goes back to the original.

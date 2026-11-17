@@ -562,13 +562,13 @@ async function syncLoop(s: Session, signal: AbortSignal) {
           const c = r.chats[m.roomId];
           if (m.attention && !initial && m.id && isFresh(m.ts) && !muted.includes(m.roomId)) raise({ id: m.id, roomId: m.roomId, chat: m.chat, sender: m.sender, kind: m.attention, mxc: m.attention === "image" ? m.mxc : undefined });
           // A message that cannot be read yet makes no alert (and never one that says it is locked): it waits for its key and then alerts with its own words.
-          if (m.locked && m.id) { holdAlert(m); continue; }
+          if (m.locked && m.id) { crumb("alert", `held: the message cannot be read yet (${m.network})`); holdAlert(m); continue; }
           if (st.convoSounds && looking(m.roomId) && attended()) { playSound(m.reaction ? st.reactionSound : st.receiveSound, st.convoSoundVolume); continue; }
           // The settings of a contact are the same on all of their chats: another number, another network, merged or not.
           const same = [m.roomId, ...siblingsOf(m.roomId)];
           const d = decide({ roomId: m.roomId, network: m.network, isGroup: m.isGroup, mentioned: m.mentioned, replyToMe: m.replyToMe, text: m.text, chat: chatNotifPrefs(m.roomId),
             quiet: same.some((id) => muted.includes(id) || (state.chats[id] ? isLowPriority(state.chats[id]) : false)), pinned: c ? isPinned(c) : false, nowMin: when.getHours() * 60 + when.getMinutes(), day: when.getDay() }, st);
-          if (!d.show) continue;
+          if (!d.show) { crumb("alert", `none: your notification settings say no (${m.network}${m.isGroup ? ", group" : ""}${m.reaction ? ", reaction" : ""})`); continue; }
           notify(m, d);
         }
         if (getSettings().unarchiveOnMessage) {
@@ -659,13 +659,14 @@ function notify(m: Incoming, d: Decision) {
   glance(m, d);
   const inApp = attended();
   // The alert sound plays for a page you are not looking at even while you are in Pager; the pop-up only appears when you are not.
-  if (inApp) { if (!d.silent) playSound(m.reaction ? getSettings().reactionSound : d.sound, getSettings().notifSoundVolume); return; }
+  if (inApp) { crumb("alert", "sound only: you are in the app and active"); if (!d.silent) playSound(m.reaction ? getSettings().reactionSound : d.sound, getSettings().notifSoundVolume); return; }
   const body = d.preview === "full" ? (m.isGroup ? `${m.sender}: ${m.text}` : m.text) : d.preview === "sender" ? m.sender : "New message";
   const desktop = window.pagerDesktop;
   // We play the sound ourselves (so it can differ per app and per contact) and keep the system notification quiet.
   if (!d.silent) playSound(m.reaction ? getSettings().reactionSound : d.sound, getSettings().notifSoundVolume);
-  if (desktop) { desktop.notify({ title: m.chat, body, roomId: m.roomId, silent: true }); return; }
-  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  if (desktop) { crumb("alert", "pop-up sent to the system"); desktop.notify({ title: m.chat, body, roomId: m.roomId, silent: true }); return; }
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") { crumb("alert", "none: the browser has not allowed notifications"); return; }
+  crumb("alert", "pop-up sent to the browser");
   const n = new Notification(m.chat, { body, tag: m.roomId, silent: true });
   n.onclick = () => { window.focus(); window.dispatchEvent(new CustomEvent("pager:open", { detail: m.roomId })); };
 }

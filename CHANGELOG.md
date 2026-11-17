@@ -4,6 +4,12 @@ What changed for the people using Pager, newest first. The phone, desktop and na
 
 Versions before 0.5.84 are in the git history.
 
+## 0.6.33 (desktop, web)
+
+For "notifications stopped showing on Windows but still show on Linux". I could not find the cause in the Windows log, so this version records what happens to each alert, to find it next time.
+
+- **The log says what became of each alert (desktop, web):** Settings > Advanced > Logs now has a line for every message that could have alerted: a pop-up was sent, or why there was none (the message could not be read yet, your notification settings said no, you were in the app and active). On the desktop app the shell log also says when Windows reports that it cannot show notifications, when a pop-up fails (with the system's reason), and when one is shown. None of these lines contain message text or names.
+
 ## 0.6.32 (desktop, web)
 
 From the Windows log you sent. The shell showed the app flipping between "ok" and "high" memory every minute or so, all day, and each time the page let go of old messages ("let go of 88 older messages ... memory high; kept 40") and then had to fetch them again.
